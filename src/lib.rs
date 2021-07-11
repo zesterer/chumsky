@@ -200,6 +200,55 @@ pub trait Parser<I, O> {
     /// ```
     fn to<U: Clone>(self, x: U) -> To<Self, O, U> where Self: Sized { To(self, x, PhantomData) }
 
+    /// Left-fold the output of the parser into a single value, where the output is of type `(_, Vec<_>)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    ///
+    /// let int = text::int::<Simple<char>>()
+    ///     .collect::<String>()
+    ///     .map(|s| s.parse().unwrap());
+    ///
+    /// let sum = int
+    ///     .then(just('+').padding_for(int).repeated())
+    ///     .foldl(|a, b| a + b);
+    ///
+    /// assert_eq!(sum.parse("1+12+3+9".chars()), Ok(25));
+    /// assert_eq!(sum.parse("6".chars()), Ok(6));
+    /// ```
+    fn foldl<'a, A, B, F: Fn(A, B) -> A + 'a>(self, f: F) -> Foldl<'a, Self, A, B, (A, Vec<B>)>
+    where
+        Self: Parser<I, (A, Vec<B>)> + Sized
+    { self.map(Box::new(move |(head, tail)| tail.into_iter().fold(head, &f))) }
+
+    /// Right-fold the output of the parser into a single value, where the output is of type `(Vec<_>, _)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    ///
+    /// let int = text::int::<Simple<char>>()
+    ///     .collect::<String>()
+    ///     .map(|s| s.parse().unwrap());
+    ///
+    /// let signed = just('+').to(1)
+    ///     .or(just('-').to(-1))
+    ///     .repeated()
+    ///     .then(int)
+    ///     .foldr(|a, b| a * b);
+    ///
+    /// assert_eq!(signed.parse("3".chars()), Ok(3));
+    /// assert_eq!(signed.parse("-17".chars()), Ok(-17));
+    /// assert_eq!(signed.parse("--+-+-5".chars()), Ok(5));
+    /// ```
+    fn foldr<'a, A, B, F: Fn(A, B) -> B + 'a>(self, f: F) -> Foldr<'a, Self, A, B, (Vec<A>, B)>
+    where
+        Self: Parser<I, (Vec<A>, B)> + Sized
+    { self.map(Box::new(move |(init, end)| init.into_iter().rev().fold(end, |b, a| (&f)(a, b)))) }
+
     /// Ignore the output of this parser, yielding `()` as an output instead.
     ///
     /// This can be used to reduce the cost of passing by avoiding unnecessary allocations (most collections containing
@@ -383,8 +432,7 @@ pub trait Parser<I, O> {
     ///     .repeated_at_least(1)
     ///     .collect::<String>();
     ///
-    /// let num = filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated_at_least(1)
+    /// let num = text::int()
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -423,7 +471,7 @@ pub trait Parser<I, O> {
     ///             SExpr::Error,
     ///             SExpr::Num(15),
     ///         ])),
-    ///         vec![Simple::expected_found(11, Some(')'), Some('!'))], // A syntax error!
+    ///         vec![Simple::expected_found(11, vec![')'], Some('!'))], // A syntax error!
     ///     ),
     /// );
     /// ```

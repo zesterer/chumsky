@@ -32,7 +32,7 @@ pub fn digits<E: Error<char>>() -> Repeated<Filter<fn(&char) -> bool, E>> {
 /// has length one.
 pub fn int<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
     filter(|c: &char| c.is_ascii_digit() && *c != '0').map(Some)
-        .chain(digits())
+        .chain(filter(char::is_ascii_digit).repeated())
         .or(just('0').map(|c| vec![c]))
 }
 
