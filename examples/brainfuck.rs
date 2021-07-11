@@ -1,4 +1,4 @@
-use chumsky::{Parser, just, recursive};
+use chumsky::{Parser, error::BasicError, just, recursive, end};
 use std::{env, io::{self, Read}, fs};
 
 #[derive(Clone)]
@@ -10,7 +10,7 @@ enum Instr {
     Loop(Vec<Self>)
 }
 
-fn parser() -> impl Parser<char, Vec<Instr>> {
+fn parser() -> impl Parser<char, Vec<Instr>, Error = BasicError<char>> {
     use Instr::*;
     recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
         .or(just('<').to(Left))
@@ -20,12 +20,12 @@ fn parser() -> impl Parser<char, Vec<Instr>> {
         .or(just(',').to(Read))
         .or(just('.').to(Write))
         .repeated())
+    .padded_by(end())
 }
 
 const TAPE_LEN: usize = 10_000;
 
-/// Interpret a brainfuck AST
-fn exec(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
+fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
     use Instr::*;
     for symbol in ast {
         match symbol {
@@ -36,13 +36,18 @@ fn exec(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
             Decr => tape[*ptr] = tape[*ptr].wrapping_sub(1),
             Read => tape[*ptr] = io::stdin().bytes().next().unwrap().unwrap(),
             Write => print!("{}", tape[*ptr] as char),
-            Loop(ast) => while tape[*ptr] != 0 { exec(ast, ptr, tape) },
+            Loop(ast) => while tape[*ptr] != 0 { execute(ast, ptr, tape) },
         }
     }
 }
 
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
-    let ast = parser().parse(src.chars()).expect("Failed to parse");
-    exec(&ast, &mut 0, &mut [0; TAPE_LEN]);
+
+    match parser().parse(src.trim().chars()) {
+        Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
+        Err(errs) => errs
+            .into_iter()
+            .for_each(|e| println!("{}", e)),
+    }
 }
