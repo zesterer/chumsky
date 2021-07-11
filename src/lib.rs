@@ -180,6 +180,20 @@ pub trait Parser<I, O> {
     /// ```
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
 
+    /// Map the primary error of this parser to another value.
+    ///
+    /// This does not map error emitted by sub-patterns within the parser.
+    fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
+        where Self: Sized
+    { MapErr(self, f) }
+
+    /// Label the pattern parsed by this parser for error messages.
+    ///
+    /// This does not label sub-patterns within the parser.
+    fn label<L: Into<<Self::Error as Error<I>>::Pattern> + Clone>(self, label: L) -> Label<Self, L>
+        where Self: Sized
+    { Label(self, label) }
+
     /// Transform all outputs of this parser to a pretermined value.
     ///
     /// # Examples
@@ -532,7 +546,7 @@ pub trait Parser<I, O> {
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let sum = num.then(just('+').padding_for(num).repeated())
-    ///     .map(|(head, tail)| tail.into_iter().fold(head, |a, b| a + b));
+    ///     .foldl(|a, b| a + b);
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5".chars()), Ok(24));
     /// ```

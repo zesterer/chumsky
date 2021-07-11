@@ -185,6 +185,32 @@ impl<I, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, 
     }
 }
 
+/// See [`Parser::map_err`].
+#[derive(Copy, Clone)]
+pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
+
+impl<I, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O> for MapErr<A, F> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<O, E>) where Self: Sized {
+        let (n, res) = self.0.parse_inner(stream, errors);
+        (n, res.map_err(&self.1))
+    }
+}
+
+/// See [`Parser::label`].
+#[derive(Copy, Clone)]
+pub struct Label<A, L>(pub(crate) A, pub(crate) L);
+
+impl<I, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Error<I>> Parser<I, O> for Label<A, L> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<O, E>) where Self: Sized {
+        let (n, res) = self.0.parse_inner(stream, errors);
+        (n, res.map_err(|e| e.label_expected(self.1.clone())))
+    }
+}
+
 /// See [`Parser::to`].
 pub struct To<A, O, U>(pub(crate) A, pub(crate) U, pub(crate) PhantomData<O>);
 

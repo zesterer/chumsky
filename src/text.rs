@@ -21,6 +21,18 @@ pub fn whitespace<E: Error<char>>() -> Padding<E> {
     filter((|c: &char| c.is_whitespace()) as _).ignored().repeated()
 }
 
+/// A parser that accepts (and ignores) any newline characters or character sequences.
+pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
+    just('\r').or_not().padding_for(just('\n'))
+        .or(just('\x0B')) // Vertical tab
+        .or(just('\x0C')) // Form feed
+        .or(just('\x0D')) // Carriage return
+        .or(just('\u{0085}')) // Next line
+        .or(just('\u{2028}')) // Line separator
+        .or(just('\u{2029}')) // Paragraph separator
+        .ignored()
+}
+
 /// A parser that accepts one or more ASCII digits.
 pub fn digits<E: Error<char>>() -> Repeated<Filter<fn(&char) -> bool, E>> {
     filter(char::is_ascii_digit as _).repeated_at_least(1)
