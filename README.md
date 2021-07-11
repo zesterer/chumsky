@@ -1,6 +1,6 @@
 # Chumsky
 
-A friendly parser combinator crate that makes writing LL parsers with error recovery easy.
+A friendly parser combinator crate that makes writing LL-1 parsers with error recovery easy.
 
 ## Example
 
@@ -25,12 +25,12 @@ fn parser() -> impl Parser<char, Vec<Instr>> {
 - Generic combinator parsing
 - Error recovery
 - Recursive parsers
-- Text parsing extensions
+- Text-specific parsers & utilities
+- Custom error types
 
 ## Planned Features
 
 - Nested parsers
-- Custom error types
 
 ## Other Information
 
