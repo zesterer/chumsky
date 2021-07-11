@@ -38,4 +38,4 @@ My apologies to Noam for choosing such an absurd name.
 
 ## License
 
-Lagoon is licensed under the MIT license (see `LICENSE`) in the main repository.
+Chumsky is licensed under the MIT license (see `LICENSE`) in the main repository.
