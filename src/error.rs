@@ -14,12 +14,12 @@ pub trait Error<I>: Sized {
     /// Merge two errors together, combining their elements together.
     ///
     /// Note that when the errors originate from two different locations in the token stream (i.e: their
-    /// [`Error::position`] differs), the earlier error should be preferred.
+    /// [`Error::position`] differs), the latter error should be preferred.
     fn merge(self, other: Self) -> Self {
         if self.position() < other.position() {
-            self
-        } else {
             other
+        } else {
+            self
         }
     }
 }
@@ -43,9 +43,9 @@ impl<I> Error<I> for Simple<I> {
     }
     fn merge(mut self, mut other: Self) -> Self {
         if self.position() < other.position() {
-            self
-        } else if self.position() > other.position() {
             other
+        } else if self.position() > other.position() {
+            self
         } else {
             self.expected.append(&mut other.expected);
             self

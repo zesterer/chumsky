@@ -16,6 +16,10 @@ type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I>, &mut Vec<E>) -> (usize, 
 /// See [`recursive()`].
 pub struct Recursive<'a, I, O, E>(Rc<OnceCell<Box<ParserFn<'a, I, O, E>>>>);
 
+impl<'a, I, O, E> Clone for Recursive<'a, I, O, E> {
+    fn clone(&self) -> Self { Self(self.0.clone()) }
+}
+
 impl<'a, I, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 

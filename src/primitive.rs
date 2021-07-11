@@ -53,6 +53,39 @@ pub fn just<I: Clone + PartialEq, E>(x: I) -> Just<I, E> {
     Just(x, PhantomData)
 }
 
+/// See [`seq`].
+pub struct Seq<I, E>(Vec<I>, PhantomData<E>);
+
+impl<I: Clone, E> Clone for Seq<I, E> {
+    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+}
+
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(), E>) where Self: Sized {
+        let mut n = 0;
+        for expected in &self.0 {
+            match stream.peek() {
+                Some(x) if x == expected => {
+                    n += 1;
+                    stream.next().unwrap();
+                },
+                x => {
+                    let x = x.cloned();
+                    return (n, Err(E::expected_found(stream.position(), Some(expected.clone()), x)));
+                },
+            }
+        }
+        (n, Ok(()))
+    }
+}
+
+/// A parser that accepts only a sequence of specific tokens.
+pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
+    Seq(xs.into_iter().collect(), PhantomData)
+}
+
 /// See [`filter`].
 pub struct Filter<F, E>(F, PhantomData<E>);
 

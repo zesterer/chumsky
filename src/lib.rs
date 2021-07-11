@@ -45,6 +45,8 @@
 pub mod combinator;
 /// Error types, traits and utilities.
 pub mod error;
+/// Traits that allow chaining parser outputs together.
+pub mod chain;
 /// Parser primitives that accept specific token patterns.
 pub mod primitive;
 /// Recursive parsers (parser that include themselves within their patterns).
@@ -55,6 +57,7 @@ pub mod stream;
 pub mod text;
 
 use crate::{
+    chain::Chain,
     combinator::*,
     error::Error,
     primitive::*,
@@ -74,7 +77,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
-        primitive::{just, filter, end, any},
+        primitive::{any, end, filter, just, seq},
         recursive::recursive,
         Parser,
     };
@@ -87,7 +90,6 @@ fn or_zip_with<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: Option<T>, f: F) -> Opt
         (a, b) => a.or(b),
     }
 }
-*/
 
 fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
     match a {
@@ -95,6 +97,7 @@ fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
         None => b,
     }
 }
+*/
 
 /// A trait implemented by parsers.
 ///
@@ -254,6 +257,49 @@ pub trait Parser<I, O> {
     /// ```
     fn then<U, P: Parser<I, U>>(self, other: P) -> Then<Self, P> where Self: Sized { Then(self, other) }
 
+    /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    ///
+    /// let int = just('-').or_not()
+    ///     .chain(filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
+    ///         .chain(filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit()).repeated()))
+    ///     .or(just('0').map(|c| vec![c]))
+    ///     .padded_by(end())
+    ///     .collect::<String>()
+    ///     .map(|s| s.parse().unwrap());
+    ///
+    /// assert_eq!(int.parse("0".chars()), Ok(0));
+    /// assert_eq!(int.parse("415".chars()), Ok(415));
+    /// assert_eq!(int.parse("-50".chars()), Ok(-50));
+    /// assert!(int.parse("-0".chars()).is_err());
+    /// assert!(int.parse("05".chars()).is_err());
+    /// ```
+    fn chain<T, U, P: Parser<I, U, Error = Self::Error>>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
+    where
+        Self: Sized,
+        U: Chain<T>,
+        O: Chain<T>,
+    {
+        self.then(other).map(|(a, b)| {
+            let mut v = Vec::with_capacity(a.len() + b.len());
+            a.append(&mut v);
+            b.append(&mut v);
+            v
+        })
+    }
+
+    /// Flatten a nested collection.
+    fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>, O>
+    where
+        Self: Sized,
+        O: IntoIterator<Item = Inner>,
+        Inner: IntoIterator<Item = T>,
+    { self.map(|xs| xs.into_iter().map(|xs| xs.into_iter()).flatten().collect()) }
+
     /// Parse one thing and then another thing, yielding only the output of the latter.
     ///
     /// # Examples
@@ -314,7 +360,7 @@ pub trait Parser<I, O> {
     /// If parsing of the inner pattern is successful, the output is `Some(_)`. If an error occurs, the output is
     /// `None`.
     ///
-    /// The delimiters are assymed to allow nesting, so error recovery will attempt to balance the delimiters where
+    /// The delimiters are assumed to allow nesting, so error recovery will attempt to balance the delimiters where
     /// possible. A syntax error within the delimiters should not prevent correct parsing of tokens beyond the
     /// delimiters.
     ///

@@ -85,8 +85,8 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                         break (n, Ok(None));
                     },
                 },
-                Some(x) => res = Err(zip_or(res.err(), E::expected_found(stream.position(), Some(self.1.clone()), Some(x)), |a, b| a.merge(b))),
-                None => break (n, Err(zip_or(res.err(), E::expected_found(stream.position(), Some(self.1.clone()), None), |a, b| a.merge(b)))),
+                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), Some(x)))),
+                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), None)))),
             }
         }
     }
@@ -128,8 +128,8 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                 } else {
                     balance += 1;
                 },
-                Some(x) => res = Err(zip_or(res.err(), E::expected_found(stream.position(), Some(self.1.clone()), Some(x)), |a, b| a.merge(b))),
-                None => break (n, Err(zip_or(res.err(), E::expected_found(stream.position(), Some(self.1.clone()), None), |a, b| a.merge(b))))
+                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), Some(x)))),
+                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), None)))),
             }
         }
     }
