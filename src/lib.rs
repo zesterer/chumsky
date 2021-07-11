@@ -37,8 +37,9 @@
 //! - Text-specific parsers & utilities
 //! - Custom error types
 
-#![feature(once_cell)]
 #![deny(missing_docs)]
+// TODO: Enable when stable
+//#![feature(once_cell)]
 
 /// Combinators that allow combining and extending existing parsers.
 pub mod combinator;
@@ -64,7 +65,8 @@ use std::{
     iter::Peekable,
     marker::PhantomData,
     rc::Rc,
-    lazy::OnceCell,
+    // TODO: Enable when stable
+    //lazy::OnceCell,
 };
 
 /// Commonly used functions, traits and types.
