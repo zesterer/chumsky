@@ -128,8 +128,8 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                 } else {
                     balance += 1;
                 },
-                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), Some(x)))),
-                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), None)))),
+                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.2.clone()), Some(x)))),
+                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.2.clone()), None)))),
             }
         }
     }

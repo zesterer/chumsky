@@ -422,7 +422,7 @@ pub trait Parser<I, O> {
     ///             SExpr::Error,
     ///             SExpr::Num(15),
     ///         ])),
-    ///         vec![Simple::expected_found(11, Some('('), Some('!'))], // A syntax error!
+    ///         vec![Simple::expected_found(11, Some(')'), Some('!'))], // A syntax error!
     ///     ),
     /// );
     /// ```

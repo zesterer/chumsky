@@ -14,7 +14,8 @@ pub trait Error<I>: Sized {
     /// Merge two errors together, combining their elements together.
     ///
     /// Note that when the errors originate from two different locations in the token stream (i.e: their
-    /// [`Error::position`] differs), the latter error should be preferred.
+    /// [`Error::position`] differs), the error error with the latest position should be preferred. When merging
+    /// errors, unresolvable differences should favour `self`.
     fn merge(self, other: Self) -> Self {
         if self.position() < other.position() {
             other
@@ -64,7 +65,7 @@ impl<I: fmt::Display> fmt::Display for Simple<I> {
         write!(f, "at {}", self.position)?;
 
         match self.expected.as_slice() {
-            [] => {},
+            [] => write!(f, " but end of input was expected")?,
             [expected] => write!(f, " but '{}' was expected", expected)?,
             [_, ..] => write!(f, " but one of '{}' expected", self.expected
                 .iter()
