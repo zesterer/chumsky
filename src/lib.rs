@@ -79,6 +79,7 @@ pub mod prelude {
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, just, seq},
         recursive::recursive,
+        text,
         Parser,
     };
 }
@@ -118,7 +119,7 @@ fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
 /// have a lexical pass prior to the main parser that groups the input characters into tokens.
 pub trait Parser<I, O> {
     /// The type of errors emitted by this parser.
-    type Error: Error<I>;
+    type Error: Error<I>; // TODO when default associated types are stable: = Simple<I>;
 
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.

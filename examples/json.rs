@@ -13,19 +13,14 @@ enum Json {
 
 fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
     recursive(|value| {
-        let int = filter(|c: &char| c.is_ascii_digit() && *c != '0').map(Some)
-            .chain(filter(|c: &char| c.is_ascii_digit()).repeated())
-            .or(just('0').map(|c| vec![c]));
-
-        let frac = just('.')
-            .chain(filter(|c: &char| c.is_ascii_digit()).repeated_at_least(1));
+        let frac = just('.').chain(text::digits());
 
         let exp = just('e').or(just('E'))
             .padding_for(just('+').or(just('-')).or_not())
-            .chain(filter(|c: &char| c.is_ascii_digit()).repeated_at_least(1));
+            .chain(text::digits());
 
         let number = just('-').or_not()
-            .chain(int)
+            .chain(text::int())
             .chain(frac.or_not().flatten())
             .chain::<char, _, _>(exp.or_not().flatten())
             .collect::<String>()

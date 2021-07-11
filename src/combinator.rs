@@ -85,8 +85,8 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                         break (n, Ok(None));
                     },
                 },
-                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), Some(x)))),
-                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.1.clone()), None)))),
+                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.1.clone()], Some(x)))),
+                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.1.clone()], None)))),
             }
         }
     }
@@ -105,7 +105,7 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
             Some(x) if x == &self.1 => { stream.next(); 1 },
             x => {
                 let x = x.cloned();
-                return (0, Err(E::expected_found(stream.position(), Some(self.1.clone()), x)))
+                return (0, Err(E::expected_found(stream.position(), vec![self.1.clone()], x)))
             },
         };
 
@@ -128,8 +128,8 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                 } else {
                     balance += 1;
                 },
-                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.2.clone()), Some(x)))),
-                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), Some(self.2.clone()), None)))),
+                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.2.clone()], Some(x)))),
+                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.2.clone()], None)))),
             }
         }
     }

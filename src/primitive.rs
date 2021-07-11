@@ -15,7 +15,7 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
             None => (0, Ok(())),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), None, x)))
+                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
             },
         }
     }
@@ -42,7 +42,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
             Some(x) if x == &self.0 => (1, Ok(stream.next().unwrap())),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), Some(self.0.clone()), x)))
+                (0, Err(E::expected_found(stream.position(), vec![self.0.clone()], x)))
             },
         }
     }
@@ -73,7 +73,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
                 },
                 x => {
                     let x = x.cloned();
-                    return (n, Err(E::expected_found(stream.position(), Some(expected.clone()), x)));
+                    return (n, Err(E::expected_found(stream.position(), vec![expected.clone()], x)));
                 },
             }
         }
@@ -83,6 +83,34 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 
 /// A parser that accepts only a sequence of specific tokens.
 pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
+    Seq(xs.into_iter().collect(), PhantomData)
+}
+
+/// See [`one_of`].
+pub struct OneOf<I, E>(Vec<I>, PhantomData<E>);
+
+impl<I: Clone, E> Clone for OneOf<I, E> {
+    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+}
+
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<I, E>) where Self: Sized {
+        match stream.peek() {
+            Some(x) if self.0.contains(x) => {
+                (1, Ok(stream.next().unwrap()))
+            },
+            x => {
+                let x = x.cloned();
+                (0, Err(E::expected_found(stream.position(), self.0.clone(), x)))
+            },
+        }
+    }
+}
+
+/// A parser that accepts only a sequence of specific tokens.
+pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
     Seq(xs.into_iter().collect(), PhantomData)
 }
 
@@ -102,7 +130,7 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
             Some(x) if (self.0)(x) => (1, Ok(stream.next().unwrap())),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), None, x)))
+                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
             },
         }
     }
@@ -135,7 +163,7 @@ impl<I: Clone, O, F: Fn(I) -> Result<O, E>, E: Error<I>> Parser<I, O> for Filter
             },
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), None, x)))
+                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
             },
         }
     }

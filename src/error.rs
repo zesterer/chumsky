@@ -9,7 +9,7 @@ pub trait Error<I>: Sized {
     ///
     /// Using a `None` as `expected` indicates that accepted tokens cannot be described with a token. Using a `None` as
     /// `found` indicates that the end of input was reached, but was not expected.
-    fn expected_found(position: usize, expected: Option<I>, found: Option<I>) -> Self;
+    fn expected_found(position: usize, expected: Vec<I>, found: Option<I>) -> Self;
 
     /// Merge two errors together, combining their elements together.
     ///
@@ -35,10 +35,10 @@ pub struct Simple<I> {
 
 impl<I> Error<I> for Simple<I> {
     fn position(&self) -> usize { self.position }
-    fn expected_found(position: usize, expected: Option<I>, found: Option<I>) -> Self {
+    fn expected_found(position: usize, expected: Vec<I>, found: Option<I>) -> Self {
         Self {
             position,
-            expected: expected.into_iter().collect(),
+            expected,
             found,
         }
     }
