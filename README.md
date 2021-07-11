@@ -1,13 +1,13 @@
 # Chumsky
 
-A friendly parser combinator crate that makes writing LL-1 parsers with error recovery easy.
+A friendly parser combinator crate that makes writing LL(1) parsers with error recovery easy.
 
 ## Example
 
 Here follows a [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) parser. See `examples/` for the full interpreter.
 
 ```rs
-fn parser() -> impl Parser<char, Vec<Instr>> {
+fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
     recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
         .or(just('<').to(Left))
@@ -30,7 +30,7 @@ fn parser() -> impl Parser<char, Vec<Instr>> {
 
 ## Planned Features
 
-- Nested parsers
+- Nested parsers (parsers that parse patterns within nested tokens)
 
 ## Other Information
 

@@ -1,4 +1,4 @@
-use chumsky::{Parser, error::BasicError, just, recursive, end};
+use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
 
 #[derive(Clone)]
@@ -10,7 +10,7 @@ enum Instr {
     Loop(Vec<Self>)
 }
 
-fn parser() -> impl Parser<char, Vec<Instr>, Error = BasicError<char>> {
+fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
     recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
         .or(just('<').to(Left))
