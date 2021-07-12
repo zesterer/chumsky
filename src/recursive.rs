@@ -11,7 +11,7 @@ impl<T> OnceCell<T> {
     pub fn get(&self) -> Option<std::cell::Ref<T>> { Some(std::cell::Ref::map(self.0.borrow(), |x| x.as_ref().unwrap())) }
 }
 
-type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I>, &mut Vec<E>) -> (usize, Result<O, E>) + 'a;
+type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I>, &mut Vec<E>) -> (usize, Result<(O, Option<E>), E>) + 'a;
 
 /// See [`recursive()`].
 pub struct Recursive<'a, I, O, E>(Rc<OnceCell<Box<ParserFn<'a, I, O, E>>>>);
@@ -23,7 +23,7 @@ impl<'a, I, O, E> Clone for Recursive<'a, I, O, E> {
 impl<'a, I, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<O, E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
         (self.0
             .get()
             .expect("Recursive parser used prior to construction"))(stream, errors)

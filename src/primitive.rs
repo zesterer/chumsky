@@ -10,9 +10,9 @@ impl<E> Clone for End<E> {
 impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) where Self: Sized {
         match stream.peek() {
-            None => (0, Ok(())),
+            None => (0, Ok(((), None))),
             x => {
                 let x = x.cloned();
                 (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
@@ -37,9 +37,9 @@ impl<I: Clone, E> Clone for Just<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<I, E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
         match stream.peek() {
-            Some(x) if x == &self.0 => (1, Ok(stream.next().unwrap())),
+            Some(x) if x == &self.0 => (1, Ok((stream.next().unwrap(), None))),
             x => {
                 let x = x.cloned();
                 (0, Err(E::expected_found(stream.position(), vec![self.0.clone()], x)))
@@ -63,7 +63,7 @@ impl<I: Clone, E> Clone for Seq<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) where Self: Sized {
         let mut n = 0;
         for expected in &self.0 {
             match stream.peek() {
@@ -77,7 +77,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
                 },
             }
         }
-        (n, Ok(()))
+        (n, Ok(((), None)))
     }
 }
 
@@ -96,10 +96,10 @@ impl<I: Clone, E> Clone for OneOf<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<I, E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
         match stream.peek() {
             Some(x) if self.0.contains(x) => {
-                (1, Ok(stream.next().unwrap()))
+                (1, Ok((stream.next().unwrap(), None)))
             },
             x => {
                 let x = x.cloned();
@@ -125,9 +125,9 @@ impl<F: Clone, E> Clone for Filter<F, E> {
 impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<I, E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
         match stream.peek() {
-            Some(x) if (self.0)(x) => (1, Ok(stream.next().unwrap())),
+            Some(x) if (self.0)(x) => (1, Ok((stream.next().unwrap(), None))),
             x => {
                 let x = x.cloned();
                 (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
@@ -152,12 +152,12 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
 impl<I: Clone, O, F: Fn(I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<O, E>) where Self: Sized {
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
         match stream.peek() {
             Some(x) => match (self.0)(x.clone()) {
                 Ok(o) => {
                     stream.next().unwrap();
-                    (1, Ok(o))
+                    (1, Ok((o, None)))
                 },
                 Err(e) => (0, Err(e)),
             },

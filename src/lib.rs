@@ -84,7 +84,6 @@ pub mod prelude {
     };
 }
 
-/*
 fn or_zip_with<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: Option<T>, f: F) -> Option<T> {
     match (a, b) {
         (Some(a), Some(b)) => Some(f(a, b)),
@@ -98,7 +97,6 @@ fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
         None => b,
     }
 }
-*/
 
 /// A trait implemented by parsers.
 ///
@@ -125,7 +123,7 @@ pub trait Parser<I, O> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<O, Self::Error>) where Self: Sized;
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<Self::Error>), Self::Error>) where Self: Sized;
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
@@ -133,7 +131,7 @@ pub trait Parser<I, O> {
     fn parse_recovery<Iter: IntoIterator<Item = I>>(&self, iter: Iter) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         let mut errors = Vec::new();
         match self.parse_inner(&mut IterStream::new(iter.into_iter()), &mut errors).1 {
-            Ok(o) => (Some(o), errors),
+            Ok((o, _)) => (Some(o), errors),
             Err(e) => {
                 errors.push(e);
                 (None, errors)
@@ -485,7 +483,7 @@ pub trait Parser<I, O> {
     ///             SExpr::Error,
     ///             SExpr::Num(15),
     ///         ])),
-    ///         vec![Simple::expected_found(11, vec![')'], Some('!'))], // A syntax error!
+    ///         vec![Simple::expected_found(10, vec!['(', '0', ')'], Some('!'))], // A syntax error!
     ///     ),
     /// );
     /// ```
