@@ -1,3 +1,7 @@
+//! This is a parser for JSON.
+//! Run it with the following command:
+//! cargo run --example json -- examples/sample.json
+
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 

@@ -25,6 +25,9 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
 }
 ```
 
+Other examples in this repository include a **JSON parser**, a **Brainfuck interpreter**, and an interpreter for a
+simple dynamically-typed **Rust-like programming language**.
+
 ## Features
 
 - Generic combinator parsing

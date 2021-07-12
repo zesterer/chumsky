@@ -1,3 +1,8 @@
+//! This is an entire parser and interpreter for a dynamically-typed Rust-like expression-oriented
+//! programming language. See `example.nrs` for sample source code.
+//! Run it with the following command:
+//! cargo run --example nano_rust -- examples/example.nrs
+
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 

@@ -1,3 +1,5 @@
+//! This is a Brainfuck parser and interpreter
+
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
 
