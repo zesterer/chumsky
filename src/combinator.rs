@@ -11,11 +11,11 @@ pub type PaddedBy<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 
 /// See [`Parser::foldl`].
 // TODO: Don't use a `Box` here.
-pub type Foldl<'a, P, A, B, O> = Map<P, Box<dyn Fn((A, Vec<B>)) -> A + 'a>, O>;
+// pub type Foldl<'a, P, A, B, O> = Map<P, Box<dyn Fn((A, Vec<B>)) -> A + 'a>, O>;
 
 /// See [`Parser::foldr`].
 // TODO: Don't use a `Box` here.
-pub type Foldr<'a, P, A, B, O> = Map<P, Box<dyn Fn((Vec<A>, B)) -> B + 'a>, O>;
+// pub type Foldr<'a, P, A, B, O> = Map<P, Box<dyn Fn((Vec<A>, B)) -> B + 'a>, O>;
 
 /// See [`Parser::or`].
 #[derive(Copy, Clone)]
@@ -196,6 +196,40 @@ impl<I, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, 
     fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) where Self: Sized {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map(|(o, f)|((&self.1)(o), f)))
+    }
+}
+
+/// See [`Parser::foldl`].
+pub struct Foldl<A, F, O, U>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(O, U)>);
+
+impl<A: Copy, F: Copy, O, U> Copy for Foldl<A, F, O, U> {}
+impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
+}
+
+impl<I, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+        let (n, res) = self.0.parse_inner(stream, errors);
+        (n, res.map(|((head, tail), f)|(tail.into_iter().fold(head, &self.1), f)))
+    }
+}
+
+/// See [`Parser::foldr`].
+pub struct Foldr<A, F, O, U>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(O, U)>);
+
+impl<A: Copy, F: Copy, O, U> Copy for Foldr<A, F, O, U> {}
+impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
+}
+
+impl<I, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) where Self: Sized {
+        let (n, res) = self.0.parse_inner(stream, errors);
+        (n, res.map(|((init, end), f)|(init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b)), f)))
     }
 }
 

@@ -110,8 +110,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 }
 
 /// A parser that accepts only a sequence of specific tokens.
-pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
-    Seq(xs.into_iter().collect(), PhantomData)
+pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> OneOf<I, E> {
+    OneOf(xs.into_iter().collect(), PhantomData)
 }
 
 /// See [`filter`].
@@ -149,12 +149,13 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, F: Fn(I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
+impl<I: Clone, O, F: Fn(usize, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
     fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+        let pos = stream.position();
         match stream.peek() {
-            Some(x) => match (self.0)(x.clone()) {
+            Some(x) => match (self.0)(pos, x.clone()) {
                 Ok(o) => {
                     stream.next().unwrap();
                     (1, Ok((o, None)))
@@ -172,7 +173,7 @@ impl<I: Clone, O, F: Fn(I) -> Result<O, E>, E: Error<I>> Parser<I, O> for Filter
 /// A parser that accepts a token and tests it against the given fallible function.
 ///
 /// This function allows integration with custom error types to allow for custom parser errors.
-pub fn filter_map<I, O, F: Fn(I) -> Result<O, E>, E>(f: F) -> FilterMap<F, E> {
+pub fn filter_map<I, O, F: Fn(usize, I) -> Result<O, E>, E>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
 }
 

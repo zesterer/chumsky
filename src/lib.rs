@@ -67,7 +67,6 @@ use crate::{
 use std::{
     iter::Peekable,
     marker::PhantomData,
-    rc::Rc,
     // TODO: Enable when stable
     //lazy::OnceCell,
 };
@@ -77,7 +76,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
-        primitive::{any, end, filter, just, seq},
+        primitive::{any, end, filter, filter_map, just, one_of, seq},
         recursive::recursive,
         text,
         Parser,
@@ -230,10 +229,10 @@ pub trait Parser<I, O> {
     /// assert_eq!(sum.parse("1+12+3+9".chars()), Ok(25));
     /// assert_eq!(sum.parse("6".chars()), Ok(6));
     /// ```
-    fn foldl<'a, A, B, F: Fn(A, B) -> A + 'a>(self, f: F) -> Foldl<'a, Self, A, B, (A, Vec<B>)>
+    fn foldl<A, B, F: Fn(A, B) -> A>(self, f: F) -> Foldl<Self, F, A, B>
     where
         Self: Parser<I, (A, Vec<B>)> + Sized
-    { self.map(Box::new(move |(head, tail)| tail.into_iter().fold(head, &f))) }
+    { Foldl(self, f, PhantomData) }
 
     /// Right-fold the output of the parser into a single value, where the output is of type `(Vec<_>, _)`.
     ///
@@ -256,10 +255,10 @@ pub trait Parser<I, O> {
     /// assert_eq!(signed.parse("-17".chars()), Ok(-17));
     /// assert_eq!(signed.parse("--+-+-5".chars()), Ok(5));
     /// ```
-    fn foldr<'a, A, B, F: Fn(A, B) -> B + 'a>(self, f: F) -> Foldr<'a, Self, A, B, (Vec<A>, B)>
+    fn foldr<'a, A, B, F: Fn(A, B) -> B + 'a>(self, f: F) -> Foldr<Self, F, A, B>
     where
         Self: Parser<I, (Vec<A>, B)> + Sized
-    { self.map(Box::new(move |(init, end)| init.into_iter().rev().fold(end, |b, a| (&f)(a, b)))) }
+    { Foldr(self, f, PhantomData) }
 
     /// Ignore the output of this parser, yielding `()` as an output instead.
     ///

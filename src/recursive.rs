@@ -1,5 +1,7 @@
 use super::*;
 
+use std::rc::Rc;
+
 // TODO: Remove when `OnceCell` is stable
 struct OnceCell<T>(std::cell::RefCell<Option<T>>);
 impl<T> OnceCell<T> {
