@@ -10,12 +10,12 @@ impl<E> Clone for End<E> {
 impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) where Self: Sized {
-        match stream.peek() {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) {
+        match stream.peek_token() {
             None => (0, Ok(((), None))),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
+                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
             },
         }
     }
@@ -28,8 +28,8 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
 /// ```
 /// use chumsky::prelude::*;
 ///
-/// assert_eq!(end::<Simple<char>>().parse("".chars()), Ok(()));
-/// assert!(end::<Simple<char>>().parse("hello".chars()).is_err());
+/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
+/// assert!(end::<Simple<char>>().parse("hello").is_err());
 /// ```
 pub fn end<E>() -> End<E> {
     End(PhantomData)
@@ -46,12 +46,12 @@ impl<I: Clone, E> Clone for Just<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
-        match stream.peek() {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
+        match stream.peek_token() {
             Some(x) if x == &self.0 => (1, Ok((stream.next().unwrap(), None))),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), vec![self.0.clone()], x)))
+                (0, Err(E::expected_token_found(stream.peek_span(), vec![self.0.clone()], x)))
             },
         }
     }
@@ -66,12 +66,12 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
 ///
 /// let question = just::<_, Simple<char>>('?');
 ///
-/// assert_eq!(question.parse("?".chars()), Ok('?'));
-/// assert!(question.parse("!".chars()).is_err());
+/// assert_eq!(question.parse("?"), Ok('?'));
+/// assert!(question.parse("!").is_err());
 /// // This works because parsers do not eagerly consume input, so the '!' is not parsed
-/// assert_eq!(question.parse("?!".chars()), Ok('?'));
+/// assert_eq!(question.parse("?!"), Ok('?'));
 /// // This fails because the parser expects an end to the input after the '?'
-/// assert!(question.then(end()).parse("?!".chars()).is_err());
+/// assert!(question.then(end()).parse("?!").is_err());
 /// ```
 pub fn just<I: Clone + PartialEq, E>(x: I) -> Just<I, E> {
     Just(x, PhantomData)
@@ -87,17 +87,17 @@ impl<I: Clone, E> Clone for Seq<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) {
         let mut n = 0;
         for expected in &self.0 {
-            match stream.peek() {
+            match stream.peek_token() {
                 Some(x) if x == expected => {
                     n += 1;
                     stream.next().unwrap();
                 },
                 x => {
                     let x = x.cloned();
-                    return (n, Err(E::expected_found(stream.position(), vec![expected.clone()], x)));
+                    return (n, Err(E::expected_token_found(stream.peek_span(), vec![expected.clone()], x)));
                 },
             }
         }
@@ -114,9 +114,9 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 ///
 /// let hello = seq::<_, _, Simple<char>>("Hello".chars());
 ///
-/// assert_eq!(hello.parse("Hello".chars()), Ok(()));
-/// assert_eq!(hello.parse("Hello, world!".chars()), Ok(()));
-/// assert!(hello.parse("Goodbye".chars()).is_err());
+/// assert_eq!(hello.parse("Hello"), Ok(()));
+/// assert_eq!(hello.parse("Hello, world!"), Ok(()));
+/// assert!(hello.parse("Goodbye").is_err());
 ///
 /// let onetwothree = seq::<_, _, Simple<i32>>([1, 2, 3]);
 ///
@@ -138,14 +138,14 @@ impl<I: Clone, E> Clone for OneOf<I, E> {
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
-        match stream.peek() {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
+        match stream.peek_token() {
             Some(x) if self.0.contains(x) => {
                 (1, Ok((stream.next().unwrap(), None)))
             },
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), self.0.clone(), x)))
+                (0, Err(E::expected_token_found(stream.peek_span(), self.0.clone(), x)))
             },
         }
     }
@@ -163,8 +163,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 ///     .padded_by(end())
 ///     .collect::<String>();
 ///
-/// assert_eq!(digits.parse("48791".chars()), Ok("48791".to_string()));
-/// assert!(digits.parse("421!53".chars()).is_err());
+/// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
+/// assert!(digits.parse("421!53").is_err());
 /// ```
 pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> OneOf<I, E> {
     OneOf(xs.into_iter().collect(), PhantomData)
@@ -181,12 +181,12 @@ impl<F: Clone, E> Clone for Filter<F, E> {
 impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) where Self: Sized {
-        match stream.peek() {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
+        match stream.peek_token() {
             Some(x) if (self.0)(x) => (1, Ok((stream.next().unwrap(), None))),
             x => {
                 let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
+                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
             },
         }
     }
@@ -204,8 +204,8 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
 ///     .padded_by(end())
 ///     .collect::<String>();
 ///
-/// assert_eq!(lowercase.parse("hello".chars()), Ok("hello".to_string()));
-/// assert!(lowercase.parse("Hello".chars()).is_err());
+/// assert_eq!(lowercase.parse("hello"), Ok("hello".to_string()));
+/// assert!(lowercase.parse("Hello").is_err());
 /// ```
 pub fn filter<I, F: Fn(&I) -> bool, E>(f: F) -> Filter<F, E> {
     Filter(f, PhantomData)
@@ -219,13 +219,12 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, F: Fn(usize, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
+impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
-        let pos = stream.position();
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
         match stream.peek() {
-            Some(x) => match (self.0)(pos, x.clone()) {
+            Some((x, span)) => match (self.0)(span, x.clone()) {
                 Ok(o) => {
                     stream.next().unwrap();
                     (1, Ok((o, None)))
@@ -233,8 +232,8 @@ impl<I: Clone, O, F: Fn(usize, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for
                 Err(e) => (0, Err(e)),
             },
             x => {
-                let x = x.cloned();
-                (0, Err(E::expected_found(stream.position(), Vec::new(), x)))
+                let x = x.map(|(x, _)| x.clone());
+                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
             },
         }
     }
@@ -248,29 +247,31 @@ impl<I: Clone, O, F: Fn(usize, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for
 ///
 /// ```
 /// use chumsky::prelude::*;
+/// use std::ops::Range;
 ///
 /// // A custom error type
 /// #[derive(Debug, PartialEq)]
 /// enum Custom {
-///     ExpectedFound(usize, Vec<char>, Option<char>),
-///     NotADigit(usize, char),
+///     ExpectedFound(Option<Range<usize>>, Vec<char>, Option<char>),
+///     NotADigit(Option<Range<usize>>, char),
 /// }
 ///
 /// impl chumsky::Error<char> for Custom {
+///     type Span = Range<usize>;
 ///     type Pattern = char;
 ///
-///     fn position(&self) -> usize {
+///     fn span(&self) -> Option<Self::Span> {
 ///         match self {
-///             Self::ExpectedFound(p, _, _) => *p,
-///             Self::NotADigit(p, _) => *p,
+///             Self::ExpectedFound(span, _, _) => span.clone(),
+///             Self::NotADigit(span, _) => span.clone(),
 ///         }
 ///     }
 ///
-///     fn expected_found(pos: usize, expected: Vec<char>, found: Option<char>) -> Self {
-///         Self::ExpectedFound(pos, expected, found)
+///     fn expected_token_found(span: Option<Range<usize>>, expected: Vec<char>, found: Option<char>) -> Self {
+///         Self::ExpectedFound(span, expected, found)
 ///     }
 ///
-///     fn label_expected<L: Into<Self::Pattern>>(mut self, label: L) -> Self {
+///     fn into_labelled<L: Into<Self::Pattern>>(mut self, label: L) -> Self {
 ///         if let Self::ExpectedFound(_, expected, _) = &mut self {
 ///             *expected = vec![label.into()];
 ///         }
@@ -278,16 +279,16 @@ impl<I: Clone, O, F: Fn(usize, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for
 ///     }
 /// }
 ///
-/// let numeral = filter_map(|p, c: char| match c.to_digit(10) {
+/// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
-///     None => Err(Custom::NotADigit(p, c)),
+///     None => Err(Custom::NotADigit(Some(span), c)),
 /// });
 ///
-/// assert_eq!(numeral.parse("3".chars()), Ok(3));
-/// assert_eq!(numeral.parse("7".chars()), Ok(7));
-/// assert_eq!(numeral.parse("f".chars()), Err(vec![Custom::NotADigit(0, 'f')]));
+/// assert_eq!(numeral.parse("3"), Ok(3));
+/// assert_eq!(numeral.parse("7"), Ok(7));
+/// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(Some(0..1), 'f')]));
 /// ```
-pub fn filter_map<I, O, F: Fn(usize, I) -> Result<O, E>, E>(f: F) -> FilterMap<F, E> {
+pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
 }
 
@@ -303,10 +304,10 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 ///
 /// let any = any::<char, Simple<char>>();
 ///
-/// assert_eq!(any.parse("a".chars()), Ok('a'));
-/// assert_eq!(any.parse("7".chars()), Ok('7'));
-/// assert_eq!(any.parse("🤖".chars()), Ok('🤖'));
-/// assert!(any.parse("".chars()).is_err());
+/// assert_eq!(any.parse("a"), Ok('a'));
+/// assert_eq!(any.parse("7"), Ok('7'));
+/// assert_eq!(any.parse("🤖"), Ok('🤖'));
+/// assert!(any.parse("").is_err());
 /// ```
 pub fn any<I, E>() -> Any<I, E> {
     Filter(|_| true, PhantomData)

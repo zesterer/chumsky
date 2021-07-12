@@ -6,6 +6,8 @@
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 
+pub type Span = std::ops::Range<usize>;
+
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
     Value(Value),
@@ -19,7 +21,7 @@ enum Token {
     Else,
 }
 
-fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
+fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let num = text::int()
         .chain::<char, _, _>(just('.').chain(text::digits()).or_not().flatten())
         .collect::<String>()
@@ -52,7 +54,10 @@ fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
 
     let token = num.or(str_).or(op).or(ctrl).or(ident);
 
-    token.padded().repeated()
+    token
+        .map_with_span(|tok, span| (tok, span.unwrap()))
+        .padded()
+        .repeated()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -122,15 +127,15 @@ struct Func {
 fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
-            let val = filter_map(|pos, tok| match tok {
+            let val = filter_map(|span, tok| match tok {
                 Token::Value(v) => Ok(Expr::Value(v.clone())),
-                _ => Err(Simple::expected_found(pos, Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
             })
                 .label("value");
 
-            let ident = filter_map(|pos, tok| match tok {
+            let ident = filter_map(|span, tok| match tok {
                 Token::Ident(ident) => Ok(ident.clone()),
-                _ => Err(Simple::expected_found(pos, Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
             })
                 .label("identifier");
 
@@ -186,6 +191,7 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
                 .foldl(|a, (op, b)| Expr::Binary(Box::new(a), op, Box::new(b)));
 
             compare
+                .label("expression")
         });
 
         let block = expr.clone()
@@ -219,9 +225,9 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
 }
 
 fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|pos, tok| match tok {
+    let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
-        _ => Err(Simple::expected_found(pos, Vec::new(), Some(tok))),
+        _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
     });
 
     let args = ident.clone()
@@ -326,7 +332,7 @@ fn eval_expr(expr: &Expr, funcs: &HashMap<String, Func>, stack: &mut Vec<(String
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    match lexer().parse(src.trim().chars()) {
+    match lexer().parse(src.as_str()) {
         Ok(tokens) => {
             println!("Tokens = {:?}", tokens);
             match funcs_parser().parse(tokens) {

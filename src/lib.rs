@@ -65,7 +65,7 @@
 //! parser either: splitting parsing into multiple passes makes writing and validating each pass simpler and allows for
 //! tools like syntax highlighters that make use of earlier passes only to be built on top of the same codebase.
 //!
-//! All of this considered, LL(1) parsers are a powerful tool that continue to be a relevant and effective route for
+//! All of this considered, LL(1) parsers are powerful tools that continue to be a relevant and effective route for
 //! parsing even (and, perhaps, *in particular*) the latest generations of programming languages.
 //!
 //! Why use LL(1) parsing when more powerful backtracking alternatives exist? The answer, in my view, comes down to
@@ -100,7 +100,7 @@ pub mod stream;
 /// Text-specific parsers and utilities.
 pub mod text;
 
-pub use crate::error::Error;
+pub use crate::error::{Error, Span};
 
 use crate::{
     chain::Chain,
@@ -167,14 +167,14 @@ pub trait Parser<I, O> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<Self::Error>), Self::Error>) where Self: Sized;
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<Self::Error>), Self::Error>) where Self: Sized;
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_recovery<Iter: IntoIterator<Item = I>>(&self, iter: Iter) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+    fn parse_recovery<S: IntoStream<I, <Self::Error as Error<I>>::Span>>(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         let mut errors = Vec::new();
-        match self.parse_inner(&mut IterStream::new(iter.into_iter()), &mut errors).1 {
+        match self.parse_inner(&mut stream.into_stream(), &mut errors).1 {
             Ok((o, _)) => (Some(o), errors),
             Err(e) => {
                 errors.push(e);
@@ -186,8 +186,8 @@ pub trait Parser<I, O> {
     /// Parse an iterator of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
-    fn parse<Iter: IntoIterator<Item = I>>(&self, iter: Iter) -> Result<O, Vec<Self::Error>> where Self: Sized {
-        let (output, errors) = self.parse_recovery(iter);
+    fn parse<S: IntoStream<I, <Self::Error as Error<I>>::Span>>(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
+        let (output, errors) = self.parse_recovery(stream);
         if errors.len() > 0 {
             Err(errors)
         } else {
@@ -195,7 +195,7 @@ pub trait Parser<I, O> {
         }
     }
 
-    /// Map the output of this parser to a value of a potentially different type.
+    /// Map the output of this parser to aanother value.
     ///
     /// # Examples
     ///
@@ -217,10 +217,15 @@ pub trait Parser<I, O> {
     ///
     /// let token = word.or(num);
     ///
-    /// assert_eq!(token.parse("test".chars()), Ok(Token::Word("test".to_string())));
-    /// assert_eq!(token.parse("42".chars()), Ok(Token::Num(42)));
+    /// assert_eq!(token.parse("test"), Ok(Token::Word("test".to_string())));
+    /// assert_eq!(token.parse("42"), Ok(Token::Num(42)));
     /// ```
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
+
+    /// Map the output of this parser to another value, making use of the pattern's span.
+    fn map_with_span<U, F: Fn(O, Option<<Self::Error as Error<I>>::Span>) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
+        where Self: Sized
+        { MapWithSpan(self, f, PhantomData) }
 
     /// Map the primary error of this parser to another value.
     ///
@@ -251,8 +256,8 @@ pub trait Parser<I, O> {
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
     ///
-    /// assert_eq!(op.parse("+".chars()), Ok(Op::Add));
-    /// assert_eq!(op.parse("/".chars()), Ok(Op::Div));
+    /// assert_eq!(op.parse("+"), Ok(Op::Add));
+    /// assert_eq!(op.parse("/"), Ok(Op::Div));
     /// ```
     fn to<U: Clone>(self, x: U) -> To<Self, O, U> where Self: Sized { To(self, x, PhantomData) }
 
@@ -271,8 +276,8 @@ pub trait Parser<I, O> {
     ///     .then(just('+').padding_for(int).repeated())
     ///     .foldl(|a, b| a + b);
     ///
-    /// assert_eq!(sum.parse("1+12+3+9".chars()), Ok(25));
-    /// assert_eq!(sum.parse("6".chars()), Ok(6));
+    /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
+    /// assert_eq!(sum.parse("6"), Ok(6));
     /// ```
     fn foldl<A, B, F: Fn(A, B) -> A>(self, f: F) -> Foldl<Self, F, A, B>
     where
@@ -296,9 +301,9 @@ pub trait Parser<I, O> {
     ///     .then(int)
     ///     .foldr(|a, b| a * b);
     ///
-    /// assert_eq!(signed.parse("3".chars()), Ok(3));
-    /// assert_eq!(signed.parse("-17".chars()), Ok(-17));
-    /// assert_eq!(signed.parse("--+-+-5".chars()), Ok(5));
+    /// assert_eq!(signed.parse("3"), Ok(3));
+    /// assert_eq!(signed.parse("-17"), Ok(-17));
+    /// assert_eq!(signed.parse("--+-+-5"), Ok(5));
     /// ```
     fn foldr<'a, A, B, F: Fn(A, B) -> B + 'a>(self, f: F) -> Foldr<Self, F, A, B>
     where
@@ -322,8 +327,8 @@ pub trait Parser<I, O> {
     ///     .ignored()
     ///     .repeated();
     ///
-    /// assert_eq!(whitespace.parse("    ".chars()), Ok(vec![(); 4]));
-    /// assert_eq!(whitespace.parse("  hello".chars()), Ok(vec![(); 2]));
+    /// assert_eq!(whitespace.parse("    "), Ok(vec![(); 4]));
+    /// assert_eq!(whitespace.parse("  hello"), Ok(vec![(); 2]));
     /// ```
     fn ignored(self) -> Ignored<Self, O> where Self: Sized { To(self, (), PhantomData) }
 
@@ -340,7 +345,7 @@ pub trait Parser<I, O> {
     ///     .repeated()
     ///     .collect::<String>();
     ///
-    /// assert_eq!(word.parse("hello".chars()), Ok("hello".to_string()));
+    /// assert_eq!(word.parse("hello"), Ok("hello".to_string()));
     /// ```
     fn collect<C: core::iter::FromIterator<O::Item>>(self) -> Map<Self, fn(O) -> C, O>
         where Self: Sized, O: IntoIterator
@@ -358,8 +363,8 @@ pub trait Parser<I, O> {
     ///     .collect::<String>();
     /// let two_words = word.padded_by(just(' ')).then(word);
     ///
-    /// assert_eq!(two_words.parse("dog cat".chars()), Ok(("dog".to_string(), "cat".to_string())));
-    /// assert!(two_words.parse("hedgehog".chars()).is_err());
+    /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
+    /// assert!(two_words.parse("hedgehog").is_err());
     /// ```
     fn then<U, P: Parser<I, U>>(self, other: P) -> Then<Self, P> where Self: Sized { Then(self, other) }
 
@@ -378,11 +383,11 @@ pub trait Parser<I, O> {
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
-    /// assert_eq!(int.parse("0".chars()), Ok(0));
-    /// assert_eq!(int.parse("415".chars()), Ok(415));
-    /// assert_eq!(int.parse("-50".chars()), Ok(-50));
-    /// assert!(int.parse("-0".chars()).is_err());
-    /// assert!(int.parse("05".chars()).is_err());
+    /// assert_eq!(int.parse("0"), Ok(0));
+    /// assert_eq!(int.parse("415"), Ok(415));
+    /// assert_eq!(int.parse("-50"), Ok(-50));
+    /// assert!(int.parse("-0").is_err());
+    /// assert!(int.parse("05").is_err());
     /// ```
     fn chain<T, U, P: Parser<I, U, Error = Self::Error>>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
     where
@@ -420,8 +425,8 @@ pub trait Parser<I, O> {
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
-    /// assert_eq!(integer.parse("00064".chars()), Ok(64));
-    /// assert_eq!(integer.parse("32".chars()), Ok(32));
+    /// assert_eq!(integer.parse("00064"), Ok(64));
+    /// assert_eq!(integer.parse("32"), Ok(32));
     /// ```
     fn padding_for<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
         where Self: Sized
@@ -446,7 +451,7 @@ pub trait Parser<I, O> {
     ///     .repeated();
     ///
     /// assert_eq!(
-    ///     sentence.parse("hello! how are you?".chars()),
+    ///     sentence.parse("hello! how are you?"),
     ///     Ok(vec![
     ///         "hello".to_string(),
     ///         "how".to_string(),
@@ -502,7 +507,7 @@ pub trait Parser<I, O> {
     ///
     /// // A valid input
     /// assert_eq!(
-    ///     s_expr.parse_recovery("(add (mul 42 3) 15)".chars()),
+    ///     s_expr.parse_recovery("(add (mul 42 3) 15)"),
     ///     (
     ///         Some(SExpr::List(vec![
     ///             SExpr::Ident("add".to_string()),
@@ -520,14 +525,14 @@ pub trait Parser<I, O> {
     /// // An input with a syntax error at position 11! Thankfully, we're able to recover
     /// // and still produce a useful output for later compilation stages (i.e: type-checking).
     /// assert_eq!(
-    ///     s_expr.parse_recovery("(add (mul ! 3) 15)".chars()),
+    ///     s_expr.parse_recovery("(add (mul ! 3) 15)"),
     ///     (
     ///         Some(SExpr::List(vec![
     ///             SExpr::Ident("add".to_string()),
     ///             SExpr::Error,
     ///             SExpr::Num(15),
     ///         ])),
-    ///         vec![Simple::expected_found(10, vec!['(', '0', ')'], Some('!'))], // A syntax error!
+    ///         vec![Simple::expected_token_found(Some(10..11), vec!['(', '0', ')'], Some('!'))], // A syntax error!
     ///     ),
     /// );
     /// ```
@@ -545,9 +550,9 @@ pub trait Parser<I, O> {
     ///     .or(just('*'))
     ///     .or(just('/'));
     ///
-    /// assert_eq!(op.parse("+".chars()), Ok('+'));
-    /// assert_eq!(op.parse("/".chars()), Ok('/'));
-    /// assert!(op.parse("!".chars()).is_err());
+    /// assert_eq!(op.parse("+"), Ok('+'));
+    /// assert_eq!(op.parse("/"), Ok('/'));
+    /// assert!(op.parse("!").is_err());
     /// ```
     fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
 
@@ -567,8 +572,8 @@ pub trait Parser<I, O> {
     /// let word_or_question = word
     ///     .then(just('?').or_not());
     ///
-    /// assert_eq!(word_or_question.parse("hello?".chars()), Ok(("hello".to_string(), Some('?'))));
-    /// assert_eq!(word_or_question.parse("wednesday".chars()), Ok(("wednesday".to_string(), None)));
+    /// assert_eq!(word_or_question.parse("hello?"), Ok(("hello".to_string(), Some('?'))));
+    /// assert_eq!(word_or_question.parse("wednesday"), Ok(("wednesday".to_string(), None)));
     /// ```
     fn or_not(self) -> OrNot<Self> where Self: Sized { OrNot(self) }
 
@@ -590,7 +595,7 @@ pub trait Parser<I, O> {
     /// let sum = num.then(just('+').padding_for(num).repeated())
     ///     .foldl(|a, b| a + b);
     ///
-    /// assert_eq!(sum.parse("2+13+4+0+5".chars()), Ok(24));
+    /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
     /// ```
     fn repeated(self) -> Repeated<Self> where Self: Sized { Repeated(self, 0) }
 
@@ -607,8 +612,8 @@ pub trait Parser<I, O> {
     ///     .repeated_at_least(5)
     ///     .collect::<String>();
     ///
-    /// assert_eq!(long_word.parse("hello".chars()), Ok("hello".to_string()));
-    /// assert!(long_word.parse("hi".chars()).is_err());
+    /// assert_eq!(long_word.parse("hello"), Ok("hello".to_string()));
+    /// assert!(long_word.parse("hi").is_err());
     /// ```
     fn repeated_at_least(self, n: usize) -> Repeated<Self> where Self: Sized { Repeated(self, n) }
 }

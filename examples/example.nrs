@@ -18,7 +18,7 @@ fn main() {
 	} else {
 		print("...something we cannot know");
 
-		print("How, I can tell you that the factorial of 10 is...");
+		print("However, I can tell you that the factorial of 10 is...");
 		print(factorial(10));
 	}
 }

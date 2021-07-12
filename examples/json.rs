@@ -80,7 +80,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    match parser().parse(src.trim().chars()) {
+    match parser().parse(src.trim()) {
         Ok(json) => println!("{:#?}", json),
         Err(errs) => errs
             .into_iter()

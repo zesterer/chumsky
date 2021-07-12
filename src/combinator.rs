@@ -24,7 +24,7 @@ pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 impl<I: Clone, O, A: Parser<I, O, Error =  E>, B: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Or<A, B> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
         match self.0.parse_inner(stream, errors) {
             (n, Ok((o, f))) => (n, Ok((o, f))),
             (0, Err(e)) => match self.1.parse_inner(stream, errors) {
@@ -43,7 +43,7 @@ pub struct OrNot<A>(pub(crate) A);
 impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<I>> Parser<I, Option<O>> for OrNot<A> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) {
         match self.0.parse_inner(stream, errors) {
             (n, Ok((o, f))) => (n, Ok((Some(o), f))),
             (0, Err(e)) => (0, Ok((None, Some(e)))),
@@ -59,7 +59,7 @@ pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 impl<I, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>> Parser<I, (O, U)> for Then<A, B> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<((O, U), Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<((O, U), Option<E>), E>) {
         match self.0.parse_inner(stream, errors) {
             (n, Ok((o, f))) => match self.1.parse_inner(stream, errors) {
                 (m, Ok((u, g))) => (n + m, Ok(((o, u), or_zip_with(f, g, |f, g| f.merge(g))))),
@@ -78,7 +78,7 @@ pub struct ThenCatch<A, I>(pub(crate) A, pub(crate) I);
 impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for ThenCatch<A, I> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) {
         let (mut n, mut res) = self.0.parse_inner(stream, errors);
 
         assert!(n > 0 /*|| res.is_ok()*/, "ThenCatch must consume input (i.e: be non-optional) to avoid consuming everything");
@@ -108,12 +108,12 @@ pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
 impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for DelimitedBy<A, I> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) where Self: Sized {
-        let mut n = match stream.peek() {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) {
+        let mut n = match stream.peek_token() {
             Some(x) if x == &self.1 => { stream.next(); 1 },
             x => {
                 let x = x.cloned();
-                return (0, Err(E::expected_found(stream.position(), vec![self.1.clone()], x)))
+                return (0, Err(E::expected_token_found(stream.peek_span(), vec![self.1.clone()], x)))
             },
         };
 
@@ -129,7 +129,6 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
         let mut is_err = output.is_none();
         loop {
             n += 1;
-            let next_pos = stream.position();
             let token = match stream.next() {
                 Some(x) if x == self.1 => { balance -= 1; x },
                 Some(x) if x == self.2 => if balance == 0 {
@@ -144,11 +143,11 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
                     x
                 },
                 Some(x) => x,
-                None => break (n, Err(furthest.unwrap_or_else(|| E::expected_found(next_pos, vec![self.2.clone()], None)))),
+                None => break (n, Err(furthest.unwrap_or_else(|| E::expected_token_found(stream.last_span(), vec![self.2.clone()], None)))),
             };
 
             if !is_err {
-                furthest = Some(zip_or(furthest, E::expected_found(next_pos, vec![self.2.clone()], Some(token)), |a, b| a.merge(b)));
+                furthest = Some(zip_or(furthest, E::expected_token_found(stream.last_span(), vec![self.2.clone()], Some(token)), |a, b| a.merge(b)));
                 is_err = true;
             }
         }
@@ -162,7 +161,7 @@ pub struct Repeated<A>(pub(crate) A, pub(crate) usize);
 impl<I, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Vec<O>, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Vec<O>, Option<E>), E>) {
         let mut outputs = Vec::new();
         let mut furthest = None;
 
@@ -193,9 +192,40 @@ impl<A: Clone, F: Clone, O> Clone for Map<A, F, O> {
 impl<I, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, U> for Map<A, F, O> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map(|(o, f)|((&self.1)(o), f)))
+    }
+}
+
+/// See [`Parser::map_with_span`].
+pub struct MapWithSpan<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
+
+impl<A: Copy, F: Copy, O> Copy for MapWithSpan<A, F, O> {}
+impl<A: Clone, F: Clone, O> Clone for MapWithSpan<A, F, O> {
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
+}
+
+impl<I, O, A: Parser<I, O, Error = E>, U, F: Fn(O, Option<E::Span>) -> U, E: Error<I>> Parser<I, U> for MapWithSpan<A, F, O> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) {
+        let start = stream.peek_span();
+        let (n, res) = self.0.parse_inner(stream, errors);
+        let span = match n {
+            0 => stream
+                .last_span()
+                .into_iter()
+                .zip(start)
+                .map(|(start, end)| start.inner(end))
+                .next(),
+            _ => start
+                .into_iter()
+                .zip(stream.last_span())
+                .map(|(start, end)| start.union(end))
+                .next(),
+        };
+        (n, res.map(|(o, f)|((&self.1)(o, span), f)))
     }
 }
 
@@ -210,7 +240,7 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
 impl<I, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map(|((head, tail), f)|(tail.into_iter().fold(head, &self.1), f)))
     }
@@ -227,7 +257,7 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
 impl<I, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map(|((init, end), f)|(init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b)), f)))
     }
@@ -240,7 +270,7 @@ pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
 impl<I, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O> for MapErr<A, F> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map_err(&self.1))
     }
@@ -253,9 +283,9 @@ pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 impl<I, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Error<I>> Parser<I, O> for Label<A, L> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
-        (n, res.map_err(|e| e.label_expected(self.1.clone())))
+        (n, res.map_err(|e| e.into_labelled(self.1.clone())))
     }
 }
 
@@ -270,7 +300,7 @@ impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
 impl<I, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U> for To<A, O, U> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) where Self: Sized {
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(U, Option<E>), E>) {
         let (n, res) = self.0.parse_inner(stream, errors);
         (n, res.map(|(_, f)| (self.1.clone(), f)))
     }

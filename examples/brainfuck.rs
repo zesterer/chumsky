@@ -1,4 +1,6 @@
 //! This is a Brainfuck parser and interpreter
+//! Run it with the following command:
+//! cargo run --example brainfuck -- examples/hello.bf
 
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
@@ -46,7 +48,7 @@ fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    match parser().parse(src.trim().chars()) {
+    match parser().parse(src.trim()) {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs
             .into_iter()
