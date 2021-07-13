@@ -131,13 +131,13 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
                 Token::Value(v) => Ok(Expr::Value(v.clone())),
                 _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
             })
-                .label("value");
+                .labelled("value");
 
             let ident = filter_map(|span, tok| match tok {
                 Token::Ident(ident) => Ok(ident.clone()),
                 _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
             })
-                .label("identifier");
+                .labelled("identifier");
 
             let items = expr.clone()
                 .chain(just(Token::Ctrl(',')).padding_for(expr.clone()).repeated())
@@ -191,7 +191,7 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
                 .foldl(|a, (op, b)| Expr::Binary(Box::new(a), op, Box::new(b)));
 
             compare
-                .label("expression")
+                .labelled("expression")
         });
 
         let block = expr.clone()
@@ -210,7 +210,8 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
         });
 
         let block_expr = block
-            .or(if_);
+            .or(if_)
+            .labelled("block");
 
         let block_chain = block_expr.clone().then(block_expr.clone().repeated())
             .foldl(|a, b| Expr::Then(Box::new(a), Box::new(b)));
@@ -234,10 +235,11 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .chain(just(Token::Ctrl(',')).padding_for(ident.clone()).repeated())
         .padded_by(just(Token::Ctrl(',')).or_not())
         .or_not()
-        .map(|items| items.unwrap_or_else(Vec::new));
+        .map(|items| items.unwrap_or_else(Vec::new))
+        .labelled("function args");
 
     let func = just(Token::Fn)
-        .padding_for(ident.label("function name"))
+        .padding_for(ident.labelled("function name"))
         .then(args
             .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
             .map(|expr| expr.unwrap_or_else(Vec::new)))
@@ -247,7 +249,8 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .map(|((name, args), body)| (name, Func {
             args,
             body,
-        }));
+        }))
+        .labelled("function");
 
     func
         .repeated()
@@ -260,6 +263,7 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
             }
             funcs
         })
+        .padded_by(end())
 }
 
 fn eval_expr(expr: &Expr, funcs: &HashMap<String, Func>, stack: &mut Vec<(String, Value)>) -> Value {

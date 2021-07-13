@@ -54,26 +54,33 @@ impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
 /// A trait that describes parser error types.
 pub trait Error<I>: Sized {
     /// The type of spans to be used in the error.
-    type Span: Span;
+    type Span: Span; // TODO: Default to = Range<usize>;
 
     /// The label used to describe tokens or a token pattern in error messages.
     ///
-    /// Commonly, this type has a way to represent both *specific* tokens and groups of tokens just 'expressions' or
+    /// Commonly, this type has a way to represent both *specific* tokens and groups of tokens like 'expressions' or
     /// 'statements'.
     type Pattern; // TODO: Default to = I;
 
-    /// The primary span that the error originated at, if one exists..
+    /// The primary span that the error originated at, if one exists.
     fn span(&self) -> Option<Self::Span>;
 
-    /// Create a new error describing a conflict between the expected token and that which was found in its place.
+    /// Create a new error describing a conflict between expected tokens and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
     fn expected_token_found(span: Option<Self::Span>, expected: Vec<I>, found: Option<I>) -> Self;
 
+    /// Create a new error describing a conflict between an expected label and that the token that was actually found.
+    ///
+    /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
+    fn expected_label_found<L: Into<Self::Pattern>>(span: Option<Self::Span>, expected: L, found: Option<I>) -> Self {
+        Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
+    }
+
     /// Alter the error message to indicate that the given labelled pattern was expected.
     fn into_labelled<L: Into<Self::Pattern>>(self, label: L) -> Self;
 
-    /// Merge two errors together, combining their elements together.
+    /// Merge two errors together, combining their elements.
     ///
     /// Note that when the errors originate from two different locations in the token stream (i.e: their span
     /// [`Span::end`] differs), the error error with the latest position should be preferred. When merging errors,
@@ -95,19 +102,19 @@ pub trait Error<I>: Sized {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimplePattern<I> {
     /// A pattern with the given name was expected.
-    Named(&'static str),
+    Labelled(&'static str),
     /// A specific token was expected.
     Token(I),
 }
 
 impl<I> From<&'static str> for SimplePattern<I> {
-    fn from(s: &'static str) -> Self { Self::Named(s) }
+    fn from(s: &'static str) -> Self { Self::Labelled(s) }
 }
 
 impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Named(s) => write!(f, "{}", s),
+            Self::Labelled(s) => write!(f, "{}", s),
             Self::Token(x) => write!(f, "'{}'", x),
         }
     }

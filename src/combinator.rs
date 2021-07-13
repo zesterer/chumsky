@@ -9,14 +9,6 @@ pub type PaddingFor<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
 /// See [`Parser::padded_by`].
 pub type PaddedBy<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 
-/// See [`Parser::foldl`].
-// TODO: Don't use a `Box` here.
-// pub type Foldl<'a, P, A, B, O> = Map<P, Box<dyn Fn((A, Vec<B>)) -> A + 'a>, O>;
-
-/// See [`Parser::foldr`].
-// TODO: Don't use a `Box` here.
-// pub type Foldr<'a, P, A, B, O> = Map<P, Box<dyn Fn((Vec<A>, B)) -> B + 'a>, O>;
-
 /// See [`Parser::or`].
 #[derive(Copy, Clone)]
 pub struct Or<A, B>(pub(crate) A, pub(crate) B);
@@ -276,7 +268,7 @@ impl<I, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O> 
     }
 }
 
-/// See [`Parser::label`].
+/// See [`Parser::labelled`].
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 

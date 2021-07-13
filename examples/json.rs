@@ -29,7 +29,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .chain::<char, _, _>(exp.or_not().flatten())
             .collect::<String>()
             .map(|s| s.parse().unwrap())
-            .label("number");
+            .labelled("number");
 
         let escape = just('\\')
             .padding_for(just('\\')
@@ -45,7 +45,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .padding_for(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
             .padded_by(just('"'))
             .collect::<String>()
-            .label("string");
+            .labelled("string");
 
         let array = value.clone()
             .chain(just(',').padding_for(value.clone()).repeated())
@@ -53,7 +53,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .flatten()
             .delimited_by('[', ']')
             .map(|x| x.unwrap_or_else(Vec::new))
-            .label("array");
+            .labelled("array");
 
         let member = string.padded_by(just(':').padded()).then(value);
         let object = member.clone()
@@ -64,11 +64,11 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .delimited_by('{', '}')
             .map(|x| x.unwrap_or_else(Vec::new))
             .collect::<HashMap<String, Json>>()
-            .label("object");
+            .labelled("object");
 
-        seq("null".chars()).to(Json::Null).label("null")
-            .or(seq("true".chars()).to(Json::Bool(true)).label("true"))
-            .or(seq("false".chars()).to(Json::Bool(false)).label("false"))
+        seq("null".chars()).to(Json::Null).labelled("null")
+            .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
+            .or(seq("false".chars()).to(Json::Bool(false)).labelled("false"))
             .or(number.map(Json::Num))
             .or(string.map(Json::Str))
             .or(array.map(Json::Array))
