@@ -3,6 +3,7 @@
 //! cargo run --example json -- examples/sample.json
 
 use chumsky::prelude::*;
+use ariadne::{Report, ReportKind, Label, Source, Color, Fmt};
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]
@@ -84,6 +85,23 @@ fn main() {
         Ok(json) => println!("{:#?}", json),
         Err(errs) => errs
             .into_iter()
-            .for_each(|e| println!("{}", e)),
+            .for_each(|e| {
+                Report::build(ReportKind::Error, (), e.span().unwrap().start)
+                    .with_code(3)
+                    .with_message(if e.found().is_some() {
+                        "Unexpected token in input"
+                    } else {
+                        "Unexpected end of input"
+                    })
+                    .with_label(Label::new(e.span().unwrap())
+                        .with_message(format!("Unexpected {}", e
+                            .found()
+                            .map(|c| format!("token {}", c.fg(Color::Red)))
+                            .unwrap_or_else(|| "end of input".to_string())))
+                        .with_color(Color::Red))
+                    .finish()
+                    .print(Source::from(&src))
+                    .unwrap();
+            }),
     }
 }

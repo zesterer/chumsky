@@ -10,3 +10,6 @@ categories = ["parsing", "text-processing"]
 edition = "2018"
 
 [dependencies]
+
+[dev-dependencies]
+ariadne = "0.1.0"

@@ -128,6 +128,14 @@ pub struct Simple<I, S = Range<usize>> {
     found: Option<I>,
 }
 
+impl<I, S> Simple<I, S> {
+    /// Returns an iterator over possible expected patterns.
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &SimplePattern<I>> + '_ { self.expected.iter() }
+
+    /// Returns the token, if any, that was found instead of an expected pattern.
+    pub fn found(&self) -> Option<&I> { self.found.as_ref() }
+}
+
 impl<I, S: Span + Clone + From<Range<usize>>> Error<I> for Simple<I, S> {
     type Span = S;
     type Pattern = SimplePattern<I>;
