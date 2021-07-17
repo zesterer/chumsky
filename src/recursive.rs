@@ -13,8 +13,6 @@ impl<T> OnceCell<T> {
     pub fn get(&self) -> Option<std::cell::Ref<T>> { Some(std::cell::Ref::map(self.0.borrow(), |x| x.as_ref().unwrap())) }
 }
 
-type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I, <E as Error<I>>::Span>, &mut Vec<E>) -> (usize, Result<(O, Option<E>), E>) + 'a;
-
 /// See [`recursive()`].
 pub struct Recursive<'a, I, O, E: Error<I>>(Rc<OnceCell<Box<ParserFn<'a, I, O, E>>>>);
 

@@ -170,6 +170,50 @@ pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -
     OneOf(xs.into_iter().collect(), PhantomData)
 }
 
+/// See [`none_of`].
+pub struct NoneOf<I, E>(Vec<I>, PhantomData<E>);
+
+impl<I: Clone, E> Clone for NoneOf<I, E> {
+    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+}
+
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
+        match stream.peek_token() {
+            Some(x) if !self.0.contains(x) => {
+                (1, Ok((stream.next().unwrap(), None)))
+            },
+            x => {
+                let x = x.cloned();
+                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
+            },
+        }
+    }
+}
+
+/// A parser that accepts any token that is *not* in a sequence of specific tokens.
+///
+/// # Examples
+///
+/// ```
+/// use chumsky::prelude::*;
+///
+/// let string = one_of::<_, _, Simple<char>>("\"'".chars())
+///     .padding_for(none_of("\"'".chars()).repeated())
+///     .padded_by(one_of("\"'".chars()))
+///     .padded_by(end())
+///     .collect::<String>();
+///
+/// assert_eq!(string.parse("'hello'"), Ok("hello".to_string()));
+/// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
+/// assert!(string.parse("\"421!53").is_err());
+/// ```
+pub fn none_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> NoneOf<I, E> {
+    NoneOf(xs.into_iter().collect(), PhantomData)
+}
+
 /// See [`filter`].
 pub struct Filter<F, E>(F, PhantomData<E>);
 

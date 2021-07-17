@@ -112,6 +112,7 @@ use crate::{
 use std::{
     iter::Peekable,
     marker::PhantomData,
+    rc::Rc,
     // TODO: Enable when stable
     //lazy::OnceCell,
 };
@@ -121,10 +122,11 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
-        primitive::{any, end, filter, filter_map, just, one_of, seq},
+        primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
         recursive::recursive,
         text,
         Parser,
+        BoxedParser,
     };
 }
 
@@ -141,6 +143,8 @@ fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
         None => b,
     }
 }
+
+type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I, <E as Error<I>>::Span>, &mut Vec<E>) -> (usize, Result<(O, Option<E>), E>) + 'a;
 
 /// A trait implemented by parsers.
 ///
@@ -635,4 +639,44 @@ pub trait Parser<I, O> {
     /// assert!(long_word.parse("hi").is_err());
     /// ```
     fn repeated_at_least(self, n: usize) -> Repeated<Self> where Self: Sized { Repeated(self, n) }
+
+    /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
+    ///
+    /// Boxing a parser might be useful for:
+    ///
+    /// - Passing a parser over an FFI boundary
+    ///
+    /// - Getting around compiler implementation problems with long types such as
+    ///   [this](https://github.com/rust-lang/rust/issues/54540).
+    ///
+    /// - Places where you need to name the type of a parser
+    ///
+    /// Boxing a parser is loosely equivalent to boxing other combinators, such as [`Iterator`].
+    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
+        BoxedParser(Rc::new(move |mut stream: &mut dyn Stream<I, <Self::Error as Error<I>>::Span>, errors| self.parse_inner(&mut stream, errors)))
+    }
+}
+
+/// See [`Parser::boxed`].
+///
+/// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
+/// around its inner value.
+///
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
+/// it is *currently* the same size as a raw pointer.
+// TODO: Don't use an Rc
+#[repr(transparent)]
+pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<ParserFn<'a, I, O, E>>);
+
+impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
+    fn clone(&self) -> Self { Self(self.0.clone()) }
+}
+
+impl<'a, I, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
+    type Error = E;
+
+    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
+        (self.0)(stream, errors)
+    }
 }
