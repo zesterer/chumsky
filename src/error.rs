@@ -1,6 +1,6 @@
 use std::{
+    cmp::{Ord, Ordering},
     fmt,
-    cmp::Ord,
     ops::Range,
 };
 
@@ -36,19 +36,29 @@ pub trait Span {
 impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
     type Position = T;
 
-    fn start(&self) -> Self::Position { self.start.clone() }
-    fn end(&self) -> Self::Position { self.end.clone() }
+    fn start(&self) -> Self::Position {
+        self.start.clone()
+    }
+
+    fn end(&self) -> Self::Position {
+        self.end.clone()
+    }
+
     fn union(self, other: Self) -> Self {
         self.start.min(other.start)..self.end.max(other.end)
     }
+
     fn inner(self, other: Self) -> Self {
         if self.end <= other.start {
-            self.end.clone()..other.start.clone()
+            self.end..other.start
         } else {
             panic!("Spans intersect of are incorrectly ordered");
         }
     }
-    fn display(&self) -> Box<dyn fmt::Display + '_> { Box::new(format!("{}..{}", self.start, self.end)) }
+
+    fn display(&self) -> Box<dyn fmt::Display + '_> {
+        Box::new(format!("{}..{}", self.start, self.end))
+    }
 }
 
 /// A trait that describes parser error types.
@@ -73,7 +83,11 @@ pub trait Error<I>: Sized {
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_label_found<L: Into<Self::Pattern>>(span: Option<Self::Span>, expected: L, found: Option<I>) -> Self {
+    fn expected_label_found<L: Into<Self::Pattern>>(
+        span: Option<Self::Span>,
+        expected: L,
+        found: Option<I>,
+    ) -> Self {
         Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
     }
 
@@ -108,7 +122,9 @@ pub enum SimplePattern<I> {
 }
 
 impl<I> From<&'static str> for SimplePattern<I> {
-    fn from(s: &'static str) -> Self { Self::Labelled(s) }
+    fn from(s: &'static str) -> Self {
+        Self::Labelled(s)
+    }
 }
 
 impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
@@ -130,25 +146,28 @@ pub struct Simple<I, S = Range<usize>> {
 
 impl<I, S> Simple<I, S> {
     /// Returns an iterator over possible expected patterns.
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = &SimplePattern<I>> + '_ { self.expected.iter() }
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &SimplePattern<I>> + '_ {
+        self.expected.iter()
+    }
 
     /// Returns the token, if any, that was found instead of an expected pattern.
-    pub fn found(&self) -> Option<&I> { self.found.as_ref() }
+    pub const fn found(&self) -> Option<&I> {
+        self.found.as_ref()
+    }
 }
 
 impl<I, S: Span + Clone + From<Range<usize>>> Error<I> for Simple<I, S> {
     type Span = S;
     type Pattern = SimplePattern<I>;
 
-    fn span(&self) -> Option<Self::Span> { self.span.clone() }
+    fn span(&self) -> Option<Self::Span> {
+        self.span.clone()
+    }
 
     fn expected_token_found(span: Option<Self::Span>, expected: Vec<I>, found: Option<I>) -> Self {
         Self {
             span,
-            expected: expected
-                .into_iter()
-                .map(SimplePattern::Token)
-                .collect(),
+            expected: expected.into_iter().map(SimplePattern::Token).collect(),
             found,
         }
     }
@@ -160,13 +179,13 @@ impl<I, S: Span + Clone + From<Range<usize>>> Error<I> for Simple<I, S> {
 
     fn merge(mut self, mut other: Self) -> Self {
         if let Some((a, b)) = self.span().zip(other.span()) {
-            if a.end() < b.end() {
-                other
-            } else if a.end() > b.end() {
-                self
-            } else {
-                self.expected.append(&mut other.expected);
-                self
+            match a.end().cmp(&b.end()) {
+                Ordering::Less => other,
+                Ordering::Greater => self,
+                Ordering::Equal => {
+                    self.expected.append(&mut other.expected);
+                    self
+                }
             }
         } else {
             self
@@ -189,14 +208,19 @@ impl<I: fmt::Display, S: Span> fmt::Display for Simple<I, S> {
         match self.expected.as_slice() {
             [] => write!(f, "but end of input was expected")?,
             [expected] => write!(f, "but {} was expected", expected)?,
-            [_, ..] => write!(f, "but one of {} was expected", self.expected
-                .iter()
-                .map(|expected| expected.to_string())
-                .collect::<Vec<_>>()
-                .join(", "))?,
+            [_, ..] => write!(
+                f,
+                "but one of {} was expected",
+                self.expected
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )?,
         }
 
         Ok(())
     }
 }
+
 impl<I: fmt::Debug + fmt::Display, S: Span + fmt::Debug> std::error::Error for Simple<I, S> {}
