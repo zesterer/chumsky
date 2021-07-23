@@ -276,8 +276,10 @@ impl<I, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Error<I>>
     type Error = E;
 
     fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
-        let (n, res) = self.0.parse_inner(stream, errors);
-        (n, res.map_err(|e| e.into_labelled(self.1.clone())))
+        match self.0.parse_inner(stream, errors) {
+            (0, res) => (0, res.map_err(|e| e.into_labelled(self.1.clone()))),
+            (n, res) => (n, res),
+        }
     }
 }
 
