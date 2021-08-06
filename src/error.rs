@@ -45,7 +45,7 @@ impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
         if self.end <= other.start {
             self.end.clone()..other.start.clone()
         } else {
-            panic!("Spans intersect of are incorrectly ordered");
+            panic!("Spans intersect or are incorrectly ordered");
         }
     }
     fn display(&self) -> Box<dyn fmt::Display + '_> { Box::new(format!("{}..{}", self.start, self.end)) }
@@ -136,7 +136,7 @@ impl<I, S> Simple<I, S> {
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
 }
 
-impl<I, S: Span + Clone + From<Range<usize>>> Error<I> for Simple<I, S> {
+impl<I, S: Span + Clone> Error<I> for Simple<I, S> {
     type Span = S;
     type Pattern = SimplePattern<I>;
 

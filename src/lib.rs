@@ -340,7 +340,7 @@ pub trait Parser<I, O> {
 
     /// Ignore the output of this parser, yielding `()` as an output instead.
     ///
-    /// This can be used to reduce the cost of passing by avoiding unnecessary allocations (most collections containing
+    /// This can be used to reduce the cost of parsing by avoiding unnecessary allocations (most collections containing
     /// [ZSTs](https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts) do
     /// [not allocate](https://doc.rust-lang.org/std/vec/struct.Vec.html#guarantees)). For example, it's common to want
     /// to ignore whitespace in many grammars.
