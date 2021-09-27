@@ -159,16 +159,15 @@ impl<I, S: Span + Clone> Error<I> for Simple<I, S> {
     }
 
     fn merge(mut self, mut other: Self) -> Self {
-        if let Some((a, b)) = self.span().zip(other.span()) {
-            if a.end() < b.end() {
-                other
-            } else if a.end() > b.end() {
-                self
-            } else {
-                self.expected.append(&mut other.expected);
-                self
-            }
+        let end = self.span().map_or(0, |span| span.end());
+        let other_end = other.span().map_or(0, |span| span.end());
+
+        if end > other_end {
+            other
+        } else if end < other_end {
+            self
         } else {
+            self.expected.append(&mut other.expected);
             self
         }
     }
