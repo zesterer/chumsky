@@ -7,16 +7,13 @@ impl<E> Clone for End<E> {
     fn clone(&self) -> Self { Self(PhantomData) }
 }
 
-impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
+impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) {
-        match stream.peek_token() {
-            None => (0, Ok(((), None))),
-            x => {
-                let x = x.cloned();
-                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<(), Self::Error> {
+        match stream.next() {
+            (_, None) => (Vec::new(), Ok(((), None))),
+            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
         }
     }
 }
@@ -43,16 +40,13 @@ impl<I: Clone, E> Clone for Just<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
+impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
-        match stream.peek_token() {
-            Some(x) if x == &self.0 => (1, Ok((stream.next().unwrap(), None))),
-            x => {
-                let x = x.cloned();
-                (0, Err(E::expected_token_found(stream.peek_span(), vec![self.0.clone()], x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+        match stream.next() {
+            (_, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
+            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), vec![self.0.clone()], found)))),
         }
     }
 }
@@ -84,24 +78,18 @@ impl<I: Clone, E> Clone for Seq<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
+impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<((), Option<E>), E>) {
-        let mut n = 0;
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<(), Self::Error> {
         for expected in &self.0 {
-            match stream.peek_token() {
-                Some(x) if x == expected => {
-                    n += 1;
-                    stream.next().unwrap();
-                },
-                x => {
-                    let x = x.cloned();
-                    return (n, Err(E::expected_token_found(stream.peek_span(), vec![expected.clone()], x)));
-                },
+            match stream.next() {
+                (_, Some(tok)) if &tok == expected => {},
+                (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), vec![expected.clone()], found)))),
             }
         }
-        (n, Ok(((), None)))
+
+        (Vec::new(), Ok(((), None)))
     }
 }
 
@@ -135,18 +123,13 @@ impl<I: Clone, E> Clone for OneOf<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
+impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
-        match stream.peek_token() {
-            Some(x) if self.0.contains(x) => {
-                (1, Ok((stream.next().unwrap(), None)))
-            },
-            x => {
-                let x = x.cloned();
-                (0, Err(E::expected_token_found(stream.peek_span(), self.0.clone(), x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+        match stream.next() {
+            (_, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), self.0.clone(), found)))),
         }
     }
 }
@@ -170,6 +153,26 @@ pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -
     OneOf(xs.into_iter().collect(), PhantomData)
 }
 
+/// See [`empty`].
+pub struct Empty<E>(PhantomData<E>);
+
+impl<E> Clone for Empty<E> {
+    fn clone(&self) -> Self { Self(PhantomData) }
+}
+
+impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for Empty<E> {
+    type Error = E;
+
+    fn parse_inner(&self, _: &mut Stream<I>) -> PResult<(), Self::Error> {
+        (Vec::new(), Ok(((), None)))
+    }
+}
+
+/// A parser that parses no tokens.
+pub fn empty<E>() -> Empty<E> {
+    Empty(PhantomData)
+}
+
 /// See [`none_of`].
 pub struct NoneOf<I, E>(Vec<I>, PhantomData<E>);
 
@@ -177,18 +180,13 @@ impl<I: Clone, E> Clone for NoneOf<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
+impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for NoneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
-        match stream.peek_token() {
-            Some(x) if !self.0.contains(x) => {
-                (1, Ok((stream.next().unwrap(), None)))
-            },
-            x => {
-                let x = x.cloned();
-                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+        match stream.next() {
+            (_, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
         }
     }
 }
@@ -222,16 +220,13 @@ impl<F: Clone, E> Clone for Filter<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
+impl<I: Clone, F: Fn(&I) -> bool, E: Error<Token = I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(I, Option<E>), E>) {
-        match stream.peek_token() {
-            Some(x) if (self.0)(x) => (1, Ok((stream.next().unwrap(), None))),
-            x => {
-                let x = x.cloned();
-                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+        match stream.next() {
+            (_, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
+            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
         }
     }
 }
@@ -263,22 +258,16 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
+impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, _: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
-        match stream.peek() {
-            Some((x, span)) => match (self.0)(span, x.clone()) {
-                Ok(o) => {
-                    stream.next().unwrap();
-                    (1, Ok((o, None)))
-                },
-                Err(e) => (0, Err(e)),
-            },
-            x => {
-                let x = x.map(|(x, _)| x.clone());
-                (0, Err(E::expected_token_found(stream.peek_span(), Vec::new(), x)))
-            },
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+        let (at, tok) = stream.next();
+        let span = todo!();
+        match tok.map(|tok| (self.0)(span, tok)) {
+            Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
+            Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
+            None => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), None)))),
         }
     }
 }
@@ -332,7 +321,7 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 /// assert_eq!(numeral.parse("7"), Ok(7));
 /// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(Some(0..1), 'f')]));
 /// ```
-pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
+pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
 }
 

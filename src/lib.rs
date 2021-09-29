@@ -81,7 +81,7 @@
 //!   parse paths to consider: this makes it more likely that errors can be recovered from without misinterpreting
 //!   syntax and makes it more likely that errors relate to the syntax that the user is attempting to write.
 
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 // TODO: Enable when stable
 //#![feature(once_cell)]
 
@@ -113,6 +113,7 @@ use std::{
     iter::Peekable,
     marker::PhantomData,
     rc::Rc,
+    cmp::Ordering,
     // TODO: Enable when stable
     //lazy::OnceCell,
 };
@@ -144,7 +145,65 @@ fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
     }
 }
 
-type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I, <E as Error<I>>::Span>, &mut Vec<E>) -> (usize, Result<(O, Option<E>), E>) + 'a;
+enum ControlFlow<C, B> {
+    Continue(C),
+    Break(B),
+}
+
+pub struct Located<E> {
+    at: usize,
+    error: E,
+}
+
+impl<E: Error> Located<E> {
+    pub fn at(at: usize, error: E) -> Self {
+        Self { at, error }
+    }
+
+    pub fn max(self, other: impl Into<Option<Self>>) -> Self {
+        let other = match other.into() {
+            Some(other) => other,
+            None => return self,
+        };
+        match self.at.cmp(&other.at) {
+            Ordering::Equal => Self {
+                at: self.at,
+                error: self.error.merge(other.error),
+            },
+            Ordering::Less => other,
+            Ordering::Greater => self,
+        }
+    }
+
+    pub fn map<F: FnOnce(E) -> E>(self, f: F) -> Self {
+        Self {
+            error: f(self.error),
+            ..self
+        }
+    }
+}
+
+fn merge_results<O, E: Error>(a: Result<O, Located<E>>, b: Result<O, Located<E>>) -> Result<O, Located<E>> {
+    match (a, b) {
+        (Err(a_err), Err(b_err)) => Err(a_err.max(b_err)),
+        (a, b) => a.or(b),
+    }
+}
+
+fn merge_alts<E: Error>(a: Option<Located<E>>, b: Option<Located<E>>) -> Option<Located<E>> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    }
+}
+
+// ([], Ok((out, recovered, alt_err))) => parsing successful, recovered = whether the false is a false recovered value,
+// alt_err = potential alternative error should a different number of optional patterns be parsed
+// ([x, ...], Ok(out)) => parsing failed, but recovery occurred so parsing may continue
+// ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
+type PResult<O, E> = (Vec<Located<E>>, Result<(O, Option<Located<E>>), Located<E>>);
+
+type ParserFn<'a, I, O, E> = dyn Fn(&mut Stream<I>) -> PResult<O, E> + 'a;
 
 /// A trait implemented by parsers.
 ///
@@ -163,34 +222,38 @@ type ParserFn<'a, I, O, E> = dyn Fn(&mut dyn Stream<I, <E as Error<I>>::Span>, &
 /// by an LL(1) parser in a single pass. However, this limitation quickly vanishes (and, indeed, makes the design of
 /// both the language and the parser easier) when one introduces multiple passes. For example, C compilers generally
 /// have a lexical pass prior to the main parser that groups the input characters into tokens.
-pub trait Parser<I, O> {
+pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
-    type Error: Error<I>; // TODO when default associated types are stable: = Simple<I>;
+    type Error: Error<Token=I>; // TODO when default associated types are stable: = Simple<I>;
 
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<Self::Error>), Self::Error>) where Self: Sized;
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error>;
+    fn try_parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+        stream.try_parse(|stream| self.parse_inner(stream))
+    }
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_recovery<S: IntoStream<I, <Self::Error as Error<I>>::Span>>(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
-        let mut errors = Vec::new();
-        match self.parse_inner(&mut stream.into_stream(), &mut errors).1 {
-            Ok((o, _)) => (Some(o), errors),
-            Err(e) => {
-                errors.push(e);
-                (None, errors)
+    fn parse_recovery<'a, Iter: Iterator<Item = I> + 'a, S: Into<Stream<'a, I, Iter>>>(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+        let (mut errors, res) = self.parse_inner(&mut stream.into());
+        let out = match res {
+            Ok((out, _)) => Some(out),
+            Err(err) => {
+                errors.push(err);
+                None
             },
-        }
+        };
+        (out, errors.into_iter().map(|e| e.error).collect())
     }
 
     /// Parse an iterator of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
-    fn parse<S: IntoStream<I, <Self::Error as Error<I>>::Span>>(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
+    fn parse<'a, Iter: Iterator<Item = I> + 'a, S: Into<Stream<'a, I, Iter>>>(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
         let (output, errors) = self.parse_recovery(stream);
         if errors.len() > 0 {
             Err(errors)
@@ -227,7 +290,7 @@ pub trait Parser<I, O> {
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
 
     /// Map the output of this parser to another value, making use of the pattern's span.
-    fn map_with_span<U, F: Fn(O, Option<<Self::Error as Error<I>>::Span>) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
+    fn map_with_span<U, F: Fn(O, Option<<Self::Error as Error>::Span>) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
         { MapWithSpan(self, f, PhantomData) }
 
@@ -265,7 +328,7 @@ pub trait Parser<I, O> {
     /// assert_eq!(frac.parse("hello"), Err(vec![Simple::expected_label_found(Some(0..1), "number", Some('h'))]));
     /// assert_eq!(frac.parse("42!"), Err(vec![Simple::expected_token_found(Some(2..3), vec!['.'], Some('!'))]));
     /// ```
-    fn labelled<L: Into<<Self::Error as Error<I>>::Pattern> + Clone>(self, label: L) -> Label<Self, L>
+    fn labelled<L: Into<<Self::Error as Error>::Pattern> + Clone>(self, label: L) -> Label<Self, L>
         where Self: Sized
     { Label(self, label) }
 
@@ -459,6 +522,9 @@ pub trait Parser<I, O> {
     fn padding_for<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(_, u)| u, PhantomData) }
+    fn ignore_then<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
+        where Self: Sized
+    { Map(Then(self, other), |(_, u)| u, PhantomData) }
 
     /// Parse one thing and then another thing, yielding only the output of the former.
     ///
@@ -489,6 +555,9 @@ pub trait Parser<I, O> {
     /// );
     /// ```
     fn padded_by<U, P: Parser<I, U>>(self, other: P) -> PaddedBy<Self, P, O, U>
+        where Self: Sized
+    { Map(Then(self, other), |(o, _)| o, PhantomData) }
+    fn then_ignore<U, P: Parser<I, U>>(self, other: P) -> PaddedBy<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(o, _)| o, PhantomData) }
 
@@ -645,6 +714,12 @@ pub trait Parser<I, O> {
     /// ```
     fn repeated_at_least(self, n: usize) -> Repeated<Self> where Self: Sized { Repeated(self, n) }
 
+    /// Parse an expression, separated by another, any number of times, optionally with a trailing instance of the
+    /// other.
+    fn separated_by<U, P: Parser<I, U>>(self, other: P, trailing: bool) -> SeparatedBy<Self, P, U> where Self: Sized {
+        SeparatedBy(self, other, 0, trailing, PhantomData)
+    }
+
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
     ///
     /// Boxing a parser might be useful for:
@@ -658,7 +733,15 @@ pub trait Parser<I, O> {
     ///
     /// Boxing a parser is loosely equivalent to boxing other combinators, such as [`Iterator`].
     fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
-        BoxedParser(Rc::new(move |mut stream: &mut dyn Stream<I, <Self::Error as Error<I>>::Span>, errors| self.parse_inner(&mut stream, errors)))
+        BoxedParser(Rc::new(move |stream| self.parse_inner(stream)))
+    }
+}
+
+impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
+    type Error = T::Error;
+
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+        T::parse_inner(*self, stream)
     }
 }
 
@@ -672,16 +755,16 @@ pub trait Parser<I, O> {
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 #[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<ParserFn<'a, I, O, E>>);
+pub struct BoxedParser<'a, I, O, E: Error>(Rc<ParserFn<'a, I, O, E>>);
 
-impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
+impl<'a, I, O, E: Error> Clone for BoxedParser<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
 }
 
-impl<'a, I, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
+impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) {
-        (self.0)(stream, errors)
+    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+        (self.0)(stream)
     }
 }

@@ -17,12 +17,12 @@ pub trait TextParser<O>: Parser<char, O> {
 impl<O, P: Parser<char, O>> TextParser<O> for P {}
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
-pub fn whitespace<E: Error<char>>() -> Padding<E> {
+pub fn whitespace<E: Error<Token = char>>() -> Padding<E> {
     filter((|c: &char| c.is_whitespace()) as _).ignored().repeated()
 }
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
-pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
+pub fn newline<E: Error<Token = char>>() -> impl Parser<char, (), Error = E> {
     just('\r').or_not().padding_for(just('\n'))
         .or(just('\x0B')) // Vertical tab
         .or(just('\x0C')) // Form feed
@@ -34,7 +34,7 @@ pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
 }
 
 /// A parser that accepts one or more ASCII digits.
-pub fn digits<E: Error<char>>() -> Repeated<Filter<fn(&char) -> bool, E>> {
+pub fn digits<E: Error<Token = char>>() -> Repeated<Filter<fn(&char) -> bool, E>> {
     filter(char::is_ascii_digit as _).repeated_at_least(1)
 }
 
@@ -42,7 +42,7 @@ pub fn digits<E: Error<char>>() -> Repeated<Filter<fn(&char) -> bool, E>> {
 ///
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
-pub fn int<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
+pub fn int<E: Error<Token = char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
     filter(|c: &char| c.is_ascii_digit() && *c != '0').map(Some)
         .chain(filter(char::is_ascii_digit).repeated())
         .or(just('0').map(|c| vec![c]))
@@ -52,7 +52,7 @@ pub fn int<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy +
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-pub fn ident<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
+pub fn ident<E: Error<Token = char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
     filter(|c: &char| c.is_ascii_alphabetic() || *c == '_').map(Some)
         .chain(filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_').repeated())
 }

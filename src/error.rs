@@ -52,7 +52,8 @@ impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
 }
 
 /// A trait that describes parser error types.
-pub trait Error<I>: Sized {
+pub trait Error: Sized {
+    type Token;
     /// The type of spans to be used in the error.
     type Span: Span; // TODO: Default to = Range<usize>;
 
@@ -68,12 +69,12 @@ pub trait Error<I>: Sized {
     /// Create a new error describing a conflict between expected tokens and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_token_found(span: Option<Self::Span>, expected: Vec<I>, found: Option<I>) -> Self;
+    fn expected_token_found(span: Option<Self::Span>, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self;
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_label_found<L: Into<Self::Pattern>>(span: Option<Self::Span>, expected: L, found: Option<I>) -> Self {
+    fn expected_label_found<L: Into<Self::Pattern>>(span: Option<Self::Span>, expected: L, found: Option<Self::Token>) -> Self {
         Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
     }
 
@@ -136,13 +137,14 @@ impl<I, S> Simple<I, S> {
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
 }
 
-impl<I, S: Span + Clone> Error<I> for Simple<I, S> {
+impl<I, S: Span + Clone> Error for Simple<I, S> {
+    type Token = I;
     type Span = S;
     type Pattern = SimplePattern<I>;
 
     fn span(&self) -> Option<Self::Span> { self.span.clone() }
 
-    fn expected_token_found(span: Option<Self::Span>, expected: Vec<I>, found: Option<I>) -> Self {
+    fn expected_token_found(span: Option<Self::Span>, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self {
         Self {
             span,
             expected: expected

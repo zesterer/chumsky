@@ -16,7 +16,7 @@ enum Instr {
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
+    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
         .or(just('<').to(Left))
         .or(just('>').to(Right))
         .or(just('+').to(Incr))
