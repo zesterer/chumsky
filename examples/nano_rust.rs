@@ -6,7 +6,7 @@
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 
-pub type Span = std::ops::Range<usize>;
+pub type Span = std::ops::Range<Option<usize>>;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
@@ -28,8 +28,8 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(|s| Token::Value(Value::Num(s.parse().unwrap())));
 
     let str_ = just('"')
-        .padding_for(filter(|c| *c != '"').repeated())
-        .padded_by(just('"'))
+        .ignore_then(filter(|c| *c != '"').repeated())
+        .then_ignore(just('"'))
         .collect::<String>()
         .map(|s| Token::Value(Value::Str(s)));
 
@@ -55,7 +55,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let token = num.or(str_).or(op).or(ctrl).or(ident);
 
     token
-        .map_with_span(|tok, span| (tok, span.unwrap()))
+        .map_with_span(|tok, span| (tok, span))
         .padded()
         .repeated()
 }
@@ -129,52 +129,47 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
         let raw_expr = recursive(|raw_expr| {
             let val = filter_map(|span, tok| match tok {
                 Token::Value(v) => Ok(Expr::Value(v.clone())),
-                _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
             })
                 .labelled("value");
 
             let ident = filter_map(|span, tok| match tok {
                 Token::Ident(ident) => Ok(ident.clone()),
-                _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
             })
                 .labelled("identifier");
 
             let items = expr.clone()
-                .chain(just(Token::Ctrl(',')).padding_for(expr.clone()).repeated())
-                .padded_by(just(Token::Ctrl(',')).or_not())
+                .chain(just(Token::Ctrl(',')).ignore_then(expr.clone()).repeated())
+                .then_ignore(just(Token::Ctrl(',')).or_not())
                 .or_not()
-                .map(|items| items.unwrap_or_else(Vec::new));
+                .map(|item| item.unwrap_or_else(Vec::new));
 
             let let_ = just(Token::Let)
-                .padding_for(ident)
-                .padded_by(just(Token::Op("=".to_string())))
+                .ignore_then(ident)
+                .then_ignore(just(Token::Op("=".to_string())))
                 .then(raw_expr)
-                .padded_by(just(Token::Ctrl(';')))
+                .then_ignore(just(Token::Ctrl(';')))
                 .then(expr.clone())
                 .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)));
 
             let list = items.clone()
                 .delimited_by(Token::Ctrl('['), Token::Ctrl(']'))
-                .map(|expr| expr.unwrap_or_else(Vec::new))
                 .map(Expr::List);
 
             let atom = expr.clone().delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
-                .map(|expr| expr.unwrap_or(Expr::Error))
                 .or(val)
                 .or(just(Token::Print)
-                    .padding_for(expr.clone().delimited_by(Token::Ctrl('('), Token::Ctrl(')')))
-                    .map(|expr| expr.unwrap_or(Expr::Error))
+                    .ignore_then(expr.clone().delimited_by(Token::Ctrl('('), Token::Ctrl(')')))
                     .map(|expr| Expr::Print(Box::new(expr))))
                 .or(let_)
                 .or(ident.map(Expr::Local))
                 .or(list)
                 .or(expr.clone()
-                    .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
-                    .map(|expr| expr.unwrap_or(Expr::Error)));
+                    .delimited_by(Token::Ctrl('('), Token::Ctrl(')')));
 
             let call = atom.then(items
                     .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
-                    .map(|expr| expr.unwrap_or_else(Vec::new))
                     .repeated())
                 .foldl(|f, args| Expr::Call(Box::new(f), args));
 
@@ -195,14 +190,13 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
         });
 
         let block = expr.clone()
-            .delimited_by(Token::Ctrl('{'), Token::Ctrl('}'))
-            .map(|expr| expr.unwrap_or(Expr::Error));
+            .delimited_by(Token::Ctrl('{'), Token::Ctrl('}'));
 
         let if_ = recursive(|if_| {
             just(Token::If)
-                .padding_for(expr.clone())
+                .ignore_then(expr.clone())
                 .then(block.clone())
-                .then(just(Token::Else).padding_for(block.clone().or(if_)).or_not())
+                .then(just(Token::Else).ignore_then(block.clone().or(if_)).or_not())
                 .map(|((cond, a), b)| Expr::If(Box::new(cond), Box::new(a), Box::new(match b {
                     Some(b) => b,
                     None => Expr::Value(Value::Null),
@@ -217,7 +211,7 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
             .foldl(|a, b| Expr::Then(Box::new(a), Box::new(b)));
 
         block_chain.or(raw_expr.clone())
-            .then(just(Token::Ctrl(';')).padding_for(expr.or_not()).repeated())
+            .then(just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| Expr::Then(Box::new(a), Box::new(match b {
                 Some(b) => b,
                 None => Expr::Value(Value::Null),
@@ -228,24 +222,20 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
 fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
-        _ => Err(Simple::expected_token_found(Some(span), Vec::new(), Some(tok))),
+        _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
     });
 
     let args = ident.clone()
-        .chain(just(Token::Ctrl(',')).padding_for(ident.clone()).repeated())
-        .padded_by(just(Token::Ctrl(',')).or_not())
+        .chain(just(Token::Ctrl(',')).ignore_then(ident.clone()).repeated())
+        .then_ignore(just(Token::Ctrl(',')).or_not())
         .or_not()
         .map(|items| items.unwrap_or_else(Vec::new))
         .labelled("function args");
 
     let func = just(Token::Fn)
-        .padding_for(ident.labelled("function name"))
-        .then(args
-            .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
-            .map(|expr| expr.unwrap_or_else(Vec::new)))
-        .then(expr_parser()
-            .delimited_by(Token::Ctrl('{'), Token::Ctrl('}'))
-            .map(|expr| expr.unwrap_or(Expr::Error)))
+        .ignore_then(ident.labelled("function name"))
+        .then(args.delimited_by(Token::Ctrl('('), Token::Ctrl(')')))
+        .then(expr_parser().delimited_by(Token::Ctrl('{'), Token::Ctrl('}')))
         .map(|((name, args), body)| (name, Func {
             args,
             body,
@@ -263,7 +253,7 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
             }
             funcs
         })
-        .padded_by(end())
+        .then_ignore(end())
 }
 
 fn eval_expr(expr: &Expr, funcs: &HashMap<String, Func>, stack: &mut Vec<(String, Value)>) -> Value {
@@ -339,7 +329,7 @@ fn main() {
     match lexer().parse(src.as_str()) {
         Ok(tokens) => {
             println!("Tokens = {:?}", tokens);
-            match funcs_parser().parse(tokens) {
+            match funcs_parser().parse(tokens.as_slice()) {
                 Ok(funcs) => {
                     println!("{:#?}", funcs);
                     if let Some(main) = funcs.get("main") {

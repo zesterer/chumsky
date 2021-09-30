@@ -241,7 +241,7 @@ pub trait Parser<I: Clone, O> {
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
     fn parse_recovery<
         'a,
-        Iter: Iterator<Item = (<Self::Error as Error>::Span, I)> + 'a,
+        Iter: Iterator<Item = (I, <Self::Error as Error>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
     >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         let (mut errors, res) = self.parse_inner(&mut stream.into());
@@ -260,7 +260,7 @@ pub trait Parser<I: Clone, O> {
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
     fn parse<
         'a,
-        Iter: Iterator<Item = (<Self::Error as Error>::Span, I)> + 'a,
+        Iter: Iterator<Item = (I, <Self::Error as Error>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
     >(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
         let (output, errors) = self.parse_recovery(stream);
@@ -299,7 +299,7 @@ pub trait Parser<I: Clone, O> {
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
 
     /// Map the output of this parser to another value, making use of the pattern's span.
-    fn map_with_span<U, F: Fn(O, Option<<Self::Error as Error>::Span>) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
+    fn map_with_span<U, F: Fn(O, <Self::Error as Error>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
         { MapWithSpan(self, f, PhantomData) }
 
