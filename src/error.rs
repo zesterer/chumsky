@@ -155,11 +155,11 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
     fn debug(&self) -> &dyn fmt::Debug { self }
 }
 
-impl<I: fmt::Display, S: Span> fmt::Display for Simple<I, S> {
+impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(found) = &self.found {
             write!(f, "found '{}' ", found)?;
-            write!(f, "at {} ", self.span.display())?;
+            write!(f, "at {} ", self.span)?;
         } else {
             write!(f, "the input ended ")?;
         }
@@ -178,4 +178,5 @@ impl<I: fmt::Display, S: Span> fmt::Display for Simple<I, S> {
         Ok(())
     }
 }
-impl<I: fmt::Debug + fmt::Display, S: Span + fmt::Debug> std::error::Error for Simple<I, S> {}
+
+impl<I: fmt::Debug + fmt::Display, S: Span + fmt::Display + fmt::Debug> std::error::Error for Simple<I, S> {}
