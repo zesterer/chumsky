@@ -39,6 +39,7 @@ simple dynamically-typed **Rust-like programming language**.
 ## Planned Features
 
 - Nested parsers (parsers that parse patterns within nested tokens)
+- A debugging mode (using `track_caller`) that allows inspecting the behaviour of parsers
 
 ## Other Information
 

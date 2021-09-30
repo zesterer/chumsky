@@ -132,7 +132,7 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
-        recovery::{SkipExcept, Until, NestedDelimiters},
+        recovery::{SkipThenRetry, NestedDelimiters},
         recursive::recursive,
         text,
         Parser,
@@ -140,6 +140,7 @@ pub mod prelude {
     };
 }
 
+// TODO: Replace with `std::ops::ControlFlow` when stable
 enum ControlFlow<C, B> {
     Continue(C),
     Break(B),
@@ -656,8 +657,8 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
 
-    fn recover_with<S: Strategy<I, O, Self::Error>, F: Fn() -> O>(self, strategy: S, default: F) -> Recovery<Self, S, F> where Self: Sized {
-        Recovery(self, strategy, default)
+    fn recover_with<S: Strategy<I, O>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
+        Recovery(self, strategy)
     }
 
     /// Attempt to parse something, but only if it exists.

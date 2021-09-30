@@ -56,7 +56,6 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .flatten()
             .delimited_by('[', ']')
             .map(Json::Array)
-            .recover_with(NestedDelimiters('[', ']'), || Json::Invalid)
             .labelled("array");
 
         let member = string.then_ignore(just(':').padded()).then(value);
@@ -68,7 +67,6 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .delimited_by('{', '}')
             .collect::<HashMap<String, Json>>()
             .map(Json::Object)
-            .recover_with(NestedDelimiters('{', '}'), || Json::Invalid)
             .labelled("object");
 
         seq("null".chars()).to(Json::Null).labelled("null")
@@ -78,6 +76,9 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .or(string.map(Json::Str))
             .or(array)
             .or(object)
+            .recover_with(SkipThenRetry)
+            .recover_with(NestedDelimiters('{', '}', || Json::Invalid))
+            .recover_with(NestedDelimiters('[', ']', || Json::Invalid))
             .padded()
     })
         .then_ignore(end())
