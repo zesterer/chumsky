@@ -6,7 +6,7 @@
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 
-pub type Span = std::ops::Range<Option<usize>>;
+pub type Span = std::ops::Range<usize>;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
@@ -346,6 +346,6 @@ fn main() {
         },
         Err(errs) => errs
             .into_iter()
-            .for_each(|e| println!("Error: {}", e)),
+            .for_each(|e| println!("Error: {:?}", e)),
     }
 }

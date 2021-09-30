@@ -92,7 +92,7 @@ fn main() {
     errs
         .into_iter()
         .for_each(|e| {
-            Report::build(ReportKind::Error, (), e.span().start.unwrap())
+            Report::build(ReportKind::Error, (), e.span().start)
                 .with_code(3)
                 .with_message(format!("{}, expected {}", if e.found().is_some() {
                     "Unexpected token in input"
@@ -103,7 +103,7 @@ fn main() {
                 } else {
                     e.expected().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
                 }))
-                .with_label(Label::new(e.span().start.unwrap()..e.span().end.unwrap())
+                .with_label(Label::new(e.span().start..e.span().end)
                     .with_message(format!("Unexpected {}", e
                         .found()
                         .map(|c| format!("token {}", c.fg(Color::Red)))

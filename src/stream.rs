@@ -76,15 +76,15 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     }
 }
 
-impl<'a> From<&'a str> for Stream<'a, char, Range<Option<usize>>, Box<dyn Iterator<Item = (char, Range<Option<usize>>)> + 'a>> {
+impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
     fn from(s: &'a str) -> Self {
-        Self::from_iter((), None, Box::new(s.chars().enumerate().map(|(i, c)| (c, Some(i)..Some(i + 1)))))
+        Self::from_iter((), s.chars().count(), Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
     }
 }
 
-impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<Option<usize>>, Box<dyn Iterator<Item = (T, Range<Option<usize>>)> + 'a>> {
+impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
     fn from(s: &'a [T]) -> Self {
-        Self::from_iter((), None, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, Some(i)..Some(i + 1)))))
+        Self::from_iter((), s.len(), Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
     }
 }
 

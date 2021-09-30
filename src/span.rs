@@ -11,9 +11,9 @@ pub trait Span: Clone {
     fn end(&self) -> Self::Offset;
 }
 
-impl<T: Clone + Ord + fmt::Debug> Span for Range<Option<T>> {
+impl<T: Clone + Ord + fmt::Debug> Span for Range<T> {
     type Context = ();
-    type Offset = Option<T>;
+    type Offset = T;
 
     fn new((): Self::Context, range: Self) -> Self { range }
     fn range(&self) -> Range<Self::Offset> { self.clone() }

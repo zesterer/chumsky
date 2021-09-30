@@ -109,7 +109,7 @@ impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
 
 /// A simple default error type that provides minimal functionality.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Simple<I, S = Range<Option<usize>>> {
+pub struct Simple<I, S = Range<usize>> {
     span: S,
     expected: Vec<SimplePattern<I>>,
     found: Option<I>,

@@ -24,7 +24,7 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
-        .recover_with(SkipExcept([']']), || Invalid)
+        .recover_with(SkipThenRetry)
         .repeated())
     .then_ignore(end())
 }
@@ -55,6 +55,6 @@ fn main() {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs
             .into_iter()
-            .for_each(|e| println!("{}", e)),
+            .for_each(|e| println!("{:?}", e)),
     }
 }
