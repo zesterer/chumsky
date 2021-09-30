@@ -23,7 +23,7 @@ impl<'a, I: Clone, O, E: Error> Clone for Recursive<'a, I, O, E> {
 impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         (self.0
             .get()
             .expect("Recursive parser used prior to construction"))(stream)

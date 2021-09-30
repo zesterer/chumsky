@@ -5,7 +5,7 @@
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Instr {
     Invalid,
     Left, Right,
@@ -16,15 +16,16 @@ enum Instr {
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
-        .or(just('<').to(Left))
+    recursive(|bf| just('<').to(Left)
         .or(just('>').to(Right))
         .or(just('+').to(Incr))
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
+        .or(bf.delimited_by('[', ']').map(Loop)
+            .recover_with(NestedDelimiters('[', ']'), || Invalid))
         .repeated())
-    .padded_by(end())
+    .then_ignore(end())
 }
 
 const TAPE_LEN: usize = 10_000;
@@ -49,7 +50,10 @@ fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
     match parser().parse(src.trim()) {
-        Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
+        Ok(ast) => {
+            // println!("{:#?}", ast);
+            execute(&ast, &mut 0, &mut [0; TAPE_LEN])
+        },
         Err(errs) => errs
             .into_iter()
             .for_each(|e| println!("{}", e)),

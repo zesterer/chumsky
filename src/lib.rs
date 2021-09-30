@@ -93,29 +93,37 @@ pub mod error;
 pub mod chain;
 /// Parser primitives that accept specific token patterns.
 pub mod primitive;
+pub mod recovery;
 /// Recursive parsers (parser that include themselves within their patterns).
 pub mod recursive;
+/// Types and traits related to spans.
+pub mod span;
 /// Token streams and behaviours.
 pub mod stream;
 /// Text-specific parsers and utilities.
 pub mod text;
 
-pub use crate::error::{Error, Span};
+pub use crate::{
+    error::Error,
+    span::Span,
+};
 
 use crate::{
     chain::Chain,
     combinator::*,
     primitive::*,
     stream::*,
+    recovery::*,
 };
 
 use std::{
-    iter::Peekable,
     marker::PhantomData,
     rc::Rc,
     cmp::Ordering,
+    ops::Range,
     // TODO: Enable when stable
     //lazy::OnceCell,
+    fmt,
 };
 
 /// Commonly used functions, traits and types.
@@ -124,25 +132,12 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
+        recovery::NestedDelimiters,
         recursive::recursive,
         text,
         Parser,
         BoxedParser,
     };
-}
-
-fn or_zip_with<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: Option<T>, f: F) -> Option<T> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(f(a, b)),
-        (a, b) => a.or(b),
-    }
-}
-
-fn zip_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: T, f: F) -> T {
-    match a {
-        Some(a) => f(a, b),
-        None => b,
-    }
 }
 
 enum ControlFlow<C, B> {
@@ -203,7 +198,9 @@ fn merge_alts<E: Error>(a: Option<Located<E>>, b: Option<Located<E>>) -> Option<
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
 type PResult<O, E> = (Vec<Located<E>>, Result<(O, Option<Located<E>>), Located<E>>);
 
-type ParserFn<'a, I, O, E> = dyn Fn(&mut Stream<I>) -> PResult<O, E> + 'a;
+type ParserFn<'a, I, O, E> = dyn Fn(&mut StreamOf<I, E>) -> PResult<O, E> + 'a;
+
+type StreamOf<'a, I, E> = Stream<'a, I, <E as Error>::Span>;
 
 /// A trait implemented by parsers.
 ///
@@ -230,15 +227,19 @@ pub trait Parser<I: Clone, O> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error>;
-    fn try_parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error>;
+    fn try_parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         stream.try_parse(|stream| self.parse_inner(stream))
     }
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_recovery<'a, Iter: Iterator<Item = I> + 'a, S: Into<Stream<'a, I, Iter>>>(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+    fn parse_recovery<
+        'a,
+        Iter: Iterator<Item = (<Self::Error as Error>::Span, I)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
+    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         let (mut errors, res) = self.parse_inner(&mut stream.into());
         let out = match res {
             Ok((out, _)) => Some(out),
@@ -253,12 +254,16 @@ pub trait Parser<I: Clone, O> {
     /// Parse an iterator of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
-    fn parse<'a, Iter: Iterator<Item = I> + 'a, S: Into<Stream<'a, I, Iter>>>(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
+    fn parse<
+        'a,
+        Iter: Iterator<Item = (<Self::Error as Error>::Span, I)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
+    >(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
         let (output, errors) = self.parse_recovery(stream);
-        if errors.len() > 0 {
-            Err(errors)
-        } else {
+        if errors.is_empty() {
             Ok(output.expect("Parsing failed, but no errors were emitted. This is troubling, to say the least."))
+        } else {
+            Err(errors)
         }
     }
 
@@ -488,8 +493,8 @@ pub trait Parser<I: Clone, O> {
     {
         self.then(other).map(|(a, b)| {
             let mut v = Vec::with_capacity(a.len() + b.len());
-            a.append(&mut v);
-            b.append(&mut v);
+            a.append_to(&mut v);
+            b.append_to(&mut v);
             v
         })
     }
@@ -519,9 +524,6 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(integer.parse("00064"), Ok(64));
     /// assert_eq!(integer.parse("32"), Ok(32));
     /// ```
-    fn padding_for<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
-        where Self: Sized
-    { Map(Then(self, other), |(_, u)| u, PhantomData) }
     fn ignore_then<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(_, u)| u, PhantomData) }
@@ -554,9 +556,6 @@ pub trait Parser<I: Clone, O> {
     ///     ]),
     /// );
     /// ```
-    fn padded_by<U, P: Parser<I, U>>(self, other: P) -> PaddedBy<Self, P, O, U>
-        where Self: Sized
-    { Map(Then(self, other), |(o, _)| o, PhantomData) }
     fn then_ignore<U, P: Parser<I, U>>(self, other: P) -> PaddedBy<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(o, _)| o, PhantomData) }
@@ -653,6 +652,10 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
 
+    fn recover_with<S: Strategy<I, Self::Error>, F: Fn() -> O>(self, strategy: S, default: F) -> Recovery<Self, S, F> where Self: Sized {
+        Recovery(self, strategy, default)
+    }
+
     /// Attempt to parse something, but only if it exists.
     ///
     /// If parsing of the pattern is successful, the output is `Some(_)`. Otherwise, the output is `None`.
@@ -740,7 +743,7 @@ pub trait Parser<I: Clone, O> {
 impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
     type Error = T::Error;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         T::parse_inner(*self, stream)
     }
 }
@@ -764,7 +767,7 @@ impl<'a, I, O, E: Error> Clone for BoxedParser<'a, I, O, E> {
 impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         (self.0)(stream)
     }
 }

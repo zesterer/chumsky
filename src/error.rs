@@ -1,9 +1,6 @@
-use std::{
-    fmt,
-    cmp::Ord,
-    ops::Range,
-};
+use super::*;
 
+/*
 /// A trait representing a span over elements of a token stream
 pub trait Span {
     /// A position that can be used to demarcate the bounds of this span.
@@ -50,6 +47,7 @@ impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
     }
     fn display(&self) -> Box<dyn fmt::Display + '_> { Box::new(format!("{}..{}", self.start, self.end)) }
 }
+*/
 
 /// A trait that describes parser error types.
 pub trait Error: Sized {
@@ -64,39 +62,25 @@ pub trait Error: Sized {
     type Pattern; // TODO: Default to = I;
 
     /// The primary span that the error originated at, if one exists.
-    fn span(&self) -> Option<Self::Span>;
+    fn span(&self) -> Self::Span;
 
     /// Create a new error describing a conflict between expected tokens and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_token_found(span: Option<Self::Span>, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self;
+    fn expected_token_found(span: Self::Span, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self;
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_label_found<L: Into<Self::Pattern>>(span: Option<Self::Span>, expected: L, found: Option<Self::Token>) -> Self {
+    fn expected_label_found<L: Into<Self::Pattern>>(span: Self::Span, expected: L, found: Option<Self::Token>) -> Self {
         Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
     }
 
     /// Alter the error message to indicate that the given labelled pattern was expected.
     fn into_labelled<L: Into<Self::Pattern>>(self, label: L) -> Self;
 
-    /// Merge two errors together, combining their elements.
-    ///
-    /// Note that when the errors originate from two different locations in the token stream (i.e: their span
-    /// [`Span::end`] differs), the error error with the latest position should be preferred. When merging errors,
-    /// unresolvable differences should favour `self`.
-    fn merge(self, other: Self) -> Self {
-        if let Some((a, b)) = self.span().zip(other.span()) {
-            if a.end() < b.end() {
-                other
-            } else {
-                self
-            }
-        } else {
-            self
-        }
-    }
+    /// Merge two errors that point to the same token together, combining their information.
+    fn merge(self, other: Self) -> Self;
 }
 
 /// A simple default token pattern that allows describing tokens and token patterns in error messages.
@@ -123,8 +107,8 @@ impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
 
 /// A simple default error type that provides minimal functionality.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Simple<I, S = Range<usize>> {
-    span: Option<S>,
+pub struct Simple<I, S = Range<Option<usize>>> {
+    span: S,
     expected: Vec<SimplePattern<I>>,
     found: Option<I>,
 }
@@ -142,9 +126,9 @@ impl<I, S: Span + Clone> Error for Simple<I, S> {
     type Span = S;
     type Pattern = SimplePattern<I>;
 
-    fn span(&self) -> Option<Self::Span> { self.span.clone() }
+    fn span(&self) -> Self::Span { self.span.clone() }
 
-    fn expected_token_found(span: Option<Self::Span>, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self {
+    fn expected_token_found(span: Self::Span, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self {
         Self {
             span,
             expected: expected
@@ -161,18 +145,9 @@ impl<I, S: Span + Clone> Error for Simple<I, S> {
     }
 
     fn merge(mut self, mut other: Self) -> Self {
-        if let Some((a, b)) = self.span().zip(other.span()) {
-            if a.end() < b.end() {
-                other
-            } else if a.end() > b.end() {
-                self
-            } else {
-                self.expected.append(&mut other.expected);
-                self
-            }
-        } else {
-            self
-        }
+        // TODO: Assert that `self.span == other.span` here?
+        (&mut self.expected).append(&mut other.expected);
+        self
     }
 }
 
@@ -184,9 +159,7 @@ impl<I: fmt::Display, S: Span> fmt::Display for Simple<I, S> {
             write!(f, "the input ended ")?;
         }
 
-        if let Some(span) = &self.span {
-            write!(f, "at {} ", span.display())?;
-        }
+        write!(f, "at {} ", self.span.display())?;
 
         match self.expected.as_slice() {
             [] => write!(f, "but end of input was expected")?,

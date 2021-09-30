@@ -1,25 +1,37 @@
 use super::*;
 
-pub struct Stream<'a, I, Iter: ?Sized = dyn Iterator<Item = I> + 'a> {
+pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (S, I)> + ?Sized = dyn Iterator<Item = (S, I)> + 'a> {
     pub(crate) phantom: PhantomData<&'a ()>,
+    pub(crate) ctx: S::Context,
     pub(crate) offset: usize,
-    pub(crate) buffer: Vec<Option<I>>,
+    pub(crate) buffer: Vec<Option<(S, I)>>,
     pub(crate) iter: Iter,
 }
 
-impl<'a, I: Clone> Stream<'a, I> {
+impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     pub(crate) fn offset(&self) -> usize { self.offset }
 
-    pub(crate) fn next(&mut self) -> (usize, Option<I>) {
-        if self.buffer.len() <= self.offset {
+    fn pull_until(&mut self, offset: usize) -> &Option<(S, I)> {
+        while self.buffer.len() <= offset {
             self.buffer.push(self.iter.next());
         }
+        &self.buffer[offset]
+    }
 
-        let out = (self.offset, self.buffer[self.offset].clone());
-        if out.1.is_some() {
-            self.offset += 1;
+    pub(crate) fn next(&mut self) -> (usize, S, Option<I>) {
+        match self.pull_until(self.offset).clone() {
+            Some((span, out)) => {
+                self.offset += 1;
+                (self.offset, span, Some(out))
+            },
+            None => (self.offset, S::new(self.ctx.clone(), None..None), None),
         }
-        out
+    }
+
+    pub(crate) fn zero_span(&mut self) -> S {
+        let start = self.pull_until(self.offset.saturating_sub(1)).as_ref().and_then(|(s, _)| s.end());
+        let end = self.pull_until(self.offset).as_ref().and_then(|(s, _)| s.start());
+        S::new(self.ctx.clone(), start..end)
     }
 
     pub(crate) fn attempt<R, F: FnOnce(&mut Self) -> (bool, R)>(&mut self, f: F) -> R {
@@ -39,13 +51,14 @@ impl<'a, I: Clone> Stream<'a, I> {
     }
 }
 
-impl<'a> From<&'a str> for Stream<'a, char, std::str::Chars<'a>> {
+impl<'a> From<&'a str> for Stream<'a, char, Range<Option<usize>>, Box<dyn Iterator<Item = (Range<Option<usize>>, char)> + 'a>> {
     fn from(s: &'a str) -> Self {
         Stream {
             phantom: PhantomData,
+            ctx: (),
             offset: 0,
             buffer: Vec::new(),
-            iter: s.chars(),
+            iter: Box::new(s.chars().enumerate().map(|(i, c)| (Some(i)..Some(i + 1), c))),
         }
     }
 }

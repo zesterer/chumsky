@@ -10,7 +10,7 @@ pub type Padded<P, O> = PaddedBy<PaddingFor<Padding<<P as Parser<char, O>>::Erro
 pub trait TextParser<O>: Parser<char, O> {
     /// Parse a pattern, allowing whitespace both before and after.
     fn padded(self) -> Padded<Self, O> where Self: Sized {
-        whitespace().padding_for(self).padded_by(whitespace())
+        whitespace().ignore_then(self).then_ignore(whitespace())
     }
 }
 
@@ -23,7 +23,7 @@ pub fn whitespace<E: Error<Token = char>>() -> Padding<E> {
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
 pub fn newline<E: Error<Token = char>>() -> impl Parser<char, (), Error = E> {
-    just('\r').or_not().padding_for(just('\n'))
+    just('\r').or_not().ignore_then(just('\n'))
         .or(just('\x0B')) // Vertical tab
         .or(just('\x0C')) // Form feed
         .or(just('\x0D')) // Carriage return

@@ -10,10 +10,10 @@ impl<E> Clone for End<E> {
 impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
         match stream.next() {
-            (_, None) => (Vec::new(), Ok(((), None))),
-            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
+            (_, _, None) => (Vec::new(), Ok(((), None))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
         }
     }
 }
@@ -43,10 +43,10 @@ impl<I: Clone, E> Clone for Just<I, E> {
 impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
         match stream.next() {
-            (_, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
-            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), vec![self.0.clone()], found)))),
+            (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, vec![self.0.clone()], found)))),
         }
     }
 }
@@ -81,11 +81,11 @@ impl<I: Clone, E> Clone for Seq<I, E> {
 impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
         for expected in &self.0 {
             match stream.next() {
-                (_, Some(tok)) if &tok == expected => {},
-                (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), vec![expected.clone()], found)))),
+                (_, _, Some(tok)) if &tok == expected => {},
+                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, vec![expected.clone()], found)))),
             }
         }
 
@@ -126,10 +126,10 @@ impl<I: Clone, E> Clone for OneOf<I, E> {
 impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
         match stream.next() {
-            (_, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), self.0.clone(), found)))),
+            (_, _, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, self.0.clone(), found)))),
         }
     }
 }
@@ -163,7 +163,7 @@ impl<E> Clone for Empty<E> {
 impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for Empty<E> {
     type Error = E;
 
-    fn parse_inner(&self, _: &mut Stream<I>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, _: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
         (Vec::new(), Ok(((), None)))
     }
 }
@@ -183,10 +183,10 @@ impl<I: Clone, E> Clone for NoneOf<I, E> {
 impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for NoneOf<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
         match stream.next() {
-            (_, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
+            (_, _, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
         }
     }
 }
@@ -223,10 +223,10 @@ impl<F: Clone, E> Clone for Filter<F, E> {
 impl<I: Clone, F: Fn(&I) -> bool, E: Error<Token = I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
         match stream.next() {
-            (_, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
-            (at, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), found)))),
+            (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
         }
     }
 }
@@ -261,13 +261,12 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
 impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut Stream<I>) -> PResult<O, Self::Error> {
-        let (at, tok) = stream.next();
-        let span = todo!();
-        match tok.map(|tok| (self.0)(span, tok)) {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        let (at, span, tok) = stream.next();
+        match tok.map(|tok| (self.0)(span.clone(), tok)) {
             Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
             Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
-            None => (Vec::new(), Err(Located::at(at, E::expected_token_found(todo!(), Vec::new(), None)))),
+            None => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), None)))),
         }
     }
 }
