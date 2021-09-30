@@ -8,6 +8,18 @@ pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn I
     pub(crate) iter: Iter,
 }
 
+impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
+    pub fn from_iter(ctx: S::Context, iter: Iter) -> Self {
+        Self {
+            phantom: PhantomData,
+            ctx,
+            offset: 0,
+            buffer: Vec::new(),
+            iter,
+        }
+    }
+}
+
 impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     pub(crate) fn offset(&self) -> usize { self.offset }
 
@@ -27,13 +39,19 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
             },
-            None => (self.offset, S::new(self.ctx.clone(), None..None), None),
+            None => (self.offset, S::new(self.ctx.clone(), S::end_offset()..S::end_offset()), None),
         }
     }
 
     pub(crate) fn zero_span(&mut self) -> S {
-        let start = self.pull_until(self.offset.saturating_sub(1)).as_ref().and_then(|(_, s)| s.end());
-        let end = self.pull_until(self.offset).as_ref().and_then(|(_, s)| s.start());
+        let start = self.pull_until(self.offset.saturating_sub(1))
+            .as_ref()
+            .map(|(_, s)| s.end())
+            .unwrap_or_else(S::end_offset);
+        let end = self.pull_until(self.offset)
+            .as_ref()
+            .map(|(_, s)| s.start())
+            .unwrap_or_else(S::end_offset);
         S::new(self.ctx.clone(), start..end)
     }
 
@@ -56,36 +74,18 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
 
 impl<'a> From<&'a str> for Stream<'a, char, Range<Option<usize>>, Box<dyn Iterator<Item = (char, Range<Option<usize>>)> + 'a>> {
     fn from(s: &'a str) -> Self {
-        Stream {
-            phantom: PhantomData,
-            ctx: (),
-            offset: 0,
-            buffer: Vec::new(),
-            iter: Box::new(s.chars().enumerate().map(|(i, c)| (c, Some(i)..Some(i + 1)))),
-        }
+        Self::from_iter((), Box::new(s.chars().enumerate().map(|(i, c)| (c, Some(i)..Some(i + 1)))))
     }
 }
 
 impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<Option<usize>>, Box<dyn Iterator<Item = (T, Range<Option<usize>>)> + 'a>> {
     fn from(s: &'a [T]) -> Self {
-        Stream {
-            phantom: PhantomData,
-            ctx: (),
-            offset: 0,
-            buffer: Vec::new(),
-            iter: Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, Some(i)..Some(i + 1)))),
-        }
+        Self::from_iter((), Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, Some(i)..Some(i + 1)))))
     }
 }
 
 impl<'a, T: Clone, S: Clone + Span<Context = ()>> From<&'a [(T, S)]> for Stream<'a, T, S, Box<dyn Iterator<Item = (T, S)> + 'a>> {
     fn from(s: &'a [(T, S)]) -> Self {
-        Stream {
-            phantom: PhantomData,
-            ctx: (),
-            offset: 0,
-            buffer: Vec::new(),
-            iter: Box::new(s.iter().cloned()),
-        }
+        Self::from_iter((), Box::new(s.iter().cloned()))
     }
 }
