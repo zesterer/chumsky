@@ -1,13 +1,31 @@
 use super::*;
 
-pub trait Strategy<I, E: Error> {
+pub trait Strategy<I, O, E: Error> {
     fn recover(&self, stream: &mut StreamOf<I, E>) -> Result<(), ()>;
 }
 
 #[derive(Copy, Clone)]
+pub struct SkipExcept<I, const N: usize>(pub [I; N]);
+
+impl<I: Clone + PartialEq, O, E: Error, const N: usize> Strategy<I, O, E> for SkipExcept<I, N> {
+    fn recover(&self, stream: &mut StreamOf<I, E>) -> Result<(), ()> {
+        stream.attempt(|stream| match stream.next() {
+            (_, _, Some(tok)) if !self.0.contains(&tok) => (true, Ok(())),
+            _ => (false, Err(())),
+        })
+    }
+}
+
+// impl<I, O, P: Parser<I, O>, E: Error> Strategy<I, O, E> for P {
+//     fn recover(&self, stream: &mut StreamOf<I, E>) -> Result<(), ()> {
+//         self.parse_inner(stream).1.map(|_| ()).map_err(|_| ())
+//     }
+// }
+
+#[derive(Copy, Clone)]
 pub struct NestedDelimiters<I>(pub I, pub I);
 
-impl<I: Clone + PartialEq, E: Error> Strategy<I, E> for NestedDelimiters<I> {
+impl<I: Clone + PartialEq, O, E: Error> Strategy<I, O, E> for NestedDelimiters<I> {
     fn recover(&self, stream: &mut StreamOf<I, E>) -> Result<(), ()> {
         let mut balance = 0;
         loop {
@@ -34,23 +52,25 @@ impl<I: Clone + PartialEq, E: Error> Strategy<I, E> for NestedDelimiters<I> {
 #[derive(Copy, Clone)]
 pub struct Recovery<A, S, F>(pub(crate) A, pub(crate) S, pub(crate) F);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, E>, F: Fn() -> O, E: Error<Token = I>> Parser<I, O> for Recovery<A, S, F> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, F: Fn() -> O, E: Error<Token = I>> Parser<I, O> for Recovery<A, S, F> {
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         match self.0.try_parse_inner(stream) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (mut a_errors, Err(a_err)) => {
-                println!("Recovering from {}...", stream.offset());
+                // println!("Recovering from {}...", stream.offset());
 
-                let res = if self.1.recover(stream).is_ok() {
-                    a_errors.push(a_err);
-                    (a_errors, Ok(((self.2)(), None)))
-                } else {
-                    (a_errors, Err(a_err))
-                };
+                let res = stream.attempt(|stream| {
+                    if self.1.recover(stream).is_ok() {
+                        a_errors.push(a_err);
+                        (true, (a_errors, Ok(((self.2)(), None))))
+                    } else {
+                        (false, (a_errors, Err(a_err)))
+                    }
+                });
 
-                println!("Recovered to {}.", stream.offset());
+                // println!("Recovered to {}. {}.", stream.offset(), if res.1.is_ok() { "SUCCESS" } else { "(failed)" });
 
                 res
             },

@@ -16,14 +16,15 @@ enum Instr {
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| just('<').to(Left)
+    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
+        // .recover_with(NestedDelimiters('[', ']'), || Invalid)
+        .or(just('<').to(Left))
         .or(just('>').to(Right))
         .or(just('+').to(Incr))
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
-        .or(bf.delimited_by('[', ']').map(Loop)
-            .recover_with(NestedDelimiters('[', ']'), || Invalid))
+        .recover_with(SkipExcept([']']), || Invalid)
         .repeated())
     .then_ignore(end())
 }
@@ -49,9 +50,10 @@ fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
+    // let src = "[!]+";
     match parser().parse(src.trim()) {
         Ok(ast) => {
-            // println!("{:#?}", ast);
+            println!("{:?}", ast);
             execute(&ast, &mut 0, &mut [0; TAPE_LEN])
         },
         Err(errs) => errs

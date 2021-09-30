@@ -132,7 +132,7 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
-        recovery::NestedDelimiters,
+        recovery::{SkipExcept, NestedDelimiters},
         recursive::recursive,
         text,
         Parser,
@@ -161,12 +161,12 @@ impl<E: Error> Located<E> {
             None => return self,
         };
         match self.at.cmp(&other.at) {
+            Ordering::Greater => self,
+            Ordering::Less => other,
             Ordering::Equal => Self {
                 at: self.at,
                 error: self.error.merge(other.error),
             },
-            Ordering::Less => other,
-            Ordering::Greater => self,
         }
     }
 
@@ -175,6 +175,10 @@ impl<E: Error> Located<E> {
             error: f(self.error),
             ..self
         }
+    }
+
+    fn debug(&self) -> Box<dyn fmt::Debug> {
+        Box::new(format!("{:?} at {}", self.error.debug(), self.at))
     }
 }
 
@@ -652,7 +656,7 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
 
-    fn recover_with<S: Strategy<I, Self::Error>, F: Fn() -> O>(self, strategy: S, default: F) -> Recovery<Self, S, F> where Self: Sized {
+    fn recover_with<S: Strategy<I, O, Self::Error>, F: Fn() -> O>(self, strategy: S, default: F) -> Recovery<Self, S, F> where Self: Sized {
         Recovery(self, strategy, default)
     }
 

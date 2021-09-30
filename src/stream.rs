@@ -11,6 +11,9 @@ pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (S, I)> + ?Sized = dyn I
 impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     pub(crate) fn offset(&self) -> usize { self.offset }
 
+    pub(crate) fn save(&self) -> usize { self.offset }
+    pub(crate) fn revert(&mut self, offset: usize) { self.offset = offset; }
+
     fn pull_until(&mut self, offset: usize) -> &Option<(S, I)> {
         while self.buffer.len() <= offset {
             self.buffer.push(self.iter.next());
@@ -22,7 +25,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         match self.pull_until(self.offset).clone() {
             Some((span, out)) => {
                 self.offset += 1;
-                (self.offset, span, Some(out))
+                (self.offset - 1, span, Some(out))
             },
             None => (self.offset, S::new(self.ctx.clone(), None..None), None),
         }

@@ -48,34 +48,40 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .then_ignore(just('"'))
             .collect::<String>()
             .labelled("string");
+        // let string = just('@').map(|_| "STRING".to_owned());
 
         let array = value.clone()
             .chain(just(',').ignore_then(value.clone()).repeated())
             .or_not()
             .flatten()
             .delimited_by('[', ']')
+            .map(Json::Array)
+            .recover_with(NestedDelimiters('[', ']'), || Json::Invalid)
             // .map(|x| x.unwrap_or_else(Vec::new))
             .labelled("array");
 
         let member = string.then_ignore(just(':').padded()).then(value);
+            // .map_err(|e| { println!("member error: {:?}", e); e });
         let object = member.clone()
             .chain(just(',').padded().ignore_then(member).repeated())
             .or_not()
             .flatten()
             .padded()
             .delimited_by('{', '}')
+            // .map(|member| std::iter::once(member).collect::<HashMap<String, Json>>())
             .collect::<HashMap<String, Json>>()
             .map(Json::Object)
-            // .recover_with(NestedDelimiters('{', '}'), || Json::Invalid)
+            // .map_err(|e| { println!("object error: {:?}", e); e })
+            .recover_with(NestedDelimiters('{', '}'), || Json::Invalid)
             // .map(|x| x.unwrap_or_else(Vec::new))
-            .labelled("object");
+            ;//.labelled("object");
 
         seq("null".chars()).to(Json::Null).labelled("null")
             .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
             .or(seq("false".chars()).to(Json::Bool(false)).labelled("false"))
             .or(number.map(Json::Num))
             .or(string.map(Json::Str))
-            .or(array.map(Json::Array))
+            .or(array)
             .or(object)
             .padded()
     })
@@ -85,28 +91,31 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    // let src = r#"{ "foo": {!} }"#;
-    match parser().parse(src.trim()) {
-        Ok(json) => println!("{:#?}", json),
-        Err(errs) => errs
-            .into_iter()
-            .for_each(|e| {
-                Report::build(ReportKind::Error, (), e.span().start.unwrap())
-                    .with_code(3)
-                    .with_message(format!("{}, expected {}", if e.found().is_some() {
-                        "Unexpected token in input"
-                    } else {
-                        "Unexpected end of input"
-                    }, e.expected().map(|x| x.to_string()).collect::<Vec<_>>().join(",")))
-                    .with_label(Label::new(e.span().start.unwrap()..e.span().end.unwrap())
-                        .with_message(format!("Unexpected {}", e
-                            .found()
-                            .map(|c| format!("token {}", c.fg(Color::Red)))
-                            .unwrap_or_else(|| "end of input".to_string())))
-                        .with_color(Color::Red))
-                    .finish()
-                    .print(Source::from(&src))
-                    .unwrap();
-            }),
-    }
+    let src = r#"{"foo":{"bar":!null}}"#;
+    let (json, errs) = parser().parse_recovery(src.trim());
+    println!("{:#?}", json);
+    errs
+        .into_iter()
+        .for_each(|e| {
+            Report::build(ReportKind::Error, (), e.span().start.unwrap())
+                .with_code(3)
+                .with_message(format!("{}, expected {}", if e.found().is_some() {
+                    "Unexpected token in input"
+                } else {
+                    "Unexpected end of input"
+                }, if e.expected().len() == 0 {
+                    "end of input".to_string()
+                } else {
+                    e.expected().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
+                }))
+                .with_label(Label::new(e.span().start.unwrap()..e.span().end.unwrap())
+                    .with_message(format!("Unexpected {}", e
+                        .found()
+                        .map(|c| format!("token {}", c.fg(Color::Red)))
+                        .unwrap_or_else(|| "end of input".to_string())))
+                    .with_color(Color::Red))
+                .finish()
+                .print(Source::from(&src))
+                .unwrap();
+        });
 }

@@ -81,6 +81,8 @@ pub trait Error: Sized {
 
     /// Merge two errors that point to the same token together, combining their information.
     fn merge(self, other: Self) -> Self;
+
+    fn debug(&self) -> &dyn fmt::Debug;
 }
 
 /// A simple default token pattern that allows describing tokens and token patterns in error messages.
@@ -121,7 +123,7 @@ impl<I, S> Simple<I, S> {
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
 }
 
-impl<I, S: Span + Clone> Error for Simple<I, S> {
+impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
     type Token = I;
     type Span = S;
     type Pattern = SimplePattern<I>;
@@ -146,20 +148,22 @@ impl<I, S: Span + Clone> Error for Simple<I, S> {
 
     fn merge(mut self, mut other: Self) -> Self {
         // TODO: Assert that `self.span == other.span` here?
-        (&mut self.expected).append(&mut other.expected);
+        self.expected.append(&mut other.expected);
         self
     }
+
+    fn debug(&self) -> &dyn fmt::Debug { self }
 }
 
 impl<I: fmt::Display, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(found) = &self.found {
             write!(f, "found '{}' ", found)?;
+            write!(f, "at {} ", self.span.display())?;
         } else {
             write!(f, "the input ended ")?;
         }
 
-        write!(f, "at {} ", self.span.display())?;
 
         match self.expected.as_slice() {
             [] => write!(f, "but end of input was expected")?,

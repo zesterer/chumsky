@@ -17,44 +17,60 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
-        match self.0.try_parse_inner(stream) {
-            (a_errors, Ok(a_out)) if a_errors.is_empty() => (a_errors, Ok(a_out)), // TODO: Handle merging alts with b
-            (a_errors, a_out) => match self.1.try_parse_inner(stream) {
-                (b_errors, Ok(b_out)) if b_errors.is_empty() => (b_errors, Ok(b_out)),
-                (b_errors, b_out) => {
-                    let a_err = a_out.as_ref().err().or(a_out.as_ref().ok().and_then(|(_, x)| x.as_ref())).or(a_errors.iter().rev().next());
-                    let b_err = b_out.as_ref().err().or(b_out.as_ref().ok().and_then(|(_, x)| x.as_ref())).or(b_errors.iter().rev().next());
+        let pre_state = stream.save();
 
-                    fn zip_with<A, B, R, F: FnOnce(A, B) -> R>(a: Option<A>, b: Option<B>, f: F) -> Option<R> {
-                        match (a, b) {
-                            (Some(a), Some(b)) => Some(f(a, b)),
-                            _ => None,
-                        }
-                    }
+        let a_res = self.0.parse_inner(stream);
+        let a_state = stream.save();
+        stream.revert(pre_state);
+        let b_res = self.1.parse_inner(stream);
+        let b_state = stream.save();
 
-                    fn zip_with_or<T, F: FnOnce(T, T) -> T>(a: Option<T>, b: Option<T>, f: F) -> Option<T> {
-                        match (a, b) {
-                            (Some(a), Some(b)) => Some(f(a, b)),
-                            (a, b) => a.or(b),
-                        }
-                    }
+        fn zip_with<A, B, R, F: FnOnce(A, B) -> R>(a: Option<A>, b: Option<B>, f: F) -> Option<R> {
+            match (a, b) {
+                (Some(a), Some(b)) => Some(f(a, b)),
+                _ => None,
+            }
+        }
 
-                    if zip_with(a_err, b_err, |a, b| a.at > b.at).unwrap_or(false) {
-                        (a_errors, a_out)
-                    } else if zip_with(a_err, b_err, |a, b| a.at < b.at).unwrap_or(false) {
-                        (b_errors, b_out)
-                    } else
-
-                    // Choose the branch that produced an output or, if not, the fewest errors
-                    if a_errors.is_empty() && b_errors.is_empty() {
-                        (Vec::new(), merge_results(a_out, b_out))
-                    } else if (a_out.is_err(), a_errors.len()) < (b_out.is_err(), b_errors.len()) {
-                        (a_errors, a_out)
-                    } else {
-                        (b_errors, b_out)
-                    }
+        let is_a = match (&a_res, &b_res) {
+            ((a_errors, Ok(a_out)), (b_errors, Ok(b_out))) => match a_errors.len().cmp(&b_errors.len()) {
+                Ordering::Greater => false,
+                Ordering::Less => true,
+                Ordering::Equal => match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at)) {
+                    Some(Ordering::Greater) => true,
+                    Some(Ordering::Less) => false,
+                    _ => match zip_with(a_out.1.as_ref(), b_out.1.as_ref(), |a, b| a.at.cmp(&b.at)) {
+                        Some(Ordering::Greater) => true,
+                        Some(Ordering::Less) => false,
+                        _ => true,
+                    },
                 },
             },
+            ((a_errors, Ok(_)), (b_errors, Err(_))) => true,
+            ((a_errors, Err(_)), (b_errors, Ok(_))) => false,
+            ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
+                Ordering::Greater => true,
+                Ordering::Less => false,
+                Ordering::Equal => match a_errors.len().cmp(&b_errors.len()) {
+                    Ordering::Greater => false,
+                    Ordering::Less => true,
+                    Ordering::Equal => match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at)) {
+                        Some(Ordering::Greater) => true,
+                        Some(Ordering::Less) => false,
+                        // If the branches really do seem to be equally valid as parse options, try to unify them
+                        // We already know that both parsers produces hard errors, so unwrapping cannot fail here
+                        _ => return (a_res.0, Err(a_res.1.err().unwrap().max(b_res.1.err().unwrap()))),
+                    },
+                },
+            },
+        };
+
+        if is_a {
+            stream.revert(a_state);
+            (a_res.0, a_res.1.map(|(out, alt)| (out, merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))))))
+        } else {
+            stream.revert(b_state);
+            (b_res.0, b_res.1.map(|(out, alt)| (out, merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))))))
         }
     }
 }
@@ -81,8 +97,8 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(O, U), Self::Error> {
-        match self.0.try_parse_inner(stream) {
-            (mut a_errors, Ok((a_out, a_alt))) => match self.1.try_parse_inner(stream) {
+        match self.0.parse_inner(stream) {
+            (mut a_errors, Ok((a_out, a_alt))) => match self.1.parse_inner(stream) {
                 (mut b_errors, Ok((b_out, b_alt))) => {
                     a_errors.append(&mut b_errors);
                     (a_errors, Ok(((a_out, b_out), merge_alts(a_alt, b_alt))))
@@ -97,37 +113,6 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     }
 }
 
-/*
-/// See [`Parser::then_catch`].
-#[derive(Copy, Clone)]
-pub struct ThenCatch<A, I>(pub(crate) A, pub(crate) I);
-
-impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Option<O>> for ThenCatch<A, I> {
-    type Error = E;
-
-    fn parse_inner<S: Stream<I, <Self::Error as Error>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(Option<O>, Option<E>), E>) {
-        let (mut n, mut res) = self.0.parse_inner(stream, errors);
-
-        assert!(n > 0 /*|| res.is_ok()*/, "ThenCatch must consume input (i.e: be non-optional) to avoid consuming everything");
-
-        loop {
-            n += 1;
-            match stream.next() {
-                Some(x) if x == self.1 => match res {
-                    Ok((o, f)) => break (n, Ok((Some(o), f))),
-                    Err(e) => {
-                        errors.push(e);
-                        break (n, Ok((None, None)));
-                    },
-                },
-                Some(x) => res = Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.1.clone()], Some(x)))),
-                None => break (n, Err(res.err().unwrap_or_else(|| E::expected_found(stream.position(), vec![self.1.clone()], None)))),
-            }
-        }
-    }
-}
-*/
-
 /// See [`Parser::delimited_by`].
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
@@ -137,10 +122,11 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> P
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         // TODO: Don't clone!
-        just(self.1.clone())
+        let (errors, res) = just(self.1.clone())
             .ignore_then(&self.0)
             .then_ignore(just(self.2.clone()))
-            .parse_inner(stream)
+            .parse_inner(stream);
+        (errors, res)
     }
 }
 
@@ -177,17 +163,23 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec
                 },
                 (mut a_errors, Err(a_err)) if outputs.len() < self.1 => {
                     errors.append(&mut a_errors);
-                    (false, ControlFlow::Break((
+                    (true, ControlFlow::Break((
                         std::mem::take(&mut errors),
                         Err(a_err),
                     )))
                 },
-                (a_errors, a_out) => {
+                (mut a_errors, Err(a_err)) => {
                     // Find furthest alternative error
                     // TODO: Handle multiple alternative errors
                     // println!("Errors = {:?}, a_err = {:?}, a_errors = {:?}", errors, a_out.as_ref().err(), a_errors);
-                    let alt = a_out.err().or(a_errors.into_iter().next()).or(alt.take());
-                    // println!("alt = {:?}", alt);
+                    // let alt = alt.take().or(a_out.err()).or(a_errors.into_iter().next());
+                    let alt = merge_alts(
+                        alt.take(),
+                        merge_alts(
+                            Some(a_err),
+                            a_errors.into_iter().next(),
+                        ),
+                    );
                     (false, ControlFlow::Break((
                         std::mem::take(&mut errors),
                         Ok((std::mem::take(&mut outputs), alt)),
@@ -314,8 +306,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Er
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, E> {
-        (&self.0).map_err(|e| e.into_labelled(self.1.clone()))
-            .parse_inner(stream)
+        let (errors, res) = self.0.parse_inner(stream);
+        // TODO: Think about how this interacts with errors that occur in the pattern
+        (errors.into_iter().collect(), res.map_err(|e| e.map(|e| e.into_labelled(self.1.clone()))))
     }
 }
 
