@@ -46,7 +46,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                     },
                 },
             },
+            // ((a_errors, Ok(_)), (b_errors, Err(_))) if !a_errors.is_empty() => panic!("a_errors = {:?}", a_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
             ((a_errors, Ok(_)), (b_errors, Err(_))) => true,
+            // ((a_errors, Err(_)), (b_errors, Ok(_))) if !b_errors.is_empty() => panic!("b_errors = {:?}", b_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
             ((a_errors, Err(_)), (b_errors, Ok(_))) => false,
             ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
                 Ordering::Greater => true,
@@ -83,9 +85,10 @@ impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<Token = I>> Parser<I, Op
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Option<O>, Self::Error> {
-        (&self.0).map(Some)
-            .or(Parser::<I, _>::map(empty::<E>(), |_| None))
-            .try_parse_inner(stream)
+        match self.0.try_parse_inner(stream) {
+            (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
+            (_, Err(err)) => (Vec::new(), Ok((None, Some(err)))),
+        }
     }
 }
 
@@ -171,8 +174,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec
                 (mut a_errors, Err(a_err)) => {
                     // Find furthest alternative error
                     // TODO: Handle multiple alternative errors
-                    // println!("Errors = {:?}, a_err = {:?}, a_errors = {:?}", errors, a_out.as_ref().err(), a_errors);
-                    // let alt = alt.take().or(a_out.err()).or(a_errors.into_iter().next());
+                    // TODO: Should we really be taking *all* of these into consideration?
                     let alt = merge_alts(
                         alt.take(),
                         merge_alts(

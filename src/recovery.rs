@@ -5,6 +5,24 @@ pub trait Strategy<I, O, E: Error> {
 }
 
 #[derive(Copy, Clone)]
+pub struct Until<I, const N: usize>(pub [I; N]);
+
+impl<I: Clone + PartialEq, O, E: Error, const N: usize> Strategy<I, O, E> for Until<I, N> {
+    fn recover(&self, stream: &mut StreamOf<I, E>) -> Result<(), ()> {
+        let mut n = 0;
+        while stream.attempt(|stream| match stream.next() {
+            (_, _, Some(tok)) if !self.0.contains(&tok) => (true, Ok(())),
+            _ => (false, Err(())),
+        }).is_ok() { n += 1; }
+        if n > 0 {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct SkipExcept<I, const N: usize>(pub [I; N]);
 
 impl<I: Clone + PartialEq, O, E: Error, const N: usize> Strategy<I, O, E> for SkipExcept<I, N> {
@@ -56,11 +74,13 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, F: Fn() -> O
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        let at = stream.save();
         match self.0.try_parse_inner(stream) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (mut a_errors, Err(a_err)) => {
-                // println!("Recovering from {}...", stream.offset());
+                debug_assert_eq!(at, stream.save());
 
+                // TODO: Is attempt needed here? Probably not because we allow invalid parses to mutate stream state.
                 let res = stream.attempt(|stream| {
                     if self.1.recover(stream).is_ok() {
                         a_errors.push(a_err);
@@ -69,8 +89,6 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, F: Fn() -> O
                         (false, (a_errors, Err(a_err)))
                     }
                 });
-
-                // println!("Recovered to {}. {}.", stream.offset(), if res.1.is_ok() { "SUCCESS" } else { "(failed)" });
 
                 res
             },

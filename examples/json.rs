@@ -57,24 +57,19 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .delimited_by('[', ']')
             .map(Json::Array)
             .recover_with(NestedDelimiters('[', ']'), || Json::Invalid)
-            // .map(|x| x.unwrap_or_else(Vec::new))
             .labelled("array");
 
         let member = string.then_ignore(just(':').padded()).then(value);
-            // .map_err(|e| { println!("member error: {:?}", e); e });
         let object = member.clone()
             .chain(just(',').padded().ignore_then(member).repeated())
             .or_not()
             .flatten()
             .padded()
             .delimited_by('{', '}')
-            // .map(|member| std::iter::once(member).collect::<HashMap<String, Json>>())
             .collect::<HashMap<String, Json>>()
             .map(Json::Object)
-            // .map_err(|e| { println!("object error: {:?}", e); e })
             .recover_with(NestedDelimiters('{', '}'), || Json::Invalid)
-            // .map(|x| x.unwrap_or_else(Vec::new))
-            ;//.labelled("object");
+            .labelled("object");
 
         seq("null".chars()).to(Json::Null).labelled("null")
             .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
@@ -91,7 +86,6 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    let src = r#"{"foo":{"bar":!null}}"#;
     let (json, errs) = parser().parse_recovery(src.trim());
     println!("{:#?}", json);
     errs

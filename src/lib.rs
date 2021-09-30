@@ -132,7 +132,7 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
-        recovery::{SkipExcept, NestedDelimiters},
+        recovery::{SkipExcept, Until, NestedDelimiters},
         recursive::recursive,
         text,
         Parser,

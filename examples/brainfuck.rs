@@ -5,7 +5,7 @@
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum Instr {
     Invalid,
     Left, Right,
@@ -52,10 +52,7 @@ fn main() {
 
     // let src = "[!]+";
     match parser().parse(src.trim()) {
-        Ok(ast) => {
-            println!("{:?}", ast);
-            execute(&ast, &mut 0, &mut [0; TAPE_LEN])
-        },
+        Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs
             .into_iter()
             .for_each(|e| println!("{}", e)),
