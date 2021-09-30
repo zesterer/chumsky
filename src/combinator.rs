@@ -19,9 +19,16 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         let pre_state = stream.save();
 
+        #[allow(deprecated)]
         let a_res = self.0.parse_inner(stream);
         let a_state = stream.save();
+
+        // TODO: If the first parser succeeded and no recovered errors were generated, don't bother running the second
+        // parser
+
         stream.revert(pre_state);
+
+        #[allow(deprecated)]
         let b_res = self.1.parse_inner(stream);
         let b_state = stream.save();
 
@@ -47,9 +54,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                 },
             },
             // ((a_errors, Ok(_)), (b_errors, Err(_))) if !a_errors.is_empty() => panic!("a_errors = {:?}", a_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-            ((a_errors, Ok(_)), (b_errors, Err(_))) => true,
+            ((_a_errors, Ok(_)), (_b_errors, Err(_))) => true,
             // ((a_errors, Err(_)), (b_errors, Ok(_))) if !b_errors.is_empty() => panic!("b_errors = {:?}", b_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-            ((a_errors, Err(_)), (b_errors, Ok(_))) => false,
+            ((_a_errors, Err(_)), (_b_errors, Ok(_))) => false,
             ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
                 Ordering::Greater => true,
                 Ordering::Less => false,
@@ -85,7 +92,7 @@ impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<Token = I>> Parser<I, Op
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Option<O>, Self::Error> {
-        match self.0.try_parse_inner(stream) {
+        match { #[allow(deprecated)] self.0.try_parse_inner(stream) } {
             (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
             (_, Err(err)) => (Vec::new(), Ok((None, Some(err)))),
         }
@@ -100,8 +107,8 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(O, U), Self::Error> {
-        match self.0.parse_inner(stream) {
-            (mut a_errors, Ok((a_out, a_alt))) => match self.1.parse_inner(stream) {
+        match { #[allow(deprecated)] self.0.parse_inner(stream) } {
+            (mut a_errors, Ok((a_out, a_alt))) => match { #[allow(deprecated)] self.1.parse_inner(stream) } {
                 (mut b_errors, Ok((b_out, b_alt))) => {
                     a_errors.append(&mut b_errors);
                     (a_errors, Ok(((a_out, b_out), merge_alts(a_alt, b_alt))))
@@ -125,6 +132,7 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> P
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
         // TODO: Don't clone!
+        #[allow(deprecated)]
         let (errors, res) = just(self.1.clone())
             .ignore_then(&self.0)
             .then_ignore(just(self.2.clone()))
@@ -147,7 +155,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec
         let mut old_offset = None;
 
         loop {
-            if let ControlFlow::Break(b) = stream.attempt(|stream| match self.0.parse_inner(stream) {
+            if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] self.0.parse_inner(stream) } {
                 (mut a_errors, Ok((a_out, a_alt))) => {
                     errors.append(&mut a_errors);
                     alt = merge_alts(alt.take(), a_alt);
@@ -171,7 +179,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec
                         Err(a_err),
                     )))
                 },
-                (mut a_errors, Err(a_err)) => {
+                (a_errors, Err(a_err)) => {
                     // Find furthest alternative error
                     // TODO: Handle multiple alternative errors
                     // TODO: Should we really be taking *all* of these into consideration?
@@ -206,6 +214,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Vec<O>, Self::Error> {
+        #[allow(deprecated)]
         (&self.0)
             .then((&self.1)
                 .ignore_then(&self.0)
@@ -228,6 +237,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<Token =
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+        #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
 
         (errors, res.map(|(out, alt)| ((&self.1)(out), alt)))
@@ -246,6 +256,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+        #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
 
         (errors, res.map(|(out, alt)| ((self.1)(out, stream.zero_span()), alt)))
@@ -264,6 +275,7 @@ impl<I: Clone, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        #[allow(deprecated)]
         (&self.0).map(|(head, tail)| tail.into_iter().fold(head, &self.1))
             .parse_inner(stream)
     }
@@ -281,6 +293,7 @@ impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+        #[allow(deprecated)]
         (&self.0).map(|(init, end)| init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b)))
             .parse_inner(stream)
     }
@@ -294,6 +307,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<Token = I>
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, E> {
+        #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
         let mapper = |e: Located<E>| e.map(&self.1);
         (errors.into_iter().map(mapper).collect(), res.map(|(out, alt)| (out, alt.map(mapper))).map_err(mapper))
@@ -308,6 +322,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Er
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, E> {
+        #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
         // TODO: Think about how this interacts with errors that occur in the pattern
         (errors.into_iter().collect(), res.map_err(|e| e.map(|e| e.into_labelled(self.1.clone()))))
@@ -326,6 +341,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<Token = I>> Par
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, E> {
+        #[allow(deprecated)]
         (&self.0).map(|_| self.1.clone())
             .parse_inner(stream)
     }

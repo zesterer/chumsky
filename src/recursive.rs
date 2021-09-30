@@ -36,7 +36,10 @@ impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for Recursive<'a, I, O, 
 pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error>(f: F) -> Recursive<'a, I, O, E> {
     let rc = Rc::new(OnceCell::new());
     let parser = f(Recursive(rc.clone()));
-    rc.set(Box::new(move |stream| parser.parse_inner(stream)))
+    rc.set(Box::new(move |stream| {
+        #[allow(deprecated)]
+        parser.parse_inner(stream)
+    }))
         .unwrap_or_else(|_| unreachable!());
     Recursive(rc)
 }

@@ -76,7 +76,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .or(string.map(Json::Str))
             .or(array)
             .or(object)
-            .recover_with(SkipThenRetry)
+            .recover_with(SkipThenRetryUntil([')', ']']))
             .recover_with(NestedDelimiters('{', '}', || Json::Invalid))
             .recover_with(NestedDelimiters('[', ']', || Json::Invalid))
             .padded()

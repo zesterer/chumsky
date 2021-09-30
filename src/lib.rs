@@ -132,7 +132,7 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
-        recovery::{SkipThenRetry, NestedDelimiters},
+        recovery::{SkipThenRetryUntil, NestedDelimiters},
         recursive::recursive,
         text,
         Parser,
@@ -176,17 +176,6 @@ impl<E: Error> Located<E> {
             error: f(self.error),
             ..self
         }
-    }
-
-    fn debug(&self) -> Box<dyn fmt::Debug> {
-        Box::new(format!("{:?} at {}", self.error.debug(), self.at))
-    }
-}
-
-fn merge_results<O, E: Error>(a: Result<O, Located<E>>, b: Result<O, Located<E>>) -> Result<O, Located<E>> {
-    match (a, b) {
-        (Err(a_err), Err(b_err)) => Err(a_err.max(b_err)),
-        (a, b) => a.or(b),
     }
 }
 
@@ -232,8 +221,12 @@ pub trait Parser<I: Clone, O> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
+    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. Avoid using it directly if you can.")]
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error>;
+
+    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. Avoid using it directly if you can.")]
     fn try_parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        #[allow(deprecated)]
         stream.try_parse(|stream| self.parse_inner(stream))
     }
 
@@ -245,6 +238,7 @@ pub trait Parser<I: Clone, O> {
         Iter: Iterator<Item = (I, <Self::Error as Error>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
     >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+        #[allow(deprecated)]
         let (mut errors, res) = self.parse_inner(&mut stream.into());
         let out = match res {
             Ok((out, _)) => Some(out),
@@ -741,6 +735,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Boxing a parser is loosely equivalent to boxing other combinators, such as [`Iterator`].
     fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
+        #[allow(deprecated)]
         BoxedParser(Rc::new(move |stream| self.parse_inner(stream)))
     }
 }
@@ -749,6 +744,7 @@ impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
     type Error = T::Error;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        #[allow(deprecated)]
         T::parse_inner(*self, stream)
     }
 }

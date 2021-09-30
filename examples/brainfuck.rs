@@ -17,14 +17,14 @@ enum Instr {
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
     recursive(|bf| bf.delimited_by('[', ']').map(Loop)
-        // .recover_with(NestedDelimiters('[', ']'), || Invalid)
         .or(just('<').to(Left))
         .or(just('>').to(Right))
         .or(just('+').to(Incr))
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
-        .recover_with(SkipThenRetry)
+        .recover_with(SkipThenRetryUntil([']']))
+        // .recover_with(NestedDelimiters('[', ']', || Invalid))
         .repeated())
     .then_ignore(end())
 }
