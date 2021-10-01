@@ -53,7 +53,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
             },
-            None => (self.offset, S::new(self.ctx.clone(), self.eoi.clone()..self.eoi.clone()), None),
+            None => (self.offset, S::new(self.ctx.clone(), self.eoi.clone()..(self.eoi.clone() + 1)), None),
         }
     }
 
