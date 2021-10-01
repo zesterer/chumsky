@@ -46,7 +46,7 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                 let mut balance_others = [0; N];
                 let mut starts = Vec::new();
                 if loop {
-                    let pre_state = stream.save();
+                    // let pre_state = stream.save();
                     if match stream.next() {
                         (_, span, Some(t)) if t == self.0 => { balance += 1; starts.push(span); true },
                         (_, _, Some(t)) if t == self.1 => { balance -= 1; starts.pop(); true },
@@ -60,8 +60,9 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                                     if balance_others[i] < 0 && balance > 0 {
                                         // stream.revert(pre_state);
                                         return (
-                                            vec![Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), Some(t)))],
-                                            Ok(((self.3)(), None)),
+                                            vec![],
+                                            Err(Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), Some(t)))),
+                                            // Ok(((self.3)(), None)),
                                         );
                                     }
                                 }

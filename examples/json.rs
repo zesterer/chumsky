@@ -80,13 +80,13 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .recover_with(SkipThenRetryUntil(['}', ']']))
             .padded()
     })
-        .then_ignore(end())
+        .then_ignore(end().recover_with(SkipThenRetryUntil([])))
 }
 
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
-    let src = r#"["foo", !null, [!}], true]"#;
+    // let src = r#"["foo", !null, { { "foo": null!], true]"#;
     let (json, errs) = parser().parse_recovery(src.trim());
     println!("{:#?}", json);
     errs
