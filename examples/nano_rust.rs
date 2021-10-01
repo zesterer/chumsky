@@ -389,7 +389,7 @@ fn main() {
         let len = src.chars().count();
         let (ast, parse_errs) = funcs_parser().parse_recovery(Stream::from_iter((), len..len + 1, tokens.into_iter()));
 
-        // println!("{:#?}", ast);
+        println!("{:#?}", ast);
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
             if let Some(main) = funcs.get("main") {
                 assert_eq!(main.args.len(), 0);

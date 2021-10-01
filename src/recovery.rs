@@ -91,7 +91,9 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                 if let Some(e) = error { a_errors.push(e); }
 
                 if recovered {
-                    a_errors.push(a_err);
+                    if a_errors.last().map_or(true, |e| a_err.at < e.at) {
+                        a_errors.push(a_err);
+                    }
                     (a_errors, Ok(((self.3)(), None)))
                 } else {
                     (a_errors, Err(a_err))
