@@ -82,6 +82,24 @@ impl<I, S> Simple<I, S> {
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
 
     pub fn reason(&self) -> Option<&SimpleReason<I, S>> { self.reason.as_ref() }
+
+    pub fn map<U, F: FnMut(I) -> U>(self, mut f: F) -> Simple<U, S> {
+        Simple {
+            span: self.span,
+            reason: match self.reason {
+                Some(SimpleReason::Unclosed(span, tok)) => Some(SimpleReason::Unclosed(span, f(tok))),
+                None => None,
+            },
+            expected: self.expected
+                .into_iter()
+                .map(|pat| match pat {
+                    SimplePattern::Labelled(label) => SimplePattern::Labelled(label),
+                    SimplePattern::Token(tok) => SimplePattern::Token(f(tok)),
+                })
+                .collect(),
+            found: self.found.map(f),
+        }
+    }
 }
 
 impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {

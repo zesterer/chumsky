@@ -98,10 +98,10 @@ impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterato
     }
 }
 
-impl<'a, T: Clone, S: Clone + Span<Context = ()>> From<&'a [(T, S)]> for Stream<'a, T, S, Box<dyn Iterator<Item = (T, S)> + 'a>>
-    where S::Offset: Default
-{
-    fn from(s: &'a [(T, S)]) -> Self {
-        Self::from_iter((), Default::default(), Box::new(s.iter().cloned()))
-    }
-}
+// impl<'a, T: Clone, S: Clone + Span<Context = ()>> From<&'a [(T, S)]> for Stream<'a, T, S, Box<dyn Iterator<Item = (T, S)> + 'a>>
+//     where S::Offset: Default
+// {
+//     fn from(s: &'a [(T, S)]) -> Self {
+//         Self::from_iter((), Default::default(), Box::new(s.iter().cloned()))
+//     }
+// }

@@ -23,8 +23,8 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
+        .recover_with(nested_delimiters('[', ']', [], || Invalid))
         .recover_with(SkipThenRetryUntil([']']))
-        // .recover_with(NestedDelimiters('[', ']', || Invalid))
         .repeated())
     .then_ignore(end())
 }
