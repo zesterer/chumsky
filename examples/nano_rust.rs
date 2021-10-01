@@ -377,7 +377,8 @@ fn main() {
 
     let parse_errs = if let Some(tokens) = tokens {
         // println!("Tokens = {:?}", tokens);
-        let (ast, parse_errs) = funcs_parser().parse_recovery(Stream::from_iter((), src.chars().count(), tokens.into_iter()));
+        let len = src.chars().count();
+        let (ast, parse_errs) = funcs_parser().parse_recovery(Stream::from_iter((), len..len + 1, tokens.into_iter()));
 
         // println!("{:#?}", ast);
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

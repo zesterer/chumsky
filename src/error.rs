@@ -20,7 +20,9 @@ pub trait Error: Sized {
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
     fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self;
 
-    fn unclosed_delimiter(start_span: Self::Span, start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self;
+    fn unclosed_delimiter(_start_span: Self::Span, _start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self {
+        Self::expected_token_found(span, Some(expected), found)
+    }
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
@@ -189,10 +191,6 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for OnlySpan<I, S> {
     fn span(&self) -> Self::Span { self.span.clone() }
 
     fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, _: Iter, _: Option<Self::Token>) -> Self {
-        Self { span, phantom: PhantomData }
-    }
-
-    fn unclosed_delimiter(_: Self::Span, _: Self::Token, span: Self::Span, _: Self::Token, _: Option<Self::Token>) -> Self {
         Self { span, phantom: PhantomData }
     }
 

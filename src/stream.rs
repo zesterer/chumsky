@@ -53,7 +53,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
             },
-            None => (self.offset, S::new(self.ctx.clone(), self.eoi.clone()), None),
+            None => (self.offset, self.eoi.clone(), None),
         }
     }
 
@@ -61,11 +61,11 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         let start = self.pull_until(start)
             .as_ref()
             .map(|(_, s)| s.start())
-            .unwrap_or_else(|| self.eoi.clone().start);
+            .unwrap_or_else(|| self.eoi.clone().start());
         let end = self.pull_until(self.offset.saturating_sub(1))
             .as_ref()
             .map(|(_, s)| s.end())
-            .unwrap_or_else(|| self.eoi.clone().end);
+            .unwrap_or_else(|| self.eoi.clone().end());
         S::new(self.ctx.clone(), start..end)
     }
 
@@ -88,13 +88,15 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
 
 impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
     fn from(s: &'a str) -> Self {
-        Self::from_iter((), s.chars().count(), Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
+        let len = s.chars().count();
+        Self::from_iter((), len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
     }
 }
 
 impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
     fn from(s: &'a [T]) -> Self {
-        Self::from_iter((), s.len(), Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
+        let len = s.len();
+        Self::from_iter((), len..len + 1, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
     }
 }
 
