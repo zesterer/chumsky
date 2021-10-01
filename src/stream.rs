@@ -61,11 +61,11 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         let start = self.pull_until(start)
             .as_ref()
             .map(|(_, s)| s.start())
-            .unwrap_or_else(|| self.eoi.clone().start());
+            .unwrap_or_else(|| self.eoi.start());
         let end = self.pull_until(self.offset.saturating_sub(1))
             .as_ref()
             .map(|(_, s)| s.end())
-            .unwrap_or_else(|| self.eoi.clone().end());
+            .unwrap_or_else(|| self.eoi.end());
         S::new(self.ctx.clone(), start..end)
     }
 

@@ -45,7 +45,8 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                 let mut balance = 0;
                 let mut balance_others = [0; N];
                 let mut starts = Vec::new();
-                if loop {
+                let mut error = None;
+                let recovered = loop {
                     // let pre_state = stream.save();
                     if match stream.next() {
                         (_, span, Some(t)) if t == self.0 => { balance += 1; starts.push(span); true },
@@ -57,24 +58,20 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                                 } else if t == self.2[i].1 {
                                     balance_others[i] -= 1;
 
-                                    if balance_others[i] < 0 && balance > 0 {
+                                    if balance_others[i] < 0 && balance == 1 {
                                         // stream.revert(pre_state);
-                                        return (
-                                            vec![],
-                                            Err(Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), Some(t)))),
-                                            // Ok(((self.3)(), None)),
-                                        );
+                                        error.get_or_insert_with(|| Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span.clone(), self.1.clone(), Some(t.clone()))));
                                     }
                                 }
                             }
                             false
                         },
                         (at, span, None) => {
-                            if balance > 0 {
-                                return (
-                                    vec![Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), None))],
-                                    Ok(((self.3)(), None)),
-                                );
+                            if balance > 0 && balance == 1 {
+                                error.get_or_insert_with(|| match starts.pop() {
+                                    Some(start) => Located::at(at, P::Error::unclosed_delimiter(start, self.0.clone(), span, self.1.clone(), None)),
+                                    None => Located::at(at, P::Error::expected_token_found(span, Some(self.1.clone()), None)),
+                                });
                             }
                             break false
                         },
@@ -89,7 +86,11 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
                         // A non-delimiter token before anything else is not a valid recovery pattern
                         break false;
                     }
-                } {
+                };
+
+                if let Some(e) = error { a_errors.push(e); }
+
+                if recovered {
                     a_errors.push(a_err);
                     (a_errors, Ok(((self.3)(), None)))
                 } else {

@@ -9,9 +9,12 @@ use std::{collections::HashMap, env, fs, fmt};
 
 pub type Span = std::ops::Range<usize>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Token {
-    Value(Value),
+    Null,
+    Bool(bool),
+    Num(String),
+    Str(String),
     Op(String),
     Ctrl(char),
     Ident(String),
@@ -25,7 +28,10 @@ enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Value(val) => write!(f, "{}", val),
+            Token::Null => write!(f, "null"),
+            Token::Bool(x) => write!(f, "{}", x),
+            Token::Num(n) => write!(f, "{}", n),
+            Token::Str(s) => write!(f, "{}", s),
             Token::Op(s) => write!(f, "{}", s),
             Token::Ctrl(c) => write!(f, "{}", c),
             Token::Ident(s) => write!(f, "{}", s),
@@ -42,13 +48,13 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let num = text::int(10)
         .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())
         .collect::<String>()
-        .map(|s| Token::Value(Value::Num(s.parse().unwrap())));
+        .map(Token::Num);
 
     let str_ = just('"')
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
         .collect::<String>()
-        .map(|s| Token::Value(Value::Str(s)));
+        .map(Token::Str);
 
     let op = one_of("+-*/!=".chars())
         .repeated_at_least(1)
@@ -63,9 +69,9 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         "print" => Token::Print,
         "if" => Token::If,
         "else" => Token::Else,
-        "true" => Token::Value(Value::Bool(true)),
-        "false" => Token::Value(Value::Bool(false)),
-        "null" => Token::Value(Value::Null),
+        "true" => Token::Bool(true),
+        "false" => Token::Bool(false),
+        "null" => Token::Null,
         _ => Token::Ident(ident),
     });
 
@@ -150,7 +156,10 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
             let val = filter_map(|span, tok| match tok {
-                Token::Value(v) => Ok(Expr::Value(v.clone())),
+                Token::Null => Ok(Expr::Value(Value::Null)),
+                Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
+                Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
+                Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
                 _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
             })
                 .labelled("value");

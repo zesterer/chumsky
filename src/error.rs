@@ -1,4 +1,8 @@
 use super::*;
+use std::{
+    collections::HashSet,
+    hash::Hash,
+};
 
 /// A trait that describes parser error types.
 pub trait Error: Sized {
@@ -41,7 +45,7 @@ pub trait Error: Sized {
 }
 
 /// A simple default token pattern that allows describing tokens and token patterns in error messages.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SimplePattern<I> {
     /// A pattern with the given name was expected.
     Labelled(&'static str),
@@ -68,15 +72,15 @@ pub enum SimpleReason<I, S> {
 }
 
 /// A simple default error type that tracks error spans, expected patterns, and the token found at an error site.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Simple<I, S = Range<usize>> {
+#[derive(Clone, Debug)]
+pub struct Simple<I: Hash, S = Range<usize>> {
     span: S,
     reason: Option<SimpleReason<I, S>>,
-    expected: Vec<SimplePattern<I>>,
+    expected: HashSet<SimplePattern<I>>,
     found: Option<I>,
 }
 
-impl<I, S> Simple<I, S> {
+impl<I: Hash + Eq, S> Simple<I, S> {
     /// Returns an iterator over possible expected patterns.
     pub fn expected(&self) -> impl ExactSizeIterator<Item = &SimplePattern<I>> + '_ { self.expected.iter() }
 
@@ -85,7 +89,7 @@ impl<I, S> Simple<I, S> {
 
     pub fn reason(&self) -> Option<&SimpleReason<I, S>> { self.reason.as_ref() }
 
-    pub fn map<U, F: FnMut(I) -> U>(self, mut f: F) -> Simple<U, S> {
+    pub fn map<U: Hash + Eq, F: FnMut(I) -> U>(self, mut f: F) -> Simple<U, S> {
         Simple {
             span: self.span,
             reason: match self.reason {
@@ -104,7 +108,7 @@ impl<I, S> Simple<I, S> {
     }
 }
 
-impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
+impl<I: fmt::Debug + Hash + Eq, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
     type Token = I;
     type Span = S;
     type Pattern = SimplePattern<I>;
@@ -135,22 +139,24 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
     }
 
     fn into_labelled<L: Into<Self::Pattern>>(mut self, label: L) -> Self {
-        self.expected = vec![label.into()];
+        self.expected = std::iter::once(label.into()).collect();
         self
     }
 
-    fn merge(mut self, mut other: Self) -> Self {
+    fn merge(mut self, other: Self) -> Self {
         // TODO: Assert that `self.span == other.span` here?
         let reasons_match = self.reason.is_some() == other.reason.is_some();
         self.reason = self.reason.filter(|_| reasons_match);
-        self.expected.append(&mut other.expected);
+        for expected in other.expected {
+            self.expected.insert(expected);
+        }
         self
     }
 
     // fn debug(&self) -> &dyn fmt::Debug { self }
 }
 
-impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
+impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(found) = &self.found {
             write!(f, "found '{}' ", found)?;
@@ -160,10 +166,10 @@ impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
         }
 
 
-        match self.expected.as_slice() {
-            [] => write!(f, "but end of input was expected")?,
-            [expected] => write!(f, "but {} was expected", expected)?,
-            [_, ..] => write!(f, "but one of {} was expected", self.expected
+        match self.expected.len() {
+            0 => write!(f, "but end of input was expected")?,
+            1 => write!(f, "but {} was expected", self.expected.iter().next().unwrap())?,
+            _ => write!(f, "but one of {} was expected", self.expected
                 .iter()
                 .map(|expected| expected.to_string())
                 .collect::<Vec<_>>()
@@ -174,7 +180,7 @@ impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
     }
 }
 
-impl<I: fmt::Debug + fmt::Display, S: Span + fmt::Display + fmt::Debug> std::error::Error for Simple<I, S> {}
+impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> std::error::Error for Simple<I, S> {}
 
 /// A minimal error type that tracks only the error span.
 #[derive(Clone, Debug)]
