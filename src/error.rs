@@ -1,54 +1,5 @@
 use super::*;
 
-/*
-/// A trait representing a span over elements of a token stream
-pub trait Span {
-    /// A position that can be used to demarcate the bounds of this span.
-    type Position: Ord;
-
-    /// Get the start position of this span.
-    fn start(&self) -> Self::Position;
-    /// Get the (exclusive) end position of this span.
-    fn end(&self) -> Self::Position;
-    /// Find the span that is the closest fit around two spans as possible.
-    ///
-    /// # Panics
-    ///
-    /// This function is permitted to panic if the first comes after the last.
-    fn union(self, other: Self) -> Self;
-    /// Find the span that fits between two spans but does not intersect with either.
-    ///
-    /// # Panics
-    ///
-    /// This function is permitted to panic if the spans intersect or the first comes after the last.
-    fn inner(self, other: Self) -> Self;
-
-    /// Return a value that allows displaying this span.
-    ///
-    /// Note that this function exists to work around certain implementation details and is highly likely to be removed
-    /// in the future. If possible, implement [`std::fmt::Display`] for your span type too.
-    fn display(&self) -> Box<dyn fmt::Display + '_>;
-}
-
-impl<T: Ord + Clone + fmt::Display> Span for Range<T> {
-    type Position = T;
-
-    fn start(&self) -> Self::Position { self.start.clone() }
-    fn end(&self) -> Self::Position { self.end.clone() }
-    fn union(self, other: Self) -> Self {
-        self.start.min(other.start)..self.end.max(other.end)
-    }
-    fn inner(self, other: Self) -> Self {
-        if self.end <= other.start {
-            self.end.clone()..other.start.clone()
-        } else {
-            panic!("Spans intersect or are incorrectly ordered");
-        }
-    }
-    fn display(&self) -> Box<dyn fmt::Display + '_> { Box::new(format!("{}..{}", self.start, self.end)) }
-}
-*/
-
 /// A trait that describes parser error types.
 pub trait Error: Sized {
     type Token;
@@ -68,6 +19,8 @@ pub trait Error: Sized {
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
     fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self;
+
+    fn unclosed_delimiter(start_span: Self::Span, start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self;
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
@@ -107,10 +60,16 @@ impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimpleReason<I, S> {
+    Unclosed(S, I),
+}
+
 /// A simple default error type that tracks error spans, expected patterns, and the token found at an error site.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Simple<I, S = Range<usize>> {
     span: S,
+    reason: Option<SimpleReason<I, S>>,
     expected: Vec<SimplePattern<I>>,
     found: Option<I>,
 }
@@ -121,6 +80,8 @@ impl<I, S> Simple<I, S> {
 
     /// Returns the token, if any, that was found instead of an expected pattern.
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
+
+    pub fn reason(&self) -> Option<&SimpleReason<I, S>> { self.reason.as_ref() }
 }
 
 impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
@@ -133,8 +94,20 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
     fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self {
         Self {
             span,
+            reason: None,
             expected: expected
                 .into_iter()
+                .map(SimplePattern::Token)
+                .collect(),
+            found,
+        }
+    }
+
+    fn unclosed_delimiter(start_span: Self::Span, start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self {
+        Self {
+            span,
+            reason: Some(SimpleReason::Unclosed(start_span, start)),
+            expected: std::iter::once(expected)
                 .map(SimplePattern::Token)
                 .collect(),
             found,
@@ -148,6 +121,8 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
 
     fn merge(mut self, mut other: Self) -> Self {
         // TODO: Assert that `self.span == other.span` here?
+        let reasons_match = self.reason.is_some() == other.reason.is_some();
+        self.reason = self.reason.filter(|_| reasons_match);
         self.expected.append(&mut other.expected);
         self
     }
@@ -196,6 +171,10 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for OnlySpan<I, S> {
     fn span(&self) -> Self::Span { self.span.clone() }
 
     fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, _: Iter, _: Option<Self::Token>) -> Self {
+        Self { span, phantom: PhantomData }
+    }
+
+    fn unclosed_delimiter(_: Self::Span, _: Self::Token, span: Self::Span, _: Self::Token, _: Option<Self::Token>) -> Self {
         Self { span, phantom: PhantomData }
     }
 

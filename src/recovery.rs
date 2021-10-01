@@ -33,21 +33,50 @@ impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUn
 }
 
 #[derive(Copy, Clone)]
-pub struct NestedDelimiters<I, F>(pub I, pub I, pub F);
+pub struct NestedDelimiters<I, F, const N: usize>(pub I, pub I, pub [(I, I); N], pub F);
 
-impl<I: Clone + PartialEq, O, F: Fn() -> O> Strategy<I, O> for NestedDelimiters<I, F> {
+impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for NestedDelimiters<I, F, N> {
     fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error> {
         assert!(self.0 != self.1, "NestedDelimiters cannot be used with identical delimiters.");
         match stream.try_parse(|stream| { #[allow(deprecated)] parser.parse_inner(stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (mut a_errors, Err(a_err)) => {
+                // TODO: track start delimiter locations for better error reporting
                 let mut balance = 0;
+                let mut balance_others = [0; N];
+                let mut starts = Vec::new();
                 if loop {
+                    let pre_state = stream.save();
                     if match stream.next() {
-                        (_, _, Some(t)) if t == self.0 => { balance += 1; true },
-                        (_, _, Some(t)) if t == self.1 => { balance -= 1; true },
-                        (_, _, Some(_)) => false,
-                        (_, _, None) => break false,
+                        (_, span, Some(t)) if t == self.0 => { balance += 1; starts.push(span); true },
+                        (_, _, Some(t)) if t == self.1 => { balance -= 1; starts.pop(); true },
+                        (at, span, Some(t)) => {
+                            for i in 0..N {
+                                if t == self.2[i].0 {
+                                    balance_others[i] += 1;
+                                } else if t == self.2[i].1 {
+                                    balance_others[i] -= 1;
+
+                                    if balance_others[i] < 0 && balance > 0 {
+                                        // stream.revert(pre_state);
+                                        return (
+                                            vec![Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), Some(t)))],
+                                            Ok(((self.3)(), None)),
+                                        );
+                                    }
+                                }
+                            }
+                            false
+                        },
+                        (at, span, None) => {
+                            if balance > 0 {
+                                return (
+                                    vec![Located::at(at, P::Error::unclosed_delimiter(starts.pop().unwrap(), self.0.clone(), span, self.1.clone(), None))],
+                                    Ok(((self.3)(), None)),
+                                );
+                            }
+                            break false
+                        },
                     } {
                         if balance == 0 {
                             break true;
@@ -61,13 +90,21 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O> Strategy<I, O> for NestedDelimiters<
                     }
                 } {
                     a_errors.push(a_err);
-                    (a_errors, Ok(((self.2)(), None)))
+                    (a_errors, Ok(((self.3)(), None)))
                 } else {
                     (a_errors, Err(a_err))
                 }
             },
         }
     }
+}
+
+/// A recovery mode that searches for a start and end delimiter, respecting nesting.
+///
+/// It is possible to specify other delimiters that are valid in this scope for better error generation. A function
+/// that generates a default fallback parser output on recovery is also required.
+pub fn nested_delimiters<I, F, const N: usize>(start: I, end: I, others: [(I, I); N], default: F) -> NestedDelimiters<I, F, N> {
+    NestedDelimiters(start, end, others, default)
 }
 
 #[derive(Copy, Clone)]

@@ -55,7 +55,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .flatten()
             .delimited_by('[', ']')
             .map(Json::Array)
-            .labelled("array");
+            ;//.labelled("array");
 
         let member = string.then_ignore(just(':').padded()).then(value);
         let object = member.clone()
@@ -66,7 +66,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .delimited_by('{', '}')
             .collect::<HashMap<String, Json>>()
             .map(Json::Object)
-            .labelled("object");
+            ;//.labelled("object");
 
         seq("null".chars()).to(Json::Null).labelled("null")
             .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
@@ -75,9 +75,9 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .or(string.map(Json::Str))
             .or(array)
             .or(object)
-            .recover_with(SkipThenRetryUntil([')', ']']))
-            .recover_with(NestedDelimiters('{', '}', || Json::Invalid))
-            .recover_with(NestedDelimiters('[', ']', || Json::Invalid))
+            .recover_with(nested_delimiters('{', '}', [('[', ']')], || Json::Invalid))
+            .recover_with(nested_delimiters('[', ']', [('{', '}')], || Json::Invalid))
+            .recover_with(SkipThenRetryUntil(['}', ']']))
             .padded()
     })
         .then_ignore(end())
@@ -86,12 +86,13 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
+    let src = r#"["foo", !null, [!}], true]"#;
     let (json, errs) = parser().parse_recovery(src.trim());
-    // println!("{:#?}", json);
+    println!("{:#?}", json);
     errs
         .into_iter()
         .for_each(|e| {
-            Report::build(ReportKind::Error, (), e.span().start)
+            let report = Report::build(ReportKind::Error, (), e.span().start)
                 .with_code(3)
                 .with_message(format!("{}, expected {}", if e.found().is_some() {
                     "Unexpected token in input"
@@ -107,7 +108,17 @@ fn main() {
                         .found()
                         .map(|c| format!("token {}", c.fg(Color::Red)))
                         .unwrap_or_else(|| "end of input".to_string())))
-                    .with_color(Color::Red))
+                    .with_color(Color::Red));
+
+            let report = match e.reason() {
+                Some(chumsky::error::SimpleReason::Unclosed(span, c)) => report
+                    .with_label(Label::new(span.clone())
+                        .with_message(format!("Unclosed delimiter {}", c.fg(Color::Yellow)))
+                    .with_color(Color::Yellow)),
+                None => report
+            };
+
+            report
                 .finish()
                 .print(Source::from(&src))
                 .unwrap();
