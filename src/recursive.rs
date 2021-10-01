@@ -14,7 +14,7 @@ impl<T> OnceCell<T> {
 }
 
 /// See [`recursive()`].
-pub struct Recursive<'a, I, O, E: Error>(Rc<OnceCell<Box<ParserFn<'a, I, O, E>>>>);
+pub struct Recursive<'a, I, O, E: Error>(Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>);
 
 impl<'a, I: Clone, O, E: Error> Clone for Recursive<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
@@ -24,9 +24,11 @@ impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for Recursive<'a, I, O, 
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
-        (self.0
+        #[allow(deprecated)]
+        self.0
             .get()
-            .expect("Recursive parser used prior to construction"))(stream)
+            .expect("Recursive parser used prior to construction")
+            .parse_inner(stream)
     }
 }
 
@@ -36,10 +38,7 @@ impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for Recursive<'a, I, O, 
 pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error>(f: F) -> Recursive<'a, I, O, E> {
     let rc = Rc::new(OnceCell::new());
     let parser = f(Recursive(rc.clone()));
-    rc.set(Box::new(move |stream| {
-        #[allow(deprecated)]
-        parser.parse_inner(stream)
-    }))
+    rc.set(Box::new(parser))
         .unwrap_or_else(|_| unreachable!());
     Recursive(rc)
 }

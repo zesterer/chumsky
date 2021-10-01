@@ -67,7 +67,7 @@ pub trait Error: Sized {
     /// Create a new error describing a conflict between expected tokens and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_token_found(span: Self::Span, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self;
+    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self;
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
@@ -82,7 +82,7 @@ pub trait Error: Sized {
     /// Merge two errors that point to the same token together, combining their information.
     fn merge(self, other: Self) -> Self;
 
-    fn debug(&self) -> &dyn fmt::Debug;
+    // fn debug(&self) -> &dyn fmt::Debug;
 }
 
 /// A simple default token pattern that allows describing tokens and token patterns in error messages.
@@ -107,7 +107,7 @@ impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
     }
 }
 
-/// A simple default error type that provides minimal functionality.
+/// A simple default error type that tracks error spans, expected patterns, and the token found at an error site.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Simple<I, S = Range<usize>> {
     span: S,
@@ -130,7 +130,7 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
 
     fn span(&self) -> Self::Span { self.span.clone() }
 
-    fn expected_token_found(span: Self::Span, expected: Vec<Self::Token>, found: Option<Self::Token>) -> Self {
+    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self {
         Self {
             span,
             expected: expected
@@ -152,7 +152,7 @@ impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
         self
     }
 
-    fn debug(&self) -> &dyn fmt::Debug { self }
+    // fn debug(&self) -> &dyn fmt::Debug { self }
 }
 
 impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
@@ -180,3 +180,28 @@ impl<I: fmt::Display, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
 }
 
 impl<I: fmt::Debug + fmt::Display, S: Span + fmt::Display + fmt::Debug> std::error::Error for Simple<I, S> {}
+
+/// A minimal error type that tracks only the error span.
+#[derive(Clone, Debug)]
+pub struct OnlySpan<I, S = Range<usize>> {
+    span: S,
+    phantom: PhantomData<I>,
+}
+
+impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for OnlySpan<I, S> {
+    type Token = I;
+    type Span = S;
+    type Pattern = SimplePattern<I>;
+
+    fn span(&self) -> Self::Span { self.span.clone() }
+
+    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, _: Iter, _: Option<Self::Token>) -> Self {
+        Self { span, phantom: PhantomData }
+    }
+
+    fn into_labelled<L: Into<Self::Pattern>>(self, _: L) -> Self { self }
+
+    fn merge(self, _: Self) -> Self { self }
+
+    // fn debug(&self) -> &dyn fmt::Debug { self }
+}

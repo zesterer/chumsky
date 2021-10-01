@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
 [![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
 
-A friendly parser combinator crate that makes writing LL(1) parsers with error recovery easy.
+A friendly parser combinator crate that makes writing LL(k) parsers with powerful error recovery easy.
 
 ## Example
 
@@ -14,7 +14,7 @@ Here follows a [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) parser. See 
 ```rs
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
+    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
         .or(just('<').to(Left))
         .or(just('>').to(Right))
         .or(just('+').to(Incr))

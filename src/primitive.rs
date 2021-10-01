@@ -1,5 +1,25 @@
 use super::*;
 
+/// See [`custom`].
+pub struct Custom<F, E>(F, PhantomData<E>);
+
+impl<F: Copy, E> Copy for Custom<F, E> {}
+impl<F: Clone, E> Clone for Custom<F, E> {
+    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+}
+
+impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<O, E>, E: Error<Token = I>> Parser<I, O> for Custom<F, E> {
+    type Error = E;
+
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+        (self.0)(stream)
+    }
+}
+
+pub fn custom<F, E>(f: F) -> Custom<F, E> {
+    Custom(f, PhantomData)
+}
+
 /// See [`end`].
 pub struct End<E>(PhantomData<E>);
 
@@ -46,7 +66,7 @@ impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for Just<I, E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, vec![self.0.clone()], found)))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Some(self.0.clone()), found)))),
         }
     }
 }
@@ -85,7 +105,7 @@ impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, ()> for Seq<I, E> {
         for expected in &self.0 {
             match stream.next() {
                 (_, _, Some(tok)) if &tok == expected => {},
-                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, vec![expected.clone()], found)))),
+                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Some(expected.clone()), found)))),
             }
         }
 

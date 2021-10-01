@@ -1,17 +1,28 @@
 use super::*;
 
-pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn Iterator<Item = (I, S)> + 'a> {
+pub trait StreamExtend<T> {
+    fn extend(&mut self, v: &mut Vec<T>, n: usize);
+}
+
+impl<I: Iterator> StreamExtend<I::Item> for I {
+    fn extend(&mut self, v: &mut Vec<I::Item>, n: usize) {
+        v.reserve(n);
+        v.extend(self.take(n));
+    }
+}
+
+pub struct Stream<'a, I, S: Span, Iter: StreamExtend<(I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
     pub(crate) phantom: PhantomData<&'a ()>,
     pub(crate) ctx: S::Context,
     pub(crate) eoi: S::Offset,
     pub(crate) offset: usize,
-    pub(crate) buffer: Vec<Option<(I, S)>>,
+    pub(crate) buffer: Vec<(I, S)>,
     pub(crate) iter: Iter,
 }
 
 impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
-    /// Create a new stream from an iterator of `(Token, Span)` tuples. Additionally, the input context (usually a file
-    /// reference) and the end of input symbol must be provided.
+    /// Create a new stream from an iterator of `(Token, Span)` tuples. The input context (usually a file identifier of
+    /// some kind) and the end of input offset must be provided.
     pub fn from_iter(ctx: S::Context, eoi: S::Offset, iter: Iter) -> Self {
         Self {
             phantom: PhantomData,
@@ -30,15 +41,14 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     pub(crate) fn save(&self) -> usize { self.offset }
     pub(crate) fn revert(&mut self, offset: usize) { self.offset = offset; }
 
-    fn pull_until(&mut self, offset: usize) -> &Option<(I, S)> {
-        while self.buffer.len() <= offset {
-            self.buffer.push(self.iter.next());
-        }
-        &self.buffer[offset]
+    fn pull_until(&mut self, offset: usize) -> Option<&(I, S)> {
+        let additional = offset.saturating_sub(self.buffer.len()) + 1024;
+        self.iter.extend(&mut self.buffer, additional);
+        self.buffer.get(offset)
     }
 
     pub(crate) fn next(&mut self) -> (usize, S, Option<I>) {
-        match self.pull_until(self.offset).clone() {
+        match self.pull_until(self.offset).cloned() {
             Some((out, span)) => {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
@@ -47,14 +57,14 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         }
     }
 
-    pub(crate) fn zero_span(&mut self) -> S {
-        let start = self.pull_until(self.offset.saturating_sub(1))
-            .as_ref()
-            .map(|(_, s)| s.end())
-            .unwrap_or_else(|| self.eoi.clone());
-        let end = self.pull_until(self.offset)
+    pub(crate) fn span_since(&mut self, start: usize) -> S {
+        let start = self.pull_until(start)
             .as_ref()
             .map(|(_, s)| s.start())
+            .unwrap_or_else(|| self.eoi.clone());
+        let end = self.pull_until(self.offset.saturating_sub(1))
+            .as_ref()
+            .map(|(_, s)| s.end())
             .unwrap_or_else(|| self.eoi.clone());
         S::new(self.ctx.clone(), start..end)
     }

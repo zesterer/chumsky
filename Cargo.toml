@@ -13,3 +13,7 @@ edition = "2018"
 
 [dev-dependencies]
 ariadne = "0.1.2"
+pom = "3.0"
+
+[profile.bench]
+debug = true

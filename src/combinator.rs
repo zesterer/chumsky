@@ -23,8 +23,12 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let a_res = self.0.parse_inner(stream);
         let a_state = stream.save();
 
-        // TODO: If the first parser succeeded and no recovered errors were generated, don't bother running the second
-        // parser
+        // If the first parser succeeded and produced no secondary errors, don't bother trying the second parser
+        if a_res.0.len() == 0 {
+            if let (a_errors, Ok(a_out)) = a_res {
+                return (a_errors, Ok(a_out));
+            }
+        }
 
         stream.revert(pre_state);
 
@@ -92,7 +96,7 @@ impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<Token = I>> Parser<I, Op
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Option<O>, Self::Error> {
-        match { #[allow(deprecated)] self.0.try_parse_inner(stream) } {
+        match stream.try_parse(|stream| { #[allow(deprecated)] self.0.parse_inner(stream) }) {
             (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
             (_, Err(err)) => (Vec::new(), Ok((None, Some(err)))),
         }
@@ -256,10 +260,11 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+        let start = stream.save();
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
 
-        (errors, res.map(|(out, alt)| ((self.1)(out, stream.zero_span()), alt)))
+        (errors, res.map(|(out, alt)| ((self.1)(out, stream.span_since(start)), alt)))
     }
 }
 

@@ -192,8 +192,6 @@ fn merge_alts<E: Error>(a: Option<Located<E>>, b: Option<Located<E>>) -> Option<
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
 type PResult<O, E> = (Vec<Located<E>>, Result<(O, Option<Located<E>>), Located<E>>);
 
-type ParserFn<'a, I, O, E> = dyn Fn(&mut StreamOf<I, E>) -> PResult<O, E> + 'a;
-
 type StreamOf<'a, I, E> = Stream<'a, I, <E as Error>::Span>;
 
 /// A trait implemented by parsers.
@@ -221,14 +219,8 @@ pub trait Parser<I: Clone, O> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. Avoid using it directly if you can.")]
+    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error>;
-
-    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. Avoid using it directly if you can.")]
-    fn try_parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
-        #[allow(deprecated)]
-        stream.try_parse(|stream| self.parse_inner(stream))
-    }
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
@@ -735,8 +727,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Boxing a parser is loosely equivalent to boxing other combinators, such as [`Iterator`].
     fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
-        #[allow(deprecated)]
-        BoxedParser(Rc::new(move |stream| self.parse_inner(stream)))
+        BoxedParser(Rc::new(self))
     }
 }
 
@@ -759,7 +750,7 @@ impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 #[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error>(Rc<ParserFn<'a, I, O, E>>);
+pub struct BoxedParser<'a, I, O, E: Error>(Rc<dyn Parser<I, O, Error = E> + 'a>);
 
 impl<'a, I, O, E: Error> Clone for BoxedParser<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
@@ -769,6 +760,7 @@ impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for BoxedParser<'a, I, O
     type Error = E;
 
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
-        (self.0)(stream)
+        #[allow(deprecated)]
+        self.0.parse_inner(stream)
     }
 }

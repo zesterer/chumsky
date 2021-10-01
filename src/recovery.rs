@@ -9,7 +9,7 @@ pub struct SkipThenRetryUntil<I, const N: usize>(pub [I; N]);
 
 impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUntil<I, N> {
     fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error> {
-        match { #[allow(deprecated)] parser.try_parse_inner(stream) } {
+        match stream.try_parse(|stream| { #[allow(deprecated)] parser.parse_inner(stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (a_errors, Err(a_err)) => {
                 loop {
@@ -38,7 +38,7 @@ pub struct NestedDelimiters<I, F>(pub I, pub I, pub F);
 impl<I: Clone + PartialEq, O, F: Fn() -> O> Strategy<I, O> for NestedDelimiters<I, F> {
     fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error> {
         assert!(self.0 != self.1, "NestedDelimiters cannot be used with identical delimiters.");
-        match { #[allow(deprecated)] parser.try_parse_inner(stream) } {
+        match stream.try_parse(|stream| { #[allow(deprecated)] parser.parse_inner(stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (mut a_errors, Err(a_err)) => {
                 let mut balance = 0;

@@ -19,14 +19,14 @@ enum Json {
 
 fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
     recursive(|value| {
-        let frac = just('.').chain(text::digits());
+        let frac = just('.').chain(text::digits(10));
 
         let exp = just('e').or(just('E'))
             .ignore_then(just('+').or(just('-')).or_not())
-            .chain(text::digits());
+            .chain(text::digits(10));
 
         let number = just('-').or_not()
-            .chain(text::int())
+            .chain(text::int(10))
             .chain(frac.or_not().flatten())
             .chain::<char, _, _>(exp.or_not().flatten())
             .collect::<String>()
@@ -48,7 +48,6 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .then_ignore(just('"'))
             .collect::<String>()
             .labelled("string");
-        // let string = just('@').map(|_| "STRING".to_owned());
 
         let array = value.clone()
             .chain(just(',').ignore_then(value.clone()).repeated())
@@ -88,7 +87,7 @@ fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
     let (json, errs) = parser().parse_recovery(src.trim());
-    println!("{:#?}", json);
+    // println!("{:#?}", json);
     errs
         .into_iter()
         .for_each(|e| {
