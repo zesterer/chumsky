@@ -14,7 +14,7 @@ impl<I: Iterator> StreamExtend<I::Item> for I {
 pub struct Stream<'a, I, S: Span, Iter: StreamExtend<(I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
     pub(crate) phantom: PhantomData<&'a ()>,
     pub(crate) ctx: S::Context,
-    pub(crate) eoi: S::Offset,
+    pub(crate) eoi: S,
     pub(crate) offset: usize,
     pub(crate) buffer: Vec<(I, S)>,
     pub(crate) iter: Iter,
@@ -23,7 +23,7 @@ pub struct Stream<'a, I, S: Span, Iter: StreamExtend<(I, S)> + ?Sized = dyn Stre
 impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
     /// Create a new stream from an iterator of `(Token, Span)` tuples. The input context (usually a file identifier of
     /// some kind) and the end of input offset must be provided.
-    pub fn from_iter(ctx: S::Context, eoi: S::Offset, iter: Iter) -> Self {
+    pub fn from_iter(ctx: S::Context, eoi: S, iter: Iter) -> Self {
         Self {
             phantom: PhantomData,
             ctx,
@@ -53,7 +53,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
             },
-            None => (self.offset, S::new(self.ctx.clone(), self.eoi.clone()..self.eoi.clone()), None),
+            None => (self.offset, S::new(self.ctx.clone(), self.eoi.clone()), None),
         }
     }
 
@@ -61,11 +61,11 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         let start = self.pull_until(start)
             .as_ref()
             .map(|(_, s)| s.start())
-            .unwrap_or_else(|| self.eoi.clone());
+            .unwrap_or_else(|| self.eoi.clone().start);
         let end = self.pull_until(self.offset.saturating_sub(1))
             .as_ref()
             .map(|(_, s)| s.end())
-            .unwrap_or_else(|| self.eoi.clone());
+            .unwrap_or_else(|| self.eoi.clone().end);
         S::new(self.ctx.clone(), start..end)
     }
 
