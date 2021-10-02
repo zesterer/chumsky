@@ -110,6 +110,11 @@ impl<Iter: Iterator<Item = (I, S)>, I, S: Span + Clone> Stream<I, S> for Spanned
     }
 }
 
+impl<I, S: Span + Clone, Iter: Iterator<Item = (I, S)>> IntoStream<I, S> for SpannedIterStream<Iter, S> {
+    type Stream = Self;
+    fn into_stream(self) -> Self::Stream { self }
+}
+
 impl<'a, I: Clone, S: Span + Clone> IntoStream<I, S> for &'a [(I, S)] {
     type Stream = SpannedIterStream<std::iter::Cloned<std::slice::Iter<'a, (I, S)>>, S>;
     fn into_stream(self) -> Self::Stream { SpannedIterStream::new(self.into_iter().cloned()) }
