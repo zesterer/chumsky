@@ -1,14 +1,14 @@
 use super::*;
 
 pub trait Strategy<I: Clone, O> {
-    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error>;
+    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error>;
 }
 
 #[derive(Copy, Clone)]
 pub struct SkipThenRetryUntil<I, const N: usize>(pub [I; N]);
 
 impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUntil<I, N> {
-    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error> {
+    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error> {
         match stream.try_parse(|stream| { #[allow(deprecated)] parser.parse_inner(stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
             (a_errors, Err(a_err)) => {
@@ -36,7 +36,7 @@ impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUn
 pub struct NestedDelimiters<I, F, const N: usize>(pub I, pub I, pub [(I, I); N], pub F);
 
 impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for NestedDelimiters<I, F, N> {
-    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<O, P::Error> {
+    fn recover<P: Parser<I, O>>(&self, parser: P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error> {
         assert!(self.0 != self.1, "NestedDelimiters cannot be used with identical delimiters.");
         match stream.try_parse(|stream| { #[allow(deprecated)] parser.parse_inner(stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
@@ -114,10 +114,10 @@ pub fn nested_delimiters<I, F, const N: usize>(start: I, end: I, others: [(I, I)
 #[derive(Copy, Clone)]
 pub struct Recovery<A, S>(pub(crate) A, pub(crate) S);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O>, E: Error<Token = I>> Parser<I, O> for Recovery<A, S> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O>, E: Error<I>> Parser<I, O> for Recovery<A, S> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         self.1.recover(&self.0, stream)
     }
 }

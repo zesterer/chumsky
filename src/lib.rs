@@ -108,11 +108,14 @@ pub use crate::{
     span::Span,
 };
 
+pub use crate::{
+    stream::Stream,
+};
+
 use crate::{
     chain::Chain,
     combinator::*,
     primitive::*,
-    stream::*,
     recovery::*,
 };
 
@@ -131,6 +134,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         text::{TextParser as _, whitespace},
+        span::Span as _,
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
         recovery::{SkipThenRetryUntil, nested_delimiters},
         recursive::recursive,
@@ -146,14 +150,15 @@ enum ControlFlow<C, B> {
     Break(B),
 }
 
-pub struct Located<E> {
+pub struct Located<I, E> {
     at: usize,
     error: E,
+    phantom: PhantomData<I>,
 }
 
-impl<E: Error> Located<E> {
+impl<I, E: Error<I>> Located<I, E> {
     pub fn at(at: usize, error: E) -> Self {
-        Self { at, error }
+        Self { at, error, phantom: PhantomData }
     }
 
     pub fn max(self, other: impl Into<Option<Self>>) -> Self {
@@ -165,8 +170,8 @@ impl<E: Error> Located<E> {
             Ordering::Greater => self,
             Ordering::Less => other,
             Ordering::Equal => Self {
-                at: self.at,
                 error: self.error.merge(other.error),
+                ..self
             },
         }
     }
@@ -179,7 +184,7 @@ impl<E: Error> Located<E> {
     }
 }
 
-fn merge_alts<E: Error>(a: Option<Located<E>>, b: Option<Located<E>>) -> Option<Located<E>> {
+fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>) -> Option<Located<I, E>> {
     match (a, b) {
         (Some(a), Some(b)) => Some(a.max(b)),
         (a, b) => a.or(b),
@@ -190,9 +195,9 @@ fn merge_alts<E: Error>(a: Option<Located<E>>, b: Option<Located<E>>) -> Option<
 // alt_err = potential alternative error should a different number of optional patterns be parsed
 // ([x, ...], Ok(out)) => parsing failed, but recovery occurred so parsing may continue
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
-type PResult<O, E> = (Vec<Located<E>>, Result<(O, Option<Located<E>>), Located<E>>);
+type PResult<I, O, E> = (Vec<Located<I, E>>, Result<(O, Option<Located<I, E>>), Located<I, E>>);
 
-type StreamOf<'a, I, E> = Stream<'a, I, <E as Error>::Span>;
+type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
 
 /// A trait implemented by parsers.
 ///
@@ -213,22 +218,22 @@ type StreamOf<'a, I, E> = Stream<'a, I, <E as Error>::Span>;
 /// have a lexical pass prior to the main parser that groups the input characters into tokens.
 pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
-    type Error: Error<Token=I>; // TODO when default associated types are stable: = Simple<I>;
+    type Error: Error<I>; // TODO when default associated types are stable: = Simple<I>;
 
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error>;
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
 
     /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
     fn parse_recovery<
         'a,
-        Iter: Iterator<Item = (I, <Self::Error as Error>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
+        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         #[allow(deprecated)]
         let (mut errors, res) = self.parse_inner(&mut stream.into());
@@ -247,8 +252,8 @@ pub trait Parser<I: Clone, O> {
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
     fn parse<
         'a,
-        Iter: Iterator<Item = (I, <Self::Error as Error>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error>::Span, Iter>>,
+        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     >(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
         let (output, errors) = self.parse_recovery(stream);
         if errors.is_empty() {
@@ -286,7 +291,7 @@ pub trait Parser<I: Clone, O> {
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
 
     /// Map the output of this parser to another value, making use of the pattern's span.
-    fn map_with_span<U, F: Fn(O, <Self::Error as Error>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
+    fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
         { MapWithSpan(self, f, PhantomData) }
 
@@ -324,7 +329,7 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(frac.parse("hello"), Err(vec![Simple::expected_label_found(Some(0..1), "number", Some('h'))]));
     /// assert_eq!(frac.parse("42!"), Err(vec![Simple::expected_token_found(Some(2..3), vec!['.'], Some('!'))]));
     /// ```
-    fn labelled<L: Into<<Self::Error as Error>::Pattern> + Clone>(self, label: L) -> Label<Self, L>
+    fn labelled<L: Into<<Self::Error as Error<I>>::Label> + Clone>(self, label: L) -> Label<Self, L>
         where Self: Sized
     { Label(self, label) }
 
@@ -710,8 +715,15 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse an expression, separated by another, any number of times, optionally with a trailing instance of the
     /// other.
-    fn separated_by<U, P: Parser<I, U>>(self, other: P, trailing: bool) -> SeparatedBy<Self, P, U> where Self: Sized {
-        SeparatedBy(self, other, 0, trailing, PhantomData)
+    fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
+        SeparatedBy {
+            a: self,
+            b: other,
+            at_least: 0,
+            allow_leading: false,
+            allow_trailing: false,
+            phantom: PhantomData,
+        }
     }
 
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
@@ -734,7 +746,7 @@ pub trait Parser<I: Clone, O> {
 impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
     type Error = T::Error;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
         T::parse_inner(*self, stream)
     }
@@ -750,16 +762,16 @@ impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 #[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error>(Rc<dyn Parser<I, O, Error = E> + 'a>);
+pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
 
-impl<'a, I, O, E: Error> Clone for BoxedParser<'a, I, O, E> {
+impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
 }
 
-impl<'a, I: Clone, O, E: Error<Token = I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
+impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
         self.0.parse_inner(stream)
     }

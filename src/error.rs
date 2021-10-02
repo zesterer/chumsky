@@ -5,16 +5,12 @@ use std::{
 };
 
 /// A trait that describes parser error types.
-pub trait Error: Sized {
-    type Token;
+pub trait Error<I>: Sized {
     /// The type of spans to be used in the error.
     type Span: Span; // TODO: Default to = Range<usize>;
 
-    /// The label used to describe tokens or a token pattern in error messages.
-    ///
-    /// Commonly, this type has a way to represent both *specific* tokens and groups of tokens like 'expressions' or
-    /// 'statements'.
-    type Pattern; // TODO: Default to = I;
+    /// The label used to describe a syntatic structure currently being parsed.
+    type Label; // TODO: Default to = &'static str;
 
     /// The primary span that the error originated at, if one exists.
     fn span(&self) -> Self::Span;
@@ -22,21 +18,21 @@ pub trait Error: Sized {
     /// Create a new error describing a conflict between expected tokens and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self;
+    fn expected_token_found<Iter: IntoIterator<Item = I>>(span: Self::Span, expected: Iter, found: Option<I>) -> Self;
 
-    fn unclosed_delimiter(_start_span: Self::Span, _start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self {
+    fn unclosed_delimiter(_start_span: Self::Span, _start: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
         Self::expected_token_found(span, Some(expected), found)
     }
 
     /// Create a new error describing a conflict between an expected label and that the token that was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_label_found<L: Into<Self::Pattern>>(span: Self::Span, expected: L, found: Option<Self::Token>) -> Self {
-        Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
-    }
+    // fn expected_label_found<L: Into<Self::Pattern>>(span: Self::Span, expected: L, found: Option<I>) -> Self {
+    //     Self::expected_token_found(span, Vec::new(), found).into_labelled(expected)
+    // }
 
-    /// Alter the error message to indicate that the given labelled pattern was expected.
-    fn into_labelled<L: Into<Self::Pattern>>(self, label: L) -> Self;
+    /// Indicate that the error occured while parsing a particular syntactic structure.
+    fn with_label(self, label: Self::Label) -> Self;
 
     /// Merge two errors that point to the same token together, combining their information.
     fn merge(self, other: Self) -> Self;
@@ -45,26 +41,26 @@ pub trait Error: Sized {
 }
 
 /// A simple default token pattern that allows describing tokens and token patterns in error messages.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SimplePattern<I> {
-    /// A pattern with the given name was expected.
-    Labelled(&'static str),
-    /// A specific token was expected.
-    Token(I),
-}
+// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+// pub enum SimplePattern<I> {
+//     /// A pattern with the given name was expected.
+//     Labelled(&'static str),
+//     /// A specific token was expected.
+//     Token(I),
+// }
 
-impl<I> From<&'static str> for SimplePattern<I> {
-    fn from(s: &'static str) -> Self { Self::Labelled(s) }
-}
+// impl<I> From<&'static str> for SimplePattern<I> {
+//     fn from(s: &'static str) -> Self { Self::Labelled(s) }
+// }
 
-impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Labelled(s) => write!(f, "{}", s),
-            Self::Token(x) => write!(f, "'{}'", x),
-        }
-    }
-}
+// impl<I: fmt::Display> fmt::Display for SimplePattern<I> {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             Self::Labelled(s) => write!(f, "{}", s),
+//             Self::Token(x) => write!(f, "'{}'", x),
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimpleReason<I, S> {
@@ -76,18 +72,21 @@ pub enum SimpleReason<I, S> {
 pub struct Simple<I: Hash, S = Range<usize>> {
     span: S,
     reason: Option<SimpleReason<I, S>>,
-    expected: HashSet<SimplePattern<I>>,
+    expected: HashSet<I>,
     found: Option<I>,
+    label: Option<&'static str>,
 }
 
 impl<I: Hash + Eq, S> Simple<I, S> {
     /// Returns an iterator over possible expected patterns.
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = &SimplePattern<I>> + '_ { self.expected.iter() }
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &I> + '_ { self.expected.iter() }
 
     /// Returns the token, if any, that was found instead of an expected pattern.
     pub fn found(&self) -> Option<&I> { self.found.as_ref() }
 
     pub fn reason(&self) -> Option<&SimpleReason<I, S>> { self.reason.as_ref() }
+
+    pub fn label(&self) -> Option<&'static str> { self.label }
 
     pub fn map<U: Hash + Eq, F: FnMut(I) -> U>(self, mut f: F) -> Simple<U, S> {
         Simple {
@@ -98,55 +97,50 @@ impl<I: Hash + Eq, S> Simple<I, S> {
             },
             expected: self.expected
                 .into_iter()
-                .map(|pat| match pat {
-                    SimplePattern::Labelled(label) => SimplePattern::Labelled(label),
-                    SimplePattern::Token(tok) => SimplePattern::Token(f(tok)),
-                })
+                .map(&mut f)
                 .collect(),
             found: self.found.map(f),
+            label: self.label,
         }
     }
 }
 
-impl<I: fmt::Debug + Hash + Eq, S: Span + Clone + fmt::Debug> Error for Simple<I, S> {
-    type Token = I;
+impl<I: fmt::Debug + Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     type Span = S;
-    type Pattern = SimplePattern<I>;
+    type Label = &'static str;
 
     fn span(&self) -> Self::Span { self.span.clone() }
 
-    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, expected: Iter, found: Option<Self::Token>) -> Self {
+    fn expected_token_found<Iter: IntoIterator<Item = I>>(span: Self::Span, expected: Iter, found: Option<I>) -> Self {
         Self {
             span,
             reason: None,
             expected: expected
                 .into_iter()
-                .map(SimplePattern::Token)
                 .collect(),
             found,
+            label: None,
         }
     }
 
-    fn unclosed_delimiter(start_span: Self::Span, start: Self::Token, span: Self::Span, expected: Self::Token, found: Option<Self::Token>) -> Self {
+    fn unclosed_delimiter(start_span: Self::Span, start: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
         Self {
             span,
             reason: Some(SimpleReason::Unclosed(start_span, start)),
-            expected: std::iter::once(expected)
-                .map(SimplePattern::Token)
-                .collect(),
+            expected: std::iter::once(expected).collect(),
             found,
+            label: None,
         }
     }
 
-    fn into_labelled<L: Into<Self::Pattern>>(mut self, label: L) -> Self {
-        self.expected = std::iter::once(label.into()).collect();
+    fn with_label(mut self, label: Self::Label) -> Self {
+        self.label = Some(label);
         self
     }
 
     fn merge(mut self, other: Self) -> Self {
         // TODO: Assert that `self.span == other.span` here?
-        let reasons_match = self.reason.is_some() == other.reason.is_some();
-        self.reason = self.reason.filter(|_| reasons_match);
+        self.reason = self.reason.or(other.reason);
         for expected in other.expected {
             self.expected.insert(expected);
         }
@@ -184,23 +178,26 @@ impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> s
 
 /// A minimal error type that tracks only the error span.
 #[derive(Clone, Debug)]
-pub struct OnlySpan<I, S = Range<usize>> {
+pub struct Cheap<I, S = Range<usize>> {
     span: S,
+    label: Option<&'static str>,
     phantom: PhantomData<I>,
 }
 
-impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error for OnlySpan<I, S> {
-    type Token = I;
+impl<I: fmt::Debug, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
     type Span = S;
-    type Pattern = SimplePattern<I>;
+    type Label = &'static str;
 
     fn span(&self) -> Self::Span { self.span.clone() }
 
-    fn expected_token_found<Iter: IntoIterator<Item = Self::Token>>(span: Self::Span, _: Iter, _: Option<Self::Token>) -> Self {
-        Self { span, phantom: PhantomData }
+    fn expected_token_found<Iter: IntoIterator<Item = I>>(span: Self::Span, _: Iter, _: Option<I>) -> Self {
+        Self { span, label: None, phantom: PhantomData }
     }
 
-    fn into_labelled<L: Into<Self::Pattern>>(self, _: L) -> Self { self }
+    fn with_label(mut self, label: Self::Label) -> Self {
+        self.label = Some(label);
+        self
+    }
 
     fn merge(self, _: Self) -> Self { self }
 

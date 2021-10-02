@@ -1,6 +1,6 @@
 {
   "leaving": {
-    "tail": [
+    "tail": [{
       -2063823378.8597813,
       !true,
       false,
@@ -17,6 +17,6 @@
   "though": ~true,
   "activity": "value",
   "office": -342325541.1937506,
-  "noise": false,
+  "noise": fallse,
   "acres": "home"
 }

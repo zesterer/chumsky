@@ -8,10 +8,10 @@ impl<F: Clone, E> Clone for Custom<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<O, E>, E: Error<Token = I>> Parser<I, O> for Custom<F, E> {
+impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O> for Custom<F, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         (self.0)(stream)
     }
 }
@@ -27,10 +27,10 @@ impl<E> Clone for End<E> {
     fn clone(&self) -> Self { Self(PhantomData) }
 }
 
-impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for End<E> {
+impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, (), Self::Error> {
         match stream.next() {
             (_, _, None) => (Vec::new(), Ok(((), None))),
             (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
@@ -60,10 +60,10 @@ impl<I: Clone, E> Clone for Just<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for Just<I, E> {
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
             (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Some(self.0.clone()), found)))),
@@ -98,10 +98,10 @@ impl<I: Clone, E> Clone for Seq<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, ()> for Seq<I, E> {
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, (), Self::Error> {
         for expected in &self.0 {
             match stream.next() {
                 (_, _, Some(tok)) if &tok == expected => {},
@@ -143,10 +143,10 @@ impl<I: Clone, E> Clone for OneOf<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for OneOf<I, E> {
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
             (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, self.0.clone(), found)))),
@@ -180,10 +180,10 @@ impl<E> Clone for Empty<E> {
     fn clone(&self) -> Self { Self(PhantomData) }
 }
 
-impl<I: Clone, E: Error<Token = I>> Parser<I, ()> for Empty<E> {
+impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
     type Error = E;
 
-    fn parse_inner(&self, _: &mut StreamOf<I, Self::Error>) -> PResult<(), Self::Error> {
+    fn parse_inner(&self, _: &mut StreamOf<I, Self::Error>) -> PResult<I, (), Self::Error> {
         (Vec::new(), Ok(((), None)))
     }
 }
@@ -200,10 +200,10 @@ impl<I: Clone, E> Clone for NoneOf<I, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone + PartialEq, E: Error<Token = I>> Parser<I, I> for NoneOf<I, E> {
+impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
             (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
@@ -240,10 +240,10 @@ impl<F: Clone, E> Clone for Filter<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, F: Fn(&I) -> bool, E: Error<Token = I>> Parser<I, I> for Filter<F, E> {
+impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
             (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
@@ -278,10 +278,10 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
     fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>> Parser<I, O> for FilterMap<F, E> {
+impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         let (at, span, tok) = stream.next();
         match tok.map(|tok| (self.0)(span.clone(), tok)) {
             Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
@@ -340,7 +340,7 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>> Parser
 /// assert_eq!(numeral.parse("7"), Ok(7));
 /// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(Some(0..1), 'f')]));
 /// ```
-pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<Token = I>>(f: F) -> FilterMap<F, E> {
+pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
 }
 

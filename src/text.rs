@@ -1,7 +1,7 @@
 use super::*;
 
 /// The type of a parser that accepts (and ignores) any number of characters.
-pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<(), E>, E>;
+pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>;
 
 /// The type of a parser that accepts (and ignores) any number of characters before or after another pattern.
 pub type Padded<P, I, O> = PaddedBy<PaddingFor<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
@@ -36,7 +36,7 @@ pub trait TextParser<I: Character, O>: Parser<I, O> {
 impl<I: Character, O, P: Parser<I, O>> TextParser<I, O> for P {}
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
-pub fn whitespace<C: Character, E: Error<Token = C>>() -> Padding<C, E> {
+pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
     custom(|stream: &mut StreamOf<C, E>| {
         loop {
             let state = stream.save();
@@ -49,7 +49,7 @@ pub fn whitespace<C: Character, E: Error<Token = C>>() -> Padding<C, E> {
 }
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
-pub fn newline<E: Error<Token = char>>() -> impl Parser<char, (), Error = E> {
+pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
     just('\r').or_not().ignore_then(just('\n'))
         .or(just('\x0B')) // Vertical tab
         .or(just('\x0C')) // Form feed
@@ -61,7 +61,7 @@ pub fn newline<E: Error<Token = char>>() -> impl Parser<char, (), Error = E> {
 }
 
 /// A parser that accepts one or more ASCII digits.
-pub fn digits<C: Character, E: Error<Token = C>>(radix: u32) -> Repeated<Filter<impl Fn(&C) -> bool + Clone + Send + Sync + 'static, E>> {
+pub fn digits<C: Character, E: Error<C>>(radix: u32) -> Repeated<Filter<impl Fn(&C) -> bool + Clone + Send + Sync + 'static, E>> {
     filter(move |c: &C| c.is_digit(radix)).repeated_at_least(1)
 }
 
@@ -69,7 +69,7 @@ pub fn digits<C: Character, E: Error<Token = C>>(radix: u32) -> Repeated<Filter<
 ///
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
-pub fn int<C: Character, E: Error<Token = C>>(radix: u32) -> impl Parser<C, Vec<C>, Error = E> + Copy + Clone {
+pub fn int<C: Character, E: Error<C>>(radix: u32) -> impl Parser<C, Vec<C>, Error = E> + Copy + Clone {
     filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero()).map(Some)
         .chain(filter(move |c: &C| c.is_digit(radix)).repeated())
         .or(just(C::digit_zero()).map(|c| vec![c]))
@@ -79,7 +79,7 @@ pub fn int<C: Character, E: Error<Token = C>>(radix: u32) -> impl Parser<C, Vec<
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-pub fn ident<E: Error<Token = char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
+pub fn ident<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
     filter(|c: &char| c.is_ascii_alphabetic() || *c == '_').map(Some)
         .chain(filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_').repeated())
 }

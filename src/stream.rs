@@ -78,7 +78,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         out
     }
 
-    pub(crate) fn try_parse<O, E, F: FnOnce(&mut Self) -> PResult<O, E>>(&mut self, f: F) -> PResult<O, E> {
+    pub(crate) fn try_parse<O, E, F: FnOnce(&mut Self) -> PResult<I, O, E>>(&mut self, f: F) -> PResult<I, O, E> {
         self.attempt(move |stream| {
             let out = f(stream);
             (out.1.is_ok(), out)

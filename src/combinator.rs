@@ -13,10 +13,10 @@ pub type PaddedBy<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 #[derive(Copy, Clone)]
 pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, O> for Or<A, B> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Or<A, B> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         let pre_state = stream.save();
 
         #[allow(deprecated)]
@@ -92,10 +92,10 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
 #[derive(Copy, Clone)]
 pub struct OrNot<A>(pub(crate) A);
 
-impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<Token = I>> Parser<I, Option<O>> for OrNot<A> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for OrNot<A> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Option<O>, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Option<O>, Self::Error> {
         match stream.try_parse(|stream| { #[allow(deprecated)] self.0.parse_inner(stream) }) {
             (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
             (_, Err(err)) => (Vec::new(), Ok((None, Some(err)))),
@@ -107,10 +107,10 @@ impl<I: Clone, O, A: Parser<I, O, Error =  E>, E: Error<Token = I>> Parser<I, Op
 #[derive(Copy, Clone)]
 pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 
-impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<Token = I>> Parser<I, (O, U)> for Then<A, B> {
+impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>> Parser<I, (O, U)> for Then<A, B> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<(O, U), Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, (O, U), Self::Error> {
         match { #[allow(deprecated)] self.0.parse_inner(stream) } {
             (mut a_errors, Ok((a_out, a_alt))) => match { #[allow(deprecated)] self.1.parse_inner(stream) } {
                 (mut b_errors, Ok((b_out, b_alt))) => {
@@ -131,10 +131,10 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
 
-impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, O> for DelimitedBy<A, I> {
+impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for DelimitedBy<A, I> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         // TODO: Don't clone!
         #[allow(deprecated)]
         let (errors, res) = just(self.1.clone())
@@ -149,10 +149,10 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> P
 #[derive(Copy, Clone)]
 pub struct Repeated<A>(pub(crate) A, pub(crate) usize);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec<O>> for Repeated<A> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Vec<O>, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Vec<O>, Self::Error> {
         let mut errors = Vec::new();
         let mut outputs = Vec::new();
         let mut alt = None;
@@ -207,25 +207,97 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<Token = I>> Parser<I, Vec
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, U>(pub(crate) A, pub(crate) B, pub(crate) usize, pub(crate) bool, pub(crate) PhantomData<U>);
+pub struct SeparatedBy<A, B, U> {
+    pub(crate) a: A,
+    pub(crate) b: B,
+    pub(crate) at_least: usize,
+    pub(crate) allow_leading: bool,
+    pub(crate) allow_trailing: bool,
+    pub(crate) phantom: PhantomData<U>,
+}
+
+impl<A, B, U> SeparatedBy<A, B, U> {
+    pub fn with_leading(mut self) -> Self {
+        self.allow_leading = true;
+        self
+    }
+
+    pub fn with_trailing(mut self) -> Self {
+        self.allow_trailing = true;
+        self
+    }
+}
 
 impl<A: Copy, B: Copy, U> Copy for SeparatedBy<A, B, U> {}
 impl<A: Clone, B: Clone, U> Clone for SeparatedBy<A, B, U> {
-    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), self.2, self.3, PhantomData) }
+    fn clone(&self) -> Self {
+        Self {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            at_least: self.at_least,
+            allow_leading: self.allow_leading,
+            allow_trailing: self.allow_trailing,
+            phantom: PhantomData,
+        }
+    }
 }
 
-impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<Token = I>> Parser<I, Vec<O>> for SeparatedBy<A, B, U> {
+impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>> Parser<I, Vec<O>> for SeparatedBy<A, B, U> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<Vec<O>, Self::Error> {
-        #[allow(deprecated)]
-        (&self.0)
-            .then((&self.1)
-                .ignore_then(&self.0)
-                .repeated()
-                .then_ignore((&self.1).or_not()))
-            .map(|(head, tail)| std::iter::once(head).chain(tail.into_iter()).collect())
-            .parse_inner(stream)
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, Vec<O>, Self::Error> {
+        let mut outputs = Vec::new();
+        let mut errors = Vec::new();
+        let mut alt = None;
+
+        assert!(!self.allow_leading, "Leading separators are not supported yet!");
+
+        let mut i = 0;
+        loop {
+            if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] self.a.parse_inner(stream) } {
+                (mut a_errors, Ok((a_out, a_alt))) => {
+                    errors.append(&mut a_errors);
+                    alt = merge_alts(alt.take(), a_alt);
+                    outputs.push(a_out);
+                    (true, ControlFlow::Continue(()))
+                },
+                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least || (!self.allow_trailing && i > 0) => {
+                    errors.append(&mut a_errors);
+                    (false, ControlFlow::Break((std::mem::take(&mut errors), Err(a_err))))
+                },
+                (a_errors, Err(a_err)) => {
+                    // Find furthest alternative error
+                    // TODO: Handle multiple alternative errors
+                    // TODO: Should we really be taking *all* of these into consideration?
+                    let alt = merge_alts(
+                        alt.take(),
+                        merge_alts(
+                            Some(a_err),
+                            a_errors.into_iter().next(),
+                        ),
+                    );
+                    (false, ControlFlow::Break((
+                        std::mem::take(&mut errors),
+                        Ok((std::mem::take(&mut outputs), alt)),
+                    )))
+                },
+            }) {
+                break b;
+            }
+
+            match stream.try_parse(|stream| { #[allow(deprecated)] self.b.parse_inner(stream) }) {
+                (mut b_errors, Ok((_, b_alt))) => {
+                    errors.append(&mut b_errors);
+                    alt = merge_alts(alt.take(), b_alt);
+                },
+                (mut b_errors, Err(b_err)) => {
+                    alt = merge_alts(alt.take(), Some(b_err));
+                    break (errors, Ok((outputs, alt)));
+                },
+            }
+
+            i += 1;
+        }
     }
 }
 
@@ -237,10 +309,10 @@ impl<A: Clone, F: Clone, O> Clone for Map<A, F, O> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<Token = I>> Parser<I, U> for Map<A, F, O> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, U> for Map<A, F, O> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, U, Self::Error> {
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
 
@@ -256,10 +328,10 @@ impl<A: Clone, F: Clone, O> Clone for MapWithSpan<A, F, O> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Error<Token = I>> Parser<I, U> for MapWithSpan<A, F, O> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Error<I>> Parser<I, U> for MapWithSpan<A, F, O> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, U, Self::Error> {
         let start = stream.save();
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
@@ -276,10 +348,10 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<Token = I>> Parser<I, O> for Foldl<A, F, O, U> {
+impl<I: Clone, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
         (&self.0).map(|(head, tail)| tail.into_iter().fold(head, &self.1))
             .parse_inner(stream)
@@ -294,10 +366,10 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<Token = I>> Parser<I, U> for Foldr<A, F, O, U> {
+impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, Self::Error> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, U, Self::Error> {
         #[allow(deprecated)]
         (&self.0).map(|(init, end)| init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b)))
             .parse_inner(stream)
@@ -308,13 +380,13 @@ impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: 
 #[derive(Copy, Clone)]
 pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<Token = I>> Parser<I, O> for MapErr<A, F> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O> for MapErr<A, F> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, E> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, E> {
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
-        let mapper = |e: Located<E>| e.map(&self.1);
+        let mapper = |e: Located<I, E>| e.map(&self.1);
         (errors.into_iter().map(mapper).collect(), res.map(|(out, alt)| (out, alt.map(mapper))).map_err(mapper))
     }
 }
@@ -323,14 +395,20 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<Token = I>
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Pattern> + Clone, E: Error<Token = I>> Parser<I, O> for Label<A, L> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Error<I>> Parser<I, O> for Label<A, L> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<O, E> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, E> {
+        let pre_state = stream.save();
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
-        // TODO: Think about how this interacts with errors that occur in the pattern
-        (errors.into_iter().collect(), res.map_err(|e| e.map(|e| e.into_labelled(self.1.clone()))))
+        let res = res.map_err(|e| if e.at > pre_state {
+            // Only add the label if we committed to this pattern somewhat
+            e.map(|e| e.with_label(self.1.clone().into()))
+        } else {
+            e
+        });
+        (errors.into_iter().map(|e| e.map(|e| e.with_label(self.1.clone().into()))).collect(), res)
     }
 }
 
@@ -342,10 +420,10 @@ impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<Token = I>> Parser<I, U> for To<A, O, U> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U> for To<A, O, U> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<U, E> {
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         (&self.0).map(|_| self.1.clone())
             .parse_inner(stream)

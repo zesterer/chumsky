@@ -32,12 +32,12 @@ fn pom(b: &mut Bencher) {
 }
 
 mod chumsky {
-    use chumsky::{prelude::*, error::OnlySpan};
+    use chumsky::{prelude::*, error::Cheap};
 
     use std::{collections::HashMap, str};
     use super::Json;
 
-    pub fn json() -> impl Parser<u8, Json, Error = OnlySpan<u8>> {
+    pub fn json() -> impl Parser<u8, Json, Error = Cheap<u8>> {
         recursive(|value| {
             let frac = just(b'.').chain(text::digits(10));
 
