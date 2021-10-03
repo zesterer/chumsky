@@ -3,7 +3,7 @@ use super::*;
 /// See [`Parser::ignored`].
 pub type Ignored<P, O> = To<P, O, ()>;
 
-/// See [`Parser::then_then`].
+/// See [`Parser::ignore_then`].
 pub type IgnoreThen<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
 
 /// See [`Parser::then_ignore`].
@@ -145,7 +145,7 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
     }
 }
 
-/// See [`Parser::repeated`] and [`Parser::repeated_at_least`].
+/// See [`Parser::repeated`].
 #[derive(Copy, Clone)]
 pub struct Repeated<A>(pub(crate) A, pub(crate) usize, pub(crate) Option<usize>);
 

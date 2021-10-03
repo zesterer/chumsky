@@ -32,7 +32,7 @@ than if one were to write the same code by hand. The same is true of parsers and
 See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for the full
 interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
 
-```rs
+```rust
 #[derive(Clone)]
 enum Instr {
     Left, Right,
@@ -57,8 +57,8 @@ Other examples include:
 
 - A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --example json --
   examples/sample.json`)
-- An [interpreter for simple Rust-y language]
-  (https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs) (`cargo run --example nano_rust -- examples/sample.nrs`)
+- An [interpreter for simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
+  (`cargo run --example nano_rust -- examples/sample.nrs`)
 
 ## Error Recovery
 

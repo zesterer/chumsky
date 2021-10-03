@@ -608,8 +608,9 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn repeated(self) -> Repeated<Self> where Self: Sized { Repeated(self, 0, None) }
 
-    /// Parse an expression, separated by another, any number of times, optionally with a trailing instance of the
-    /// other.
+    /// Parse an expression, separated by another, any number of times.
+    ///
+    /// You can call `.with_leading()` or `.with_trailing()` on the result to permit leading and trailing separators.
     fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
         SeparatedBy {
             a: self,

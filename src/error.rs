@@ -33,6 +33,10 @@ pub trait Error<I>: Sized {
     }
 
     /// Indicate that the error occured while parsing a particular syntactic structure.
+    ///
+    /// How the error handles this information is up to it. It can append it to a list of structures to get a sort of
+    /// 'parse backtrace', or it can just keep only the most recent label. If the latter, this method should have no
+    /// effect when the error already has a label.
     fn with_label(self, label: Self::Label) -> Self;
 
     /// Merge two errors that point to the same input together, combining their information.
@@ -149,7 +153,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     }
 
     fn with_label(mut self, label: Self::Label) -> Self {
-        self.label = Some(label);
+        self.label.get_or_insert(label);
         self
     }
 
@@ -219,7 +223,7 @@ impl<I, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
     }
 
     fn with_label(mut self, label: Self::Label) -> Self {
-        self.label = Some(label);
+        self.label.get_or_insert(label);
         self
     }
 
