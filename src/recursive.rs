@@ -14,29 +14,31 @@ impl<T> OnceCell<T> {
 }
 
 /// See [`recursive()`].
-pub struct Recursive<'a, I, O, E: Error<I>>(Rc<OnceCell<Box<ParserFn<'a, I, O, E>>>>);
+pub struct Recursive<'a, I, O, E: Error<I>>(Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>);
 
-impl<'a, I, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
+impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
 }
 
-impl<'a, I, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
+impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner<S: Stream<I, <Self::Error as Error<I>>::Span>>(&self, stream: &mut S, errors: &mut Vec<Self::Error>) -> (usize, Result<(O, Option<E>), E>) where Self: Sized {
-        (self.0
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.0
             .get()
-            .expect("Recursive parser used prior to construction"))(stream, errors)
+            .expect("Recursive parser used prior to construction")
+            .parse_inner(stream)
     }
 }
 
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
 ///
 /// The given function must create the parser. The parser must not be used to parse input before this function returns.
-pub fn recursive<'a, I, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error<I>>(f: F) -> Recursive<'a, I, O, E> {
+pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error<I>>(f: F) -> Recursive<'a, I, O, E> {
     let rc = Rc::new(OnceCell::new());
     let parser = f(Recursive(rc.clone()));
-    rc.set(Box::new(move |mut stream: &mut dyn Stream<I, E::Span>, errors| parser.parse_inner(&mut stream, errors)))
+    rc.set(Box::new(parser))
         .unwrap_or_else(|_| unreachable!());
     Recursive(rc)
 }

@@ -1,6 +1,6 @@
 //! This is a Brainfuck parser and interpreter
 //! Run it with the following command:
-//! cargo run --example brainfuck -- examples/hello.bf
+//! cargo run --example brainfuck -- examples/sample.bf
 
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};
@@ -16,15 +16,17 @@ enum Instr {
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| bf.delimited_by('[', ']').map(|xs| xs.map_or(Invalid, Loop))
+    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
         .or(just('<').to(Left))
         .or(just('>').to(Right))
         .or(just('+').to(Incr))
         .or(just('-').to(Decr))
         .or(just(',').to(Read))
         .or(just('.').to(Write))
+        .recover_with(nested_delimiters('[', ']', [], || Invalid))
+        .recover_with(skip_then_retry_until([']']))
         .repeated())
-    .padded_by(end())
+    .then_ignore(end())
 }
 
 const TAPE_LEN: usize = 10_000;
@@ -48,10 +50,11 @@ fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
 fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
 
+    // let src = "[!]+";
     match parser().parse(src.trim()) {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs
             .into_iter()
-            .for_each(|e| println!("{}", e)),
+            .for_each(|e| println!("{:?}", e)),
     }
 }

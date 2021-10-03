@@ -1,126 +1,127 @@
 use super::*;
 
-use std::ops::Range;
-
-/// A trait implemented by token streams.
-pub trait Stream<I, S: Span> {
-    /// Peek at the next token and its span (if any), but do not progress the stream.
-    fn peek(&mut self) -> Option<(&I, S)>;
-
-    /// Peek at the next token (if any), but do not progress the stream.
-    fn peek_token(&mut self) -> Option<&I> { self.peek().map(|(x, _)| x) }
-
-    /// Peek at the span of the next token (if any), but do not progress the stream.
-    fn peek_span(&mut self) -> Option<S> { self.peek().map(|(_, span)| span) }
-
-    /// Returns the span of the last token to be pulled from the stream.
-    fn last_span(&self) -> Option<S>;
-
-    /// Progress the stream, returning the next token (if any).
-    fn next(&mut self) -> Option<I>;
+/// A helper trait for [`Stream`]. There is no need to implement this trait yourself, nor do you need to care about its
+/// existence. It is marked as 'deprecated' to discourage its use and to indicate that it is not part of the crate's
+/// semver guarantees.
+#[deprecated(note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
+pub trait StreamExtend<T>: Iterator<Item = T> {
+    /// Extend the vector with input. The actual amount can be more or less than `n`.
+    fn extend(&mut self, v: &mut Vec<T>, n: usize);
 }
 
-impl<'a, I, S: Span> Stream<I, S> for &'a mut dyn Stream<I, S> {
-    fn peek(&mut self) -> Option<(&I, S)> { (**self).peek() }
-    fn peek_token(&mut self) -> Option<&I> { (**self).peek_token() }
-    fn peek_span(&mut self) -> Option<S> { (**self).peek_span() }
-    fn last_span(&self) -> Option<S> { (**self).last_span() }
-    fn next(&mut self) -> Option<I> { (**self).next() }
-}
-
-/// A trait that describes types that can be turned into token streams (types that implement [`Stream`]).
-pub trait IntoStream<I, S: Span> {
-    /// The type of the stream that this type can be transformed into.
-    type Stream: Stream<I, S>;
-
-    /// Transform this value into a stream.
-    fn into_stream(self) -> Self::Stream;
-}
-
-/// A stream that wraps an [`Iterator`].
-pub struct IterStream<Iter: Iterator>(Peekable<Iter>, usize);
-
-impl<Iter: Iterator> IterStream<Iter> {
-    /// Create a new [`IterStream`] from an iterator.
-    pub fn new(iter: Iter) -> Self {
-        Self(iter.peekable(), 0)
+#[allow(deprecated)]
+impl<I: Iterator> StreamExtend<I::Item> for I {
+    fn extend(&mut self, v: &mut Vec<I::Item>, n: usize) {
+        v.reserve(n);
+        v.extend(self.take(n));
     }
 }
 
-impl<Iter: Iterator> Stream<Iter::Item, Range<usize>> for IterStream<Iter> {
-    fn peek(&mut self) -> Option<(&Iter::Item, Range<usize>)> {
-        let span = self.1..self.1 + 1;
-        self.0.peek().map(|x| (x, span))
+/// A type that represents a stream of input tokens. Unlike [`Iterator`], this type supports backtracking and a few
+/// other features required by the crate.
+#[allow(deprecated)]
+pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
+    pub(crate) phantom: PhantomData<&'a ()>,
+    pub(crate) eoi: S,
+    pub(crate) offset: usize,
+    pub(crate) buffer: Vec<(I, S)>,
+    pub(crate) iter: Iter,
+}
+
+impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
+    /// Create a new stream from an iterator of `(Token, Span)` tuples. A span representing the end of input must also
+    /// be provided.
+    ///
+    /// There is no requirement that spans must map exactly to the position of inputs in the stream, but they should
+    /// be non-overlapping and should appear in a monotonically-increasing order.
+    pub fn from_iter(eoi: S, iter: Iter) -> Self {
+        Self {
+            phantom: PhantomData,
+            eoi,
+            offset: 0,
+            buffer: Vec::new(),
+            iter,
+        }
     }
-    fn last_span(&self) -> Option<Range<usize>> { self.1.checked_sub(1).map(|s| s..s + 1) }
-    fn next(&mut self) -> Option<Iter::Item> {
-        self.1 += 1;
-        self.0.next()
+}
+
+impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
+    pub(crate) fn offset(&self) -> usize { self.offset }
+
+    pub(crate) fn save(&self) -> usize { self.offset }
+    pub(crate) fn revert(&mut self, offset: usize) { self.offset = offset; }
+
+    fn pull_until(&mut self, offset: usize) -> Option<&(I, S)> {
+        let additional = offset.saturating_sub(self.buffer.len()) + 1024;
+        #[allow(deprecated)]
+        self.iter.extend(&mut self.buffer, additional);
+        self.buffer.get(offset)
+    }
+
+    pub(crate) fn next(&mut self) -> (usize, S, Option<I>) {
+        match self.pull_until(self.offset).cloned() {
+            Some((out, span)) => {
+                self.offset += 1;
+                (self.offset - 1, span, Some(out))
+            },
+            None => (self.offset, self.eoi.clone(), None),
+        }
+    }
+
+    pub(crate) fn span_since(&mut self, start: usize) -> S {
+        let start = self.pull_until(start)
+            .as_ref()
+            .map(|(_, s)| s.start())
+            .unwrap_or_else(|| self.eoi.start());
+        let end = self.pull_until(self.offset.saturating_sub(1))
+            .as_ref()
+            .map(|(_, s)| s.end())
+            .unwrap_or_else(|| self.eoi.end());
+        S::new(self.eoi.context(), start..end)
+    }
+
+    pub(crate) fn attempt<R, F: FnOnce(&mut Self) -> (bool, R)>(&mut self, f: F) -> R {
+        let old_offset = self.offset;
+        let (commit, out) = f(self);
+        if !commit {
+            self.offset = old_offset;
+        }
+        out
+    }
+
+    pub(crate) fn try_parse<O, E, F: FnOnce(&mut Self) -> PResult<I, O, E>>(&mut self, f: F) -> PResult<I, O, E> {
+        self.attempt(move |stream| {
+            let out = f(stream);
+            (out.1.is_ok(), out)
+        })
     }
 }
 
-impl<Iter: Iterator> IntoStream<Iter::Item, Range<usize>> for IterStream<Iter> {
-    type Stream = Self;
-    fn into_stream(self) -> Self::Stream { self }
+impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
+    fn from(s: &'a str) -> Self {
+        let len = s.chars().count();
+        Self::from_iter(len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
+    }
 }
 
-impl<'a> IntoStream<char, Range<usize>> for &'a str {
-    type Stream = IterStream<std::str::Chars<'a>>;
-    fn into_stream(self) -> Self::Stream { IterStream::new(self.chars()) }
+impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
+    fn from(s: &'a [T]) -> Self {
+        let len = s.len();
+        Self::from_iter(len..len + 1, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
+    }
 }
 
-impl<'a, I: Clone> IntoStream<I, Range<usize>> for &'a [I] {
-    type Stream = IterStream<std::iter::Cloned<std::slice::Iter<'a, I>>>;
-    fn into_stream(self) -> Self::Stream { IterStream::new(self.into_iter().cloned()) }
+impl<'a, T: Clone + 'a, const N: usize> From<[T; N]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
+    fn from(s: [T; N]) -> Self {
+        let len = s.len();
+        Self::from_iter(len..len + 1, Box::new(std::array::IntoIter::new(s).enumerate().map(|(i, x)| (x, i..i + 1))))
+    }
 }
 
-impl<I> IntoStream<I, Range<usize>> for Vec<I> {
-    type Stream = IterStream<std::vec::IntoIter<I>>;
-    fn into_stream(self) -> Self::Stream { IterStream::new(self.into_iter()) }
-}
-
-impl<I, const N: usize> IntoStream<I, Range<usize>> for [I; N] {
-    type Stream = IterStream<std::array::IntoIter<I, N>>;
-    fn into_stream(self) -> Self::Stream { IterStream::new(std::array::IntoIter::new(self)) }
-}
-
-// impl<Iter: Iterator> IntoStream<Iter::Item, Range<usize>> for Iter {
-//     type Stream = IterStream<Iter>;
-//     fn into_stream(self) -> Self::Stream { IterStream::new(self) }
+// impl<'a, T: Clone, S: Clone + Span<Context = ()>> From<&'a [(T, S)]> for Stream<'a, T, S, Box<dyn Iterator<Item = (T, S)> + 'a>>
+//     where S::Offset: Default
+// {
+//     fn from(s: &'a [(T, S)]) -> Self {
+//         Self::from_iter(Default::default(), Box::new(s.iter().cloned()))
+//     }
 // }
-
-/// A stream that wraps an [`Iterator`] of token/span pairs.
-pub struct SpannedIterStream<Iter: Iterator, S>(Peekable<Iter>, Option<S>);
-
-impl<Iter: Iterator, S> SpannedIterStream<Iter, S> {
-    /// Create a new [`SpannedIterStream`] from an iterator.
-    pub fn new(iter: Iter) -> Self {
-        Self(iter.peekable(), None)
-    }
-}
-
-impl<Iter: Iterator<Item = (I, S)>, I, S: Span + Clone> Stream<I, S> for SpannedIterStream<Iter, S> {
-    fn peek(&mut self) -> Option<(&I, S)> { self.0.peek().map(|(x, span)| (x, span.clone())) }
-    fn last_span(&self) -> Option<S> { self.1.clone() }
-    fn next(&mut self) -> Option<I> {
-        self.1 = None;
-        let (x, span) = self.0.next()?;
-        self.1 = Some(span);
-        Some(x)
-    }
-}
-
-impl<'a, I: Clone, S: Span + Clone> IntoStream<I, S> for &'a [(I, S)] {
-    type Stream = SpannedIterStream<std::iter::Cloned<std::slice::Iter<'a, (I, S)>>, S>;
-    fn into_stream(self) -> Self::Stream { SpannedIterStream::new(self.into_iter().cloned()) }
-}
-
-impl<I, S: Span + Clone> IntoStream<I, S> for Vec<(I, S)> {
-    type Stream = SpannedIterStream<std::vec::IntoIter<(I, S)>, S>;
-    fn into_stream(self) -> Self::Stream { SpannedIterStream::new(self.into_iter()) }
-}
-
-impl<I, S: Span + Clone, const N: usize> IntoStream<I, S> for [(I, S); N] {
-    type Stream = SpannedIterStream<std::array::IntoIter<(I, S), N>, S>;
-    fn into_stream(self) -> Self::Stream { SpannedIterStream::new(std::array::IntoIter::new(self)) }
-}
