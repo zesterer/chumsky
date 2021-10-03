@@ -254,16 +254,15 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 
         let mut i = 0;
         loop {
-            if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] self.a.parse_inner(stream) } {
+            match stream.try_parse(|stream| { #[allow(deprecated)] self.a.parse_inner(stream) }) {
                 (mut a_errors, Ok((a_out, a_alt))) => {
                     errors.append(&mut a_errors);
                     alt = merge_alts(alt.take(), a_alt);
                     outputs.push(a_out);
-                    (true, ControlFlow::Continue(()))
                 },
                 (mut a_errors, Err(a_err)) if outputs.len() < self.at_least || (!self.allow_trailing && i > 0) => {
                     errors.append(&mut a_errors);
-                    (false, ControlFlow::Break((std::mem::take(&mut errors), Err(a_err))))
+                    break (errors, Err(a_err));
                 },
                 (a_errors, Err(a_err)) => {
                     // Find furthest alternative error
@@ -276,13 +275,8 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                             a_errors.into_iter().next(),
                         ),
                     );
-                    (false, ControlFlow::Break((
-                        std::mem::take(&mut errors),
-                        Ok((std::mem::take(&mut outputs), alt)),
-                    )))
+                    break (errors, Ok((outputs, alt)));
                 },
-            }) {
-                break b;
             }
 
             match stream.try_parse(|stream| { #[allow(deprecated)] self.b.parse_inner(stream) }) {
@@ -290,7 +284,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                     errors.append(&mut b_errors);
                     alt = merge_alts(alt.take(), b_alt);
                 },
-                (mut b_errors, Err(b_err)) => {
+                (_, Err(b_err)) => {
                     alt = merge_alts(alt.take(), Some(b_err));
                     break (errors, Ok((outputs, alt)));
                 },

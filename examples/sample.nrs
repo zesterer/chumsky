@@ -1,7 +1,7 @@
 fn factorial(x) {
 	if x == 0 {
 		1
-	} else {
+	} else {(
 		x * factorial(x - 1)
 	}
 }
@@ -13,11 +13,11 @@ fn main() {
 	print("Hello, world!");
 	print("The meaning of life is...");
 
-	if meaning_of_life == 42 {
-		print(meaning_of_life);a
+	if meaning_of_life == 42 {!
+		print(meaning_of_life);
 	} else {
 		print("...something we cannot know");
-
+)
 		print("However, I can tell you that the factorial of 10 is...");
 		print(factorial(10));
 	}
