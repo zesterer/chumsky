@@ -33,6 +33,8 @@ See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/ex
 interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
 
 ```rust
+use chumsky::prelude::*;
+
 #[derive(Clone)]
 enum Instr {
     Left, Right,
