@@ -425,7 +425,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
         let pre_state = stream.save();
         #[allow(deprecated)]
         let (errors, res) = self.0.parse_inner(stream);
-        let res = res.map_err(|e| if e.at > pre_state {
+        let res = res.map_err(|e| if e.at > pre_state || true /* TODO: Not this? */ {
             // Only add the label if we committed to this pattern somewhat
             e.map(|e| e.with_label(self.1.clone().into()))
         } else {

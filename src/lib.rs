@@ -143,7 +143,7 @@ type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
 /// have a lexical pass prior to the main parser that groups the input characters into tokens.
 pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
-    type Error: Error<I>; // TODO when default associated types are stable: = Simple<I>;
+    type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
 
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
@@ -193,18 +193,18 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
-    /// let word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(1)
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
-    /// let num = filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated_at_least(1)
+    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| Token::Num(s.parse().unwrap()));
     ///
@@ -241,18 +241,18 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let frac = text::digits()
+    /// let frac = text::digits(10)
     ///     .chain(just('.'))
-    ///     .chain::<char, _, _>(text::digits())
+    ///     .chain::<char, _, _>(text::digits(10))
     ///     .collect::<String>()
-    ///     .padded_by(end())
+    ///     .then_ignore(end())
     ///     .labelled("number");
     ///
     /// assert_eq!(frac.parse("42.3"), Ok("42.3".to_string()));
-    /// assert_eq!(frac.parse("hello"), Err(vec![Simple::expected_label_found(Some(0..1), "number", Some('h'))]));
-    /// assert_eq!(frac.parse("42!"), Err(vec![Simple::expected_token_found(Some(2..3), vec!['.'], Some('!'))]));
+    /// assert_eq!(frac.parse("hello"), Err(vec![Cheap::expected_input_found(0..1, None, Some('h')).with_label("number")]));
+    /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, Some('.'), Some('!')).with_label("number")]));
     /// ```
     fn labelled<L: Into<<Self::Error as Error<I>>::Label> + Clone>(self, label: L) -> Label<Self, L>
         where Self: Sized
@@ -263,12 +263,12 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// let op = just::<_, Simple<char>>('+').to(Op::Add)
+    /// let op = just::<_, Cheap<char>>('+').to(Op::Add)
     ///     .or(just('-').to(Op::Sub))
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
@@ -283,14 +283,14 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let int = text::int::<Simple<char>>()
+    /// let int = text::int::<char, Cheap<char>>(10)
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let sum = int
-    ///     .then(just('+').padding_for(int).repeated())
+    ///     .then(just('+').ignore_then(int).repeated())
     ///     .foldl(|a, b| a + b);
     ///
     /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
@@ -306,9 +306,9 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let int = text::int::<Simple<char>>()
+    /// let int = text::int::<char, Cheap<char>>(10)
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -337,10 +337,10 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = filter::<_, _, Simple<char>>(|c: &char| c.is_whitespace())
+    /// let whitespace = filter::<_, _, Cheap<char>>(|c: &char| c.is_whitespace())
     ///     .ignored()
     ///     .repeated();
     ///
@@ -356,9 +356,9 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .collect::<String>();
     ///
@@ -373,12 +373,12 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(1)
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>();
-    /// let two_words = word.padded_by(just(' ')).then(word);
+    /// let two_words = word.then_ignore(just(' ')).then(word);
     ///
     /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
     /// assert!(two_words.parse("hedgehog").is_err());
@@ -390,13 +390,13 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// let int = just('-').or_not()
-    ///     .chain(filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit()).repeated()))
+    ///     .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
+    ///         .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit()).repeated()))
     ///     .or(just('0').map(|c| vec![c]))
-    ///     .padded_by(end())
+    ///     .then_ignore(end())
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -433,12 +433,12 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let zeroes = filter::<_, _, Simple<char>>(|c: &char| *c == '0').ignored().repeated();
+    /// let zeroes = filter::<_, _, Cheap<char>>(|c: &char| *c == '0').ignored().repeated();
     /// let digits = filter(|c: &char| c.is_ascii_digit()).repeated();
     /// let integer = zeroes
-    ///     .padding_for(digits)
+    ///     .ignore_then(digits)
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -454,14 +454,14 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(1)
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
     /// let punctuated = word
-    ///     .padded_by(just('!').or(just('?')).or_not());
+    ///     .then_ignore(just('!').or(just('?')).or_not());
     ///
     /// let sentence = punctuated
     ///     .padded() // Allow for whitespace gaps
@@ -483,42 +483,34 @@ pub trait Parser<I: Clone, O> {
 
     // fn then_catch(self, end: I) -> ThenCatch<Self, I> where Self: Sized { ThenCatch(self, end) }
 
-    /// Parse the pattern surrounded by the given delimiters, performing error recovery where possible.
-    ///
-    /// If parsing of the inner pattern is successful, the output is `Some(_)`. If an error occurs, the output is
-    /// `None`.
-    ///
-    /// The delimiters are assumed to allow nesting, so error recovery will attempt to balance the delimiters where
-    /// possible. A syntax error within the delimiters should not prevent correct parsing of tokens beyond the
-    /// delimiters.
+    /// Parse the pattern surrounded by the given delimiters.
     ///
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// // A LISP-style S-expression
     /// #[derive(Debug, PartialEq)]
     /// enum SExpr {
-    ///     Error,
     ///     Ident(String),
     ///     Num(u64),
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(1)
+    /// let ident = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
-    /// let num = text::int()
+    /// let num = text::int(10)
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let s_expr = recursive(|s_expr| s_expr
     ///     .padded()
     ///     .repeated()
+    ///     .map(SExpr::List)
     ///     .delimited_by('(', ')')
-    ///     .map(|list| list.map_or(SExpr::Error, SExpr::List))
     ///     .or(ident.map(SExpr::Ident))
     ///     .or(num.map(SExpr::Num)));
     ///
@@ -538,20 +530,6 @@ pub trait Parser<I: Clone, O> {
     ///         Vec::new(), // No errors!
     ///     ),
     /// );
-    ///
-    /// // An input with a syntax error at position 11! Thankfully, we're able to recover
-    /// // and still produce a useful output for later compilation stages (i.e: type-checking).
-    /// assert_eq!(
-    ///     s_expr.parse_recovery("(add (mul ! 3) 15)"),
-    ///     (
-    ///         Some(SExpr::List(vec![
-    ///             SExpr::Ident("add".to_string()),
-    ///             SExpr::Error,
-    ///             SExpr::Num(15),
-    ///         ])),
-    ///         vec![Simple::expected_token_found(Some(10..11), vec!['(', '0', ')'], Some('!'))], // A syntax error!
-    ///     ),
-    /// );
     /// ```
     fn delimited_by(self, start: I, end: I) -> DelimitedBy<Self, I> where Self: Sized { DelimitedBy(self, start, end) }
 
@@ -560,9 +538,9 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let op = just::<_, Simple<char>>('+')
+    /// let op = just::<_, Cheap<char>>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
@@ -594,10 +572,10 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(1)
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
     /// let word_or_question = word
@@ -611,19 +589,19 @@ pub trait Parser<I: Clone, O> {
     /// Parse an expression any number of times (including zero times).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
-    /// [`Parser::repeated_at_least`] instead if it better suits your use-case.
+    /// [`Parser::repeated().at_least`] instead if it better suits your use-case.
     ///
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let num = filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated_at_least(1)
+    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
+    ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
-    /// let sum = num.then(just('+').padding_for(num).repeated())
+    /// let sum = num.then(just('+').ignore_then(num).repeated())
     ///     .foldl(|a, b| a + b);
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));

@@ -195,7 +195,7 @@ impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> s
 
 /// A minimal error type that tracks only the error span and label. This type is most useful when you want fast parsing
 /// but do not particularly care about the quality of error messages.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cheap<I, S = Range<usize>> {
     span: S,
     label: Option<&'static str>,

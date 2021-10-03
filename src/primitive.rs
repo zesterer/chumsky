@@ -45,10 +45,10 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
-/// assert!(end::<Simple<char>>().parse("hello").is_err());
+/// assert_eq!(end::<Cheap<char>>().parse(""), Ok(()));
+/// assert!(end::<Cheap<char>>().parse("hello").is_err());
 /// ```
 pub fn end<E>() -> End<E> {
     End(PhantomData)
@@ -78,9 +78,9 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let question = just::<_, Simple<char>>('?');
+/// let question = just::<_, Cheap<char>>('?');
 ///
 /// assert_eq!(question.parse("?"), Ok('?'));
 /// assert!(question.parse("!").is_err());
@@ -120,15 +120,15 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let hello = seq::<_, _, Simple<char>>("Hello".chars());
+/// let hello = seq::<_, _, Cheap<char>>("Hello".chars());
 ///
 /// assert_eq!(hello.parse("Hello"), Ok(()));
 /// assert_eq!(hello.parse("Hello, world!"), Ok(()));
 /// assert!(hello.parse("Goodbye").is_err());
 ///
-/// let onetwothree = seq::<_, _, Simple<i32>>([1, 2, 3]);
+/// let onetwothree = seq::<_, _, Cheap<i32>>([1, 2, 3]);
 ///
 /// assert_eq!(onetwothree.parse([1, 2, 3]), Ok(()));
 /// assert_eq!(onetwothree.parse([1, 2, 3, 4, 5]), Ok(()));
@@ -161,11 +161,11 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let digits = one_of::<_, _, Simple<char>>("0123456789".chars())
-///     .repeated_at_least(1)
-///     .padded_by(end())
+/// let digits = one_of::<_, _, Cheap<char>>("0123456789".chars())
+///     .repeated().at_least(1)
+///     .then_ignore(end())
 ///     .collect::<String>();
 ///
 /// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
@@ -218,12 +218,12 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let string = one_of::<_, _, Simple<char>>("\"'".chars())
-///     .padding_for(none_of("\"'".chars()).repeated())
-///     .padded_by(one_of("\"'".chars()))
-///     .padded_by(end())
+/// let string = one_of::<_, _, Cheap<char>>("\"'".chars())
+///     .ignore_then(none_of("\"'".chars()).repeated())
+///     .then_ignore(one_of("\"'".chars()))
+///     .then_ignore(end())
 ///     .collect::<String>();
 ///
 /// assert_eq!(string.parse("'hello'"), Ok("hello".to_string()));
@@ -258,11 +258,11 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let lowercase = filter::<_, _, Simple<char>>(char::is_ascii_lowercase)
-///     .repeated_at_least(1)
-///     .padded_by(end())
+/// let lowercase = filter::<_, _, Cheap<char>>(char::is_ascii_lowercase)
+///     .repeated().at_least(1)
+///     .then_ignore(end())
 ///     .collect::<String>();
 ///
 /// assert_eq!(lowercase.parse("hello"), Ok("hello".to_string()));
@@ -300,34 +300,36 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 /// use std::ops::Range;
 ///
 /// // A custom error type
 /// #[derive(Debug, PartialEq)]
 /// enum Custom {
-///     ExpectedFound(Option<Range<usize>>, Vec<char>, Option<char>),
-///     NotADigit(Option<Range<usize>>, char),
+///     ExpectedFound(Range<usize>, Vec<char>, Option<char>),
+///     NotADigit(Range<usize>, char),
 /// }
 ///
 /// impl chumsky::Error<char> for Custom {
 ///     type Span = Range<usize>;
-///     type Pattern = char;
+///     type Label = ();
 ///
-///     fn span(&self) -> Option<Self::Span> {
-///         match self {
-///             Self::ExpectedFound(span, _, _) => span.clone(),
-///             Self::NotADigit(span, _) => span.clone(),
-///         }
+///     fn expected_input_found<Iter: IntoIterator<Item = char>>(
+///         span: Range<usize>,
+///         expected: Iter,
+///         found: Option<char>,
+///     ) -> Self {
+///         Self::ExpectedFound(span, expected.into_iter().collect(), found)
 ///     }
 ///
-///     fn expected_input_found(span: Option<Range<usize>>, expected: Vec<char>, found: Option<char>) -> Self {
-///         Self::ExpectedFound(span, expected, found)
-///     }
+///     fn with_label(mut self, label: Self::Label) -> Self { self }
 ///
-///     fn into_labelled<L: Into<Self::Pattern>>(mut self, label: L) -> Self {
-///         if let Self::ExpectedFound(_, expected, _) = &mut self {
-///             *expected = vec![label.into()];
+///     fn merge(mut self, mut other: Self) -> Self {
+///         if let (Self::ExpectedFound(_, expected, _), Self::ExpectedFound(_, expected_other, _)) = (
+///             &mut self,
+///             &mut other,
+///         ) {
+///             expected.append(expected_other);
 ///         }
 ///         self
 ///     }
@@ -335,12 +337,12 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 ///
 /// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
-///     None => Err(Custom::NotADigit(Some(span), c)),
+///     None => Err(Custom::NotADigit(span, c)),
 /// });
 ///
 /// assert_eq!(numeral.parse("3"), Ok(3));
 /// assert_eq!(numeral.parse("7"), Ok(7));
-/// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(Some(0..1), 'f')]));
+/// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(0..1, 'f')]));
 /// ```
 pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
@@ -354,9 +356,9 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 /// # Examples
 ///
 /// ```
-/// use chumsky::prelude::*;
+/// # use chumsky::{prelude::*, error::Cheap};
 ///
-/// let any = any::<char, Simple<char>>();
+/// let any = any::<char, Cheap<char>>();
 ///
 /// assert_eq!(any.parse("a"), Ok('a'));
 /// assert_eq!(any.parse("7"), Ok('7'));
