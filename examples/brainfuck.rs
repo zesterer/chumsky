@@ -1,6 +1,6 @@
 //! This is a Brainfuck parser and interpreter
 //! Run it with the following command:
-//! cargo run --example brainfuck -- examples/hello.bf
+//! cargo run --example brainfuck -- examples/sample.bf
 
 use chumsky::prelude::*;
 use std::{env, io::{self, Read}, fs};

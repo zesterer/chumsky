@@ -23,14 +23,15 @@ error recovery and partial parsing easy.
 
 Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
 parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy for transforming an
-input into an output. Using parser combinators to define a parser is roughly analagous to using Rust's
+input into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
 [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait to define iterative algorithms: the
 type-driven API of `Iterator` makes it more difficult to make mistakes and easier to encode complicated iteration logic
 than if one were to write the same code by hand. The same is true of parsers and parser combinators.
 
 ## Example [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) Parser
 
-See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for the full interpreter.
+See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for the full
+interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
 
 ```rs
 #[derive(Clone)]
@@ -55,10 +56,10 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
 
 Other examples include:
 
-- A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --examples json --
+- A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --example json --
   examples/sample.json`)
 - An [interpreter for simple Rust-y language]
-  (https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs) (`cargo run --examples nano_rust -- examples/sample.nrs`)
+  (https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs) (`cargo run --example nano_rust -- examples/sample.nrs`)
 
 ## Error Recovery
 

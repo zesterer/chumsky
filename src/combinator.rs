@@ -3,11 +3,11 @@ use super::*;
 /// See [`Parser::ignored`].
 pub type Ignored<P, O> = To<P, O, ()>;
 
-/// See [`Parser::padding_for`].
-pub type PaddingFor<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
+/// See [`Parser::then_then`].
+pub type IgnoreThen<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
 
-/// See [`Parser::padded_by`].
-pub type PaddedBy<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
+/// See [`Parser::then_ignore`].
+pub type ThenIgnore<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 
 /// See [`Parser::or`].
 #[derive(Copy, Clone)]
@@ -147,7 +147,21 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
 
 /// See [`Parser::repeated`] and [`Parser::repeated_at_least`].
 #[derive(Copy, Clone)]
-pub struct Repeated<A>(pub(crate) A, pub(crate) usize);
+pub struct Repeated<A>(pub(crate) A, pub(crate) usize, pub(crate) Option<usize>);
+
+impl<A> Repeated<A> {
+    /// Require that the pattern appear at least a minimum number of times.
+    pub fn at_least(mut self, min: usize) -> Self {
+        self.1 = min;
+        self
+    }
+
+    /// Require that the pattern appear at most a maximum number of times.
+    pub fn at_most(mut self, max: usize) -> Self {
+        self.2 = Some(max);
+        self
+    }
+}
 
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
     type Error = E;
@@ -159,6 +173,10 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
         let mut old_offset = None;
 
         loop {
+            if self.2.map_or(false, |max| outputs.len() >= max) {
+                break (errors, Ok((outputs, alt)));
+            }
+
             if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] self.0.parse_inner(stream) } {
                 (mut a_errors, Ok((a_out, a_alt))) => {
                     errors.append(&mut a_errors);

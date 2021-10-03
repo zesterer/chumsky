@@ -438,7 +438,7 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(integer.parse("00064"), Ok(64));
     /// assert_eq!(integer.parse("32"), Ok(32));
     /// ```
-    fn ignore_then<U, P: Parser<I, U>>(self, other: P) -> PaddingFor<Self, P, O, U>
+    fn ignore_then<U, P: Parser<I, U>>(self, other: P) -> IgnoreThen<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(_, u)| u, PhantomData) }
 
@@ -470,7 +470,7 @@ pub trait Parser<I: Clone, O> {
     ///     ]),
     /// );
     /// ```
-    fn then_ignore<U, P: Parser<I, U>>(self, other: P) -> PaddedBy<Self, P, O, U>
+    fn then_ignore<U, P: Parser<I, U>>(self, other: P) -> ThenIgnore<Self, P, O, U>
         where Self: Sized
     { Map(Then(self, other), |(o, _)| o, PhantomData) }
 
@@ -611,25 +611,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self> where Self: Sized { Repeated(self, 0) }
-
-    /// Parse an expression at least a given number of times.
-    ///
-    /// Input is eagerly parsed. If `n` is 0, this function is equivalent to [`Parser::repeated`]
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use chumsky::prelude::*;
-    ///
-    /// let long_word = filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated_at_least(5)
-    ///     .collect::<String>();
-    ///
-    /// assert_eq!(long_word.parse("hello"), Ok("hello".to_string()));
-    /// assert!(long_word.parse("hi").is_err());
-    /// ```
-    fn repeated_at_least(self, n: usize) -> Repeated<Self> where Self: Sized { Repeated(self, n) }
+    fn repeated(self) -> Repeated<Self> where Self: Sized { Repeated(self, 0, None) }
 
     /// Parse an expression, separated by another, any number of times, optionally with a trailing instance of the
     /// other.

@@ -1,7 +1,7 @@
 //! This is an entire parser and interpreter for a dynamically-typed Rust-like expression-oriented
 //! programming language. See `example.nrs` for sample source code.
 //! Run it with the following command:
-//! cargo run --example nano_rust -- examples/example.nrs
+//! cargo run --example nano_rust -- examples/sample.nrs
 
 use chumsky::{prelude::*, stream::Stream};
 use ariadne::{Report, ReportKind, Label, Source, Color, Fmt};
@@ -57,7 +57,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Str);
 
     let op = one_of("+-*/!=".chars())
-        .repeated_at_least(1)
+        .repeated().at_least(1)
         .collect::<String>()
         .map(Token::Op);
 

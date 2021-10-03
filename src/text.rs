@@ -4,7 +4,7 @@ use super::*;
 pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>;
 
 /// The type of a parser that accepts (and ignores) any number of characters before or after another pattern.
-pub type Padded<P, I, O> = PaddedBy<PaddingFor<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
+pub type Padded<P, I, O> = ThenIgnore<IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 pub trait Character: Copy + PartialEq {
@@ -62,7 +62,7 @@ pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
 
 /// A parser that accepts one or more ASCII digits.
 pub fn digits<C: Character, E: Error<C>>(radix: u32) -> Repeated<Filter<impl Fn(&C) -> bool + Clone + Send + Sync + 'static, E>> {
-    filter(move |c: &C| c.is_digit(radix)).repeated_at_least(1)
+    filter(move |c: &C| c.is_digit(radix)).repeated().at_least(1)
 }
 
 /// A parser that accepts a positive integer.
