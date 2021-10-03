@@ -246,6 +246,12 @@ impl<A, B, U> SeparatedBy<A, B, U> {
         self.allow_trailing = true;
         self
     }
+
+    // /// Require that the pattern appear at least a minimum number of times.
+    // pub fn at_least(mut self, n: usize) -> Self {
+    //     self.at_least = n;
+    //     self
+    // }
 }
 
 impl<A: Copy, B: Copy, U> Copy for SeparatedBy<A, B, U> {}
@@ -270,9 +276,8 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         let mut errors = Vec::new();
         let mut alt = None;
 
-        assert!(!self.allow_leading, "Leading separators are not supported yet!");
-
         let mut i = 0;
+        let mut has_leading = false;
         loop {
             match stream.try_parse(|stream| { #[allow(deprecated)] self.a.parse_inner(stream) }) {
                 (mut a_errors, Ok((a_out, a_alt))) => {
@@ -280,9 +285,13 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                     alt = merge_alts(alt.take(), a_alt);
                     outputs.push(a_out);
                 },
-                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least || (!self.allow_trailing && i > 0) => {
+                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least.max(if has_leading { 1 } else { 0 }) || (!self.allow_trailing && i > 0) => {
                     errors.append(&mut a_errors);
                     break (errors, Err(a_err));
+                },
+                (_, Err(a_err)) if self.allow_leading && i == 0 => {
+                    has_leading = true;
+                    alt = merge_alts(alt.take(), Some(a_err));
                 },
                 (a_errors, Err(a_err)) => {
                     // Find furthest alternative error
