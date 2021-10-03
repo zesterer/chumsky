@@ -3,8 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/chumsky.svg)](https://crates.io/crates/chumsky)
 [![crates.io](https://docs.rs/chumsky/badge.svg)](https://docs.rs/chumsky)
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
-[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)]
-(https://github.com/zesterer/chumsky/actions)
+[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
 
 A friendly parser combinator crate that makes writing [LL(k)](https://en.wikipedia.org/wiki/LL_parser) parsers with
 error recovery and partial parsing easy.
@@ -78,9 +77,10 @@ that Chumsky is able to produce, along with the extent to which it is able to re
 should attempt more 'specific' recovery strategies first rather than those that mindlessly skip large swathes of the
 input.
 
-It is recommended that you experiment with applying different strategies in different situations to find a configuration
-that you are happy with. If none of the provided error recovery strategies cover the specific pattern you wish to catch,
-you can even create your own by digging into Chumsky's internals and implementing your own strategies!
+It is recommended that you experiment with applying different strategies in different situations and at different levels
+of the parser to find a configuration that you are happy with. If none of the provided error recovery strategies cover
+the specific pattern you wish to catch, you can even create your own by digging into Chumsky's internals and
+implementing your own strategies! If you come up with a useful strategy, feel free to open a PR against the main repo!
 
 ## Planned Features
 
@@ -99,7 +99,10 @@ Chumsky should:
 
 - Be easy to use, even if the user doesn't understand the complexity that underpins parsing
 - Be type-driven, pushing users away from anti-patterns at compile-time
-- Be 'fast enough', but no faster (i.e: when there is a tradeoff between error quality and performance, Chumsky will always take the former option)
+- Be a mature, 'batteries-included' solution for context-free parsing by default. If you need to implement either
+  `Parser` or `Strategy` by hand, that's a problem that needs fixing
+- Be 'fast enough', but no faster (i.e: when there is a tradeoff between error quality and performance, Chumsky will
+  always take the former option)
 - Be modular and extensible, allowing users to implement their own parsers, recovery strategies, error types, spans, and
   be generic over both input tokens and the output AST
 

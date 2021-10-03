@@ -18,5 +18,6 @@
   "activity": "value",
   "office": -342325541.1937506,
   "noise": fallse,
-  "acres": "home"
+  "acres": "home",
+  "foo": {
 }

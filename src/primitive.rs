@@ -16,6 +16,8 @@ impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> P
     }
 }
 
+/// A parser primitive that allows you to define your own custom parsers. In theory, you shouldn't need to use this
+/// unless you have particularly bizarre requirements.
 pub fn custom<F, E>(f: F) -> Custom<F, E> {
     Custom(f, PhantomData)
 }
@@ -33,7 +35,7 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, (), Self::Error> {
         match stream.next() {
             (_, _, None) => (Vec::new(), Ok(((), None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
         }
     }
 }
@@ -66,12 +68,12 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Some(self.0.clone()), found)))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Some(self.0.clone()), found)))),
         }
     }
 }
 
-/// A parser that accepts only the given token.
+/// A parser that accepts only the given input.
 ///
 /// # Examples
 ///
@@ -105,7 +107,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
         for expected in &self.0 {
             match stream.next() {
                 (_, _, Some(tok)) if &tok == expected => {},
-                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Some(expected.clone()), found)))),
+                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Some(expected.clone()), found)))),
             }
         }
 
@@ -113,7 +115,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
     }
 }
 
-/// A parser that accepts only a sequence of specific tokens.
+/// A parser that accepts only a sequence of specific inputs.
 ///
 /// # Examples
 ///
@@ -149,12 +151,12 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, self.0.clone(), found)))),
+            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, self.0.clone(), found)))),
         }
     }
 }
 
-/// A parser that accepts one of a sequence of specific tokens.
+/// A parser that accepts one of a sequence of specific inputs.
 ///
 /// # Examples
 ///
@@ -188,7 +190,7 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
     }
 }
 
-/// A parser that parses no tokens.
+/// A parser that parses no inputs.
 pub fn empty<E>() -> Empty<E> {
     Empty(PhantomData)
 }
@@ -206,12 +208,12 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
+            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
         }
     }
 }
 
-/// A parser that accepts any token that is *not* in a sequence of specific tokens.
+/// A parser that accepts any input that is *not* in a sequence of specific inputs.
 ///
 /// # Examples
 ///
@@ -246,12 +248,12 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
     fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, I, Self::Error> {
         match stream.next() {
             (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), found)))),
+            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
         }
     }
 }
 
-/// A parser that accepts only tokens that match the given predicate.
+/// A parser that accepts only inputs that match the given predicate.
 ///
 /// # Examples
 ///
@@ -286,12 +288,12 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
         match tok.map(|tok| (self.0)(span.clone(), tok)) {
             Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
             Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
-            None => (Vec::new(), Err(Located::at(at, E::expected_token_found(span, Vec::new(), None)))),
+            None => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), None)))),
         }
     }
 }
 
-/// A parser that accepts a token and tests it against the given fallible function.
+/// A parser that accepts a input and tests it against the given fallible function.
 ///
 /// This function allows integration with custom error types to allow for custom parser errors.
 ///
@@ -319,7 +321,7 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 ///         }
 ///     }
 ///
-///     fn expected_token_found(span: Option<Range<usize>>, expected: Vec<char>, found: Option<char>) -> Self {
+///     fn expected_input_found(span: Option<Range<usize>>, expected: Vec<char>, found: Option<char>) -> Self {
 ///         Self::ExpectedFound(span, expected, found)
 ///     }
 ///
@@ -347,7 +349,7 @@ pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) ->
 /// See [`any`].
 pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 
-/// A parser that accepts any token (but not the end of input).
+/// A parser that accepts any input (but not the end of input).
 ///
 /// # Examples
 ///

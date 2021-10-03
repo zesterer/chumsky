@@ -80,7 +80,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .or(op)
         .or(ctrl)
         .or(ident)
-        .recover_with(SkipThenRetryUntil([]));
+        .recover_with(skip_then_retry_until([]));
 
     token
         .map_with_span(|tok, span| (tok, span))
@@ -160,13 +160,13 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
                 Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
                 Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
                 Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
-                _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
             })
                 .labelled("value");
 
             let ident = filter_map(|span, tok| match tok {
                 Token::Ident(ident) => Ok(ident.clone()),
-                _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
+                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
             })
                 .labelled("identifier");
 
@@ -269,7 +269,7 @@ fn expr_parser() -> impl Parser<Token, Expr, Error = Simple<Token>> + Clone {
 fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
-        _ => Err(Simple::expected_token_found(span, Vec::new(), Some(tok))),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
     let args = ident.clone()
@@ -387,7 +387,7 @@ fn main() {
     let parse_errs = if let Some(tokens) = tokens {
         // println!("Tokens = {:?}", tokens);
         let len = src.chars().count();
-        let (ast, parse_errs) = funcs_parser().parse_recovery(Stream::from_iter((), len..len + 1, tokens.into_iter()));
+        let (ast, parse_errs) = funcs_parser().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
 
         println!("{:#?}", ast);
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
@@ -430,11 +430,11 @@ fn main() {
                     .with_color(Color::Red));
 
             let report = match e.reason() {
-                Some(chumsky::error::SimpleReason::Unclosed(span, c)) => report
+                chumsky::error::SimpleReason::Unclosed { span, delimiter } => report
                     .with_label(Label::new(span.clone())
-                        .with_message(format!("Unclosed delimiter {}", c.fg(Color::Yellow)))
+                        .with_message(format!("Unclosed delimiter {}", delimiter.fg(Color::Yellow)))
                     .with_color(Color::Yellow)),
-                None => report
+                chumsky::error::SimpleReason::Unexpected => report
             };
 
             report

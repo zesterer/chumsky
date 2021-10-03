@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-//#![deny(missing_docs)]
+#![deny(missing_docs)]
 // TODO: Enable when stable
 //#![feature(once_cell)]
 
@@ -11,6 +11,7 @@ pub mod error;
 pub mod chain;
 /// Parser primitives that accept specific token patterns.
 pub mod primitive;
+/// Types and traits that facilitate error recovery.
 pub mod recovery;
 /// Recursive parsers (parser that include themselves within their patterns).
 pub mod recursive;
@@ -51,10 +52,10 @@ use std::{
 pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
-        text::{TextParser as _, whitespace},
+        text::TextParser as _,
         span::Span as _,
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
-        recovery::{SkipThenRetryUntil, nested_delimiters},
+        recovery::{skip_then_retry_until, nested_delimiters},
         recursive::recursive,
         text,
         Parser,
@@ -68,6 +69,8 @@ enum ControlFlow<C, B> {
     Break(B),
 }
 
+/// An internal type used to facilitate error prioritisation. You shouldn't need to interact with this type during
+/// normal use of the crate.
 pub struct Located<I, E> {
     at: usize,
     error: E,
@@ -75,10 +78,12 @@ pub struct Located<I, E> {
 }
 
 impl<I, E: Error<I>> Located<I, E> {
+    /// Create a new [`Located`] with the give input position and error.
     pub fn at(at: usize, error: E) -> Self {
         Self { at, error, phantom: PhantomData }
     }
 
+    /// Get the maximum of two located errors. If they hold the same position in the input, merge them.
     pub fn max(self, other: impl Into<Option<Self>>) -> Self {
         let other = match other.into() {
             Some(other) => other,
@@ -94,10 +99,12 @@ impl<I, E: Error<I>> Located<I, E> {
         }
     }
 
-    pub fn map<F: FnOnce(E) -> E>(self, f: F) -> Self {
-        Self {
+    /// Map the error with the given function.
+    pub fn map<U, F: FnOnce(E) -> U>(self, f: F) -> Located<I, U> {
+        Located {
+            at: self.at,
             error: f(self.error),
-            ..self
+            phantom: PhantomData,
         }
     }
 }
@@ -566,6 +573,16 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
 
+    /// Apply a fallback recovery strategy to this parser should it fail.
+    ///
+    /// There is no silver bullet for error recovery, so this function allows you to specify one of several different
+    /// strategies at the location of your choice.
+    ///
+    /// Note that for implementation reasons, adding an error recovery strategy can cause a parser to 'over-commit',
+    /// missing potentially valid alternative parse routes (TODO: document this and explain why and how it happens).
+    /// Rest assured that this case is generally quite rare and only happens for very loose, almost-ambiguous syntax.
+    /// If you run into cases that you believe should parse but do not, try removing or moving recovery strategies to
+    /// fix the problem.
     fn recover_with<S: Strategy<I, O>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
         Recovery(self, strategy)
     }

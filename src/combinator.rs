@@ -184,7 +184,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
                     outputs.push(a_out);
 
                     if old_offset == Some(stream.offset()) {
-                        panic!("Repeated parser iteration succeeded but consumed no tokens (i.e: continuing \
+                        panic!("Repeated parser iteration succeeded but consumed no inputs (i.e: continuing \
                             iteration would likely lead to an infinite loop, if the parser is pure). This is \
                             likely indicative of a parser bug. Consider using a more specific error recovery \
                             strategy.");
@@ -235,11 +235,13 @@ pub struct SeparatedBy<A, B, U> {
 }
 
 impl<A, B, U> SeparatedBy<A, B, U> {
+    /// Permit a leading separator before the first item.
     pub fn with_leading(mut self) -> Self {
         self.allow_leading = true;
         self
     }
 
+    /// Permit a trailing separator after the last item.
     pub fn with_trailing(mut self) -> Self {
         self.allow_trailing = true;
         self

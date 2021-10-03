@@ -77,10 +77,10 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .or(object)
             .recover_with(nested_delimiters('{', '}', [('[', ']')], || Json::Invalid))
             .recover_with(nested_delimiters('[', ']', [('{', '}')], || Json::Invalid))
-            .recover_with(SkipThenRetryUntil(['}', ']']))
+            .recover_with(skip_then_retry_until(['}', ']']))
             .padded()
     })
-        .then_ignore(end().recover_with(SkipThenRetryUntil([])))
+        .then_ignore(end().recover_with(skip_then_retry_until([])))
 }
 
 fn main() {
@@ -121,11 +121,11 @@ fn main() {
                     .with_color(Color::Red));
 
             let report = match e.reason() {
-                Some(chumsky::error::SimpleReason::Unclosed(span, c)) => report
+                chumsky::error::SimpleReason::Unclosed { span, delimiter } => report
                     .with_label(Label::new(span.clone())
-                        .with_message(format!("Unclosed delimiter {}", c.fg(Color::Yellow)))
+                        .with_message(format!("Unclosed delimiter {}", delimiter.fg(Color::Yellow)))
                     .with_color(Color::Yellow)),
-                None => report
+                chumsky::error::SimpleReason::Unexpected => report
             };
 
             report

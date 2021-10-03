@@ -7,9 +7,16 @@ pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>
 pub type Padded<P, I, O> = ThenIgnore<IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
+///
+/// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
 pub trait Character: Copy + PartialEq {
+    /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
+
+    /// Return the '0' digit of the character.
     fn digit_zero() -> Self;
+
+    /// Returns true if the character is canonically considered to be a numeric digit.
     fn is_digit(&self, radix: u32) -> bool;
 }
 

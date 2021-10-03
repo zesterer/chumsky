@@ -1,4 +1,4 @@
-/// A utility type to allow chaining parser outputs together.
+/// A utility trait that facilitates chaining parser outputs together into [`Vec`]s.
 pub trait Chain<T> {
     /// The number of items that this chain link consists of.
     fn len(&self) -> usize;

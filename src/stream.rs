@@ -1,9 +1,15 @@
 use super::*;
 
-pub trait StreamExtend<T> {
+/// A helper trait for [`Stream`]. There is no need to implement this trait yourself, nor do you need to care about its
+/// existence. It is marked as 'deprecated' to discourage its use and to indicate that it is not part of the crate's
+/// semver guarantees.
+#[deprecated(note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
+pub trait StreamExtend<T>: Iterator<Item = T> {
+    /// Extend the vector with input. The actual amount can be more or less than `n`.
     fn extend(&mut self, v: &mut Vec<T>, n: usize);
 }
 
+#[allow(deprecated)]
 impl<I: Iterator> StreamExtend<I::Item> for I {
     fn extend(&mut self, v: &mut Vec<I::Item>, n: usize) {
         v.reserve(n);
@@ -11,9 +17,11 @@ impl<I: Iterator> StreamExtend<I::Item> for I {
     }
 }
 
-pub struct Stream<'a, I, S: Span, Iter: StreamExtend<(I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
+/// A type that represents a stream of input tokens. Unlike [`Iterator`], this type supports backtracking and a few
+/// other features required by the crate.
+#[allow(deprecated)]
+pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
     pub(crate) phantom: PhantomData<&'a ()>,
-    pub(crate) ctx: S::Context,
     pub(crate) eoi: S,
     pub(crate) offset: usize,
     pub(crate) buffer: Vec<(I, S)>,
@@ -21,12 +29,14 @@ pub struct Stream<'a, I, S: Span, Iter: StreamExtend<(I, S)> + ?Sized = dyn Stre
 }
 
 impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
-    /// Create a new stream from an iterator of `(Token, Span)` tuples. The input context (usually a file identifier of
-    /// some kind) and the end of input offset must be provided.
-    pub fn from_iter(ctx: S::Context, eoi: S, iter: Iter) -> Self {
+    /// Create a new stream from an iterator of `(Token, Span)` tuples. A span representing the end of input must also
+    /// be provided.
+    ///
+    /// There is no requirement that spans must map exactly to the position of inputs in the stream, but they should
+    /// be non-overlapping and should appear in a monotonically-increasing order.
+    pub fn from_iter(eoi: S, iter: Iter) -> Self {
         Self {
             phantom: PhantomData,
-            ctx,
             eoi,
             offset: 0,
             buffer: Vec::new(),
@@ -43,6 +53,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
 
     fn pull_until(&mut self, offset: usize) -> Option<&(I, S)> {
         let additional = offset.saturating_sub(self.buffer.len()) + 1024;
+        #[allow(deprecated)]
         self.iter.extend(&mut self.buffer, additional);
         self.buffer.get(offset)
     }
@@ -66,7 +77,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
             .as_ref()
             .map(|(_, s)| s.end())
             .unwrap_or_else(|| self.eoi.end());
-        S::new(self.ctx.clone(), start..end)
+        S::new(self.eoi.context(), start..end)
     }
 
     pub(crate) fn attempt<R, F: FnOnce(&mut Self) -> (bool, R)>(&mut self, f: F) -> R {
@@ -89,14 +100,14 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
 impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
     fn from(s: &'a str) -> Self {
         let len = s.chars().count();
-        Self::from_iter((), len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
+        Self::from_iter(len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
     }
 }
 
 impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
     fn from(s: &'a [T]) -> Self {
         let len = s.len();
-        Self::from_iter((), len..len + 1, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
+        Self::from_iter(len..len + 1, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
     }
 }
 
@@ -104,6 +115,6 @@ impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterato
 //     where S::Offset: Default
 // {
 //     fn from(s: &'a [(T, S)]) -> Self {
-//         Self::from_iter((), Default::default(), Box::new(s.iter().cloned()))
+//         Self::from_iter(Default::default(), Box::new(s.iter().cloned()))
 //     }
 // }
