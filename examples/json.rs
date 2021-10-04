@@ -57,7 +57,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .map(Json::Array)
             .labelled("array");
 
-        let member = string.then_ignore(just(':').padded()).then(value);
+        let member = string.clone().then_ignore(just(':').padded()).then(value);
         let object = member.clone()
             .chain(just(',').padded().ignore_then(member).repeated())
             .or_not()

@@ -1,9 +1,10 @@
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 // TODO: Enable when stable
 //#![feature(once_cell)]
 
-//pub mod debug;
+/// Utilities for debugging parsers.
+pub mod debug;
 /// Combinators that allow combining and extending existing parsers.
 pub mod combinator;
 /// Error types, traits and utilities.
@@ -37,6 +38,7 @@ use crate::{
     combinator::*,
     primitive::*,
     recovery::*,
+    debug::*,
 };
 
 use std::{
@@ -153,18 +155,24 @@ pub trait Parser<I: Clone, O> {
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> where Self: Sized;
 
-    /// Parse an iterator of tokens, yielding an output if possible, and any errors encountered along the way.
+    // #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+
+    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_recovery<
+    fn parse_recovery_inner<
         'a,
+        D: Debugger,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+    >(&self, debugger: &mut D, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+
         #[allow(deprecated)]
-        let (mut errors, res) = self.parse_inner(&mut stream.into());
+        let (mut errors, res) = self.parse_inner(debugger, &mut stream.into());
         let out = match res {
             Ok((out, _)) => Some(out),
             Err(err) => {
@@ -175,7 +183,33 @@ pub trait Parser<I: Clone, O> {
         (out, errors.into_iter().map(|e| e.error).collect())
     }
 
-    /// Parse an iterator of tokens, yielding an output *or* any errors that were encountered along the way.
+    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
+    ///
+    /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
+    fn parse_recovery<
+        'a,
+        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+        self.parse_recovery_inner(&mut Silent::new(), stream)
+    }
+
+    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way. Unlike
+    /// [`Parser::parse_recovery`], this function will produce debugging output as it executes.
+    ///
+    /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
+    fn parse_debug<
+        'a,
+        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
+        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+        let mut debugger = Verbose::new();
+        let res = self.parse_recovery_inner(&mut debugger, stream);
+        debugger.print();
+        res
+    }
+
+    /// Parse a stream of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
     /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
     fn parse<
@@ -190,6 +224,9 @@ pub trait Parser<I: Clone, O> {
             Err(errors)
         }
     }
+
+    #[track_caller]
+    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized { Debug(self, Rc::new(x), *std::panic::Location::caller()) }
 
     /// Map the output of this parser to aanother value.
     ///
@@ -646,13 +683,37 @@ pub trait Parser<I: Clone, O> {
     }
 }
 
-impl<'a, I: Clone, O, T: Parser<I, O>> Parser<I, O> for &'a T {
+impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
     type Error = T::Error;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        T::parse_inner(*self, stream)
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+        debugger.invoke::<_, _, T>(*self, stream)
     }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+}
+
+impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
+    type Error = T::Error;
+
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+        debugger.invoke(&*self, stream)
+    }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+}
+
+impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
+    type Error = T::Error;
+
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+        debugger.invoke(&*self, stream)
+    }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
 /// See [`Parser::boxed`].
@@ -674,8 +735,11 @@ impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
 impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        self.0.parse_inner(stream)
+        debugger.invoke(&self.0, stream)
     }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
 }

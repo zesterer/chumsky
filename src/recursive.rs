@@ -23,13 +23,13 @@ impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
 impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        self.0
-            .get()
-            .expect("Recursive parser used prior to construction")
-            .parse_inner(stream)
+        debugger.invoke(self.0.get().expect("Recursive parser used prior to construction").as_ref(), stream)
     }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).

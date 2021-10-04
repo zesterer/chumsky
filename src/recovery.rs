@@ -3,11 +3,12 @@ use super::*;
 /// A trait implemented by error recovery strategies.
 pub trait Strategy<I: Clone, O> {
     /// Recover from a parsing failure.
-    fn recover<P: Parser<I, O>>(
+    fn recover<D: Debugger, P: Parser<I, O>>(
         &self,
         recovered_errors: Vec<Located<I, P::Error>>,
         fatal_error: Located<I, P::Error>,
         parser: P,
+        debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error>;
 }
@@ -17,11 +18,12 @@ pub trait Strategy<I: Clone, O> {
 pub struct SkipThenRetryUntil<I, const N: usize>(pub [I; N]);
 
 impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUntil<I, N> {
-    fn recover<P: Parser<I, O>>(
+    fn recover<D: Debugger, P: Parser<I, O>>(
         &self,
         a_errors: Vec<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
         parser: P,
+        debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
         loop {
@@ -33,7 +35,7 @@ impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUn
                 break (a_errors, Err(a_err));
             }
             #[allow(deprecated)]
-            let (mut errors, res) = parser.parse_inner(stream);
+            let (mut errors, res) = debugger.invoke(&parser, stream);
             if let Ok(out) = res {
                 errors.push(a_err);
                 break (errors, Ok(out));
@@ -56,11 +58,12 @@ pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryU
 pub struct NestedDelimiters<I, F, const N: usize>(pub I, pub I, pub [(I, I); N], pub F);
 
 impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for NestedDelimiters<I, F, N> {
-    fn recover<P: Parser<I, O>>(
+    fn recover<D: Debugger, P: Parser<I, O>>(
         &self,
         mut a_errors: Vec<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
         _parser: P,
+        _debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
         assert!(self.0 != self.1, "NestedDelimiters cannot be used with identical delimiters.");
@@ -139,10 +142,13 @@ pub struct Recovery<A, S>(pub(crate) A, pub(crate) S);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O>, E: Error<I>> Parser<I, O> for Recovery<A, S> {
     type Error = E;
 
-    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
-        match stream.try_parse(|stream| { #[allow(deprecated)] self.0.parse_inner(stream) }) {
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        match stream.try_parse(|stream| { #[allow(deprecated)] debugger.invoke(&self.0, stream) }) {
             (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
-            (a_errors, Err(a_err)) => self.1.recover(a_errors, a_err, &self.0, stream),
+            (a_errors, Err(a_err)) => self.1.recover(a_errors, a_err, &self.0, debugger, stream),
         }
     }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }

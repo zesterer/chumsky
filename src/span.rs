@@ -11,7 +11,7 @@ pub trait Span: Clone {
     type Context: Clone;
 
     /// A type representing a span's start or end offset. Typically, [`usize`] is used.
-    type Offset: Clone + Ord;
+    type Offset: Clone;
 
     /// Create a new span given a context and an offset range.
     fn new(context: Self::Context, range: Range<Self::Offset>) -> Self;
@@ -36,7 +36,7 @@ impl<T: Clone + Ord> Span for Range<T> {
     fn end(&self) -> Self::Offset { self.end.clone() }
 }
 
-impl<S: Clone, T: Clone + Ord> Span for (S, Range<T>) {
+impl<S: Clone, T: Clone> Span for (S, Range<T>) {
     type Context = S;
     type Offset = T;
 
