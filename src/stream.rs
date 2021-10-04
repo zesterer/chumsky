@@ -17,6 +17,14 @@ impl<I: Iterator> StreamExtend<I::Item> for I {
     }
 }
 
+/// A utility type used to flatten nested inputs.
+pub enum Flat<I, Iter> {
+    /// The input flattens into a single value.
+    Single(I),
+    /// The input flattens into many sub-tokens.
+    Many(Iter),
+}
+
 /// A type that represents a stream of input tokens. Unlike [`Iterator`], this type supports backtracking and a few
 /// other features required by the crate.
 #[allow(deprecated)]
@@ -42,6 +50,32 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
             buffer: Vec::new(),
             iter,
         }
+    }
+}
+
+impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>> {
+    /// Create a new stream from a series of nested tokens.
+    pub fn from_nested<
+        P: 'a,
+        Iter: Iterator<Item = (P, S)>,
+        Iter2: Iterator<Item = (P, S)>,
+        F: FnMut((P, S)) -> Flat<(I, S), Iter2> + 'a
+    >(eoi: S, iter: Iter, mut flatten: F) -> Self {
+        let mut v: Vec<std::collections::VecDeque<(P, S)>> = vec![iter.collect()];
+        Self::from_iter(
+            eoi,
+            Box::new(std::iter::from_fn(move || loop {
+                if let Some(many) = v.last_mut() {
+                    match many.pop_front().map(&mut flatten) {
+                        Some(Flat::Single(input)) => break Some(input),
+                        Some(Flat::Many(many)) => v.push(many.collect()),
+                        None => { v.pop(); },
+                    }
+                } else {
+                    break None;
+                }
+            })),
+        )
     }
 }
 

@@ -10,6 +10,8 @@ error recovery and partial parsing easy.
 
 # <img src="misc/example.png" alt="Example usage with my own language, Tao"/>
 
+*Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
+
 ## Features
 
 - Lots of combinators!
