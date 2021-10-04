@@ -9,6 +9,7 @@ keywords = ["parser", "combinator", "token", "language", "syntax"]
 categories = ["parsing", "text-processing"]
 edition = "2018"
 exclude = [
+    "/misc/*",
 	"/benches/*",
 ]
 

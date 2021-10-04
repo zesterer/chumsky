@@ -1,9 +1,10 @@
 use super::*;
 
-/// The type of a parser that accepts (and ignores) any number of characters.
+/// The type of a parser that accepts (and ignores) any number of whitespace characters.
 pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>;
 
-/// The type of a parser that accepts (and ignores) any number of characters before or after another pattern.
+/// The type of a parser that accepts (and ignores) any number of whitespace characters before or after another
+/// pattern.
 pub type Padded<P, I, O> = ThenIgnore<IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).

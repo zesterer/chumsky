@@ -8,6 +8,8 @@
 A friendly parser combinator crate that makes writing [LL(k)](https://en.wikipedia.org/wiki/LL_parser) parsers with
 error recovery and partial parsing easy.
 
+# <img src="misc/example.png" alt="Example usage with my own language, Tao"/>
+
 ## Features
 
 - Lots of combinators!
