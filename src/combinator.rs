@@ -414,6 +414,31 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
     }
 }
 
+/// See [`Parser::try_map`].
+pub struct TryMap<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
+
+impl<A: Copy, F: Copy, O> Copy for TryMap<A, F, O> {}
+impl<A: Clone, F: Clone, O> Clone for TryMap<A, F, O> {
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
+}
+
+impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> Result<U, E>, E: Error<I>> Parser<I, U> for TryMap<A, F, O> {
+    type Error = E;
+
+    fn parse_inner(&self, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, U, Self::Error> {
+        #[allow(deprecated)]
+        let (errors, res) = self.0.parse_inner(stream);
+
+        let res = match res.map(|(out, alt)| ((&self.1)(out), alt)) {
+            Ok((Ok(out), alt)) => Ok((out, alt)),
+            Ok((Err(a_err), _)) => Err(Located::at(stream.save(), a_err)),
+            Err(err) => Err(err),
+        };
+
+        (errors, res)
+    }
+}
+
 /// See [`Parser::labelled`].
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);

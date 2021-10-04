@@ -3,6 +3,7 @@
 // TODO: Enable when stable
 //#![feature(once_cell)]
 
+//pub mod debug;
 /// Combinators that allow combining and extending existing parsers.
 pub mod combinator;
 /// Error types, traits and utilities.
@@ -120,8 +121,10 @@ fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>
 // alt_err = potential alternative error should a different number of optional patterns be parsed
 // ([x, ...], Ok(out)) => parsing failed, but recovery occurred so parsing may continue
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
+// TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
 type PResult<I, O, E> = (Vec<Located<I, E>>, Result<(O, Option<Located<I, E>>), Located<I, E>>);
 
+/// Shorthand for a stream with the given input and error type.
 type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
 
 /// A trait implemented by parsers.
@@ -221,11 +224,15 @@ pub trait Parser<I: Clone, O> {
         { MapWithSpan(self, f, PhantomData) }
 
     /// Map the primary error of this parser to another value.
-    ///
-    /// This does not map error emitted by sub-patterns within the parser.
     fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
         where Self: Sized
     { MapErr(self, f) }
+
+    /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
+    /// as a parsing error.
+    fn try_map<U, F: Fn(O) -> Result<U, Self::Error>>(self, f: F) -> TryMap<Self, F, O>
+        where Self: Sized
+    { TryMap(self, f, PhantomData) }
 
     /// Label the pattern parsed by this parser for more useful error messages.
     ///

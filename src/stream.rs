@@ -54,12 +54,15 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
 }
 
 impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>> {
-    /// Create a new stream from a series of nested tokens.
+    /// Create a new `Stream` from an iterator of nested tokens and a function that flattens them.
+    ///
+    /// It's not uncommon for compilers to perform delimiter parsing during the lexing stage. When this is done, the
+    /// resulting token value is usually a nested tree of tokens. This functions allows you to flatten such
     pub fn from_nested<
         P: 'a,
         Iter: Iterator<Item = (P, S)>,
-        Iter2: Iterator<Item = (P, S)>,
-        F: FnMut((P, S)) -> Flat<(I, S), Iter2> + 'a
+        Many: Iterator<Item = (P, S)>,
+        F: FnMut((P, S)) -> Flat<(I, S), Many> + 'a
     >(eoi: S, iter: Iter, mut flatten: F) -> Self {
         let mut v: Vec<std::collections::VecDeque<(P, S)>> = vec![iter.collect()];
         Self::from_iter(

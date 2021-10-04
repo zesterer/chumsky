@@ -21,6 +21,7 @@ error recovery and partial parsing easy.
 - Text-specific parsers for both `u8`s and `char`s
 - Recursive parsers
 - Automatic support for backtracking, allowing the parsing of LL(k) grammars
+- Parsing of nesting inputs
 
 ## What *is* a parser combinator?
 

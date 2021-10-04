@@ -15,9 +15,6 @@ pub trait Error<I>: Sized {
     /// the error occured.
     type Label; // TODO: Default to = &'static str;
 
-    /// The primary span that the error originated at, if one exists.
-    // fn span(&self) -> Self::Span;
-
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
