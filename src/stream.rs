@@ -51,6 +51,13 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
             iter,
         }
     }
+
+    pub fn debug_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_ where (I, S): Clone {
+        while let Some(token) = self.iter.next() {
+            self.buffer.push(token);
+        }
+        self.buffer.iter().cloned()
+    }
 }
 
 impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>> {

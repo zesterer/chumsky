@@ -252,14 +252,14 @@ pub struct SeparatedBy<A, B, U> {
 }
 
 impl<A, B, U> SeparatedBy<A, B, U> {
-    /// Permit a leading separator before the first item.
-    pub fn with_leading(mut self) -> Self {
+    /// Allow a leading separator to appear before the first item.
+    pub fn allow_leading(mut self) -> Self {
         self.allow_leading = true;
         self
     }
 
-    /// Permit a trailing separator after the last item.
-    pub fn with_trailing(mut self) -> Self {
+    /// Allow a trailing separator to appear after the last item.
+    pub fn allow_trailing(mut self) -> Self {
         self.allow_trailing = true;
         self
     }

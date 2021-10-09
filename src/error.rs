@@ -168,6 +168,17 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     }
 }
 
+/*
+impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span
+            && self.found == other.found
+            && self.reason == other.reason
+            && self.label == other.label
+    }
+}
+*/
+
 impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(found) = &self.found {

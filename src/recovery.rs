@@ -66,8 +66,6 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
         _debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
-        assert!(self.0 != self.1, "NestedDelimiters cannot be used with identical delimiters.");
-
         let mut balance = 0;
         let mut balance_others = [0; N];
         let mut starts = Vec::new();
@@ -131,7 +129,8 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
 ///
 /// It is possible to specify other delimiters that are valid in this scope for better error generation. A function
 /// that generates a default fallback parser output on recovery is also required.
-pub fn nested_delimiters<I, F, const N: usize>(start: I, end: I, others: [(I, I); N], default: F) -> NestedDelimiters<I, F, N> {
+pub fn nested_delimiters<I: PartialEq, F, const N: usize>(start: I, end: I, others: [(I, I); N], default: F) -> NestedDelimiters<I, F, N> {
+    assert!(start != end, "Start and end delimiters cannot be the same when using `NestedDelimiters`, consider using `Delimiters` instead");
     NestedDelimiters(start, end, others, default)
 }
 

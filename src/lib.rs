@@ -525,6 +525,10 @@ pub trait Parser<I: Clone, O> {
         where Self: Sized
     { Map(Then(self, other), |(o, _)| o, PhantomData) }
 
+    fn padded_by<U, P: Parser<I, U, Error = Self::Error> + Clone>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
+        where Self: Sized
+    { other.clone().ignore_then(self).then_ignore(other) }
+
     // fn then_catch(self, end: I) -> ThenCatch<Self, I> where Self: Sized { ThenCatch(self, end) }
 
     /// Parse the pattern surrounded by the given delimiters.
@@ -654,7 +658,7 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse an expression, separated by another, any number of times.
     ///
-    /// You can call `.with_leading()` or `.with_trailing()` on the result to permit leading and trailing separators.
+    /// You can call `.allow_leading()` or `.allow_trailing()` on the result to permit leading and trailing separators.
     fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
         SeparatedBy {
             a: self,
