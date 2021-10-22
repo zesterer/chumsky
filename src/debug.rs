@@ -7,6 +7,7 @@ use std::{
 
 /// Information about a specific parser.
 pub struct ParserInfo {
+    #[allow(dead_code)]
     name: Cow<'static, str>,
     display: Rc<dyn fmt::Display>,
     location: Location<'static>,

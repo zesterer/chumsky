@@ -702,7 +702,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
-        debugger.invoke(&*self, stream)
+        debugger.invoke::<_, _, T>(&*self, stream)
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
@@ -713,7 +713,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
-        debugger.invoke(&*self, stream)
+        debugger.invoke::<_, _, T>(&*self, stream)
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
