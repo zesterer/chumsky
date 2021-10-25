@@ -57,7 +57,7 @@ pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
 }
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
-pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> {
+pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> + Copy + Clone {
     just('\r').or_not().ignore_then(just('\n'))
         .or(just('\x0B')) // Vertical tab
         .or(just('\x0C')) // Form feed
