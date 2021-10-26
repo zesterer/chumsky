@@ -19,18 +19,23 @@ pub trait Character: Copy + PartialEq {
 
     /// Returns true if the character is canonically considered to be a numeric digit.
     fn is_digit(&self, radix: u32) -> bool;
+
+    /// Returns this character as a [`char`].
+    fn to_char(&self) -> char;
 }
 
 impl Character for u8 {
     fn is_whitespace(&self) -> bool { self.is_ascii_whitespace() }
     fn digit_zero() -> Self { b'0' }
     fn is_digit(&self, radix: u32) -> bool { (*self as char).is_digit(radix) }
+    fn to_char(&self) -> char { *self as char }
 }
 
 impl Character for char {
     fn is_whitespace(&self) -> bool { char::is_whitespace(*self) }
     fn digit_zero() -> Self { '0' }
     fn is_digit(&self, radix: u32) -> bool { char::is_digit(*self, radix) }
+    fn to_char(&self) -> char { *self }
 }
 
 /// A trait containing text-specific functionality that extends the [`Parser`] trait.
@@ -69,25 +74,37 @@ pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> + Copy + Cl
 }
 
 /// A parser that accepts one or more ASCII digits.
-pub fn digits<C: Character, E: Error<C>>(radix: u32) -> Repeated<Filter<impl Fn(&C) -> bool + Clone + Send + Sync + 'static, E>> {
-    filter(move |c: &C| c.is_digit(radix)).repeated().at_least(1)
+pub fn digits<C: Character, E: Error<C>>(radix: u32) -> impl Parser<C, String, Error = E> + Copy + Clone {
+    filter(move |c: &C| c.is_digit(radix))
+        .map(|c| c.to_char())
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
 }
 
 /// A parser that accepts a positive integer.
 ///
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
-pub fn int<C: Character, E: Error<C>>(radix: u32) -> impl Parser<C, Vec<C>, Error = E> + Copy + Clone {
-    filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero()).map(Some)
-        .chain(filter(move |c: &C| c.is_digit(radix)).repeated())
-        .or(just(C::digit_zero()).map(|c| vec![c]))
+pub fn int<C: Character, E: Error<C>>(radix: u32) -> impl Parser<C, String, Error = E> + Copy + Clone {
+    filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
+        .map(|c| Some(c.to_char()))
+        .chain::<char, Vec<_>, _>(filter(move |c: &C| c.is_digit(radix))
+            .map(|c| c.to_char())
+            .repeated())
+        .collect::<String>()
+        .or(just(C::digit_zero()).map(|c| c.to_char().to_string()))
 }
 
 /// A parser that accepts a C-style identifier.
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-pub fn ident<E: Error<char>>() -> impl Parser<char, Vec<char>, Error = E> + Copy + Clone {
-    filter(|c: &char| c.is_ascii_alphabetic() || *c == '_').map(Some)
-        .chain(filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_').repeated())
+pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, String, Error = E> + Copy + Clone {
+    filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
+        .map(|c| Some(c.to_char()))
+        .chain::<char, Vec<_>, _>(filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+            .map(|c| c.to_char())
+            .repeated())
+        .collect::<String>()
 }

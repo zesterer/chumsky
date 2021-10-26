@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
-//#![deny(missing_docs)]
+#![deny(missing_docs)]
+#![allow(deprecated)] // TODO: Don't allow this
 // TODO: Enable when stable
 //#![feature(once_cell)]
 
@@ -135,17 +136,6 @@ type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
 /// may encounter errors. These need not be fatal to the parsing process: syntactic errors can be recovered from and a
 /// valid output may still be generated alongside any syntax errors that were encountered along the way. Usually, this
 /// output comes in the form of an [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
-///
-/// Parsers currently only support LL(1) grammars. More concretely, this means that the rules that compose this parser
-/// are only permitted to 'look' a single token into the future to determine the path through the grammar rules to be
-/// taken by the parser. Unlike other techniques, such as recursive decent, arbitrary backtracking is not permitted.
-/// The reasons for this are numerous, but perhaps the most obvious is that it makes error detection and recovery
-/// significantly simpler and easier. In the future, this crate may be extended to support more complex grammars.
-///
-/// LL(1) parsers by themselves are not particularly powerful. Indeed, even very old languages such as C cannot parsed
-/// by an LL(1) parser in a single pass. However, this limitation quickly vanishes (and, indeed, makes the design of
-/// both the language and the parser easier) when one introduces multiple passes. For example, C compilers generally
-/// have a lexical pass prior to the main parser that groups the input characters into tokens.
 pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
     type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
@@ -157,8 +147,11 @@ pub trait Parser<I: Clone, O> {
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> where Self: Sized;
 
-    // #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
+    /// [`Parser::parse_inner`], but specialised for verbose output.
+    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+    /// [`Parser::parse_inner`], but specialised for silent output.
+    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
@@ -225,8 +218,11 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
+    /// Include this parser in the debugging output produced by [`Parser::parse_debug`].
     #[track_caller]
-    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized { Debug(self, Rc::new(x), *std::panic::Location::caller()) }
+    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized {
+        Debug(self, Rc::new(x), *std::panic::Location::caller())
+    }
 
     /// Map the output of this parser to aanother value.
     ///
@@ -255,19 +251,38 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
 
-    /// Map the output of this parser to another value, making use of the pattern's span.
+    /// Map the output of this parser to another value, making use of the pattern's overall span.
+    ///
+    /// This is most useful when parsing an AST, where each AST node must have its own span.
     fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
         { MapWithSpan(self, f, PhantomData) }
 
     /// Map the primary error of this parser to another value.
+    ///
+    /// This function is most useful when using a custom error type, allowing you to augment errors according to
+    /// context.
     fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
         where Self: Sized
     { MapErr(self, f) }
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
-    fn try_map<U, F: Fn(O) -> Result<U, Self::Error>>(self, f: F) -> TryMap<Self, F, O>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    ///
+    /// let byte = text::int::<_, Simple<char>>(10)
+    ///     .try_map(|s, span| s
+    ///         .parse::<u8>()
+    ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
+    ///
+    /// assert!(byte.parse("255").is_ok());
+    /// assert!(byte.parse("256").is_err()); // Out of range
+    /// ```
+    fn try_map<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>>(self, f: F) -> TryMap<Self, F, O>
         where Self: Sized
     { TryMap(self, f, PhantomData) }
 
@@ -330,7 +345,6 @@ pub trait Parser<I: Clone, O> {
     /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let sum = int
@@ -353,7 +367,6 @@ pub trait Parser<I: Clone, O> {
     /// # use chumsky::{prelude::*, error::Cheap};
     ///
     /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let signed = just('+').to(1)
@@ -525,6 +538,21 @@ pub trait Parser<I: Clone, O> {
         where Self: Sized
     { Map(Then(self, other), |(o, _)| o, PhantomData) }
 
+    /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    ///
+    /// let ident = text::ident::<_, Simple<char>>()
+    ///     .padded_by(just('!'));
+    ///
+    /// assert_eq!(ident.parse("!hello!"), Ok("hello".to_string()));
+    /// assert!(ident.parse("hello!").is_err());
+    /// assert!(ident.parse("!hello").is_err());
+    /// assert!(ident.parse("hello").is_err());
+    /// ```
     fn padded_by<U, P: Parser<I, U, Error = Self::Error> + Clone>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
         where Self: Sized
     { other.clone().ignore_then(self).then_ignore(other) }
@@ -551,7 +579,6 @@ pub trait Parser<I: Clone, O> {
     ///     .collect::<String>();
     ///
     /// let num = text::int(10)
-    ///     .collect::<String>()
     ///     .map(|s| s.parse().unwrap());
     ///
     /// let s_expr = recursive(|s_expr| s_expr
@@ -658,7 +685,8 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse an expression, separated by another, any number of times.
     ///
-    /// You can call `.allow_leading()` or `.allow_trailing()` on the result to permit leading and trailing separators.
+    /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
+    /// separators.
     fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
         SeparatedBy {
             a: self,

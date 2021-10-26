@@ -20,3 +20,9 @@ impl<T> Chain<T> for Vec<T> {
     fn len(&self) -> usize { self.as_slice().len() }
     fn append_to(mut self, v: &mut Vec<T>) { v.append(&mut self) }
 }
+
+impl Chain<char> for String {
+    // TODO: Quite inefficient
+    fn len(&self) -> usize { self.chars().count() }
+    fn append_to(self, v: &mut Vec<char>) { v.extend(self.chars()) }
+}

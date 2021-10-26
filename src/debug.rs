@@ -14,7 +14,7 @@ pub struct ParserInfo {
 }
 
 impl ParserInfo {
-    pub fn new(name: impl Into<Cow<'static, str>>, display: Rc<dyn fmt::Display>, location: Location<'static>) -> Self {
+    pub(crate) fn new(name: impl Into<Cow<'static, str>>, display: Rc<dyn fmt::Display>, location: Location<'static>) -> Self {
         Self {
             name: name.into(),
             display,
@@ -25,17 +25,22 @@ impl ParserInfo {
 
 /// An event that occurred during parsing.
 pub enum ParseEvent {
+    /// Debugging information was emitted.
     Info(String),
 }
 
+/// A trait implemented by parser debuggers.
+#[deprecated(note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
 pub trait Debugger {
+    /// Create a new debugging scope.
     fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(&mut self, info: Info, f: F) -> R;
+    /// Emit a parse event, if the debugger supports them.
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, f: F);
+    /// Invoke the given parser with a mode specific to this debugger.
     fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(&mut self, parser: &P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error>;
 }
 
-// Verbose
-
+/// A verbose debugger that emits debugging messages to the console.
 pub struct Verbose {
     // TODO: Don't use `Result`, that's silly
     events: Vec<Result<ParseEvent, (ParserInfo, Self)>>,
@@ -81,8 +86,7 @@ impl Debugger for Verbose {
     }
 }
 
-// Silent
-
+/// A silent debugger that emits no debugging messages nor collects any debugging data.
 pub struct Silent {
     phantom: PhantomData<()>,
 }

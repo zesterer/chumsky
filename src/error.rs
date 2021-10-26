@@ -1,8 +1,13 @@
 use super::*;
 use std::{
-    collections::HashSet,
     hash::Hash,
+    collections::HashSet,
 };
+
+#[cfg(feature = "ahash")]
+type RandomState = ahash::RandomState;
+#[cfg(not(feature = "ahash"))]
+type RandomState = std::collections::hash_set::RandomState;
 
 /// A trait that describes parser error types.
 pub trait Error<I>: Sized {
@@ -25,7 +30,8 @@ pub trait Error<I>: Sized {
     /// Provided to this function is the span of the unclosed delimiter, the delimiter itself, the span of the input
     /// that was found in its place, the closing delimiter that was expected but not found, and the input that was
     /// found in its place.
-    fn unclosed_delimiter(_start_span: Self::Span, _start: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+    fn unclosed_delimiter(start_span: Self::Span, start: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+        #![allow(unused_variables)]
         Self::expected_input_found(span, Some(expected), found)
     }
 
@@ -74,6 +80,8 @@ pub enum SimpleReason<I, S> {
         /// The unclosed delimiter.
         delimiter: I,
     },
+    /// An error with a custom message occurred.
+    Custom(String),
 }
 
 /// A simple default error type that tracks error spans, expected patterns, and the input found at an error site.
@@ -81,12 +89,23 @@ pub enum SimpleReason<I, S> {
 pub struct Simple<I: Hash, S = Range<usize>> {
     span: S,
     reason: SimpleReason<I, S>,
-    expected: HashSet<I>,
+    expected: HashSet<I, RandomState>,
     found: Option<I>,
     label: Option<&'static str>,
 }
 
 impl<I: Hash + Eq, S: Clone> Simple<I, S> {
+    /// Create an error with a custom error message.
+    pub fn custom<M: ToString>(span: S, msg: M) -> Self {
+        Self {
+            span,
+            reason: SimpleReason::Custom(msg.to_string()),
+            expected: HashSet::default(),
+            found: None,
+            label: None,
+        }
+    }
+
     /// Returns the span that the error occured at.
     pub fn span(&self) -> S { self.span.clone() }
 
@@ -112,6 +131,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
             reason: match self.reason {
                 SimpleReason::Unclosed { span, delimiter } => SimpleReason::Unclosed {span, delimiter: f(delimiter) },
                 SimpleReason::Unexpected => SimpleReason::Unexpected,
+                SimpleReason::Custom(msg) => SimpleReason::Custom(msg),
             },
             expected: self.expected
                 .into_iter()
@@ -168,7 +188,6 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     }
 }
 
-/*
 impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
     fn eq(&self, other: &Self) -> bool {
         self.span == other.span
@@ -177,10 +196,11 @@ impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
             && self.label == other.label
     }
 }
-*/
 
 impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO: Take `self.reason` into account
+
         if let Some(found) = &self.found {
             write!(f, "found '{}' ", found)?;
             write!(f, "at {} ", self.span)?;

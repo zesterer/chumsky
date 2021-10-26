@@ -8,7 +8,9 @@
 A friendly parser combinator crate that makes writing [LL(k)](https://en.wikipedia.org/wiki/LL_parser) parsers with
 error recovery and partial parsing easy.
 
-# <img src="misc/example.png" alt="Example usage with my own language, Tao"/>
+<a href = "https://www.github.com/zesterer/tao">
+    <img src="misc/example.png" alt="Example usage with my own language, Tao"/>
+</a>
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
 
@@ -20,7 +22,7 @@ error recovery and partial parsing easy.
 - Inline mapping to your AST
 - Text-specific parsers for both `u8`s and `char`s
 - Recursive parsers
-- Automatic support for backtracking, allowing the parsing of LL(k) grammars
+- Automatic support for backtracking, allowing parsing of LL(k) grammars
 - Parsing of nesting inputs
 
 ## What *is* a parser combinator?

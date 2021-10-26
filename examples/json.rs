@@ -125,7 +125,11 @@ fn main() {
                     .with_label(Label::new(span.clone())
                         .with_message(format!("Unclosed delimiter {}", delimiter.fg(Color::Yellow)))
                     .with_color(Color::Yellow)),
-                chumsky::error::SimpleReason::Unexpected => report
+                chumsky::error::SimpleReason::Unexpected => report,
+                chumsky::error::SimpleReason::Custom(msg) => report
+                    .with_label(Label::new(e.span())
+                        .with_message(format!("{}", msg.fg(Color::Yellow)))
+                    .with_color(Color::Yellow)),
             };
 
             report

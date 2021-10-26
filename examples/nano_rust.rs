@@ -63,7 +63,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
 
     let ctrl = one_of("()[]{};,".chars()).map(|c| Token::Ctrl(c));
 
-    let ident = text::ident().collect::<String>().map(|ident| match ident.as_str() {
+    let ident = text::ident().map(|ident| match ident.as_str() {
         "fn" => Token::Fn,
         "let" => Token::Let,
         "print" => Token::Print,
@@ -434,7 +434,11 @@ fn main() {
                     .with_label(Label::new(span.clone())
                         .with_message(format!("Unclosed delimiter {}", delimiter.fg(Color::Yellow)))
                     .with_color(Color::Yellow)),
-                chumsky::error::SimpleReason::Unexpected => report
+                chumsky::error::SimpleReason::Unexpected => report,
+                chumsky::error::SimpleReason::Custom(msg) => report
+                    .with_label(Label::new(e.span())
+                        .with_message(format!("{}", msg.fg(Color::Yellow)))
+                    .with_color(Color::Yellow)),
             };
 
             report

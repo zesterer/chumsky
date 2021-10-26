@@ -253,12 +253,47 @@ pub struct SeparatedBy<A, B, U> {
 
 impl<A, B, U> SeparatedBy<A, B, U> {
     /// Allow a leading separator to appear before the first item.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// let r#enum = seq::<_, _, Simple<char>>("enum".chars())
+    ///     .padded()
+    ///     .ignore_then(text::ident()
+    ///         .padded()
+    ///         .separated_by(just('|'))
+    ///         .allow_leading());
+    ///
+    /// assert_eq!(r#enum.parse("enum True | False"), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// assert_eq!(r#enum.parse("
+    ///     enum
+    ///     | True
+    ///     | False
+    /// "), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// ```
     pub fn allow_leading(mut self) -> Self {
         self.allow_leading = true;
         self
     }
 
     /// Allow a trailing separator to appear after the last item.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// let numbers = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .allow_trailing()
+    ///     .delimited_by('(', ')');
+    ///
+    /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// ```
     pub fn allow_trailing(mut self) -> Self {
         self.allow_trailing = true;
         self
@@ -356,7 +391,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debu
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         debugger.scope(
-            || ParserInfo::new("Here!", self.1.clone(), self.2),
+            || ParserInfo::new("Name", self.1.clone(), self.2),
             |debugger| {
                 #[allow(deprecated)]
                 let (errors, res) = debugger.invoke(&self.0, stream);
@@ -481,14 +516,15 @@ impl<A: Clone, F: Clone, O> Clone for TryMap<A, F, O> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> Result<U, E>, E: Error<I>> Parser<I, U> for TryMap<A, F, O> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> Result<U, E>, E: Error<I>> Parser<I, U> for TryMap<A, F, O> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
+        let start = stream.save();
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
 
-        let res = match res.map(|(out, alt)| ((&self.1)(out), alt)) {
+        let res = match res.map(|(out, alt)| ((&self.1)(out, stream.span_since(start)), alt)) {
             Ok((Ok(out), alt)) => Ok((out, alt)),
             Ok((Err(a_err), _)) => Err(Located::at(stream.save(), a_err)),
             Err(err) => Err(err),

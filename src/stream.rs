@@ -52,7 +52,11 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
         }
     }
 
-    pub fn debug_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_ where (I, S): Clone {
+    /// Eagerly evaluate the token stream, returning an iterator over the tokens in it (but leaving the stream
+    /// unaffected).
+    ///
+    /// This is most useful when you wish to check the input of a parser during debugging.
+    pub fn fetch_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_ where (I, S): Clone {
         while let Some(token) = self.iter.next() {
             self.buffer.push(token);
         }
@@ -64,7 +68,8 @@ impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)
     /// Create a new `Stream` from an iterator of nested tokens and a function that flattens them.
     ///
     /// It's not uncommon for compilers to perform delimiter parsing during the lexing stage. When this is done, the
-    /// resulting token value is usually a nested tree of tokens. This functions allows you to flatten such
+    /// resulting token value is usually a nested tree of tokens. This functions allows you to flatten such token trees
+    /// such that they can be parsed by chumsky.
     pub fn from_nested<
         P: 'a,
         Iter: Iterator<Item = (P, S)>,
