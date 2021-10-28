@@ -113,6 +113,8 @@ impl<I, E: Error<I>> Located<I, E> {
     }
 }
 
+// Merge two alternative errors
+// TODO: Allow multiple alternative errors
 fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>) -> Option<Located<I, E>> {
     match (a, b) {
         (Some(a), Some(b)) => Some(a.max(b)),
@@ -127,8 +129,30 @@ fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>
 // TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
 type PResult<I, O, E> = (Vec<Located<I, E>>, Result<(O, Option<Located<I, E>>), Located<I, E>>);
 
-/// Shorthand for a stream with the given input and error type.
+// Shorthand for a stream with the given input and error type.
 type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
+
+// [`Parser::parse_recovery`], but generic across the debugger.
+fn parse_recovery_inner<
+    'a,
+    I: Clone,
+    O,
+    P: Parser<I, O>,
+    D: Debugger,
+    Iter: Iterator<Item = (I, <P::Error as Error<I>>::Span)> + 'a,
+    S: Into<Stream<'a, I, <P::Error as Error<I>>::Span, Iter>>,
+>(parser: &P, debugger: &mut D, stream: S) -> (Option<O>, Vec<P::Error>) where P: Sized {
+    #[allow(deprecated)]
+    let (mut errors, res) = parser.parse_inner(debugger, &mut stream.into());
+    let out = match res {
+        Ok((out, _)) => Some(out),
+        Err(err) => {
+            errors.push(err);
+            None
+        },
+    };
+    (out, errors.into_iter().map(|e| e.error).collect())
+}
 
 /// A trait implemented by parsers.
 ///
@@ -143,38 +167,22 @@ pub trait Parser<I: Clone, O> {
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own.
+    /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
+    /// covers your use-case.
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> where Self: Sized;
 
-    /// [`Parser::parse_inner`], but specialised for verbose output.
+    /// [`Parser::parse_inner`], but specialised for verbose output. Do not call this method directly.
+    ///
+    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
-    /// [`Parser::parse_inner`], but specialised for silent output.
+
+    /// [`Parser::parse_inner`], but specialised for silent output. Do not call this method directly.
+    ///
+    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
-
-    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
-    ///
-    /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_recovery_inner<
-        'a,
-        D: Debugger,
-        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    >(&self, debugger: &mut D, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
-
-        #[allow(deprecated)]
-        let (mut errors, res) = self.parse_inner(debugger, &mut stream.into());
-        let out = match res {
-            Ok((out, _)) => Some(out),
-            Err(err) => {
-                errors.push(err);
-                None
-            },
-        };
-        (out, errors.into_iter().map(|e| e.error).collect())
-    }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
@@ -184,20 +192,23 @@ pub trait Parser<I: Clone, O> {
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
-        self.parse_recovery_inner(&mut Silent::new(), stream)
+        parse_recovery_inner(self, &mut Silent::new(), stream)
     }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way. Unlike
-    /// [`Parser::parse_recovery`], this function will produce debugging output as it executes.
+    /// [`Parser::parse_recovery`], this function will produce verbose debugging output as it executes.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    fn parse_debug<
+    ///
+    /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
+    /// your parser. Additionally, its API is quite likely to change in future versions.
+    fn parse_recovery_verbose<
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
         let mut debugger = Verbose::new();
-        let res = self.parse_recovery_inner(&mut debugger, stream);
+        let res = parse_recovery_inner(self, &mut debugger, stream);
         debugger.print();
         res
     }
@@ -219,6 +230,9 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Include this parser in the debugging output produced by [`Parser::parse_debug`].
+    ///
+    /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
+    /// your parser. Additionally, its API is quite likely to change in future versions.
     #[track_caller]
     fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized {
         Debug(self, Rc::new(x), *std::panic::Location::caller())
@@ -253,10 +267,10 @@ pub trait Parser<I: Clone, O> {
 
     /// Map the output of this parser to another value, making use of the pattern's overall span.
     ///
-    /// This is most useful when parsing an AST, where each AST node must have its own span.
+    /// This is very useful when generating an AST but you need to know what span to give each AST node.
     fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
-        { MapWithSpan(self, f, PhantomData) }
+    { MapWithSpan(self, f, PhantomData) }
 
     /// Map the primary error of this parser to another value.
     ///
@@ -478,6 +492,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Flatten a nested collection.
+    ///
+    /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
     fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>, O>
     where
         Self: Sized,
@@ -579,7 +595,7 @@ pub trait Parser<I: Clone, O> {
     ///     .collect::<String>();
     ///
     /// let num = text::int(10)
-    ///     .map(|s| s.parse().unwrap());
+    ///     .map(|s: String| s.parse().unwrap());
     ///
     /// let s_expr = recursive(|s_expr| s_expr
     ///     .padded()
@@ -687,6 +703,21 @@ pub trait Parser<I: Clone, O> {
     ///
     /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
     /// separators.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    ///
+    /// let shopping = text::ident()
+    ///     .padded()
+    ///     .separated_by(just(','));
+    ///
+    /// assert_eq!(shopping.parse("eggs"), Ok(vec!["eggs".to_string()]));
+    /// assert_eq!(shopping.parse("eggs, flour, milk"), Ok(vec!["eggs".to_string(), "flour".to_string(), "milk".to_string()]));
+    /// ```
+    ///
+    /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
     fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
         SeparatedBy {
             a: self,
@@ -709,7 +740,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// - Places where you need to name the type of a parser
     ///
-    /// Boxing a parser is loosely equivalent to boxing other combinators, such as [`Iterator`].
+    /// Boxing a parser is broadly equivalent to boxing other combinators, such as [`Iterator`].
     fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
         BoxedParser(Rc::new(self))
     }

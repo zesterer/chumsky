@@ -16,6 +16,7 @@ pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Or<A, B> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         let pre_state = stream.save();
 
@@ -87,7 +88,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         }
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -98,6 +101,7 @@ pub struct OrNot<A>(pub(crate) A);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for OrNot<A> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, Option<O>, E> {
         match stream.try_parse(|stream| { #[allow(deprecated)] debugger.invoke(&self.0, stream) }) {
             (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
@@ -105,7 +109,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
         }
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, Option<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, Option<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -116,6 +122,7 @@ pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>> Parser<I, (O, U)> for Then<A, B> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, (O, U), E> {
         match { #[allow(deprecated)] debugger.invoke(&self.0, stream) } {
             (mut a_errors, Ok((a_out, a_alt))) => match { #[allow(deprecated)] debugger.invoke(&self.1, stream) } {
@@ -132,7 +139,9 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (O, U), E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (O, U), E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -143,6 +152,7 @@ pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
 impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for DelimitedBy<A, I> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         // TODO: Don't clone!
         #[allow(deprecated)]
@@ -155,7 +165,9 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
         (errors, res)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -180,6 +192,7 @@ impl<A> Repeated<A> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> {
         let mut errors = Vec::new();
         let mut outputs = Vec::new();
@@ -237,7 +250,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
         }
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -323,6 +338,7 @@ impl<A: Clone, B: Clone, U> Clone for SeparatedBy<A, B, U> {
 impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>> Parser<I, Vec<O>> for SeparatedBy<A, B, U> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> {
         let mut outputs = Vec::new();
         let mut errors = Vec::new();
@@ -375,7 +391,9 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, Vec<O>, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -389,6 +407,7 @@ impl<A: Clone> Clone for Debug<A> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debug<A> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         debugger.scope(
             || ParserInfo::new("Name", self.1.clone(), self.2),
@@ -401,7 +420,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debu
         )
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -416,6 +437,7 @@ impl<A: Clone, F: Clone, O> Clone for Map<A, F, O> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, U> for Map<A, F, O> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
@@ -423,7 +445,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Par
         (errors, res.map(|(out, alt)| ((&self.1)(out), alt)))
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -438,6 +462,7 @@ impl<A: Clone, F: Clone, O> Clone for MapWithSpan<A, F, O> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Error<I>> Parser<I, U> for MapWithSpan<A, F, O> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         let start = stream.save();
         #[allow(deprecated)]
@@ -446,7 +471,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
         (errors, res.map(|(out, alt)| ((self.1)(out, stream.span_since(start)), alt)))
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -461,12 +488,15 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
 impl<I: Clone, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
         debugger.invoke(&(&self.0).map(|(head, tail)| tail.into_iter().fold(head, &self.1)), stream)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -481,12 +511,15 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
 impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         debugger.invoke(&(&self.0).map(|(init, end)| init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b))), stream)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -497,6 +530,7 @@ pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O> for MapErr<A, F> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
@@ -504,7 +538,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
         (errors.into_iter().map(mapper).collect(), res.map(|(out, alt)| (out, alt.map(mapper))).map_err(mapper))
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -519,6 +555,7 @@ impl<A: Clone, F: Clone, O> Clone for TryMap<A, F, O> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> Result<U, E>, E: Error<I>> Parser<I, U> for TryMap<A, F, O> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         let start = stream.save();
         #[allow(deprecated)]
@@ -533,7 +570,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> Result<U, 
         (errors, res)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -544,6 +583,7 @@ pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Error<I>> Parser<I, O> for Label<A, L> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         let pre_state = stream.save();
         #[allow(deprecated)]
@@ -557,7 +597,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
         (errors.into_iter().map(|e| e.map(|e| e.with_label(self.1.clone().into()))).collect(), res)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
@@ -572,11 +614,14 @@ impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U> for To<A, O, U> {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         debugger.invoke(&(&self.0).map(|_| self.1.clone()), stream)
     }
 
+    #[inline]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }

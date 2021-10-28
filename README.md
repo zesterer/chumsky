@@ -23,16 +23,7 @@ error recovery and partial parsing easy.
 - Text-specific parsers for both `u8`s and `char`s
 - Recursive parsers
 - Automatic support for backtracking, allowing parsing of LL(k) grammars
-- Parsing of nesting inputs
-
-## What *is* a parser combinator?
-
-Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
-parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy for transforming an
-input into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
-[`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait to define iterative algorithms: the
-type-driven API of `Iterator` makes it more difficult to make mistakes and easier to encode complicated iteration logic
-than if one were to write the same code by hand. The same is true of parsers and parser combinators.
+- Parsing of nesting inputs, allowing you to move delimiter parsing to the lexical stage (as Rust does!)
 
 ## Example [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) Parser
 
@@ -69,6 +60,27 @@ Other examples include:
 - An [interpreter for simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
+## *What* a parser combinator?
+
+Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
+parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy for transforming a
+stream of tokens into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
+[`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait to define iterative algorithms: the
+type-driven API of `Iterator` makes it more difficult to make mistakes and easier to encode complicated iteration logic
+than if one were to write the same code by hand. The same is true of parser combinators.
+
+## *Why* use parser combinators?
+
+Writing parsers with good error recovery is conceptually difficult and time-consuming. It requires understand the
+intricacies of the recursive descent algorithm, and then implementing recovery strategies on top of it. If you're
+developing a programming language, you'll almost certainly change your mind about syntax in the process, leading to some
+slow and painful parser refactoring. Parser combinators solve both problems by providing an ergonomic API that allows
+for rapidly iterating upon a syntax.
+
+Parser combinators are also a great fit for domain-specific languages for which an existing parser does not exist.
+Writing a reliable, fault-tolerant parser for such situations can go from being a multi-day task to a half-hour task
+with the help of a decent parser combinator library.
+
 ## Error Recovery
 
 Chumsky has support for error recovery, meaning that it can encounter a syntax error, report the error, and then
@@ -91,13 +103,29 @@ of the parser to find a configuration that you are happy with. If none of the pr
 the specific pattern you wish to catch, you can even create your own by digging into Chumsky's internals and
 implementing your own strategies! If you come up with a useful strategy, feel free to open a PR against the main repo!
 
+## Performance
+
+Chumsky focuses on high-quality errors and ergonomics over performance. That said, it's important that Chumsky can keep
+up with the rest of your compiler! It's *extremely* difficult to come up with sensible benchmarks given that exactly how
+Chumsky performs depends entirely on what you are parsing, how you structure your parser, which patterns get tried
+first, how complex your error type is, what is involved in constructing your AST, etc. That said, here are some numbers
+from the the JSON benchmark included in the repository running on my 8-core Ryzen 7 3700x.
+
+```
+test chumsky ... bench:   5,969,794 ns/iter (+/- 75,548)
+test pom     ... bench:  12,858,594 ns/iter (+/- 181,703)
+```
+
+I've included results from [`pom`](https://github.com/J-F-Liu/pom), another parser combinator crate with a similar
+design, as a point of reference. The sample file being parsed is broadly represenative of typical JSON data and has
+3,018 lines. This translates to a little over 500,000 lines of JSON per second.
+
+Clearly, this is somewhat slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
+*fast enough*. If you've written enough code in your language that parsing performance even starts to be a problem,
+you've already committed enough time and resources to your language that hand-writing a parser is the best choice going!
+
 ## Planned Features
 
-- Intrusive parsers (parsers that parse patterns within nested inputs, allowing you to move delimiter parsing to the
-  lexing stage)
-- A debugging mode (using `track_caller`) that allows backtrace-style debugging of parser behaviour to help you
-  eliminate ambiguities, solve problems, and understand the route that the parser took through your grammar when
-  processing inputs
 - An optimised 'happy path' parser mode that skips error recovery & error generation
 - An even faster 'validation' parser mode, guaranteed to not allocate, that doesn't generate outputs but just verifies
   the validity of an input
@@ -106,7 +134,7 @@ implementing your own strategies! If you come up with a useful strategy, feel fr
 
 Chumsky should:
 
-- Be easy to use, even if the user doesn't understand the complexity that underpins parsing
+- Be easy to use, even if you doesn't understand exactly what the parser is doing under the hood
 - Be type-driven, pushing users away from anti-patterns at compile-time
 - Be a mature, 'batteries-included' solution for context-free parsing by default. If you need to implement either
   `Parser` or `Strategy` by hand, that's a problem that needs fixing
@@ -115,10 +143,10 @@ Chumsky should:
 - Be modular and extensible, allowing users to implement their own parsers, recovery strategies, error types, spans, and
   be generic over both input tokens and the output AST
 
-## Other Information
+## Notes
 
 My apologies to Noam for choosing such an absurd name.
 
 ## License
 
-Chumsky is licensed under the MIT license (see `LICENSE`) in the main repository.
+Chumsky is licensed under the MIT license (see `LICENSE` in the main repository).
