@@ -60,9 +60,7 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
     ///
     /// This is most useful when you wish to check the input of a parser during debugging.
     pub fn fetch_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_ where (I, S): Clone {
-        while let Some(token) = self.iter.next() {
-            self.buffer.push(token);
-        }
+        self.buffer.extend(&mut self.iter);
         self.buffer.iter().cloned()
     }
 }
