@@ -44,8 +44,8 @@ impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUn
     }
 }
 
-/// A recovery mode that simply skips to the next input on parser failure and tries again, until reaching on of a
-/// series of inputs.
+/// A recovery mode that simply skips to the next input on parser failure and tries again, until reaching one of
+/// several inputs.
 ///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
@@ -127,11 +127,14 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
 
 /// A recovery strategy that searches for a start and end delimiter, respecting nesting.
 ///
-/// It is possible to specify other delimiters that are valid in this scope for better error generation. A function
-/// that generates a default fallback parser output on recovery is also required.
-pub fn nested_delimiters<I: PartialEq, F, const N: usize>(start: I, end: I, others: [(I, I); N], default: F) -> NestedDelimiters<I, F, N> {
+/// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
+/// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesised expression as
+/// this can aid in detecting delimiter mismatches.
+///
+/// A function that generates a fallback output on recovery is also required.
+pub fn nested_delimiters<I: PartialEq, F, const N: usize>(start: I, end: I, others: [(I, I); N], fallback: F) -> NestedDelimiters<I, F, N> {
     assert!(start != end, "Start and end delimiters cannot be the same when using `NestedDelimiters`, consider using `Delimiters` instead");
-    NestedDelimiters(start, end, others, default)
+    NestedDelimiters(start, end, others, fallback)
 }
 
 /// A parser that includes a fallback recovery strategy should parsing result in an error.

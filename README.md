@@ -101,17 +101,20 @@ input.
 It is recommended that you experiment with applying different strategies in different situations and at different levels
 of the parser to find a configuration that you are happy with. If none of the provided error recovery strategies cover
 the specific pattern you wish to catch, you can even create your own by digging into Chumsky's internals and
-implementing your own strategies! If you come up with a useful strategy, feel free to open a PR against the main repo!
+implementing your own strategies! If you come up with a useful strategy, feel free to open a PR against the
+[main repository](https://github.com/zesterer/chumsky/)!
 
 ## Performance
 
 Chumsky focuses on high-quality errors and ergonomics over performance. That said, it's important that Chumsky can keep
-up with the rest of your compiler! It's *extremely* difficult to come up with sensible benchmarks given that exactly how
-Chumsky performs depends entirely on what you are parsing, how you structure your parser, which patterns get tried
-first, how complex your error type is, what is involved in constructing your AST, etc. That said, here are some numbers
-from the the JSON benchmark included in the repository running on my 8-core Ryzen 7 3700x.
+up with the rest of your compiler! Unfortunately, it's *extremely* difficult to come up with sensible benchmarks given
+that exactly how Chumsky performs depends entirely on what you are parsing, how you structure your parser, which
+patterns the parser attempts to match first, how complex your error type is, what is involved in constructing your AST,
+etc. All that said, here are some numbers from the the
+[JSON benchmark](https://github.com/zesterer/chumsky/blob/master/benches/json.rs) included in the repository running on
+my 8-core Ryzen 7 3700x.
 
-```
+```ignore
 test chumsky ... bench:   5,969,794 ns/iter (+/- 75,548)
 test pom     ... bench:  12,858,594 ns/iter (+/- 181,703)
 ```

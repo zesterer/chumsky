@@ -17,11 +17,11 @@ impl<I: Iterator> StreamExtend<I::Item> for I {
     }
 }
 
-/// A utility type used to flatten nested inputs.
+/// A utility type used to flatten input trees.
 pub enum Flat<I, Iter> {
-    /// The input flattens into a single value.
+    /// The input tree flattens into a single input.
     Single(I),
-    /// The input flattens into many sub-tokens.
+    /// The input tree flattens into many sub-trees.
     Many(Iter),
 }
 
@@ -36,8 +36,11 @@ pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn S
     pub(crate) iter: Iter,
 }
 
+/// A [`Stream`] that pulls tokens from a boxed [`Iterator`].
+pub type BoxStream<'a, I, S> = Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>>;
+
 impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
-    /// Create a new stream from an iterator of `(Token, Span)` tuples. A span representing the end of input must also
+    /// Create a new stream from an iterator of `(Token, Span)` pairs. A span representing the end of input must also
     /// be provided.
     ///
     /// There is no requirement that spans must map exactly to the position of inputs in the stream, but they should
@@ -67,9 +70,67 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
 impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>> {
     /// Create a new `Stream` from an iterator of nested tokens and a function that flattens them.
     ///
-    /// It's not uncommon for compilers to perform delimiter parsing during the lexing stage. When this is done, the
-    /// resulting token value is usually a nested tree of tokens. This functions allows you to flatten such token trees
-    /// such that they can be parsed by chumsky.
+    /// It's not uncommon for compilers to perform delimiter parsing during the lexing stage (rustc does this!). When
+    /// this is done, the output of the lexing stage is usually a series of nested token trees. This functions allows
+    /// you to easily flatten such token trees into a linear token stream so that they can be parsed by Chumsky.
+    ///
+    /// For reference, [here](https://docs.rs/syn/0.11.1/syn/enum.TokenTree.html) is `syn`'s `TokenTree` type that it
+    /// uses when parsing Rust syntax.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{Stream, BoxStream, Flat};
+    ///
+    /// type Span = std::ops::Range<usize>;
+    ///
+    /// #[derive(Clone)]
+    /// enum Token {
+    ///     Local(String),
+    ///     Int(i64),
+    ///     Bool(bool),
+    ///     Add,
+    ///     Sub,
+    ///     OpenParen,
+    ///     CloseParen,
+    ///     OpenBrace,
+    ///     CloseBrace,
+    ///     // etc.
+    /// }
+    ///
+    /// enum Delimiter {
+    ///     Paren,
+    ///     Brace,
+    /// }
+    ///
+    /// // The structure of this token tree is very similar to that which Rust uses.
+    /// // See: https://docs.rs/syn/0.11.1/syn/enum.TokenTree.html
+    /// enum TokenTree {
+    ///     Token(Token),
+    ///     Tree(Delimiter, Vec<(TokenTree, Span)>),
+    /// }
+    ///
+    /// fn flatten_tts(eoi: Span, token_trees: Vec<(TokenTree, Span)>) -> BoxStream<'static, Token, Span> {
+    ///     use std::iter::once;
+    ///     // Currently, this is quite an explicit process: it will likely become easier in subsequent versions of Chumsky.
+    ///     Stream::from_nested(
+    ///         eoi,
+    ///         token_trees.into_iter(),
+    ///         |(tt, span)| match tt {
+    ///             // For token trees that contain just a single token, no flattening needs to occur!
+    ///             TokenTree::Token(token) => Flat::Single((token, span)),
+    ///             // Flatten a parenthesised token tree into an iterator of the inner token trees, surrounded by parenthesis tokens
+    ///             TokenTree::Tree(Delimiter::Paren, tree) => Flat::Many(once((TokenTree::Token(Token::OpenParen), span.start..span.start + 1))
+    ///                 .chain(tree.into_iter())
+    ///                 .chain(once((TokenTree::Token(Token::CloseParen), span.end - 1..span.end)))),
+    ///             // Flatten a braced token tree into an iterator of the inner token trees, surrounded by brace tokens
+    ///             TokenTree::Tree(Delimiter::Brace, tree) => Flat::Many(once((TokenTree::Token(Token::OpenBrace), span.start..span.start + 1))
+    ///                 .chain(tree.into_iter())
+    ///                 .chain(once((TokenTree::Token(Token::CloseBrace), span.end - 1..span.end)))),
+    ///         }
+    ///     )
+    /// }
+    /// ```
     pub fn from_nested<
         P: 'a,
         Iter: Iterator<Item = (P, S)>,
@@ -147,6 +208,8 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
 }
 
 impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
+    /// Please note that Chumsky currently uses character indices and note byte offsets in this impl. This is likely to
+    /// change in the future. If you wish to use byte offsets, you can do so with [`Stream::from_iter`].
     fn from(s: &'a str) -> Self {
         let len = s.chars().count();
         Self::from_iter(len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))

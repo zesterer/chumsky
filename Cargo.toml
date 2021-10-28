@@ -1,6 +1,6 @@
 [package]
 name = "chumsky"
-version = "0.5.1-alpha"
+version = "0.4.0"
 description = "A friendly parser combinator crate"
 authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>"]
 repository = "https://github.com/zesterer/chumsky"
@@ -17,6 +17,7 @@ exclude = [
 default = ["ahash"]
 
 [dependencies]
+# Use `ahash` for maintaining sets of expected inputs
 ahash = { version = "^0.3", optional = true }
 
 [dev-dependencies]
@@ -24,4 +25,4 @@ ariadne = "0.1.2"
 pom = "3.0"
 
 [profile.bench]
-debug = true
+#debug = true

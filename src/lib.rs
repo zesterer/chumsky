@@ -31,7 +31,7 @@ pub use crate::{
 };
 
 pub use crate::{
-    stream::Stream,
+    stream::{Stream, BoxStream, Flat},
 };
 
 use crate::{
@@ -229,7 +229,7 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
-    /// Include this parser in the debugging output produced by [`Parser::parse_debug`].
+    /// Include this parser in the debugging output produced by [`Parser::parse_recovery_verbose`].
     ///
     /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
     /// your parser. Additionally, its API is quite likely to change in future versions.
@@ -648,10 +648,42 @@ pub trait Parser<I: Clone, O> {
     /// strategies at the location of your choice.
     ///
     /// Note that for implementation reasons, adding an error recovery strategy can cause a parser to 'over-commit',
-    /// missing potentially valid alternative parse routes (TODO: document this and explain why and how it happens).
+    /// missing potentially valid alternative parse routes (*TODO: document this and explain why and when it happens*).
     /// Rest assured that this case is generally quite rare and only happens for very loose, almost-ambiguous syntax.
     /// If you run into cases that you believe should parse but do not, try removing or moving recovery strategies to
     /// fix the problem.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    ///
+    /// #[derive(Debug, PartialEq)]
+    /// enum Expr {
+    ///     Error,
+    ///     Int(String),
+    ///     List(Vec<Expr>),
+    /// }
+    ///
+    /// let expr = recursive::<_, _, _, _, Simple<char>>(|expr| expr
+    ///     .separated_by(just(','))
+    ///     .delimited_by('[', ']')
+    ///     .map(Expr::List)
+    ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
+    ///     .recover_with(nested_delimiters('[', ']', [], || Expr::Error))
+    ///     .or(text::int(10).map(Expr::Int))
+    ///     .padded());
+    ///
+    /// assert!(expr.parse("five").is_err()); // Text is not a valid expression in this language...
+    /// assert!(expr.parse("[1, 2, 3]").is_ok()); // ...but lists and numbers are!
+    ///
+    /// // This input has two syntax errors...
+    /// let (ast, errors) = expr.parse_recovery("[[1, two], [3, four]]");
+    /// // ...and error recovery allows us to catch both of them!
+    /// assert_eq!(errors.len(), 2);
+    /// // Additionally, the AST we get back still has useful information.
+    /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
+    /// ```
     fn recover_with<S: Strategy<I, O>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
         Recovery(self, strategy)
     }
@@ -709,7 +741,7 @@ pub trait Parser<I: Clone, O> {
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let shopping = text::ident()
+    /// let shopping = text::ident::<_, Simple<char>>()
     ///     .padded()
     ///     .separated_by(just(','));
     ///

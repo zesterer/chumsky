@@ -6,7 +6,7 @@ use std::ops::Range;
 /// permitted to overlap one-another. The end offset must always be greater than or equal to the end offset.
 pub trait Span: Clone {
     /// The context that comes packaged with a span. This is usually some way to uniquely identity the source file that
-    /// a span originated in. However, it has no inherent meaning to the parser and can be anything. [`Range<usize>`]'s
+    /// a span originated in. However, it has no inherent meaning to Chumsky and can be anything. [`Range<usize>`]'s
     /// implementation of [`Span`] simply has a context of `()`.
     type Context: Clone;
 
