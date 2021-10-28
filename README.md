@@ -9,7 +9,7 @@ A friendly parser combinator crate that makes writing [LL(k)](https://en.wikiped
 error recovery and partial parsing easy.
 
 <a href = "https://www.github.com/zesterer/tao">
-    <img src="misc/example.png" alt="Example usage with my own language, Tao"/>
+    <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
 </a>
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
