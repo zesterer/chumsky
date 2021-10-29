@@ -485,7 +485,7 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, (O, Vec<U>), Error = E>, U, F: Fn(O, U) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
+impl<I: Clone, O, A: Parser<I, (O, U), Error = E>, U: IntoIterator, F: Fn(O, U::Item) -> O, E: Error<I>> Parser<I, O> for Foldl<A, F, O, U> {
     type Error = E;
 
     #[inline]
@@ -508,7 +508,9 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
     fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone(), PhantomData) }
 }
 
-impl<I: Clone, O, A: Parser<I, (Vec<O>, U), Error = E>, U, F: Fn(O, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U> {
+impl<I: Clone, O: IntoIterator, A: Parser<I, (O, U), Error = E>, U, F: Fn(O::Item, U) -> U, E: Error<I>> Parser<I, U> for Foldr<A, F, O, U>
+    where O::IntoIter: DoubleEndedIterator,
+{
     type Error = E;
 
     #[inline]

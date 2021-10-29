@@ -63,15 +63,15 @@ Other examples include:
 ## *What* a parser combinator?
 
 Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
-parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy for transforming a
-stream of tokens into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
+parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy to transform a stream
+of tokens into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
 [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait to define iterative algorithms: the
 type-driven API of `Iterator` makes it more difficult to make mistakes and easier to encode complicated iteration logic
 than if one were to write the same code by hand. The same is true of parser combinators.
 
 ## *Why* use parser combinators?
 
-Writing parsers with good error recovery is conceptually difficult and time-consuming. It requires understand the
+Writing parsers with good error recovery is conceptually difficult and time-consuming. It requires understanding the
 intricacies of the recursive descent algorithm, and then implementing recovery strategies on top of it. If you're
 developing a programming language, you'll almost certainly change your mind about syntax in the process, leading to some
 slow and painful parser refactoring. Parser combinators solve both problems by providing an ergonomic API that allows
@@ -110,9 +110,9 @@ Chumsky focuses on high-quality errors and ergonomics over performance. That sai
 up with the rest of your compiler! Unfortunately, it's *extremely* difficult to come up with sensible benchmarks given
 that exactly how Chumsky performs depends entirely on what you are parsing, how you structure your parser, which
 patterns the parser attempts to match first, how complex your error type is, what is involved in constructing your AST,
-etc. All that said, here are some numbers from the the
+etc. All that said, here are some numbers from the
 [JSON benchmark](https://github.com/zesterer/chumsky/blob/master/benches/json.rs) included in the repository running on
-my 8-core Ryzen 7 3700x.
+my Ryzen 7 3700x.
 
 ```ignore
 test chumsky ... bench:   5,969,794 ns/iter (+/- 75,548)

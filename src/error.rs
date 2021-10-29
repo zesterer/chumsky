@@ -46,7 +46,7 @@ pub trait Error<I>: Sized {
     fn merge(self, other: Self) -> Self;
 }
 
-/// A simple default input pattern that allows describing inputs and input patterns in error messages.
+// /// A simple default input pattern that allows describing inputs and input patterns in error messages.
 // #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 // pub enum SimplePattern<I> {
 //     /// A pattern with the given name was expected.
@@ -68,7 +68,7 @@ pub trait Error<I>: Sized {
 //     }
 // }
 
-/// A type representing possible reasons for an error
+/// A type representing possible reasons for an error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimpleReason<I, S> {
     /// An unexpected input was found.

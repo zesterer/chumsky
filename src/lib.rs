@@ -215,7 +215,7 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse a stream of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
-    /// If you wish to attempt to produce an output even if errors are encountered, use `Parser::parse_recovery`.
+    /// If you wish to attempt to produce an output even if errors are encountered, use [`Parser::parse_recovery`].
     fn parse<
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
@@ -238,7 +238,7 @@ pub trait Parser<I: Clone, O> {
         Debug(self, Rc::new(x), *std::panic::Location::caller())
     }
 
-    /// Map the output of this parser to aanother value.
+    /// Map the output of this parser to another value.
     ///
     /// # Examples
     ///
@@ -267,7 +267,7 @@ pub trait Parser<I: Clone, O> {
 
     /// Map the output of this parser to another value, making use of the pattern's overall span.
     ///
-    /// This is very useful when generating an AST but you need to know what span to give each AST node.
+    /// This is very useful when generating an AST that attaches a span to each AST node.
     fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
         where Self: Sized
     { MapWithSpan(self, f, PhantomData) }
@@ -351,7 +351,9 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn to<U: Clone>(self, x: U) -> To<Self, O, U> where Self: Sized { To(self, x, PhantomData) }
 
-    /// Left-fold the output of the parser into a single value, where the output is of type `(_, Vec<_>)`.
+    /// Left-fold the output of the parser into a single value.
+    ///
+    /// The output of the original parser must be of type `(A, impl IntoIterator<Item = B>)`.
     ///
     /// # Examples
     ///
@@ -368,12 +370,16 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
     /// assert_eq!(sum.parse("6"), Ok(6));
     /// ```
-    fn foldl<A, B, F: Fn(A, B) -> A>(self, f: F) -> Foldl<Self, F, A, B>
+    fn foldl<A, B, F: Fn(A, B::Item) -> A>(self, f: F) -> Foldl<Self, F, A, B>
     where
-        Self: Parser<I, (A, Vec<B>)> + Sized
+        Self: Parser<I, (A, B)> + Sized,
+        B: IntoIterator,
     { Foldl(self, f, PhantomData) }
 
-    /// Right-fold the output of the parser into a single value, where the output is of type `(Vec<_>, _)`.
+    /// Right-fold the output of the parser into a single value.
+    ///
+    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
+    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
     ///
     /// # Examples
     ///
@@ -393,9 +399,11 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(signed.parse("-17"), Ok(-17));
     /// assert_eq!(signed.parse("--+-+-5"), Ok(5));
     /// ```
-    fn foldr<'a, A, B, F: Fn(A, B) -> B + 'a>(self, f: F) -> Foldr<Self, F, A, B>
+    fn foldr<'a, A, B, F: Fn(A::Item, B) -> B + 'a>(self, f: F) -> Foldr<Self, F, A, B>
     where
-        Self: Parser<I, (Vec<A>, B)> + Sized
+        Self: Parser<I, (A, B)> + Sized,
+        A: IntoIterator,
+        A::IntoIter: DoubleEndedIterator,
     { Foldr(self, f, PhantomData) }
 
     /// Ignore the output of this parser, yielding `()` as an output instead.
@@ -712,7 +720,7 @@ pub trait Parser<I: Clone, O> {
     /// Parse an expression any number of times (including zero times).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
-    /// [`Parser::repeated().at_least`] instead if it better suits your use-case.
+    /// [`Repeated::at_least`] instead if it better suits your use-case.
     ///
     /// # Examples
     ///
