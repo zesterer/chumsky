@@ -409,9 +409,9 @@ pub trait Parser<I: Clone, O> {
     /// Ignore the output of this parser, yielding `()` as an output instead.
     ///
     /// This can be used to reduce the cost of parsing by avoiding unnecessary allocations (most collections containing
-    /// [ZSTs](https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts) do
-    /// [not allocate](https://doc.rust-lang.org/std/vec/struct.Vec.html#guarantees)). For example, it's common to want
-    /// to ignore whitespace in many grammars.
+    /// [ZSTs](https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts)
+    /// [do not allocate](https://doc.rust-lang.org/std/vec/struct.Vec.html#guarantees)). For example, it's common to
+    /// want to ignore whitespace in many grammars (see [`text::whitespace`]).
     ///
     /// # Examples
     ///
@@ -428,21 +428,23 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn ignored(self) -> Ignored<Self, O> where Self: Sized { To(self, (), PhantomData) }
 
-    /// Collect the output of this parser into a collection.
+    /// Collect the output of this parser into a type implementing [`FromIterator`].
     ///
-    /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s.
+    /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
+    /// [`HashMap`] and is analagous to [`Iterator::collect`].
     ///
     /// # Examples
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
     ///
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated()
-    ///     .collect::<String>();
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    ///     .repeated() // This parser produces an output of `Vec<char>`
+    ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
     ///
     /// assert_eq!(word.parse("hello"), Ok("hello".to_string()));
     /// ```
+    // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
     fn collect<C: core::iter::FromIterator<O::Item>>(self) -> Map<Self, fn(O) -> C, O>
         where Self: Sized, O: IntoIterator
     { self.map(|items| C::from_iter(items.into_iter())) }
@@ -692,7 +694,7 @@ pub trait Parser<I: Clone, O> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<S: Strategy<I, O>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
+    fn recover_with<S: Strategy<I, O, Self::Error>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
         Recovery(self, strategy)
     }
 

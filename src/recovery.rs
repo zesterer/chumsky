@@ -1,9 +1,9 @@
 use super::*;
 
 /// A trait implemented by error recovery strategies.
-pub trait Strategy<I: Clone, O> {
+pub trait Strategy<I: Clone, O, E: Error<I>> {
     /// Recover from a parsing failure.
-    fn recover<D: Debugger, P: Parser<I, O>>(
+    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
         recovered_errors: Vec<Located<I, P::Error>>,
         fatal_error: Located<I, P::Error>,
@@ -17,8 +17,8 @@ pub trait Strategy<I: Clone, O> {
 #[derive(Copy, Clone)]
 pub struct SkipThenRetryUntil<I, const N: usize>(pub [I; N]);
 
-impl<I: Clone + PartialEq, O, const N: usize> Strategy<I, O> for SkipThenRetryUntil<I, N> {
-    fn recover<D: Debugger, P: Parser<I, O>>(
+impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E> for SkipThenRetryUntil<I, N> {
+    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
         a_errors: Vec<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
@@ -57,8 +57,8 @@ pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryU
 #[derive(Copy, Clone)]
 pub struct NestedDelimiters<I, F, const N: usize>(pub I, pub I, pub [(I, I); N], pub F);
 
-impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for NestedDelimiters<I, F, N> {
-    fn recover<D: Debugger, P: Parser<I, O>>(
+impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E> for NestedDelimiters<I, F, N> {
+    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
         mut a_errors: Vec<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
@@ -70,8 +70,8 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
         let mut balance_others = [0; N];
         let mut starts = Vec::new();
         let mut error = None;
+        let pre_state = stream.save();
         let recovered = loop {
-            // let pre_state = stream.save();
             if match stream.next() {
                 (_, span, Some(t)) if t == self.0 => { balance += 1; starts.push(span); true },
                 (_, _, Some(t)) if t == self.1 => { balance -= 1; starts.pop(); true },
@@ -118,7 +118,7 @@ impl<I: Clone + PartialEq, O, F: Fn() -> O, const N: usize> Strategy<I, O> for N
             if a_errors.last().map_or(true, |e| a_err.at < e.at) {
                 a_errors.push(a_err);
             }
-            (a_errors, Ok(((self.3)(), None)))
+            (a_errors, Ok(((self.3)(stream.span_since(pre_state)), None)))
         } else {
             (a_errors, Err(a_err))
         }
@@ -141,7 +141,7 @@ pub fn nested_delimiters<I: PartialEq, F, const N: usize>(start: I, end: I, othe
 #[derive(Copy, Clone)]
 pub struct Recovery<A, S>(pub(crate) A, pub(crate) S);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O>, E: Error<I>> Parser<I, O> for Recovery<A, S> {
+impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, E: Error<I>> Parser<I, O> for Recovery<A, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
