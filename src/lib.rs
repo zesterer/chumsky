@@ -680,7 +680,7 @@ pub trait Parser<I: Clone, O> {
     ///     .delimited_by('[', ']')
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(nested_delimiters('[', ']', [], || Expr::Error))
+    ///     .recover_with(nested_delimiters('[', ']', [], |_| Expr::Error))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///
