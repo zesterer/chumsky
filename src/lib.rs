@@ -775,6 +775,10 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Boxing a parser might be useful for:
     ///
+    /// - Dynamically building up parsers at runtime
+    ///
+    /// - Improving compilation times (Rust can struggle to compile code containing very long times)
+    ///
     /// - Passing a parser over an FFI boundary
     ///
     /// - Getting around compiler implementation problems with long types such as
