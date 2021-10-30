@@ -202,10 +202,9 @@ impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, 
         // TODO: Take `self.reason` into account
 
         if let Some(found) = &self.found {
-            write!(f, "found '{}' ", found)?;
-            write!(f, "at {} ", self.span)?;
+            write!(f, "found '{}' at {} ", found, self.span)?;
         } else {
-            write!(f, "the input ended ")?;
+            write!(f, "found end of input ")?;
         }
 
 

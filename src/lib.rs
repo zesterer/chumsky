@@ -58,7 +58,7 @@ pub mod prelude {
         error::{Error as _, Simple},
         text::TextParser as _,
         span::Span as _,
-        primitive::{any, end, filter, filter_map, just, one_of, none_of, seq},
+        primitive::{any, end, filter, filter_map, just, one_of, none_of, seq, take_until},
         recovery::{skip_then_retry_until, nested_delimiters},
         recursive::recursive,
         text,
@@ -244,7 +244,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
@@ -287,7 +286,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let byte = text::int::<_, Simple<char>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
@@ -315,7 +313,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let frac = text::digits(10)
     ///     .chain(just('.'))
     ///     .chain::<char, _, _>(text::digits(10))
@@ -337,7 +334,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
@@ -359,7 +355,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let int = text::int::<char, Cheap<char>>(10)
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -385,7 +380,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let int = text::int::<char, Cheap<char>>(10)
     ///     .map(|s| s.parse().unwrap());
     ///
@@ -417,7 +411,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// // A parser that parses any number of whitespace characters without allocating
     /// let whitespace = filter::<_, _, Cheap<char>>(|c: &char| c.is_whitespace())
     ///     .ignored()
@@ -437,7 +430,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
     ///     .repeated() // This parser produces an output of `Vec<char>`
     ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
@@ -455,7 +447,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
@@ -472,7 +463,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let int = just('-').or_not()
     ///     .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
     ///         .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit()).repeated()))
@@ -517,7 +507,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let zeroes = filter::<_, _, Cheap<char>>(|c: &char| *c == '0').ignored().repeated();
     /// let digits = filter(|c: &char| c.is_ascii_digit()).repeated();
     /// let integer = zeroes
@@ -538,7 +527,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
@@ -570,7 +558,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let ident = text::ident::<_, Simple<char>>()
     ///     .padded_by(just('!'));
     ///
@@ -583,15 +570,12 @@ pub trait Parser<I: Clone, O> {
         where Self: Sized
     { other.clone().ignore_then(self).then_ignore(other) }
 
-    // fn then_catch(self, end: I) -> ThenCatch<Self, I> where Self: Sized { ThenCatch(self, end) }
-
     /// Parse the pattern surrounded by the given delimiters.
     ///
     /// # Examples
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// // A LISP-style S-expression
     /// #[derive(Debug, PartialEq)]
     /// enum SExpr {
@@ -640,7 +624,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let op = just::<_, Cheap<char>>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
@@ -667,7 +650,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// #[derive(Debug, PartialEq)]
     /// enum Expr {
     ///     Error,
@@ -706,7 +688,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
@@ -728,7 +709,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
@@ -750,7 +730,6 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    ///
     /// let shopping = text::ident::<_, Simple<char>>()
     ///     .padded()
     ///     .separated_by(just(','));

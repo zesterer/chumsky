@@ -273,7 +273,6 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
     /// let r#enum = seq::<_, _, Simple<char>>("enum".chars())
     ///     .padded()
     ///     .ignore_then(text::ident()
@@ -299,7 +298,6 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
     /// let numbers = text::int::<_, Simple<char>>(10)
     ///     .padded()
     ///     .separated_by(just(','))

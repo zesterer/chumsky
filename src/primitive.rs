@@ -52,7 +52,6 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// assert_eq!(end::<Cheap<char>>().parse(""), Ok(()));
 /// assert!(end::<Cheap<char>>().parse("hello").is_err());
 /// ```
@@ -88,7 +87,6 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let question = just::<_, Cheap<char>>('?');
 ///
 /// assert_eq!(question.parse("?"), Ok('?'));
@@ -133,7 +131,6 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let hello = seq::<_, _, Cheap<char>>("Hello".chars());
 ///
 /// assert_eq!(hello.parse("Hello"), Ok(()));
@@ -177,7 +174,6 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let digits = one_of::<_, _, Cheap<char>>("0123456789".chars())
 ///     .repeated().at_least(1)
 ///     .then_ignore(end())
@@ -240,7 +236,6 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let string = one_of::<_, _, Cheap<char>>("\"'".chars())
 ///     .ignore_then(none_of("\"'".chars()).repeated())
 ///     .then_ignore(one_of("\"'".chars()))
@@ -253,6 +248,73 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
 /// ```
 pub fn none_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> NoneOf<I, E> {
     NoneOf(xs.into_iter().collect(), PhantomData)
+}
+
+/// See [`take_until`].
+#[derive(Copy, Clone)]
+pub struct TakeUntil<A>(A);
+
+impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
+    type Error = A::Error;
+
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> {
+        let mut outputs = Vec::new();
+        let mut alt = None;
+
+        loop {
+            let (errors, err) = match stream.try_parse(|stream| { #[allow(deprecated)] self.0.parse_inner(debugger, stream) }) {
+                (errors, Ok((out, a_alt))) => break (errors, Ok(((outputs, out), merge_alts(alt, a_alt)))),
+                (errors, Err(err)) => (errors, err),
+            };
+
+            match stream.next() {
+                (_, _, Some(tok)) => outputs.push(tok),
+                (_, _, None) => break (errors, Err(err)),
+            }
+
+            alt = merge_alts(alt.take(), Some(err));
+        }
+    }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+}
+
+/// A parser that accepts any number of inputs until a terminating pattern is reached.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let single_line = seq::<_, _, Simple<char>>("//".chars())
+///     .then_ignore(take_until(text::newline()));
+///
+/// let multi_line = seq::<_, _, Simple<char>>("/*".chars())
+///     .then_ignore(take_until(seq("*/".chars())));
+///
+/// let comment = single_line.or(multi_line);
+///
+/// let tokens = text::ident()
+///     .padded()
+///     .padded_by(comment
+///         .padded()
+///         .repeated())
+///     .repeated();
+///
+/// assert_eq!(tokens.parse(r#"
+///     // These tokens...
+///     these are
+///     /*
+///         ...have some
+///         multi-line...
+///     */
+///     // ...and single-line...
+///     tokens
+///     // ...comments between them
+/// "#), Ok(vec!["these".to_string(), "are".to_string(), "tokens".to_string()]));
+/// ```
+pub fn take_until<A>(until: A) -> TakeUntil<A> {
+    TakeUntil(until)
 }
 
 /// See [`filter`].
@@ -283,7 +345,6 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let lowercase = filter::<_, _, Cheap<char>>(char::is_ascii_lowercase)
 ///     .repeated().at_least(1)
 ///     .then_ignore(end())
@@ -384,7 +445,6 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-///
 /// let any = any::<char, Cheap<char>>();
 ///
 /// assert_eq!(any.parse("a"), Ok('a'));

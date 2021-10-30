@@ -65,7 +65,7 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
     }
 }
 
-impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)> + 'a>> {
+impl<'a, I: Clone, S: Span + 'a> BoxStream<'a, I, S> {
     /// Create a new `Stream` from an iterator of nested tokens and a function that flattens them.
     ///
     /// It's not uncommon for compilers to perform delimiter parsing during the lexing stage (rustc does this!). When
@@ -79,8 +79,9 @@ impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)
     ///
     /// ```
     /// # use chumsky::{Stream, BoxStream, Flat};
-    ///
     /// type Span = std::ops::Range<usize>;
+    ///
+    /// fn span_at(at: usize) -> Span { at..at + 1 }
     ///
     /// #[derive(Clone)]
     /// enum Token {
@@ -118,13 +119,13 @@ impl<'a, I: Clone, S: Span + 'a> Stream<'a, I, S, Box<dyn Iterator<Item = (I, S)
     ///             // For token trees that contain just a single token, no flattening needs to occur!
     ///             TokenTree::Token(token) => Flat::Single((token, span)),
     ///             // Flatten a parenthesised token tree into an iterator of the inner token trees, surrounded by parenthesis tokens
-    ///             TokenTree::Tree(Delimiter::Paren, tree) => Flat::Many(once((TokenTree::Token(Token::OpenParen), span.start..span.start + 1))
+    ///             TokenTree::Tree(Delimiter::Paren, tree) => Flat::Many(once((TokenTree::Token(Token::OpenParen), span_at(span.start)))
     ///                 .chain(tree.into_iter())
-    ///                 .chain(once((TokenTree::Token(Token::CloseParen), span.end - 1..span.end)))),
+    ///                 .chain(once((TokenTree::Token(Token::CloseParen), span_at(span.end - 1))))),
     ///             // Flatten a braced token tree into an iterator of the inner token trees, surrounded by brace tokens
-    ///             TokenTree::Tree(Delimiter::Brace, tree) => Flat::Many(once((TokenTree::Token(Token::OpenBrace), span.start..span.start + 1))
+    ///             TokenTree::Tree(Delimiter::Brace, tree) => Flat::Many(once((TokenTree::Token(Token::OpenBrace), span_at(span.start)))
     ///                 .chain(tree.into_iter())
-    ///                 .chain(once((TokenTree::Token(Token::CloseBrace), span.end - 1..span.end)))),
+    ///                 .chain(once((TokenTree::Token(Token::CloseBrace), span_at(span.end - 1))))),
     ///         }
     ///     )
     /// }
