@@ -14,6 +14,54 @@ type RandomState = std::collections::hash_set::RandomState;
 /// If you have a custom error type in your compiler, or your needs are not sufficiently met by [`Simple`], you should
 /// implement this trait. If your error type has 'extra' features that allow for more specific error messages, you can
 /// use the [`Parser::map_err`] or [`Parser::try_map`] functions to take advantage of these inline within your parser.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// type Span = std::ops::Range<usize>;
+///
+/// // A custom error type
+/// #[derive(Debug, PartialEq)]
+/// enum MyError {
+///     ExpectedFound(Span, Vec<char>, Option<char>),
+///     NotADigit(Span, char),
+/// }
+///
+/// impl chumsky::Error<char> for MyError {
+///     type Span = Span;
+///     type Label = ();
+///
+///     fn expected_input_found<Iter: IntoIterator<Item = char>>(
+///         span: Span,
+///         expected: Iter,
+///         found: Option<char>,
+///     ) -> Self {
+///         Self::ExpectedFound(span, expected.into_iter().collect(), found)
+///     }
+///
+///     fn with_label(mut self, label: Self::Label) -> Self { self }
+///
+///     fn merge(mut self, mut other: Self) -> Self {
+///         if let (Self::ExpectedFound(_, expected, _), Self::ExpectedFound(_, expected_other, _)) = (
+///             &mut self,
+///             &mut other,
+///         ) {
+///             expected.append(expected_other);
+///         }
+///         self
+///     }
+/// }
+///
+/// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
+///     Some(x) => Ok(x),
+///     None => Err(MyError::NotADigit(span, c)),
+/// });
+///
+/// assert_eq!(numeral.parse("3"), Ok(3));
+/// assert_eq!(numeral.parse("7"), Ok(7));
+/// assert_eq!(numeral.parse("f"), Err(vec![MyError::NotADigit(0..1, 'f')]));
+/// ```
 pub trait Error<I>: Sized {
     /// The type of spans to be used in the error.
     type Span: Span; // TODO: Default to = Range<usize>;
@@ -34,7 +82,10 @@ pub trait Error<I>: Sized {
     /// Provided to this function is the span of the unclosed delimiter, the delimiter itself, the span of the input
     /// that was found in its place, the closing delimiter that was expected but not found, and the input that was
     /// found in its place.
-    fn unclosed_delimiter(start_span: Self::Span, start: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+    ///
+    /// The default implementation of this function uses [`Error::expected_input_found`], but you'll probably want to
+    /// implement it yourself to take full advantage of the extra diagnostic information.
+    fn unclosed_delimiter(unclosed_span: Self::Span, unclosed: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
         #![allow(unused_variables)]
         Self::expected_input_found(span, Some(expected), found)
     }
@@ -166,10 +217,10 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
         }
     }
 
-    fn unclosed_delimiter(start_span: Self::Span, delimiter: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+    fn unclosed_delimiter(unclosed_span: Self::Span, delimiter: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
         Self {
             span,
-            reason: SimpleReason::Unclosed { span: start_span, delimiter },
+            reason: SimpleReason::Unclosed { span: unclosed_span, delimiter },
             expected: std::iter::once(expected).collect(),
             found,
             label: None,

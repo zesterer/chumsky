@@ -390,48 +390,14 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// use std::ops::Range;
-///
-/// // A custom error type
-/// #[derive(Debug, PartialEq)]
-/// enum Custom {
-///     ExpectedFound(Range<usize>, Vec<char>, Option<char>),
-///     NotADigit(Range<usize>, char),
-/// }
-///
-/// impl chumsky::Error<char> for Custom {
-///     type Span = Range<usize>;
-///     type Label = ();
-///
-///     fn expected_input_found<Iter: IntoIterator<Item = char>>(
-///         span: Range<usize>,
-///         expected: Iter,
-///         found: Option<char>,
-///     ) -> Self {
-///         Self::ExpectedFound(span, expected.into_iter().collect(), found)
-///     }
-///
-///     fn with_label(mut self, label: Self::Label) -> Self { self }
-///
-///     fn merge(mut self, mut other: Self) -> Self {
-///         if let (Self::ExpectedFound(_, expected, _), Self::ExpectedFound(_, expected_other, _)) = (
-///             &mut self,
-///             &mut other,
-///         ) {
-///             expected.append(expected_other);
-///         }
-///         self
-///     }
-/// }
-///
 /// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
-///     None => Err(Custom::NotADigit(span, c)),
+///     None => Err(Simple::custom(span, format!("'{}' is not a digit", c))),
 /// });
 ///
 /// assert_eq!(numeral.parse("3"), Ok(3));
 /// assert_eq!(numeral.parse("7"), Ok(7));
-/// assert_eq!(numeral.parse("f"), Err(vec![Custom::NotADigit(0..1, 'f')]));
+/// assert_eq!(numeral.parse("f"), Err(vec![Simple::custom(0..1, "'f' is not a digit")]));
 /// ```
 pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
     FilterMap(f, PhantomData)
