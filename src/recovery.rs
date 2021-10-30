@@ -15,7 +15,7 @@ pub trait Strategy<I: Clone, O, E: Error<I>> {
 
 /// See [`skip_then_retry_until`].
 #[derive(Copy, Clone)]
-pub struct SkipThenRetryUntil<I, const N: usize>(pub [I; N]);
+pub struct SkipThenRetryUntil<I, const N: usize>(pub(crate) [I; N]);
 
 impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E> for SkipThenRetryUntil<I, N> {
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
@@ -55,7 +55,7 @@ pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryU
 
 /// See [`nested_delimiters`].
 #[derive(Copy, Clone)]
-pub struct NestedDelimiters<I, F, const N: usize>(pub I, pub I, pub [(I, I); N], pub F);
+pub struct NestedDelimiters<I, F, const N: usize>(pub(crate) I, pub(crate) I, pub(crate) [(I, I); N], pub(crate) F);
 
 impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E> for NestedDelimiters<I, F, N> {
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(

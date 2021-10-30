@@ -19,8 +19,9 @@ impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> P
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
-/// A parser primitive that allows you to define your own custom parsers. In theory, you shouldn't need to use this
-/// unless you have particularly bizarre requirements.
+/// A parser primitive that allows you to define your own custom parsers. In theory you shouldn't need to use this
+/// unless you have particularly bizarre requirements, but it's a cleaner and more sustainable alternative to
+/// implementing [`Parser`] by hand.
 pub fn custom<F, E>(f: F) -> Custom<F, E> {
     Custom(f, PhantomData)
 }

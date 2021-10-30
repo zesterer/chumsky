@@ -10,6 +10,10 @@ type RandomState = ahash::RandomState;
 type RandomState = std::collections::hash_set::RandomState;
 
 /// A trait that describes parser error types.
+///
+/// If you have a custom error type in your compiler, or your needs are not sufficiently met by [`Simple`], you should
+/// implement this trait. If your error type has 'extra' features that allow for more specific error messages, you can
+/// use the [`Parser::map_err`] or [`Parser::try_map`] functions to take advantage of these inline within your parser.
 pub trait Error<I>: Sized {
     /// The type of spans to be used in the error.
     type Span: Span; // TODO: Default to = Range<usize>;
@@ -84,7 +88,10 @@ pub enum SimpleReason<I, S> {
     Custom(String),
 }
 
-/// A simple default error type that tracks error spans, expected patterns, and the input found at an error site.
+/// A simple default error type that tracks error spans, expected inputs, and the actual input found at an error site.
+///
+/// Please note that it uses a [`HashSet`] to remember expected symbols. If you find this to be too slow, you can
+/// implement [`Error`] for your own error type or use [`Cheap`] instead.
 #[derive(Clone, Debug)]
 pub struct Simple<I: Hash, S = Range<usize>> {
     span: S,

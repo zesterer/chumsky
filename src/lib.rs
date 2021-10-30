@@ -167,6 +167,11 @@ fn parse_recovery_inner<
 /// may encounter errors. These need not be fatal to the parsing process: syntactic errors can be recovered from and a
 /// valid output may still be generated alongside any syntax errors that were encountered along the way. Usually, this
 /// output comes in the form of an [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
+///
+/// You should not need to implement this trait by hand. If you cannot combine existing combintors (and in particular
+/// [`custom`]) to create the combinator you're looking for, please
+/// [open an issue](https://github.com/zesterer/chumsky/issues/new)! If you *really* need to implement this trait,
+/// please check the documentation in the source: some implementation details have been deliberately hidden.
 pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
     type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
@@ -176,24 +181,30 @@ pub trait Parser<I: Clone, O> {
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
     /// covers your use-case.
+    #[doc(hidden)]
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> where Self: Sized;
 
     /// [`Parser::parse_inner`], but specialised for verbose output. Do not call this method directly.
     ///
     /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
+    #[doc(hidden)]
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
 
     /// [`Parser::parse_inner`], but specialised for silent output. Do not call this method directly.
     ///
     /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
+    #[doc(hidden)]
     #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
-    /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
+    /// If you don't care about producing an output if errors are encountered, use [`Parser::parse`] instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[I]`], a [`&str`], or a [`Stream`] to it.
     fn parse_recovery<
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
@@ -206,6 +217,9 @@ pub trait Parser<I: Clone, O> {
     /// [`Parser::parse_recovery`], this function will produce verbose debugging output as it executes.
     ///
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[I]`], a [`&str`], or a [`Stream`] to it.
     ///
     /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
     /// your parser. Additionally, its API is quite likely to change in future versions.
@@ -223,6 +237,9 @@ pub trait Parser<I: Clone, O> {
     /// Parse a stream of tokens, yielding an output *or* any errors that were encountered along the way.
     ///
     /// If you wish to attempt to produce an output even if errors are encountered, use [`Parser::parse_recovery`].
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[I]`], a [`&str`], or a [`Stream`] to it.
     fn parse<
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,

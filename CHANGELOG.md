@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.5.0] - 2021-10-30
+
+### Added
+
+- `take_until` primitive
+
+### Changed
+
+- Added span to fallback output function in `nested_delimiters`
+
 # [0.4.0] - 2021-10-28
 
 ### Added
