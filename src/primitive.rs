@@ -287,10 +287,10 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
 /// let single_line = seq::<_, _, Simple<char>>("//".chars())
-///     .then_ignore(take_until(text::newline()));
+///     .then(take_until(text::newline()));
 ///
 /// let multi_line = seq::<_, _, Simple<char>>("/*".chars())
-///     .then_ignore(take_until(seq("*/".chars())));
+///     .then(take_until(seq("*/".chars())));
 ///
 /// let comment = single_line.or(multi_line);
 ///

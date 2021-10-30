@@ -52,6 +52,13 @@ use std::{
     fmt,
 };
 
+#[cfg(doc)]
+use std::{
+    collections::HashMap,
+    // TODO: Remove when switching to 2021 edition
+    iter::FromIterator,
+};
+
 /// Commonly used functions, traits and types.
 pub mod prelude {
     pub use super::{
