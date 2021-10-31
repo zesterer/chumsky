@@ -1,11 +1,8 @@
 use super::*;
 
-/// A helper trait for [`Stream`]. There is no need to implement this trait yourself, nor do you need to care about its
-/// existence. It is marked as 'deprecated' to discourage its use and to indicate that it is not part of the crate's
-/// semver guarantees.
-#[deprecated(note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-pub trait StreamExtend<T>: Iterator<Item = T> {
-    /// Extend the vector with input. The actual amount can be more or less than `n`.
+trait StreamExtend<T>: Iterator<Item = T> {
+    /// Extend the vector with input. The actual amount can be more or less than `n`, but must be at least 1 (0 implies
+    /// that the stream has been exhausted.
     fn extend(&mut self, v: &mut Vec<T>, n: usize);
 }
 
@@ -28,7 +25,7 @@ pub enum Flat<I, Iter> {
 /// A type that represents a stream of input tokens. Unlike [`Iterator`], this type supports backtracking and a few
 /// other features required by the crate.
 #[allow(deprecated)]
-pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn StreamExtend<(I, S)> + 'a> {
+pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn Iterator<Item = (I, S)> + 'a> {
     pub(crate) phantom: PhantomData<&'a ()>,
     pub(crate) eoi: S,
     pub(crate) offset: usize,
@@ -165,7 +162,7 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     fn pull_until(&mut self, offset: usize) -> Option<&(I, S)> {
         let additional = offset.saturating_sub(self.buffer.len()) + 1024;
         #[allow(deprecated)]
-        self.iter.extend(&mut self.buffer, additional);
+        (&mut &mut self.iter as &mut dyn StreamExtend<_>).extend(&mut self.buffer, additional);
         self.buffer.get(offset)
     }
 
