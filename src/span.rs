@@ -3,7 +3,7 @@ use std::ops::Range;
 /// A trait that describes a span over a particular range of inputs.
 ///
 /// Spans typically consist of some context, such as the file they originated from, and a start/end offset. Spans are
-/// permitted to overlap one-another. The end offset must always be greater than or equal to the end offset.
+/// permitted to overlap one-another. The end offset must always be greater than or equal to the start offset.
 ///
 /// Span is automatically implemented for [`Range<T>`] and [`(C, Range<T>)`].
 pub trait Span: Clone {
