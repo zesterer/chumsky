@@ -35,6 +35,47 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
 ///
 /// The given function must create the parser. The parser must not be used to parse input before this function returns.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Debug, PartialEq)]
+/// enum Tree {
+///     Leaf(String),
+///     Branch(Vec<Tree>),
+/// }
+///
+/// // Parser that recursively parses nested lists
+/// let tree = recursive::<_, _, _, _, Simple<char>>(|tree| tree
+///     .separated_by(just(','))
+///     .delimited_by('[', ']')
+///     .map(Tree::Branch)
+///     .or(text::ident().map(Tree::Leaf))
+///     .padded());
+///
+/// assert_eq!(tree.parse("hello"), Ok(Tree::Leaf("hello".to_string())));
+/// assert_eq!(tree.parse("[a, b, c]"), Ok(Tree::Branch(vec![
+///     Tree::Leaf("a".to_string()),
+///     Tree::Leaf("b".to_string()),
+///     Tree::Leaf("c".to_string()),
+/// ])));
+/// // The parser can deal with arbitrarily complex nested lists
+/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]"), Ok(Tree::Branch(vec![
+///     Tree::Branch(vec![
+///         Tree::Leaf("a".to_string()),
+///         Tree::Leaf("b".to_string()),
+///     ]),
+///     Tree::Leaf("c".to_string()),
+///     Tree::Branch(vec![
+///         Tree::Leaf("d".to_string()),
+///         Tree::Branch(vec![
+///             Tree::Leaf("e".to_string()),
+///             Tree::Leaf("f".to_string()),
+///         ]),
+///     ]),
+/// ])));
+/// ```
 pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error<I>>(f: F) -> Recursive<'a, I, O, E> {
     let rc = Rc::new(OnceCell::new());
     let parser = f(Recursive(rc.clone()));
