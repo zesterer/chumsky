@@ -67,7 +67,7 @@ pub mod prelude {
         span::Span as _,
         primitive::{any, end, filter, filter_map, just, one_of, none_of, seq, take_until},
         recovery::{skip_then_retry_until, nested_delimiters},
-        recursive::recursive,
+        recursive::{recursive, Recursive},
         text,
         Parser,
         BoxedParser,

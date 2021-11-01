@@ -13,8 +13,62 @@ impl<T> OnceCell<T> {
     pub fn get(&self) -> Option<std::cell::Ref<T>> { Some(std::cell::Ref::map(self.0.borrow(), |x| x.as_ref().unwrap())) }
 }
 
-/// See [`recursive()`].
+/// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
+/// [definition](Recursive::define).
+///
+/// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
 pub struct Recursive<'a, I, O, E: Error<I>>(Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>);
+
+impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
+    /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
+    /// being fulled defined.
+    ///
+    /// Declaring a parser before defining it is required for a parser to reference itself.
+    ///
+    /// This should be followed by **exactly one** call to the [`Recursive::define`] method prior to using the parser
+    /// for parsing (i.e: via the [`Parser::parse`] method or similar).
+    ///
+    /// Prefer to use [`recursive()`], which is a convenient wrapper around this method and [`Recursive::define`], if
+    /// possible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// #[derive(Debug, PartialEq)]
+    /// enum Chain {
+    ///     End,
+    ///     Link(char, Box<Chain>),
+    /// }
+    ///
+    /// // Declare the existence of the parser before defining it so that it can reference itself
+    /// let mut chain = Recursive::<_, _, Simple<char>>::declare();
+    ///
+    /// // Define the parser in terms of itself.
+    /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
+    /// chain.define(just('+')
+    ///     .then(chain.clone())
+    ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
+    ///     .or_not()
+    ///     .map(|chain| chain.unwrap_or(Chain::End)));
+    ///
+    /// assert_eq!(chain.parse(""), Ok(Chain::End));
+    /// assert_eq!(
+    ///     chain.parse("++"),
+    ///     Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
+    /// );
+    /// ```
+    pub fn declare() -> Self {
+        Recursive(Rc::new(OnceCell::new()))
+    }
+
+    /// Defines the parser after declaring it, allowing it to be used for parsing.
+    pub fn define<P: Parser<I, O, Error = E> + 'a>(&mut self, parser: P) {
+        self.0
+            .set(Box::new(parser))
+            .unwrap_or_else(|_| panic!("Parser defined more than once"));
+    }
+}
 
 impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
     fn clone(&self) -> Self { Self(self.0.clone()) }
@@ -25,7 +79,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 
     fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        debugger.invoke(self.0.get().expect("Recursive parser used prior to construction").as_ref(), stream)
+        debugger.invoke(self.0.get().expect("Recursive parser used before being defined").as_ref(), stream)
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
@@ -35,6 +89,8 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
 ///
 /// The given function must create the parser. The parser must not be used to parse input before this function returns.
+///
+/// This is a wrapper around [`Recursive::declare`] and [`Recursive::define`].
 ///
 /// # Examples
 ///
@@ -77,9 +133,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 /// ])));
 /// ```
 pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error<I>>(f: F) -> Recursive<'a, I, O, E> {
-    let rc = Rc::new(OnceCell::new());
-    let parser = f(Recursive(rc.clone()));
-    rc.set(Box::new(parser))
-        .unwrap_or_else(|_| unreachable!());
-    Recursive(rc)
+    let mut parser = Recursive::declare();
+    parser.define(f(parser.clone()));
+    parser
 }
