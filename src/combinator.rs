@@ -659,6 +659,15 @@ mod tests {
     }
 
     #[test]
+    fn separated_by_at_least_without_trailing() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .at_least(3);
+        
+        assert!(parser.parse("-.-.-.").is_err());
+    }
+
+    #[test]
     fn separated_by_at_least_with_leading() {
         let parser = just::<_, Simple<char>>('-')
             .separated_by(just('.'))
