@@ -309,7 +309,7 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::prelude::*;
     /// let byte = text::int::<_, Simple<char>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
@@ -321,6 +321,26 @@ pub trait Parser<I: Clone, O> {
     fn try_map<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>>(self, f: F) -> TryMap<Self, F, O>
         where Self: Sized
     { TryMap(self, f, PhantomData) }
+
+    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let large_int = text::int::<char, _>(10)
+    ///     .map(|s| s.parse().unwrap())
+    ///     .validate(|x: u32, span, emit| {
+    ///         if x < 256 { emit(Simple::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///         x
+    ///     });
+    ///
+    /// assert_eq!(large_int.parse("537"), Ok(537));
+    /// assert!(large_int.parse("243").is_err());
+    /// ```
+    fn validate<F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O>(self, f: F) -> Validate<Self, F> where Self: Sized {
+        Validate(self, f)
+    }
 
     /// Label the pattern parsed by this parser for more useful error messages.
     ///
@@ -643,6 +663,14 @@ pub trait Parser<I: Clone, O> {
     fn delimited_by(self, start: I, end: I) -> DelimitedBy<Self, I> where Self: Sized { DelimitedBy(self, start, end) }
 
     /// Parse one thing or, on failure, another thing.
+    ///
+    /// If the first parser produces an error, even if recovered, both parsers will be tried and the 'most correct'
+    /// result of either will be produced. 'Most correct' is not a well-defined term and its meaning may change in
+    /// future versions. For now, it means that non-terminal errors are preferred over terminal errors and the number
+    /// of errors is minimised, where possible. Failing this, the parser will look at which parser made the most
+    /// progress through the input and choose which result to use based on that. The fact that this behaviour is not
+    /// ruggedly defined is not a problem. By its nature, it only occurs when the parser encounters an error and so can
+    /// never result in valid syntax failing to be parsed.
     ///
     /// # Examples
     ///

@@ -492,6 +492,33 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
 }
 
+/// See [`Parser::validate`].
+#[derive(Copy, Clone)]
+pub struct Validate<A, F>(pub(crate) A, pub(crate) F);
+
+impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(O, E::Span, &mut dyn FnMut(E)) -> O, E: Error<I>> Parser<I, O> for Validate<A, F> {
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        let start = stream.save();
+        #[allow(deprecated)]
+        let (mut errors, res) = debugger.invoke(&self.0, stream);
+
+        let pos = stream.save();
+        let span = stream.span_since(start);
+
+        let res = res.map(|(out, alt)| ((&self.1)(out, span, &mut |e| errors.push(Located::at(pos, e))), alt));
+
+        (errors, res)
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+}
+
 /// See [`Parser::foldl`].
 pub struct Foldl<A, F, O, U>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(O, U)>);
 

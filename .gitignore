@@ -1,2 +1,4 @@
+/target
 Cargo.lock
-target
+flamegraph.svg
+perf.data*
