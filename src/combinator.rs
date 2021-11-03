@@ -312,11 +312,22 @@ impl<A, B, U> SeparatedBy<A, B, U> {
         self
     }
 
-    // /// Require that the pattern appear at least a minimum number of times.
-    // pub fn at_least(mut self, n: usize) -> Self {
-    //     self.at_least = n;
-    //     self
-    // }
+    /// Require that the pattern appear at least a minimum number of times.
+    /// 
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let numbers = just::<_, Simple<char>>('-')
+    ///     .separated_by(just('.'))
+    ///     .at_least(2);
+    /// 
+    /// assert!(numbers.parse("").is_err());
+    /// assert!(numbers.parse("-").is_err());
+    /// assert_eq!(numbers.parse("-.-"), Ok(vec!['-', '-']));
+    /// ````
+    pub fn at_least(mut self, n: usize) -> Self {
+        self.at_least = n;
+        self
+    }
 }
 
 impl<A: Copy, B: Copy, U> Copy for SeparatedBy<A, B, U> {}
@@ -343,7 +354,6 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         let mut alt = None;
 
         let mut i = 0;
-        let mut has_leading = false;
         loop {
             match stream.try_parse(|stream| { #[allow(deprecated)] debugger.invoke(&self.a, stream) }) {
                 (mut a_errors, Ok((a_out, a_alt))) => {
@@ -351,13 +361,17 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                     alt = merge_alts(alt.take(), a_alt);
                     outputs.push(a_out);
                 },
-                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least.max(if has_leading { 1 } else { 0 }) || (!self.allow_trailing && i > 0) => {
+                (mut a_errors, Err(a_err)) if !self.allow_trailing && i > 0 => {
                     errors.append(&mut a_errors);
                     break (errors, Err(a_err));
                 },
                 (_, Err(a_err)) if self.allow_leading && i == 0 => {
-                    has_leading = true;
                     alt = merge_alts(alt.take(), Some(a_err));
+                },
+                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least => {
+                    dbg!(outputs.len());
+                    errors.append(&mut a_errors);
+                    break (errors, Err(a_err));
                 },
                 (a_errors, Err(a_err)) => {
                     // Find furthest alternative error
@@ -378,6 +392,9 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                 (mut b_errors, Ok((_, b_alt))) => {
                     errors.append(&mut b_errors);
                     alt = merge_alts(alt.take(), b_alt);
+                },
+                (_, Err(b_err)) if outputs.len() < self.at_least => {
+                    break (errors, Err(b_err));
                 },
                 (_, Err(b_err)) => {
                     alt = merge_alts(alt.take(), Some(b_err));
@@ -624,4 +641,60 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
     #[inline]
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+}
+
+#[cfg(test)]
+mod tests {
+    use error::Simple;
+
+    use super::*;
+
+    #[test]
+    fn separated_by_at_least() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .at_least(3);
+        
+        assert_eq!(parser.parse("-.-.-"), Ok(vec!['-', '-', '-']));
+    }
+
+    #[test]
+    fn separated_by_at_least_without_leading() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .at_least(3);
+        
+        assert!(parser.parse(".-.-.-").is_err());
+    }
+
+    #[test]
+    fn separated_by_at_least_without_trailing() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .at_least(3);
+        
+        assert!(parser.parse("-.-.-.").is_err());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_leading() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .allow_leading()
+            .at_least(3);
+        
+        assert_eq!(parser.parse(".-.-.-"), Ok(vec!['-', '-', '-']));
+        assert!(parser.parse(".-.-").is_err());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_trailing() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just('.'))
+            .allow_trailing()
+            .at_least(3);
+        
+        assert_eq!(parser.parse("-.-.-."), Ok(vec!['-', '-', '-']));
+        assert!(parser.parse("-.-.").is_err());
+    }
 }
