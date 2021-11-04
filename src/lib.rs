@@ -257,6 +257,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
     /// your parser. Additionally, its API is quite likely to change in future versions.
+    /// Use this parser like a print statement, to display whatever you pass as the argument 'x'
+
     #[track_caller]
     fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized {
         Debug(self, Rc::new(x), *std::panic::Location::caller())
