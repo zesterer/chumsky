@@ -3,7 +3,7 @@
 extern crate test;
 
 use std::collections::HashMap;
-use test::{Bencher, black_box};
+use test::{black_box, Bencher};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -12,7 +12,7 @@ pub enum Json {
     Str(String),
     Num(f64),
     Array(Vec<Json>),
-    Object(HashMap<String,Json>)
+    Object(HashMap<String, Json>),
 }
 
 static JSON: &'static [u8] = include_bytes!("sample.json");
@@ -32,41 +32,45 @@ fn pom(b: &mut Bencher) {
 }
 
 mod chumsky {
-    use chumsky::{prelude::*, error::Cheap};
+    use chumsky::{error::Cheap, prelude::*};
 
-    use std::{collections::HashMap, str};
     use super::Json;
+    use std::{collections::HashMap, str};
 
     pub fn json() -> impl Parser<u8, Json, Error = Cheap<u8>> {
         recursive(|value| {
             let frac = just(b'.').chain(text::digits(10));
 
-            let exp = just(b'e').or(just(b'E'))
+            let exp = just(b'e')
+                .or(just(b'E'))
                 .ignore_then(just(b'+').or(just(b'-')).or_not())
                 .chain(text::digits(10));
 
-            let number = just(b'-').or_not()
+            let number = just(b'-')
+                .or_not()
                 .chain(text::int(10))
                 .chain(frac.or_not().flatten())
                 .chain::<u8, _, _>(exp.or_not().flatten())
                 .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
 
-            let escape = just(b'\\')
-                .ignore_then(just(b'\\')
-                .or(just(b'/'))
-                .or(just(b'"'))
-                .or(just(b'b').to(b'\x08'))
-                .or(just(b'f').to(b'\x0C'))
-                .or(just(b'n').to(b'\n'))
-                .or(just(b'r').to(b'\r'))
-                .or(just(b't').to(b'\t')));
+            let escape = just(b'\\').ignore_then(
+                just(b'\\')
+                    .or(just(b'/'))
+                    .or(just(b'"'))
+                    .or(just(b'b').to(b'\x08'))
+                    .or(just(b'f').to(b'\x0C'))
+                    .or(just(b'n').to(b'\n'))
+                    .or(just(b'r').to(b'\r'))
+                    .or(just(b't').to(b'\t')),
+            );
 
             let string = just(b'"')
                 .ignore_then(filter(|c| *c != b'\\' && *c != b'"').or(escape).repeated())
                 .then_ignore(just(b'"'))
                 .map(|bytes| String::from_utf8(bytes).unwrap());
 
-            let array = value.clone()
+            let array = value
+                .clone()
                 .chain(just(b',').ignore_then(value.clone()).repeated())
                 .or_not()
                 .flatten()
@@ -74,7 +78,8 @@ mod chumsky {
                 .map(Json::Array);
 
             let member = string.then_ignore(just(b':').padded()).then(value);
-            let object = member.clone()
+            let object = member
+                .clone()
                 .chain(just(b',').padded().ignore_then(member).repeated())
                 .or_not()
                 .flatten()
@@ -83,7 +88,8 @@ mod chumsky {
                 .collect::<HashMap<String, Json>>()
                 .map(Json::Object);
 
-            seq(b"null".iter().copied()).to(Json::Null)
+            seq(b"null".iter().copied())
+                .to(Json::Null)
                 .or(seq(b"true".iter().copied()).to(Json::Bool(true)))
                 .or(seq(b"false".iter().copied()).to(Json::Bool(false)))
                 .or(number.map(Json::Num))
@@ -92,7 +98,7 @@ mod chumsky {
                 .or(object)
                 .padded()
         })
-            .then_ignore(end())
+        .then_ignore(end())
     }
 }
 
@@ -100,8 +106,11 @@ mod pom {
     use pom::parser::*;
     use pom::Parser;
 
-    use std::{collections::HashMap, str::{self, FromStr}};
     use super::Json;
+    use std::{
+        collections::HashMap,
+        str::{self, FromStr},
+    };
 
     fn space() -> Parser<u8, ()> {
         one_of(b" \t\r\n").repeat(0..).discard()
@@ -112,13 +121,21 @@ mod pom {
         let frac = sym(b'.') + one_of(b"0123456789").repeat(1..);
         let exp = one_of(b"eE") + one_of(b"+-").opt() + one_of(b"0123456789").repeat(1..);
         let number = sym(b'-').opt() + integer + frac.opt() + exp.opt();
-        number.collect().convert(str::from_utf8).convert(|s|f64::from_str(&s))
+        number
+            .collect()
+            .convert(str::from_utf8)
+            .convert(|s| f64::from_str(&s))
     }
 
     fn string() -> Parser<u8, String> {
-        let special_char = sym(b'\\') | sym(b'/') | sym(b'"')
-            | sym(b'b').map(|_|b'\x08') | sym(b'f').map(|_|b'\x0C')
-            | sym(b'n').map(|_|b'\n') | sym(b'r').map(|_|b'\r') | sym(b't').map(|_|b'\t');
+        let special_char = sym(b'\\')
+            | sym(b'/')
+            | sym(b'"')
+            | sym(b'b').map(|_| b'\x08')
+            | sym(b'f').map(|_| b'\x0C')
+            | sym(b'n').map(|_| b'\n')
+            | sym(b'r').map(|_| b'\r')
+            | sym(b't').map(|_| b'\t');
         let escape_sequence = sym(b'\\') * special_char;
         let string = sym(b'"') * (none_of(b"\\\"") | escape_sequence).repeat(0..) - sym(b'"');
         string.convert(String::from_utf8)
@@ -133,18 +150,18 @@ mod pom {
         let member = string() - space() - sym(b':') - space() + call(value);
         let members = list(member, sym(b',') * space());
         let obj = sym(b'{') * space() * members - sym(b'}');
-        obj.map(|members|members.into_iter().collect::<HashMap<_,_>>())
+        obj.map(|members| members.into_iter().collect::<HashMap<_, _>>())
     }
 
     fn value() -> Parser<u8, Json> {
-        ( seq(b"null").map(|_|Json::Null)
-        | seq(b"true").map(|_|Json::Bool(true))
-        | seq(b"false").map(|_|Json::Bool(false))
-        | number().map(|num|Json::Num(num))
-        | string().map(|text|Json::Str(text))
-        | array().map(|arr|Json::Array(arr))
-        | object().map(|obj|Json::Object(obj))
-        ) - space()
+        (seq(b"null").map(|_| Json::Null)
+            | seq(b"true").map(|_| Json::Bool(true))
+            | seq(b"false").map(|_| Json::Bool(false))
+            | number().map(|num| Json::Num(num))
+            | string().map(|text| Json::Str(text))
+            | array().map(|arr| Json::Array(arr))
+            | object().map(|obj| Json::Object(obj)))
+            - space()
     }
 
     pub fn json() -> Parser<u8, Json> {

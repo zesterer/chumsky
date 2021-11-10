@@ -43,18 +43,32 @@ impl<T: Clone + Ord> Span for Range<T> {
     type Context = ();
     type Offset = T;
 
-    fn new((): Self::Context, range: Self) -> Self { range }
+    fn new((): Self::Context, range: Self) -> Self {
+        range
+    }
     fn context(&self) -> Self::Context {}
-    fn start(&self) -> Self::Offset { self.start.clone() }
-    fn end(&self) -> Self::Offset { self.end.clone() }
+    fn start(&self) -> Self::Offset {
+        self.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.end.clone()
+    }
 }
 
 impl<C: Clone, T: Clone> Span for (C, Range<T>) {
     type Context = C;
     type Offset = T;
 
-    fn new(context: Self::Context, range: Range<T>) -> Self { (context, range) }
-    fn context(&self) -> Self::Context { self.0.clone() }
-    fn start(&self) -> Self::Offset { self.1.start.clone() }
-    fn end(&self) -> Self::Offset { self.1.end.clone() }
+    fn new(context: Self::Context, range: Range<T>) -> Self {
+        (context, range)
+    }
+    fn context(&self) -> Self::Context {
+        self.0.clone()
+    }
+    fn start(&self) -> Self::Offset {
+        self.1.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.1.end.clone()
+    }
 }

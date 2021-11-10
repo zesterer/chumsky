@@ -1,9 +1,6 @@
 use super::*;
 
-use std::{
-    borrow::Cow,
-    panic::Location,
-};
+use std::{borrow::Cow, panic::Location};
 
 /// Information about a specific parser.
 pub struct ParserInfo {
@@ -14,7 +11,11 @@ pub struct ParserInfo {
 }
 
 impl ParserInfo {
-    pub(crate) fn new(name: impl Into<Cow<'static, str>>, display: Rc<dyn fmt::Display>, location: Location<'static>) -> Self {
+    pub(crate) fn new(
+        name: impl Into<Cow<'static, str>>,
+        display: Rc<dyn fmt::Display>,
+        location: Location<'static>,
+    ) -> Self {
         Self {
             name: name.into(),
             display,
@@ -30,14 +31,24 @@ pub enum ParseEvent {
 }
 
 /// A trait implemented by parser debuggers.
-#[deprecated(note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
+#[deprecated(
+    note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+)]
 pub trait Debugger {
     /// Create a new debugging scope.
-    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(&mut self, info: Info, f: F) -> R;
+    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(
+        &mut self,
+        info: Info,
+        f: F,
+    ) -> R;
     /// Emit a parse event, if the debugger supports them.
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, f: F);
     /// Invoke the given parser with a mode specific to this debugger.
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(&mut self, parser: &P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error>;
+    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+        &mut self,
+        parser: &P,
+        stream: &mut StreamOf<I, P::Error>,
+    ) -> PResult<I, O, P::Error>;
 }
 
 /// A verbose debugger that emits debugging messages to the console.
@@ -53,25 +64,36 @@ impl Verbose {
 
     fn print_inner(&self, depth: usize) {
         for event in &self.events {
-            for _ in 0..depth * 4 { print!(" "); }
+            for _ in 0..depth * 4 {
+                print!(" ");
+            }
             match event {
                 Ok(ParseEvent::Info(s)) => println!("{}", s),
                 Err((info, scope)) => {
-                    println!("Entered {} at line {} in {}", info.display, info.location.line(), info.location.file());
+                    println!(
+                        "Entered {} at line {} in {}",
+                        info.display,
+                        info.location.line(),
+                        info.location.file()
+                    );
                     scope.print_inner(depth + 1);
-                },
+                }
             }
         }
     }
 
-    pub(crate) fn print(&self) { self.print_inner(0) }
+    pub(crate) fn print(&self) {
+        self.print_inner(0)
+    }
 }
 
 impl Debugger for Verbose {
-    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(&mut self, info: Info, f: F) -> R {
-        let mut verbose = Verbose {
-            events: Vec::new(),
-        };
+    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(
+        &mut self,
+        info: Info,
+        f: F,
+    ) -> R {
+        let mut verbose = Verbose { events: Vec::new() };
         let res = f(&mut verbose);
         self.events.push(Err((info(), verbose)));
         res
@@ -81,7 +103,11 @@ impl Debugger for Verbose {
         self.events.push(Ok(f()));
     }
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(&mut self, parser: &P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error> {
+    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+        &mut self,
+        parser: &P,
+        stream: &mut StreamOf<I, P::Error>,
+    ) -> PResult<I, O, P::Error> {
         parser.parse_inner_verbose(self, stream)
     }
 }
@@ -92,14 +118,28 @@ pub struct Silent {
 }
 
 impl Silent {
-     pub(crate) fn new() -> Self { Self { phantom: PhantomData } }
+    pub(crate) fn new() -> Self {
+        Self {
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl Debugger for Silent {
-    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(&mut self, _: Info, f: F) -> R { f(self) }
+    fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(
+        &mut self,
+        _: Info,
+        f: F,
+    ) -> R {
+        f(self)
+    }
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, _: F) {}
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(&mut self, parser: &P, stream: &mut StreamOf<I, P::Error>) -> PResult<I, O, P::Error> {
+    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+        &mut self,
+        parser: &P,
+        stream: &mut StreamOf<I, P::Error>,
+    ) -> PResult<I, O, P::Error> {
         parser.parse_inner_silent(self, stream)
     }
 }

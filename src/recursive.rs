@@ -5,12 +5,18 @@ use std::rc::Rc;
 // TODO: Remove when `OnceCell` is stable
 struct OnceCell<T>(std::cell::RefCell<Option<T>>);
 impl<T> OnceCell<T> {
-    pub fn new() -> Self { Self(std::cell::RefCell::new(None)) }
+    pub fn new() -> Self {
+        Self(std::cell::RefCell::new(None))
+    }
     pub fn set(&self, x: T) -> Result<(), ()> {
         *self.0.try_borrow_mut().map_err(|_| ())? = Some(x);
         Ok(())
     }
-    pub fn get(&self) -> Option<std::cell::Ref<T>> { Some(std::cell::Ref::map(self.0.borrow(), |x| x.as_ref().unwrap())) }
+    pub fn get(&self) -> Option<std::cell::Ref<T>> {
+        Some(std::cell::Ref::map(self.0.borrow(), |x| {
+            x.as_ref().unwrap()
+        }))
+    }
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -71,19 +77,37 @@ impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
 }
 
 impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
-    fn clone(&self) -> Self { Self(self.0.clone()) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        debugger.invoke(self.0.get().expect("Recursive parser used before being defined").as_ref(), stream)
+        debugger.invoke(
+            self.0
+                .get()
+                .expect("Recursive parser used before being defined")
+                .as_ref(),
+            stream,
+        )
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
@@ -132,7 +156,16 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 ///     ]),
 /// ])));
 /// ```
-pub fn recursive<'a, I: Clone, O, P: Parser<I, O, Error = E> + 'a, F: FnOnce(Recursive<'a, I, O, E>) -> P, E: Error<I>>(f: F) -> Recursive<'a, I, O, E> {
+pub fn recursive<
+    'a,
+    I: Clone,
+    O,
+    P: Parser<I, O, Error = E> + 'a,
+    F: FnOnce(Recursive<'a, I, O, E>) -> P,
+    E: Error<I>,
+>(
+    f: F,
+) -> Recursive<'a, I, O, E> {
     let mut parser = Recursive::declare();
     parser.define(f(parser.clone()));
     parser

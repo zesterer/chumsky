@@ -5,18 +5,32 @@ pub struct Custom<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for Custom<F, E> {}
 impl<F: Clone, E> Clone for Custom<F, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
-impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O> for Custom<F, E> {
+impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O>
+    for Custom<F, E>
+{
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
         (self.0)(stream)
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser primitive that allows you to define your own custom parsers. In theory you shouldn't need to use this
@@ -30,21 +44,39 @@ pub fn custom<F, E>(f: F) -> Custom<F, E> {
 pub struct End<E>(PhantomData<E>);
 
 impl<E> Clone for End<E> {
-    fn clone(&self) -> Self { Self(PhantomData) }
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
 }
 
 impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, (), E> {
         match stream.next() {
             (_, _, None) => (Vec::new(), Ok(((), None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
+            (at, span, found) => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, Vec::new(), found),
+                )),
+            ),
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts only the end of input.
@@ -65,21 +97,39 @@ pub struct Just<I, E>(I, PhantomData<E>);
 
 impl<I: Copy, E> Copy for Just<I, E> {}
 impl<I: Clone, E> Clone for Just<I, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Some(self.0.clone()), found)))),
+            (at, span, found) => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, Some(self.0.clone()), found),
+                )),
+            ),
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts only the given input.
@@ -105,25 +155,45 @@ pub fn just<I: Clone + PartialEq, E>(x: I) -> Just<I, E> {
 pub struct Seq<I, E>(Vec<I>, PhantomData<E>);
 
 impl<I: Clone, E> Clone for Seq<I, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, (), E> {
         for expected in &self.0 {
             match stream.next() {
-                (_, _, Some(tok)) if &tok == expected => {},
-                (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Some(expected.clone()), found)))),
+                (_, _, Some(tok)) if &tok == expected => {}
+                (at, span, found) => {
+                    return (
+                        Vec::new(),
+                        Err(Located::at(
+                            at,
+                            E::expected_input_found(span, Some(expected.clone()), found),
+                        )),
+                    )
+                }
             }
         }
 
         (Vec::new(), Ok(((), None)))
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts only a sequence of specific inputs.
@@ -152,21 +222,41 @@ pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> S
 pub struct OneOf<I, E>(Vec<I>, PhantomData<E>);
 
 impl<I: Clone, E> Clone for OneOf<I, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, self.0.clone(), found)))),
+            (at, span, found) => {
+                return (
+                    Vec::new(),
+                    Err(Located::at(
+                        at,
+                        E::expected_input_found(span, self.0.clone(), found),
+                    )),
+                )
+            }
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts one of a sequence of specific inputs.
@@ -191,18 +281,30 @@ pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -
 pub struct Empty<E>(PhantomData<E>);
 
 impl<E> Clone for Empty<E> {
-    fn clone(&self) -> Self { Self(PhantomData) }
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
 }
 
 impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, _: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        _: &mut StreamOf<I, E>,
+    ) -> PResult<I, (), E> {
         (Vec::new(), Ok(((), None)))
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that parses no inputs.
@@ -214,21 +316,41 @@ pub fn empty<E>() -> Empty<E> {
 pub struct NoneOf<I, E>(Vec<I>, PhantomData<E>);
 
 impl<I: Clone, E> Clone for NoneOf<I, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
-            (at, span, found) => return (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
+            (at, span, found) => {
+                return (
+                    Vec::new(),
+                    Err(Located::at(
+                        at,
+                        E::expected_input_found(span, Vec::new(), found),
+                    )),
+                )
+            }
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts any input that is *not* in a sequence of specific inputs.
@@ -258,13 +380,22 @@ pub struct TakeUntil<A>(A);
 impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
     type Error = A::Error;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, A::Error>,
+    ) -> PResult<I, (Vec<I>, O), A::Error> {
         let mut outputs = Vec::new();
         let mut alt = None;
 
         loop {
-            let (errors, err) = match stream.try_parse(|stream| { #[allow(deprecated)] self.0.parse_inner(debugger, stream) }) {
-                (errors, Ok((out, a_alt))) => break (errors, Ok(((outputs, out), merge_alts(alt, a_alt)))),
+            let (errors, err) = match stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                self.0.parse_inner(debugger, stream)
+            }) {
+                (errors, Ok((out, a_alt))) => {
+                    break (errors, Ok(((outputs, out), merge_alts(alt, a_alt))))
+                }
                 (errors, Err(err)) => (errors, err),
             };
 
@@ -277,8 +408,22 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, A::Error>) -> PResult<I, (Vec<I>, O), A::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, A::Error>,
+    ) -> PResult<I, (Vec<I>, O), A::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, A::Error>,
+    ) -> PResult<I, (Vec<I>, O), A::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts any number of inputs until a terminating pattern is reached.
@@ -323,21 +468,39 @@ pub struct Filter<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for Filter<F, E> {}
 impl<F: Clone, E> Clone for Filter<F, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), found)))),
+            (at, span, found) => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, Vec::new(), found),
+                )),
+            ),
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts only inputs that match the given predicate.
@@ -363,23 +526,41 @@ pub struct FilterMap<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for FilterMap<F, E> {}
 impl<F: Clone, E> Clone for FilterMap<F, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, _debugger: &mut D, stream: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
         let (at, span, tok) = stream.next();
         match tok.map(|tok| (self.0)(span.clone(), tok)) {
             Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
             Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
-            None => (Vec::new(), Err(Located::at(at, E::expected_input_found(span, Vec::new(), None)))),
+            None => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, Vec::new(), None),
+                )),
+            ),
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// A parser that accepts a input and tests it against the given fallible function.

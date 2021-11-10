@@ -1,17 +1,17 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
-// TODO: Enable when stable
-//#![feature(once_cell)]
+                      // TODO: Enable when stable
+                      //#![feature(once_cell)]
 
-/// Utilities for debugging parsers.
-pub mod debug;
-/// Combinators that allow combining and extending existing parsers.
-pub mod combinator;
-/// Error types, traits and utilities.
-pub mod error;
 /// Traits that allow chaining parser outputs together.
 pub mod chain;
+/// Combinators that allow combining and extending existing parsers.
+pub mod combinator;
+/// Utilities for debugging parsers.
+pub mod debug;
+/// Error types, traits and utilities.
+pub mod error;
 /// Parser primitives that accept specific token patterns.
 pub mod primitive;
 /// Types and traits that facilitate error recovery.
@@ -25,31 +25,20 @@ pub mod stream;
 /// Text-specific parsers and utilities.
 pub mod text;
 
-pub use crate::{
-    error::Error,
-    span::Span,
-};
+pub use crate::{error::Error, span::Span};
 
-pub use crate::{
-    stream::{Stream, BoxStream, Flat},
-};
+pub use crate::stream::{BoxStream, Flat, Stream};
 
-use crate::{
-    chain::Chain,
-    combinator::*,
-    primitive::*,
-    recovery::*,
-    debug::*,
-};
+use crate::{chain::Chain, combinator::*, debug::*, primitive::*, recovery::*};
 
 use std::{
-    marker::PhantomData,
-    rc::Rc,
     cmp::Ordering,
-    ops::Range,
     // TODO: Enable when stable
     //lazy::OnceCell,
     fmt,
+    marker::PhantomData,
+    ops::Range,
+    rc::Rc,
 };
 
 #[cfg(doc)]
@@ -63,14 +52,13 @@ use std::{
 pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
-        text::TextParser as _,
-        span::Span as _,
-        primitive::{any, end, filter, filter_map, just, one_of, none_of, seq, take_until},
-        recovery::{skip_then_retry_until, nested_delimiters},
+        primitive::{any, end, filter, filter_map, just, none_of, one_of, seq, take_until},
+        recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
+        span::Span as _,
         text,
-        Parser,
-        BoxedParser,
+        text::TextParser as _,
+        BoxedParser, Parser,
     };
 }
 
@@ -91,7 +79,11 @@ pub struct Located<I, E> {
 impl<I, E: Error<I>> Located<I, E> {
     /// Create a new [`Located`] with the give input position and error.
     pub fn at(at: usize, error: E) -> Self {
-        Self { at, error, phantom: PhantomData }
+        Self {
+            at,
+            error,
+            phantom: PhantomData,
+        }
     }
 
     /// Get the maximum of two located errors. If they hold the same position in the input, merge them.
@@ -122,7 +114,10 @@ impl<I, E: Error<I>> Located<I, E> {
 
 // Merge two alternative errors
 // TODO: Allow multiple alternative errors
-fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>) -> Option<Located<I, E>> {
+fn merge_alts<I, E: Error<I>>(
+    a: Option<Located<I, E>>,
+    b: Option<Located<I, E>>,
+) -> Option<Located<I, E>> {
     match (a, b) {
         (Some(a), Some(b)) => Some(a.max(b)),
         (a, b) => a.or(b),
@@ -134,7 +129,10 @@ fn merge_alts<I, E: Error<I>>(a: Option<Located<I, E>>, b: Option<Located<I, E>>
 // ([x, ...], Ok(out)) => parsing failed, but recovery occurred so parsing may continue
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
 // TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
-type PResult<I, O, E> = (Vec<Located<I, E>>, Result<(O, Option<Located<I, E>>), Located<I, E>>);
+type PResult<I, O, E> = (
+    Vec<Located<I, E>>,
+    Result<(O, Option<Located<I, E>>), Located<I, E>>,
+);
 
 // Shorthand for a stream with the given input and error type.
 type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
@@ -148,7 +146,14 @@ fn parse_recovery_inner<
     D: Debugger,
     Iter: Iterator<Item = (I, <P::Error as Error<I>>::Span)> + 'a,
     S: Into<Stream<'a, I, <P::Error as Error<I>>::Span, Iter>>,
->(parser: &P, debugger: &mut D, stream: S) -> (Option<O>, Vec<P::Error>) where P: Sized {
+>(
+    parser: &P,
+    debugger: &mut D,
+    stream: S,
+) -> (Option<O>, Vec<P::Error>)
+where
+    P: Sized,
+{
     #[allow(deprecated)]
     let (mut errors, res) = parser.parse_inner(debugger, &mut stream.into());
     let out = match res {
@@ -156,7 +161,7 @@ fn parse_recovery_inner<
         Err(err) => {
             errors.push(err);
             None
-        },
+        }
     };
     (out, errors.into_iter().map(|e| e.error).collect())
 }
@@ -182,22 +187,42 @@ pub trait Parser<I: Clone, O> {
     /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
     /// covers your use-case.
     #[doc(hidden)]
-    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> where Self: Sized;
+    #[deprecated(
+        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+    )]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>
+    where
+        Self: Sized;
 
     /// [`Parser::parse_inner`], but specialised for verbose output. Do not call this method directly.
     ///
     /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
     #[doc(hidden)]
-    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+    #[deprecated(
+        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+    )]
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>;
 
     /// [`Parser::parse_inner`], but specialised for silent output. Do not call this method directly.
     ///
     /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
     #[doc(hidden)]
-    #[deprecated(note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault.")]
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error>;
+    #[deprecated(
+        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+    )]
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>;
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
@@ -209,7 +234,13 @@ pub trait Parser<I: Clone, O> {
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+    >(
+        &self,
+        stream: S,
+    ) -> (Option<O>, Vec<Self::Error>)
+    where
+        Self: Sized,
+    {
         parse_recovery_inner(self, &mut Silent::new(), stream)
     }
 
@@ -227,7 +258,13 @@ pub trait Parser<I: Clone, O> {
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    >(&self, stream: S) -> (Option<O>, Vec<Self::Error>) where Self: Sized {
+    >(
+        &self,
+        stream: S,
+    ) -> (Option<O>, Vec<Self::Error>)
+    where
+        Self: Sized,
+    {
         let mut debugger = Verbose::new();
         let res = parse_recovery_inner(self, &mut debugger, stream);
         debugger.print();
@@ -244,10 +281,18 @@ pub trait Parser<I: Clone, O> {
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
         S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    >(&self, stream: S) -> Result<O, Vec<Self::Error>> where Self: Sized {
+    >(
+        &self,
+        stream: S,
+    ) -> Result<O, Vec<Self::Error>>
+    where
+        Self: Sized,
+    {
         let (output, errors) = self.parse_recovery(stream);
         if errors.is_empty() {
-            Ok(output.expect("Parsing failed, but no errors were emitted. This is troubling, to say the least."))
+            Ok(output.expect(
+                "Parsing failed, but no errors were emitted. This is troubling, to say the least.",
+            ))
         } else {
             Err(errors)
         }
@@ -260,7 +305,10 @@ pub trait Parser<I: Clone, O> {
     /// Use this parser like a print statement, to display whatever you pass as the argument 'x'
 
     #[track_caller]
-    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self> where Self: Sized {
+    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self>
+    where
+        Self: Sized,
+    {
         Debug(self, Rc::new(x), *std::panic::Location::caller())
     }
 
@@ -288,22 +336,36 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(token.parse("test"), Ok(Token::Word("test".to_string())));
     /// assert_eq!(token.parse("42"), Ok(Token::Num(42)));
     /// ```
-    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O> where Self: Sized { Map(self, f, PhantomData) }
+    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O>
+    where
+        Self: Sized,
+    {
+        Map(self, f, PhantomData)
+    }
 
     /// Map the output of this parser to another value, making use of the pattern's overall span.
     ///
     /// This is very useful when generating an AST that attaches a span to each AST node.
-    fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(self, f: F) -> MapWithSpan<Self, F, O>
-        where Self: Sized
-    { MapWithSpan(self, f, PhantomData) }
+    fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(
+        self,
+        f: F,
+    ) -> MapWithSpan<Self, F, O>
+    where
+        Self: Sized,
+    {
+        MapWithSpan(self, f, PhantomData)
+    }
 
     /// Map the primary error of this parser to another value.
     ///
     /// This function is most useful when using a custom error type, allowing you to augment errors according to
     /// context.
     fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
-        where Self: Sized
-    { MapErr(self, f) }
+    where
+        Self: Sized,
+    {
+        MapErr(self, f)
+    }
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
@@ -320,9 +382,15 @@ pub trait Parser<I: Clone, O> {
     /// assert!(byte.parse("255").is_ok());
     /// assert!(byte.parse("256").is_err()); // Out of range
     /// ```
-    fn try_map<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>>(self, f: F) -> TryMap<Self, F, O>
-        where Self: Sized
-    { TryMap(self, f, PhantomData) }
+    fn try_map<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>>(
+        self,
+        f: F,
+    ) -> TryMap<Self, F, O>
+    where
+        Self: Sized,
+    {
+        TryMap(self, f, PhantomData)
+    }
 
     /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
     ///
@@ -340,7 +408,13 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(large_int.parse("537"), Ok(537));
     /// assert!(large_int.parse("243").is_err());
     /// ```
-    fn validate<F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O>(self, f: F) -> Validate<Self, F> where Self: Sized {
+    fn validate<F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O>(
+        self,
+        f: F,
+    ) -> Validate<Self, F>
+    where
+        Self: Sized,
+    {
         Validate(self, f)
     }
 
@@ -371,8 +445,11 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, Some('.'), Some('!')).with_label("number")]));
     /// ```
     fn labelled<L: Into<<Self::Error as Error<I>>::Label> + Clone>(self, label: L) -> Label<Self, L>
-        where Self: Sized
-    { Label(self, label) }
+    where
+        Self: Sized,
+    {
+        Label(self, label)
+    }
 
     /// Transform all outputs of this parser to a pretermined value.
     ///
@@ -391,7 +468,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(op.parse("+"), Ok(Op::Add));
     /// assert_eq!(op.parse("/"), Ok(Op::Div));
     /// ```
-    fn to<U: Clone>(self, x: U) -> To<Self, O, U> where Self: Sized { To(self, x, PhantomData) }
+    fn to<U: Clone>(self, x: U) -> To<Self, O, U>
+    where
+        Self: Sized,
+    {
+        To(self, x, PhantomData)
+    }
 
     /// Left-fold the output of the parser into a single value.
     ///
@@ -415,7 +497,9 @@ pub trait Parser<I: Clone, O> {
     where
         Self: Parser<I, (A, B)> + Sized,
         B: IntoIterator,
-    { Foldl(self, f, PhantomData) }
+    {
+        Foldl(self, f, PhantomData)
+    }
 
     /// Right-fold the output of the parser into a single value.
     ///
@@ -444,7 +528,9 @@ pub trait Parser<I: Clone, O> {
         Self: Parser<I, (A, B)> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
-    { Foldr(self, f, PhantomData) }
+    {
+        Foldr(self, f, PhantomData)
+    }
 
     /// Ignore the output of this parser, yielding `()` as an output instead.
     ///
@@ -465,7 +551,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(whitespace.parse("    "), Ok(vec![(); 4]));
     /// assert_eq!(whitespace.parse("  hello"), Ok(vec![(); 2]));
     /// ```
-    fn ignored(self) -> Ignored<Self, O> where Self: Sized { To(self, (), PhantomData) }
+    fn ignored(self) -> Ignored<Self, O>
+    where
+        Self: Sized,
+    {
+        To(self, (), PhantomData)
+    }
 
     /// Collect the output of this parser into a type implementing [`FromIterator`].
     ///
@@ -484,8 +575,12 @@ pub trait Parser<I: Clone, O> {
     /// ```
     // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
     fn collect<C: core::iter::FromIterator<O::Item>>(self) -> Map<Self, fn(O) -> C, O>
-        where Self: Sized, O: IntoIterator
-    { self.map(|items| C::from_iter(items.into_iter())) }
+    where
+        Self: Sized,
+        O: IntoIterator,
+    {
+        self.map(|items| C::from_iter(items.into_iter()))
+    }
 
     /// Parse one thing and then another thing, yielding a tuple of the two outputs.
     ///
@@ -501,7 +596,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
     /// assert!(two_words.parse("hedgehog").is_err());
     /// ```
-    fn then<U, P: Parser<I, U>>(self, other: P) -> Then<Self, P> where Self: Sized { Then(self, other) }
+    fn then<U, P: Parser<I, U>>(self, other: P) -> Then<Self, P>
+    where
+        Self: Sized,
+    {
+        Then(self, other)
+    }
 
     /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
     ///
@@ -523,7 +623,10 @@ pub trait Parser<I: Clone, O> {
     /// assert!(int.parse("-0").is_err());
     /// assert!(int.parse("05").is_err());
     /// ```
-    fn chain<T, U, P: Parser<I, U, Error = Self::Error>>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
+    fn chain<T, U, P: Parser<I, U, Error = Self::Error>>(
+        self,
+        other: P,
+    ) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
     where
         Self: Sized,
         U: Chain<T>,
@@ -545,7 +648,9 @@ pub trait Parser<I: Clone, O> {
         Self: Sized,
         O: IntoIterator<Item = Inner>,
         Inner: IntoIterator<Item = T>,
-    { self.map(|xs| xs.into_iter().map(|xs| xs.into_iter()).flatten().collect()) }
+    {
+        self.map(|xs| xs.into_iter().map(|xs| xs.into_iter()).flatten().collect())
+    }
 
     /// Parse one thing and then another thing, yielding only the output of the latter.
     ///
@@ -564,8 +669,11 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(integer.parse("32"), Ok(32));
     /// ```
     fn ignore_then<U, P: Parser<I, U>>(self, other: P) -> IgnoreThen<Self, P, O, U>
-        where Self: Sized
-    { Map(Then(self, other), |(_, u)| u, PhantomData) }
+    where
+        Self: Sized,
+    {
+        Map(Then(self, other), |(_, u)| u, PhantomData)
+    }
 
     /// Parse one thing and then another thing, yielding only the output of the former.
     ///
@@ -595,8 +703,11 @@ pub trait Parser<I: Clone, O> {
     /// );
     /// ```
     fn then_ignore<U, P: Parser<I, U>>(self, other: P) -> ThenIgnore<Self, P, O, U>
-        where Self: Sized
-    { Map(Then(self, other), |(o, _)| o, PhantomData) }
+    where
+        Self: Sized,
+    {
+        Map(Then(self, other), |(o, _)| o, PhantomData)
+    }
 
     /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
     ///
@@ -612,9 +723,15 @@ pub trait Parser<I: Clone, O> {
     /// assert!(ident.parse("!hello").is_err());
     /// assert!(ident.parse("hello").is_err());
     /// ```
-    fn padded_by<U, P: Parser<I, U, Error = Self::Error> + Clone>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
-        where Self: Sized
-    { other.clone().ignore_then(self).then_ignore(other) }
+    fn padded_by<U, P: Parser<I, U, Error = Self::Error> + Clone>(
+        self,
+        other: P,
+    ) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
+    where
+        Self: Sized,
+    {
+        other.clone().ignore_then(self).then_ignore(other)
+    }
 
     /// Parse the pattern surrounded by the given delimiters.
     ///
@@ -662,7 +779,12 @@ pub trait Parser<I: Clone, O> {
     ///     ),
     /// );
     /// ```
-    fn delimited_by(self, start: I, end: I) -> DelimitedBy<Self, I> where Self: Sized { DelimitedBy(self, start, end) }
+    fn delimited_by(self, start: I, end: I) -> DelimitedBy<Self, I>
+    where
+        Self: Sized,
+    {
+        DelimitedBy(self, start, end)
+    }
 
     /// Parse one thing or, on failure, another thing.
     ///
@@ -687,7 +809,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(op.parse("/"), Ok('/'));
     /// assert!(op.parse("!").is_err());
     /// ```
-    fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P> where Self: Sized { Or(self, other) }
+    fn or<P: Parser<I, O>>(self, other: P) -> Or<Self, P>
+    where
+        Self: Sized,
+    {
+        Or(self, other)
+    }
 
     /// Apply a fallback recovery strategy to this parser should it fail.
     ///
@@ -730,7 +857,10 @@ pub trait Parser<I: Clone, O> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<S: Strategy<I, O, Self::Error>>(self, strategy: S) -> Recovery<Self, S> where Self: Sized {
+    fn recover_with<S: Strategy<I, O, Self::Error>>(self, strategy: S) -> Recovery<Self, S>
+    where
+        Self: Sized,
+    {
         Recovery(self, strategy)
     }
 
@@ -752,7 +882,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(word_or_question.parse("hello?"), Ok(("hello".to_string(), Some('?'))));
     /// assert_eq!(word_or_question.parse("wednesday"), Ok(("wednesday".to_string(), None)));
     /// ```
-    fn or_not(self) -> OrNot<Self> where Self: Sized { OrNot(self) }
+    fn or_not(self) -> OrNot<Self>
+    where
+        Self: Sized,
+    {
+        OrNot(self)
+    }
 
     /// Parse an expression any number of times (including zero times).
     ///
@@ -773,7 +908,12 @@ pub trait Parser<I: Clone, O> {
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self> where Self: Sized { Repeated(self, 0, None) }
+    fn repeated(self) -> Repeated<Self>
+    where
+        Self: Sized,
+    {
+        Repeated(self, 0, None)
+    }
 
     /// Parse an expression, separated by another, any number of times.
     ///
@@ -793,7 +933,10 @@ pub trait Parser<I: Clone, O> {
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U> where Self: Sized {
+    fn separated_by<U, P: Parser<I, U>>(self, other: P) -> SeparatedBy<Self, P, U>
+    where
+        Self: Sized,
+    {
         SeparatedBy {
             a: self,
             b: other,
@@ -820,7 +963,10 @@ pub trait Parser<I: Clone, O> {
     /// - Places where you need to name the type of a parser
     ///
     /// Boxing a parser is broadly equivalent to boxing other combinators, such as [`Iterator`].
-    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error> where Self: Sized + 'a {
+    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error>
+    where
+        Self: Sized + 'a,
+    {
         BoxedParser(Rc::new(self))
     }
 }
@@ -828,34 +974,88 @@ pub trait Parser<I: Clone, O> {
 impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
     type Error = T::Error;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
         debugger.invoke::<_, _, T>(*self, stream)
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
     type Error = T::Error;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
         debugger.invoke::<_, _, T>(&*self, stream)
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
     type Error = T::Error;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
         debugger.invoke::<_, _, T>(&*self, stream)
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }
 
 /// See [`Parser::boxed`].
@@ -871,17 +1071,37 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
 pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
 
 impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
-    fn clone(&self) -> Self { Self(self.0.clone()) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(&self, debugger: &mut D, stream: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> {
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
         debugger.invoke(&self.0, stream)
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, Self::Error>) -> PResult<I, O, Self::Error> { #[allow(deprecated)] self.parse_inner(d, s) }
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
 }

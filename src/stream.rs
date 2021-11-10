@@ -25,7 +25,12 @@ pub enum Flat<I, Iter> {
 /// A type that represents a stream of input tokens. Unlike [`Iterator`], this type supports backtracking and a few
 /// other features required by the crate.
 #[allow(deprecated)]
-pub struct Stream<'a, I, S: Span, Iter: Iterator<Item = (I, S)> + ?Sized = dyn Iterator<Item = (I, S)> + 'a> {
+pub struct Stream<
+    'a,
+    I,
+    S: Span,
+    Iter: Iterator<Item = (I, S)> + ?Sized = dyn Iterator<Item = (I, S)> + 'a,
+> {
     pub(crate) phantom: PhantomData<&'a ()>,
     pub(crate) eoi: S,
     pub(crate) offset: usize,
@@ -56,7 +61,10 @@ impl<'a, I, S: Span, Iter: Iterator<Item = (I, S)>> Stream<'a, I, S, Iter> {
     /// stream's state so that it can still be used for parsing).
     ///
     /// This is most useful when you wish to check the input of a parser during debugging.
-    pub fn fetch_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_ where (I, S): Clone {
+    pub fn fetch_tokens(&mut self) -> impl Iterator<Item = (I, S)> + '_
+    where
+        (I, S): Clone,
+    {
         self.buffer.extend(&mut self.iter);
         self.buffer.iter().cloned()
     }
@@ -133,8 +141,12 @@ impl<'a, I: Clone, S: Span + 'a> BoxStream<'a, I, S> {
         P: 'a,
         Iter: Iterator<Item = (P, S)>,
         Many: Iterator<Item = (P, S)>,
-        F: FnMut((P, S)) -> Flat<(I, S), Many> + 'a
-    >(eoi: S, iter: Iter, mut flatten: F) -> Self {
+        F: FnMut((P, S)) -> Flat<(I, S), Many> + 'a,
+    >(
+        eoi: S,
+        iter: Iter,
+        mut flatten: F,
+    ) -> Self {
         let mut v: Vec<std::collections::VecDeque<(P, S)>> = vec![iter.collect()];
         Self::from_iter(
             eoi,
@@ -143,7 +155,9 @@ impl<'a, I: Clone, S: Span + 'a> BoxStream<'a, I, S> {
                     match many.pop_front().map(&mut flatten) {
                         Some(Flat::Single(input)) => break Some(input),
                         Some(Flat::Many(many)) => v.push(many.collect()),
-                        None => { v.pop(); },
+                        None => {
+                            v.pop();
+                        }
                     }
                 } else {
                     break None;
@@ -154,10 +168,16 @@ impl<'a, I: Clone, S: Span + 'a> BoxStream<'a, I, S> {
 }
 
 impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
-    pub(crate) fn offset(&self) -> usize { self.offset }
+    pub(crate) fn offset(&self) -> usize {
+        self.offset
+    }
 
-    pub(crate) fn save(&self) -> usize { self.offset }
-    pub(crate) fn revert(&mut self, offset: usize) { self.offset = offset; }
+    pub(crate) fn save(&self) -> usize {
+        self.offset
+    }
+    pub(crate) fn revert(&mut self, offset: usize) {
+        self.offset = offset;
+    }
 
     fn pull_until(&mut self, offset: usize) -> Option<&(I, S)> {
         let additional = offset.saturating_sub(self.buffer.len()) + 1024;
@@ -171,17 +191,19 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
             Some((out, span)) => {
                 self.offset += 1;
                 (self.offset - 1, span, Some(out))
-            },
+            }
             None => (self.offset, self.eoi.clone(), None),
         }
     }
 
     pub(crate) fn span_since(&mut self, start: usize) -> S {
-        let start = self.pull_until(start)
+        let start = self
+            .pull_until(start)
             .as_ref()
             .map(|(_, s)| s.start())
             .unwrap_or_else(|| self.eoi.start());
-        let end = self.pull_until(self.offset.saturating_sub(1))
+        let end = self
+            .pull_until(self.offset.saturating_sub(1))
             .as_ref()
             .map(|(_, s)| s.end())
             .unwrap_or_else(|| self.eoi.end());
@@ -197,7 +219,10 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         out
     }
 
-    pub(crate) fn try_parse<O, E, F: FnOnce(&mut Self) -> PResult<I, O, E>>(&mut self, f: F) -> PResult<I, O, E> {
+    pub(crate) fn try_parse<O, E, F: FnOnce(&mut Self) -> PResult<I, O, E>>(
+        &mut self,
+        f: F,
+    ) -> PResult<I, O, E> {
         self.attempt(move |stream| {
             let out = f(stream);
             (out.1.is_ok(), out)
@@ -205,26 +230,45 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     }
 }
 
-impl<'a> From<&'a str> for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>> {
+impl<'a> From<&'a str>
+    for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)> + 'a>>
+{
     /// Please note that Chumsky currently uses character indices and not byte offsets in this impl. This is likely to
     /// change in the future. If you wish to use byte offsets, you can do so with [`Stream::from_iter`].
     fn from(s: &'a str) -> Self {
         let len = s.chars().count();
-        Self::from_iter(len..len + 1, Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))))
+        Self::from_iter(
+            len..len + 1,
+            Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))),
+        )
     }
 }
 
-impl<'a, T: Clone> From<&'a [T]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
+impl<'a, T: Clone> From<&'a [T]>
+    for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
+{
     fn from(s: &'a [T]) -> Self {
         let len = s.len();
-        Self::from_iter(len..len + 1, Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))))
+        Self::from_iter(
+            len..len + 1,
+            Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))),
+        )
     }
 }
 
-impl<'a, T: Clone + 'a, const N: usize> From<[T; N]> for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>> {
+impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
+    for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
+{
     fn from(s: [T; N]) -> Self {
         let len = s.len();
-        Self::from_iter(len..len + 1, Box::new(std::array::IntoIter::new(s).enumerate().map(|(i, x)| (x, i..i + 1))))
+        Self::from_iter(
+            len..len + 1,
+            Box::new(
+                std::array::IntoIter::new(s)
+                    .enumerate()
+                    .map(|(i, x)| (x, i..i + 1)),
+            ),
+        )
     }
 }
 

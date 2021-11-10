@@ -2,8 +2,8 @@
 //! Run it with the following command:
 //! cargo run --example json -- examples/sample.json
 
+use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::prelude::*;
-use ariadne::{Report, ReportKind, Label, Source, Color, Fmt};
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]
@@ -14,18 +14,20 @@ enum Json {
     Str(String),
     Num(f64),
     Array(Vec<Json>),
-    Object(HashMap<String, Json>)
+    Object(HashMap<String, Json>),
 }
 
 fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
     recursive(|value| {
         let frac = just('.').chain(text::digits(10));
 
-        let exp = just('e').or(just('E'))
+        let exp = just('e')
+            .or(just('E'))
             .ignore_then(just('+').or(just('-')).or_not())
             .chain(text::digits(10));
 
-        let number = just('-').or_not()
+        let number = just('-')
+            .or_not()
             .chain(text::int(10))
             .chain(frac.or_not().flatten())
             .chain::<char, _, _>(exp.or_not().flatten())
@@ -33,15 +35,16 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .map(|s| s.parse().unwrap())
             .labelled("number");
 
-        let escape = just('\\')
-            .ignore_then(just('\\')
-            .or(just('/'))
-            .or(just('"'))
-            .or(just('b').to('\x08'))
-            .or(just('f').to('\x0C'))
-            .or(just('n').to('\n'))
-            .or(just('r').to('\r'))
-            .or(just('t').to('\t')));
+        let escape = just('\\').ignore_then(
+            just('\\')
+                .or(just('/'))
+                .or(just('"'))
+                .or(just('b').to('\x08'))
+                .or(just('f').to('\x0C'))
+                .or(just('n').to('\n'))
+                .or(just('r').to('\r'))
+                .or(just('t').to('\t')),
+        );
 
         let string = just('"')
             .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
@@ -49,7 +52,8 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .collect::<String>()
             .labelled("string");
 
-        let array = value.clone()
+        let array = value
+            .clone()
             .chain(just(',').ignore_then(value.clone()).repeated())
             .or_not()
             .flatten()
@@ -58,7 +62,8 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .labelled("array");
 
         let member = string.clone().then_ignore(just(':').padded()).then(value);
-        let object = member.clone()
+        let object = member
+            .clone()
             .chain(just(',').padded().ignore_then(member).repeated())
             .or_not()
             .flatten()
@@ -68,7 +73,9 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .map(Json::Object)
             .labelled("object");
 
-        seq("null".chars()).to(Json::Null).labelled("null")
+        seq("null".chars())
+            .to(Json::Null)
+            .labelled("null")
             .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
             .or(seq("false".chars()).to(Json::Bool(false)).labelled("false"))
             .or(number.map(Json::Num))
@@ -80,61 +87,69 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .recover_with(skip_then_retry_until(['}', ']']))
             .padded()
     })
-        .then_ignore(end().recover_with(skip_then_retry_until([])))
+    .then_ignore(end().recover_with(skip_then_retry_until([])))
 }
 
 fn main() {
-    let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
+    let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument"))
+        .expect("Failed to read file");
 
     let (json, errs) = parser().parse_recovery(src.trim());
     println!("{:#?}", json);
-    errs
-        .into_iter()
-        .for_each(|e| {
-            let msg = format!(
-                "{}{}, expected {}",
-                if e.found().is_some() {
-                    "Unexpected token"
-                } else {
-                    "Unexpected end of input"
-                },
-                if let Some(label) = e.label() {
-                    format!(" while parsing {}", label)
-                } else {
-                    String::new()
-                },
-                if e.expected().len() == 0 {
-                    "end of input".to_string()
-                } else {
-                    e.expected().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
-                },
+    errs.into_iter().for_each(|e| {
+        let msg = format!(
+            "{}{}, expected {}",
+            if e.found().is_some() {
+                "Unexpected token"
+            } else {
+                "Unexpected end of input"
+            },
+            if let Some(label) = e.label() {
+                format!(" while parsing {}", label)
+            } else {
+                String::new()
+            },
+            if e.expected().len() == 0 {
+                "end of input".to_string()
+            } else {
+                e.expected()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
+        );
+
+        let report = Report::build(ReportKind::Error, (), e.span().start)
+            .with_code(3)
+            .with_message(msg)
+            .with_label(
+                Label::new(e.span())
+                    .with_message(format!(
+                        "Unexpected {}",
+                        e.found()
+                            .map(|c| format!("token {}", c.fg(Color::Red)))
+                            .unwrap_or_else(|| "end of input".to_string())
+                    ))
+                    .with_color(Color::Red),
             );
 
-            let report = Report::build(ReportKind::Error, (), e.span().start)
-                .with_code(3)
-                .with_message(msg)
-                .with_label(Label::new(e.span())
-                    .with_message(format!("Unexpected {}", e
-                        .found()
-                        .map(|c| format!("token {}", c.fg(Color::Red)))
-                        .unwrap_or_else(|| "end of input".to_string())))
-                    .with_color(Color::Red));
+        let report = match e.reason() {
+            chumsky::error::SimpleReason::Unclosed { span, delimiter } => report.with_label(
+                Label::new(span.clone())
+                    .with_message(format!(
+                        "Unclosed delimiter {}",
+                        delimiter.fg(Color::Yellow)
+                    ))
+                    .with_color(Color::Yellow),
+            ),
+            chumsky::error::SimpleReason::Unexpected => report,
+            chumsky::error::SimpleReason::Custom(msg) => report.with_label(
+                Label::new(e.span())
+                    .with_message(format!("{}", msg.fg(Color::Yellow)))
+                    .with_color(Color::Yellow),
+            ),
+        };
 
-            let report = match e.reason() {
-                chumsky::error::SimpleReason::Unclosed { span, delimiter } => report
-                    .with_label(Label::new(span.clone())
-                        .with_message(format!("Unclosed delimiter {}", delimiter.fg(Color::Yellow)))
-                    .with_color(Color::Yellow)),
-                chumsky::error::SimpleReason::Unexpected => report,
-                chumsky::error::SimpleReason::Custom(msg) => report
-                    .with_label(Label::new(e.span())
-                        .with_message(format!("{}", msg.fg(Color::Yellow)))
-                    .with_color(Color::Yellow)),
-            };
-
-            report
-                .finish()
-                .print(Source::from(&src))
-                .unwrap();
-        });
+        report.finish().print(Source::from(&src)).unwrap();
+    });
 }

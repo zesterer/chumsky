@@ -3,29 +3,38 @@
 //! cargo run --example brainfuck -- examples/sample.bf
 
 use chumsky::prelude::*;
-use std::{env, io::{self, Read}, fs};
+use std::{
+    env, fs,
+    io::{self, Read},
+};
 
 #[derive(Clone)]
 enum Instr {
     Invalid,
-    Left, Right,
-    Incr, Decr,
-    Read, Write,
-    Loop(Vec<Self>)
+    Left,
+    Right,
+    Incr,
+    Decr,
+    Read,
+    Write,
+    Loop(Vec<Self>),
 }
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| bf.delimited_by('[', ']').map(Loop)
-        .or(just('<').to(Left))
-        .or(just('>').to(Right))
-        .or(just('+').to(Incr))
-        .or(just('-').to(Decr))
-        .or(just(',').to(Read))
-        .or(just('.').to(Write))
-        .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
-        .recover_with(skip_then_retry_until([']']))
-        .repeated())
+    recursive(|bf| {
+        bf.delimited_by('[', ']')
+            .map(Loop)
+            .or(just('<').to(Left))
+            .or(just('>').to(Right))
+            .or(just('+').to(Incr))
+            .or(just('-').to(Decr))
+            .or(just(',').to(Read))
+            .or(just('.').to(Write))
+            .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
+            .recover_with(skip_then_retry_until([']']))
+            .repeated()
+    })
     .then_ignore(end())
 }
 
@@ -42,19 +51,22 @@ fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
             Decr => tape[*ptr] = tape[*ptr].wrapping_sub(1),
             Read => tape[*ptr] = io::stdin().bytes().next().unwrap().unwrap(),
             Write => print!("{}", tape[*ptr] as char),
-            Loop(ast) => while tape[*ptr] != 0 { execute(ast, ptr, tape) },
+            Loop(ast) => {
+                while tape[*ptr] != 0 {
+                    execute(ast, ptr, tape)
+                }
+            }
         }
     }
 }
 
 fn main() {
-    let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument")).expect("Failed to read file");
+    let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument"))
+        .expect("Failed to read file");
 
     // let src = "[!]+";
     match parser().parse(src.trim()) {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
-        Err(errs) => errs
-            .into_iter()
-            .for_each(|e| println!("{:?}", e)),
+        Err(errs) => errs.into_iter().for_each(|e| println!("{:?}", e)),
     }
 }

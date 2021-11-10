@@ -1,8 +1,5 @@
 use super::*;
-use std::{
-    hash::Hash,
-    collections::HashSet,
-};
+use std::{collections::HashSet, hash::Hash};
 
 #[cfg(feature = "ahash")]
 type RandomState = ahash::RandomState;
@@ -75,7 +72,11 @@ pub trait Error<I>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(span: Self::Span, expected: Iter, found: Option<I>) -> Self;
+    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+        span: Self::Span,
+        expected: Iter,
+        found: Option<I>,
+    ) -> Self;
 
     /// Create a new error describing a delimiter that was not correctly closed.
     ///
@@ -85,7 +86,13 @@ pub trait Error<I>: Sized {
     ///
     /// The default implementation of this function uses [`Error::expected_input_found`], but you'll probably want to
     /// implement it yourself to take full advantage of the extra diagnostic information.
-    fn unclosed_delimiter(unclosed_span: Self::Span, unclosed: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+    fn unclosed_delimiter(
+        unclosed_span: Self::Span,
+        unclosed: I,
+        span: Self::Span,
+        expected: I,
+        found: Option<I>,
+    ) -> Self {
         #![allow(unused_variables)]
         Self::expected_input_found(span, Some(expected), found)
     }
@@ -165,19 +172,29 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
     }
 
     /// Returns the span that the error occured at.
-    pub fn span(&self) -> S { self.span.clone() }
+    pub fn span(&self) -> S {
+        self.span.clone()
+    }
 
     /// Returns an iterator over possible expected patterns.
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = &I> + '_ { self.expected.iter() }
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &I> + '_ {
+        self.expected.iter()
+    }
 
     /// Returns the input, if any, that was found instead of an expected pattern.
-    pub fn found(&self) -> Option<&I> { self.found.as_ref() }
+    pub fn found(&self) -> Option<&I> {
+        self.found.as_ref()
+    }
 
     /// Returns the reason for the error.
-    pub fn reason(&self) -> &SimpleReason<I, S> { &self.reason }
+    pub fn reason(&self) -> &SimpleReason<I, S> {
+        &self.reason
+    }
 
     /// Returns the error's label, if any.
-    pub fn label(&self) -> Option<&'static str> { self.label }
+    pub fn label(&self) -> Option<&'static str> {
+        self.label
+    }
 
     /// Map the error's inputs using the given function.
     ///
@@ -187,14 +204,14 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
         Simple {
             span: self.span,
             reason: match self.reason {
-                SimpleReason::Unclosed { span, delimiter } => SimpleReason::Unclosed {span, delimiter: f(delimiter) },
+                SimpleReason::Unclosed { span, delimiter } => SimpleReason::Unclosed {
+                    span,
+                    delimiter: f(delimiter),
+                },
                 SimpleReason::Unexpected => SimpleReason::Unexpected,
                 SimpleReason::Custom(msg) => SimpleReason::Custom(msg),
             },
-            expected: self.expected
-                .into_iter()
-                .map(&mut f)
-                .collect(),
+            expected: self.expected.into_iter().map(&mut f).collect(),
             found: self.found.map(f),
             label: self.label,
         }
@@ -205,22 +222,33 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     type Span = S;
     type Label = &'static str;
 
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(span: Self::Span, expected: Iter, found: Option<I>) -> Self {
+    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+        span: Self::Span,
+        expected: Iter,
+        found: Option<I>,
+    ) -> Self {
         Self {
             span,
             reason: SimpleReason::Unexpected,
-            expected: expected
-                .into_iter()
-                .collect(),
+            expected: expected.into_iter().collect(),
             found,
             label: None,
         }
     }
 
-    fn unclosed_delimiter(unclosed_span: Self::Span, delimiter: I, span: Self::Span, expected: I, found: Option<I>) -> Self {
+    fn unclosed_delimiter(
+        unclosed_span: Self::Span,
+        delimiter: I,
+        span: Self::Span,
+        expected: I,
+        found: Option<I>,
+    ) -> Self {
         Self {
             span,
-            reason: SimpleReason::Unclosed { span: unclosed_span, delimiter },
+            reason: SimpleReason::Unclosed {
+                span: unclosed_span,
+                delimiter,
+            },
             expected: std::iter::once(expected).collect(),
             found,
             label: None,
@@ -265,22 +293,32 @@ impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, 
             write!(f, "found end of input ")?;
         }
 
-
         match self.expected.len() {
             0 => write!(f, "but end of input was expected")?,
-            1 => write!(f, "but {} was expected", self.expected.iter().next().unwrap())?,
-            _ => write!(f, "but one of {} was expected", self.expected
-                .iter()
-                .map(|expected| expected.to_string())
-                .collect::<Vec<_>>()
-                .join(", "))?,
+            1 => write!(
+                f,
+                "but {} was expected",
+                self.expected.iter().next().unwrap()
+            )?,
+            _ => write!(
+                f,
+                "but one of {} was expected",
+                self.expected
+                    .iter()
+                    .map(|expected| expected.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )?,
         }
 
         Ok(())
     }
 }
 
-impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> std::error::Error for Simple<I, S> {}
+impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> std::error::Error
+    for Simple<I, S>
+{
+}
 
 /// A minimal error type that tracks only the error span and label. This type is most useful when you want fast parsing
 /// but do not particularly care about the quality of error messages.
@@ -293,18 +331,30 @@ pub struct Cheap<I, S = Range<usize>> {
 
 impl<I, S: Clone> Cheap<I, S> {
     /// Returns the span that the error occured at.
-    pub fn span(&self) -> S { self.span.clone() }
+    pub fn span(&self) -> S {
+        self.span.clone()
+    }
 
     /// Returns the error's label, if any.
-    pub fn label(&self) -> Option<&'static str> { self.label }
+    pub fn label(&self) -> Option<&'static str> {
+        self.label
+    }
 }
 
 impl<I, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
     type Span = S;
     type Label = &'static str;
 
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(span: Self::Span, _: Iter, _: Option<I>) -> Self {
-        Self { span, label: None, phantom: PhantomData }
+    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+        span: Self::Span,
+        _: Iter,
+        _: Option<I>,
+    ) -> Self {
+        Self {
+            span,
+            label: None,
+            phantom: PhantomData,
+        }
     }
 
     fn with_label(mut self, label: Self::Label) -> Self {
@@ -312,5 +362,7 @@ impl<I, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
         self
     }
 
-    fn merge(self, _: Self) -> Self { self }
+    fn merge(self, _: Self) -> Self {
+        self
+    }
 }
