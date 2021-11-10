@@ -14,11 +14,13 @@ exclude = [
 ]
 
 [features]
-default = ["ahash"]
+default = ["ahash", "regex"]
 
 [dependencies]
 # Use `ahash` for maintaining sets of expected inputs
 ahash = { version = "^0.3", optional = true }
+# Add a regex combinator
+regex = { version = "^1.5", optional = true }
 
 [dev-dependencies]
 ariadne = "0.1.2"

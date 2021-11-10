@@ -8,12 +8,26 @@ pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>
 /// pattern.
 pub type Padded<P, I, O> = ThenIgnore<IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>, Padding<I, <P as Parser<I, O>>::Error>, O, ()>;
 
+#[cfg(feature = "regex")]
+#[cfg_attr(docsrs, doc(cfg(feature = "regex")))]
+pub use crate::regex::Regex;
+
+mod private {
+    pub trait Sealed {}
+
+    impl Sealed for u8 {}
+    impl Sealed for char {}
+}
+
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
-pub trait Character: Copy + PartialEq {
+pub trait Character: private::Sealed + Copy + PartialEq {
     /// The default type that this character collects into.
     type Collection: Chain<Self> + FromIterator<Self>;
+
+    #[cfg(feature = "regex")]
+    type Regex;
 
     /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
@@ -30,6 +44,8 @@ pub trait Character: Copy + PartialEq {
 
 impl Character for u8 {
     type Collection = Vec<u8>;
+    #[cfg(feature = "regex")]
+    type Regex = ::regex::bytes::Regex;
     fn is_whitespace(&self) -> bool { self.is_ascii_whitespace() }
     fn digit_zero() -> Self { b'0' }
     fn is_digit(&self, radix: u32) -> bool { (*self as char).is_digit(radix) }
@@ -38,6 +54,8 @@ impl Character for u8 {
 
 impl Character for char {
     type Collection = String;
+    #[cfg(feature = "regex")]
+    type Regex = ::regex::Regex;
     fn is_whitespace(&self) -> bool { char::is_whitespace(*self) }
     fn digit_zero() -> Self { '0' }
     fn is_digit(&self, radix: u32) -> bool { char::is_digit(*self, radix) }

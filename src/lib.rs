@@ -18,6 +18,8 @@ pub mod primitive;
 pub mod recovery;
 /// Recursive parsers (parser that include themselves within their patterns).
 pub mod recursive;
+#[cfg(feature = "regex")]
+mod regex;
 /// Types and traits related to spans.
 pub mod span;
 /// Token streams and behaviours.
