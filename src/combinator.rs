@@ -368,8 +368,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
 
 /// See [`Parser::separated_by`].
 pub struct SeparatedBy<A, B, U> {
-    pub(crate) a: A,
-    pub(crate) b: B,
+    pub(crate) item: A,
+    pub(crate) delimiter: B,
     pub(crate) at_least: usize,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
@@ -444,8 +444,8 @@ impl<A: Copy, B: Copy, U> Copy for SeparatedBy<A, B, U> {}
 impl<A: Clone, B: Clone, U> Clone for SeparatedBy<A, B, U> {
     fn clone(&self) -> Self {
         Self {
-            a: self.a.clone(),
-            b: self.b.clone(),
+            item: self.item.clone(),
+            delimiter: self.delimiter.clone(),
             at_least: self.at_least,
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
@@ -465,63 +465,100 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
+        #[derive(PartialEq)]
+        enum State {
+            Terminated,
+            Continue,
+        }
+
+        fn parse_or_not<U, B: Parser<I, U, Error = E>, I: Clone, E: Error<I>, D: Debugger>(
+            delimiter: &B,
+            stream: &mut StreamOf<I, E>,
+            debugger: &mut D,
+            alt: Option<Located<I, E>>,
+        ) -> Option<Located<I, E>> {
+            match stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                debugger.invoke(&delimiter, stream)
+            }) {
+                // These two paths are successful path so the furthest errors are merged with the alt.
+                (d_errors, Ok((_, d_alt))) => merge_alts(alt, merge_alts(d_alt, d_errors)),
+                (d_errors, Err(d_err)) => {
+                    merge_alts(alt, merge_alts(Some(d_err), d_errors))
+                    },
+            }
+        }
+
+        fn parse<O, A: Parser<I, O, Error = E>, I: Clone, E: Error<I>, D: Debugger>(
+            item: &A,
+            stream: &mut StreamOf<I, E>,
+            debugger: &mut D,
+            outputs: &mut Vec<O>,
+            errors: &mut Vec<Located<I, E>>,
+            alt: Option<Located<I, E>>,
+        ) -> (State, Option<Located<I, E>>) {
+            match stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                debugger.invoke(item, stream)
+            }) {
+                (mut i_errors, Ok((i_out, i_alt))) => {
+                    outputs.push(i_out);
+                    errors.append(&mut i_errors);
+                    (State::Continue, merge_alts(alt, i_alt))
+                }
+                (mut i_errors, Err(i_err)) => {
+                    errors.append(&mut i_errors);
+                    (State::Terminated, merge_alts(alt, Some(i_err)))
+                }
+            }
+        }
+
         let mut outputs = Vec::new();
         let mut errors = Vec::new();
         let mut alt = None;
 
-        let mut i = 0;
-        loop {
-            match stream.try_parse(|stream| {
-                #[allow(deprecated)]
-                debugger.invoke(&self.a, stream)
-            }) {
-                (mut a_errors, Ok((a_out, a_alt))) => {
-                    errors.append(&mut a_errors);
-                    alt = merge_alts(alt.take(), a_alt);
-                    outputs.push(a_out);
-                }
-                (mut a_errors, Err(a_err)) if !self.allow_trailing && i > 0 => {
-                    errors.append(&mut a_errors);
-                    break (errors, Err(a_err));
-                }
-                (_, Err(a_err)) if self.allow_leading && i == 0 => {
-                    alt = merge_alts(alt.take(), Some(a_err));
-                }
-                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least => {
-                    dbg!(outputs.len());
-                    errors.append(&mut a_errors);
-                    break (errors, Err(a_err));
-                }
-                (a_errors, Err(a_err)) => {
-                    // Find furthest alternative error
-                    // TODO: Handle multiple alternative errors
-                    // TODO: Should we really be taking *all* of these into consideration?
-                    let alt = merge_alts(
-                        alt.take(),
-                        merge_alts(Some(a_err), a_errors.into_iter().next()),
-                    );
-                    break (errors, Ok((outputs, alt)));
-                }
-            }
+        if self.allow_leading {
+            alt = parse_or_not(&self.delimiter, stream, debugger, alt);
+        }
+
+        let (mut state, mut alt) =
+            parse(&self.item, stream, debugger, &mut outputs, &mut errors, alt);
+
+        let mut offset = stream.save();
+        while state == State::Continue {
+            offset = stream.save();
 
             match stream.try_parse(|stream| {
                 #[allow(deprecated)]
-                debugger.invoke(&self.b, stream)
+                debugger.invoke(&self.delimiter, stream)
             }) {
-                (mut b_errors, Ok((_, b_alt))) => {
-                    errors.append(&mut b_errors);
-                    alt = merge_alts(alt.take(), b_alt);
+                (mut d_errors, Ok((_, d_alt))) => {
+                    errors.append(&mut d_errors);
+                    alt = merge_alts(alt, d_alt);
+
+                    let (i_state, i_alt) =
+                        parse(&self.item, stream, debugger, &mut outputs, &mut errors, alt);
+                    state = i_state;
+                    alt = i_alt;
                 }
-                (_, Err(b_err)) if outputs.len() < self.at_least => {
-                    break (errors, Err(b_err));
-                }
-                (_, Err(b_err)) => {
-                    alt = merge_alts(alt.take(), Some(b_err));
-                    break (errors, Ok((outputs, alt)));
+                (mut d_errors, Err(d_err)) => {
+                    errors.append(&mut d_errors);
+                    alt = merge_alts(alt, Some(d_err));
+                    state = State::Terminated;
                 }
             }
+        }
+        stream.revert(offset);
 
-            i += 1;
+        if self.allow_trailing {
+            alt = parse_or_not(&self.delimiter, stream, debugger, alt);
+        }
+
+        if outputs.len() >= self.at_least {
+            (errors, Ok((outputs, alt)))
+        } else {
+            // In all paths where `State = State::Terminated`, Some(err) is inserted into alt.
+            (errors, Err(alt.unwrap()))
         }
     }
 
@@ -992,49 +1029,58 @@ mod tests {
     #[test]
     fn separated_by_at_least() {
         let parser = just::<_, Simple<char>>('-')
-            .separated_by(just('.'))
+            .separated_by(just(','))
             .at_least(3);
 
-        assert_eq!(parser.parse("-.-.-"), Ok(vec!['-', '-', '-']));
+        assert_eq!(parser.parse("-,-,-"), Ok(vec!['-', '-', '-']));
     }
 
     #[test]
     fn separated_by_at_least_without_leading() {
         let parser = just::<_, Simple<char>>('-')
-            .separated_by(just('.'))
+            .separated_by(just(','))
             .at_least(3);
 
-        assert!(parser.parse(".-.-.-").is_err());
+        assert!(parser.parse(",-,-,-").is_err());
     }
 
     #[test]
     fn separated_by_at_least_without_trailing() {
         let parser = just::<_, Simple<char>>('-')
-            .separated_by(just('.'))
-            .at_least(3);
+            .separated_by(just(','))
+            .at_least(3)
+            .then(end());
 
-        assert!(parser.parse("-.-.-.").is_err());
+        assert!(parser.parse("-,-,-,").is_err());
     }
 
     #[test]
     fn separated_by_at_least_with_leading() {
         let parser = just::<_, Simple<char>>('-')
-            .separated_by(just('.'))
+            .separated_by(just(','))
             .allow_leading()
             .at_least(3);
 
-        assert_eq!(parser.parse(".-.-.-"), Ok(vec!['-', '-', '-']));
-        assert!(parser.parse(".-.-").is_err());
+        assert_eq!(parser.parse(",-,-,-"), Ok(vec!['-', '-', '-']));
+        assert!(parser.parse(",-,-").is_err());
     }
 
     #[test]
     fn separated_by_at_least_with_trailing() {
         let parser = just::<_, Simple<char>>('-')
-            .separated_by(just('.'))
+            .separated_by(just(','))
             .allow_trailing()
             .at_least(3);
 
-        assert_eq!(parser.parse("-.-.-."), Ok(vec!['-', '-', '-']));
-        assert!(parser.parse("-.-.").is_err());
+        assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-']));
+        assert!(parser.parse("-,-,").is_err());
+    }
+
+    #[test]
+    fn separated_by_leaves_last_separator() {
+        let parser = just::<_, Simple<char>>('-')
+            .separated_by(just(','))
+            .chain(just(','));
+        assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-', ',']))
     }
 }
