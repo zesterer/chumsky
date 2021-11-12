@@ -465,9 +465,8 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
-        #[derive(PartialEq)]
-        enum State {
-            Terminated,
+        enum State<I, E> {
+            Terminated(Located<I, E>),
             Continue,
         }
 
@@ -483,9 +482,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             }) {
                 // These two paths are successful path so the furthest errors are merged with the alt.
                 (d_errors, Ok((_, d_alt))) => merge_alts(alt, merge_alts(d_alt, d_errors)),
-                (d_errors, Err(d_err)) => {
-                    merge_alts(alt, merge_alts(Some(d_err), d_errors))
-                    },
+                (d_errors, Err(d_err)) => merge_alts(alt, merge_alts(Some(d_err), d_errors)),
             }
         }
 
@@ -496,7 +493,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             outputs: &mut Vec<O>,
             errors: &mut Vec<Located<I, E>>,
             alt: Option<Located<I, E>>,
-        ) -> (State, Option<Located<I, E>>) {
+        ) -> (State<I, E>, Option<Located<I, E>>) {
             match stream.try_parse(|stream| {
                 #[allow(deprecated)]
                 debugger.invoke(item, stream)
@@ -508,7 +505,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                 }
                 (mut i_errors, Err(i_err)) => {
                     errors.append(&mut i_errors);
-                    (State::Terminated, merge_alts(alt, Some(i_err)))
+                    (State::Terminated(i_err), alt)
                 }
             }
         }
@@ -525,7 +522,12 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             parse(&self.item, stream, debugger, &mut outputs, &mut errors, alt);
 
         let mut offset = stream.save();
-        while state == State::Continue {
+        let error: Located<I, E>;
+        loop {
+            if let State::Terminated(err) = state {
+                error = err;
+                break;
+            }
             offset = stream.save();
 
             match stream.try_parse(|stream| {
@@ -543,8 +545,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
                 }
                 (mut d_errors, Err(d_err)) => {
                     errors.append(&mut d_errors);
-                    alt = merge_alts(alt, Some(d_err));
-                    state = State::Terminated;
+                    state = State::Terminated(d_err);
                 }
             }
         }
@@ -555,10 +556,11 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
 
         if outputs.len() >= self.at_least {
+            alt = merge_alts(alt, Some(error));
             (errors, Ok((outputs, alt)))
         } else {
             // In all paths where `State = State::Terminated`, Some(err) is inserted into alt.
-            (errors, Err(alt.unwrap()))
+            (errors, Err(error))
         }
     }
 
