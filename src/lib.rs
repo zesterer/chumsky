@@ -113,20 +113,26 @@ impl<I, E: Error<I>> Located<I, E> {
 }
 
 // Merge two alternative errors
-// TODO: Allow multiple alternative errors
-fn merge_alts<I, E: Error<I>>(
-    a: Option<Located<I, E>>,
-    b: Option<Located<I, E>>,
+fn merge_alts<I, E: Error<I>, T: IntoIterator<Item = Located<I, E>>>(
+    mut error: Option<Located<I, E>>,
+    errors: T,
 ) -> Option<Located<I, E>> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(a.max(b)),
-        (a, b) => a.or(b),
+    for other in errors {
+        match (error, other) {
+            (Some(a), b) => {
+                error = Some(b.max(a));
+            }
+            (None, b) => {
+                error = Some(b);
+            }
+        }
     }
+    error
 }
 
-// ([], Ok((out, recovered, alt_err))) => parsing successful, recovered = whether the false is a false recovered value,
+// ([], Ok((out, alt_err))) => parsing successful,
 // alt_err = potential alternative error should a different number of optional patterns be parsed
-// ([x, ...], Ok(out)) => parsing failed, but recovery occurred so parsing may continue
+// ([x, ...], Ok((out, alt_err)) => parsing failed, but recovery occurred so parsing may continue
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
 // TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
 type PResult<I, O, E> = (
@@ -938,8 +944,8 @@ pub trait Parser<I: Clone, O> {
         Self: Sized,
     {
         SeparatedBy {
-            a: self,
-            b: other,
+            item: self,
+            delimiter: other,
             at_least: 0,
             allow_leading: false,
             allow_trailing: false,

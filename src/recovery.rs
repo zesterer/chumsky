@@ -68,8 +68,8 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
         &self,
         mut a_errors: Vec<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
-        parser: P,
-        debugger: &mut D,
+        _parser: P,
+        _debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
         let pre_state = stream.save();
