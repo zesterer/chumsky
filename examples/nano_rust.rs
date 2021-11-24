@@ -89,7 +89,12 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .or(ident)
         .recover_with(skip_then_retry_until([]));
 
+    let comment = seq("//".chars())
+        .then(take_until(just('\n')))
+        .padded();
+
     token
+        .padded_by(comment.repeated())
         .map_with_span(|tok, span| (tok, span))
         .padded()
         .repeated()

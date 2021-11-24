@@ -1,24 +1,33 @@
+// Run this example with `cargo run --example nano_rust -- examples/sample.nrs`
+// Feel free to play around with this sample to see what errors you can generate!
+// Spans are propagated to the interpreted AST so you can even invoke runtime
+// errors and still have an error message that points to source code emitted!
+
+// Calculate the factorial of a number
 fn factorial(x) {
-	if x == 0 {
-		1
-	} else {
-		x * factorial(x - 1)
-	}
+    // Conditionals are supported!
+    if x == 0 {
+        1
+    } else {
+        x * factorial(x - 1)
+    }
 }
 
+// The main function
 fn main() {
-	let three = 3;
-	let meaning_of_life = three * 14 + 1;
+    let three = 3;
+    let meaning_of_life = three * 14 + 1;
 
-	print("Hello, world!");
-	print("The meaning of life is...");
+    print("Hello, world!");
+    print("The meaning of life is...");
 
-	if meaning_of_life == 42 {
-		print(meaning_of_life);
-	} else {
-		print("...something we cannot know");
+    if meaning_of_life == 42 {
+        print(meaning_of_life);
+    } else {
+        print("...something we cannot know");
 
-		print("However, I can tell you that the factorial of 10 is...");
-		print(factorial(10, 11));
-	}
+        print("However, I can tell you that the factorial of 10 is...");
+        // Function calling
+        print(factorial(10));
+    }
 }
