@@ -1134,4 +1134,17 @@ mod tests {
             .chain(just(','));
         assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-', ',']))
     }
+
+    #[test]
+    // TODO: this fails
+    fn reproduce_repeated_with_infix() {
+        let a = just::<_, Simple<char>>('a');
+        let parser = a
+            .clone()
+            .repeated()
+            .then(a.clone().then_ignore(just('-')).then(a))
+            .then_ignore(end());
+
+        assert_eq!(parser.parse("aaa-a"), Ok((vec!['a', 'a'], ('a', 'a'))));
+    }
 }
