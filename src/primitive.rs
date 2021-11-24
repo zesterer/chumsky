@@ -597,7 +597,7 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 ///
 /// assert_eq!(any.parse("a"), Ok('a'));
 /// assert_eq!(any.parse("7"), Ok('7'));
-/// assert_eq!(any.parse("🤖"), Ok('🤖'));
+/// assert_eq!(any.parse("\t"), Ok('\t'));
 /// assert!(any.parse("").is_err());
 /// ```
 pub fn any<I, E>() -> Any<I, E> {

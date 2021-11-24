@@ -86,6 +86,9 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
             }) {
                 Ok(true) => break (a_errors, Ok(((self.1)(stream.span_since(pre_state)), None))),
                 Ok(false) => {}
+                Err(_) if stream.save() > pre_state => {
+                    break (a_errors, Ok(((self.1)(stream.span_since(pre_state)), None)))
+                }
                 Err((at, span)) => {
                     break (
                         a_errors,

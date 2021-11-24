@@ -60,7 +60,7 @@ Other examples include:
 - An [interpreter for simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
-## *What* a parser combinator?
+## *What* is a parser combinator?
 
 Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
 parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy to transform a stream
