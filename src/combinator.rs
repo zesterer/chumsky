@@ -1022,6 +1022,55 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
     }
 }
 
+/// See [`Parser::lookahead`].
+pub struct Lookahead<A>(pub(crate) A);
+
+impl<I: Clone, O, E: Error<I>, A> Parser<I, O> for Lookahead<A>
+where
+    A: Parser<I, O, Error = E>,
+{
+    type Error = E;
+
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>
+    where
+        Self: Sized,
+    {
+        let lookahead_from = stream.save();
+        match {
+            #[allow(deprecated)]
+            debugger.invoke(&self.0, stream)
+        } {
+            (errors, Ok((out, alt))) => {
+                stream.revert(lookahead_from);
+                (errors, Ok((out, alt)))
+            }
+            (errors, Err(err)) => (errors, Err(err)),
+        }
+    }
+
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use error::Simple;

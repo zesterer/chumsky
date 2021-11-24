@@ -953,6 +953,25 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
+    /// Make the parser only look ahead and not consume input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let terminal_word = text::ident::<_, Simple<char>>()
+    ///     .then_ignore(just('.').lookahead());
+    ///
+    /// assert!(terminal_word.parse("Me too.").is_err());
+    /// assert_eq!(terminal_word.parse("Yes."), Ok("Yes".to_string()));
+    /// ```
+    fn lookahead(self) -> Lookahead<Self>
+    where
+        Self: Sized,
+    {
+        Lookahead(self)
+    }
+
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
     ///
     /// Boxing a parser might be useful for:
