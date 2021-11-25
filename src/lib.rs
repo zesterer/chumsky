@@ -953,6 +953,29 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
+    /// Parse something and then rewind the state so that it only looks ahead and does not consume input.
+    /// Chumsky's parsers are always rewind the state when they fail.
+    /// But this combinator makes a parsers to rewind the state whether it succeeds or fails.
+    /// A typical use-case of this is that you want to parse something which is not followed by something else.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let just_numbers = text::digits::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .then_ignore(none_of("+-*/".chars()).rewind())
+    ///     .separated_by(just(','));
+    /// // 3 is not parsed because it's followed by '+'.
+    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// ```
+    fn rewind(self) -> Rewind<Self>
+    where
+        Self: Sized,
+    {
+        Rewind(self)
+    }
+
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
     ///
     /// Boxing a parser might be useful for:
