@@ -953,23 +953,27 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
-    /// Make the parser only look ahead and not consume input.
+    /// Parse something and then rewind the state so that it only looks ahead and does not consume input.
+    /// Chumsky's parsers are always rewind the state when they fail.
+    /// But this combinator makes a parsers to rewind the state whether it succeeds or fails.
+    /// A typical use-case of this is that you want to parse something which is not followed by something else.
     ///
     /// # Examples
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let terminal_word = text::ident::<_, Simple<char>>()
-    ///     .then_ignore(just('.').lookahead());
-    ///
-    /// assert!(terminal_word.parse("Me too.").is_err());
-    /// assert_eq!(terminal_word.parse("Yes."), Ok("Yes".to_string()));
+    /// let just_numbers = text::digits::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .then_ignore(none_of("+-*/".chars()).rewind())
+    ///     .separated_by(just(','));
+    /// // 3 is not parsed because it's followed by '+'.
+    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4"), Ok(vec!["1".to_string(), "2".to_string()]));
     /// ```
-    fn lookahead(self) -> Lookahead<Self>
+    fn rewind(self) -> Rewind<Self>
     where
         Self: Sized,
     {
-        Lookahead(self)
+        Rewind(self)
     }
 
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.

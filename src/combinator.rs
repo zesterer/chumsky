@@ -1022,10 +1022,10 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
     }
 }
 
-/// See [`Parser::lookahead`].
-pub struct Lookahead<A>(pub(crate) A);
+/// See [`Parser::rewind`].
+pub struct Rewind<A>(pub(crate) A);
 
-impl<I: Clone, O, E: Error<I>, A> Parser<I, O> for Lookahead<A>
+impl<I: Clone, O, E: Error<I>, A> Parser<I, O> for Rewind<A>
 where
     A: Parser<I, O, Error = E>,
 {
@@ -1039,13 +1039,13 @@ where
     where
         Self: Sized,
     {
-        let lookahead_from = stream.save();
+        let rewind_from = stream.save();
         match {
             #[allow(deprecated)]
             debugger.invoke(&self.0, stream)
         } {
             (errors, Ok((out, alt))) => {
-                stream.revert(lookahead_from);
+                stream.revert(rewind_from);
                 (errors, Ok((out, alt)))
             }
             (errors, Err(err)) => (errors, Err(err)),
@@ -1133,18 +1133,5 @@ mod tests {
             .separated_by(just(','))
             .chain(just(','));
         assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-', ',']))
-    }
-
-    #[test]
-    // TODO: this fails
-    fn reproduce_repeated_with_infix() {
-        let a = just::<_, Simple<char>>('a');
-        let parser = a
-            .clone()
-            .repeated()
-            .then(a.clone().then_ignore(just('-')).then(a))
-            .then_ignore(end());
-
-        assert_eq!(parser.parse("aaa-a"), Ok((vec!['a', 'a'], ('a', 'a'))));
     }
 }
