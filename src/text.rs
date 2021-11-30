@@ -13,10 +13,17 @@ pub type Padded<P, I, O> = ThenIgnore<
     (),
 >;
 
+mod private {
+    pub trait Sealed {}
+
+    impl Sealed for u8 {}
+    impl Sealed for char {}
+}
+
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
-pub trait Character: Copy + PartialEq {
+pub trait Character: private::Sealed + Copy + PartialEq {
     /// The default type that this character collects into.
     type Collection: Chain<Self> + FromIterator<Self>;
 
@@ -35,6 +42,7 @@ pub trait Character: Copy + PartialEq {
 
 impl Character for u8 {
     type Collection = Vec<u8>;
+
     fn is_whitespace(&self) -> bool {
         self.is_ascii_whitespace()
     }
@@ -51,6 +59,7 @@ impl Character for u8 {
 
 impl Character for char {
     type Collection = String;
+
     fn is_whitespace(&self) -> bool {
         char::is_whitespace(*self)
     }
