@@ -1,6 +1,6 @@
 use super::*;
 
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 // TODO: Remove when `OnceCell` is stable
 struct OnceCell<T>(std::cell::RefCell<Option<T>>);
@@ -19,13 +19,29 @@ impl<T> OnceCell<T> {
     }
 }
 
+enum RecursiveInner<T> {
+    Owned(Rc<T>),
+    Unowned(Weak<T>),
+}
+
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
-pub struct Recursive<'a, I, O, E: Error<I>>(Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>);
+pub struct Recursive<'a, I, O, E: Error<I>>(
+    RecursiveInner<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>,
+);
 
 impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
+    fn cell(&self) -> Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>> {
+        match &self.0 {
+            RecursiveInner::Owned(x) => x.clone(),
+            RecursiveInner::Unowned(x) => x
+                .upgrade()
+                .expect("Recursive parser used before being defined"),
+        }
+    }
+
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -65,12 +81,12 @@ impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
     /// );
     /// ```
     pub fn declare() -> Self {
-        Recursive(Rc::new(OnceCell::new()))
+        Recursive(RecursiveInner::Owned(Rc::new(OnceCell::new())))
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     pub fn define<P: Parser<I, O, Error = E> + 'a>(&mut self, parser: P) {
-        self.0
+        self.cell()
             .set(Box::new(parser))
             .unwrap_or_else(|_| panic!("Parser defined more than once"));
     }
@@ -78,7 +94,10 @@ impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
 
 impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(RecursiveInner::Unowned(match &self.0 {
+            RecursiveInner::Owned(x) => Rc::downgrade(x),
+            RecursiveInner::Unowned(x) => x.clone(),
+        }))
     }
 }
 
@@ -92,7 +111,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
     ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
         debugger.invoke(
-            self.0
+            self.cell()
                 .get()
                 .expect("Recursive parser used before being defined")
                 .as_ref(),
