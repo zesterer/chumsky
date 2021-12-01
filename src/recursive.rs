@@ -94,10 +94,10 @@ impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
 
 impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
     fn clone(&self) -> Self {
-        Self(RecursiveInner::Unowned(match &self.0 {
-            RecursiveInner::Owned(x) => Rc::downgrade(x),
-            RecursiveInner::Unowned(x) => x.clone(),
-        }))
+        Self(match &self.0 {
+            RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
+            RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
+        })
     }
 }
 
@@ -186,6 +186,9 @@ pub fn recursive<
     f: F,
 ) -> Recursive<'a, I, O, E> {
     let mut parser = Recursive::declare();
-    parser.define(f(parser.clone()));
+    parser.define(f(Recursive(match &parser.0 {
+        RecursiveInner::Owned(x) => RecursiveInner::Unowned(Rc::downgrade(x)),
+        RecursiveInner::Unowned(_) => unreachable!(),
+    })));
     parser
 }
