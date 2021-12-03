@@ -73,11 +73,11 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .map(Json::Object)
             .labelled("object");
 
-        seq("null".chars())
+        just("null")
             .to(Json::Null)
             .labelled("null")
-            .or(seq("true".chars()).to(Json::Bool(true)).labelled("true"))
-            .or(seq("false".chars()).to(Json::Bool(false)).labelled("false"))
+            .or(just("true").to(Json::Bool(true)).labelled("true"))
+            .or(just("false").to(Json::Bool(false)).labelled("false"))
             .or(number.map(Json::Num))
             .or(string.map(Json::Str))
             .or(array)

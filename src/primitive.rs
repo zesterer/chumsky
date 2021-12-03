@@ -92,41 +92,127 @@ pub fn end<E>() -> End<E> {
     End(PhantomData)
 }
 
-/// See [`just`].
-pub struct Just<I, E>(I, PhantomData<E>);
+/// A utility trait to abstract over linear container-like things.
+///
+/// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
+pub trait Container<T> {
+    /// An iterator over the items within this container, by value.
+    type Iter: Iterator<Item = T>;
+    /// Iterate over the elements of the container (using internal iteration because GATs are unstable).
+    fn get_iter(&self) -> Self::Iter;
+}
 
-impl<I: Copy, E> Copy for Just<I, E> {}
-impl<I: Clone, E> Clone for Just<I, E> {
+impl<T: Clone> Container<T> for T {
+    type Iter = std::iter::Once<T>;
+    fn get_iter(&self) -> Self::Iter {
+        std::iter::once(self.clone())
+    }
+}
+
+impl Container<char> for String {
+    type Iter = std::vec::IntoIter<char>;
+    fn get_iter(&self) -> Self::Iter {
+        self.chars().collect::<Vec<_>>().into_iter()
+    }
+}
+
+impl<'a> Container<char> for &'a str {
+    type Iter = std::str::Chars<'a>;
+    fn get_iter(&self) -> Self::Iter {
+        self.chars()
+    }
+}
+
+impl<T: Clone, const N: usize> Container<T> for [T; N] {
+    type Iter = std::array::IntoIter<T, N>;
+    fn get_iter(&self) -> Self::Iter {
+        std::array::IntoIter::new(self.clone())
+    }
+}
+
+impl<T: Clone> Container<T> for Vec<T> {
+    type Iter = std::vec::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for std::collections::LinkedList<T> {
+    type Iter = std::collections::linked_list::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for std::collections::VecDeque<T> {
+    type Iter = std::collections::vec_deque::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for std::collections::HashSet<T> {
+    type Iter = std::collections::hash_set::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for std::collections::BTreeSet<T> {
+    type Iter = std::collections::btree_set::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for std::collections::BinaryHeap<T> {
+    type Iter = std::collections::binary_heap::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+/// See [`just`].
+pub struct Just<C, E>(C, PhantomData<E>);
+
+impl<C: Copy, E> Copy for Just<C, E> {}
+impl<C: Clone, E> Clone for Just<C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
+impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> for Just<C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
         &self,
         _debugger: &mut D,
         stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, I, E> {
-        match stream.next() {
-            (_, _, Some(tok)) if tok == self.0 => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, Some(self.0.clone()), found),
-                )),
-            ),
+    ) -> PResult<I, C, E> {
+        for expected in self.0.get_iter() {
+            match stream.next() {
+                (_, _, Some(tok)) if tok == expected => {}
+                (at, span, found) => {
+                    return (
+                        Vec::new(),
+                        Err(Located::at(
+                            at,
+                            E::expected_input_found(span, Some(expected.clone()), found),
+                        )),
+                    )
+                }
+            }
         }
+
+        (Vec::new(), Ok((self.0.clone(), None)))
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, C, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, C, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
@@ -147,8 +233,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for Just<I, E> {
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").is_err());
 /// ```
-pub fn just<I: Clone + PartialEq, E>(x: I) -> Just<I, E> {
-    Just(x, PhantomData)
+pub fn just<C, E>(tokens: C) -> Just<C, E> {
+    Just(tokens, PhantomData)
 }
 
 /// See [`seq`].
@@ -214,6 +300,10 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 /// assert_eq!(onetwothree.parse([1, 2, 3, 4, 5]), Ok(()));
 /// assert!(onetwothree.parse([2, 1, 3]).is_err());
 /// ```
+#[deprecated(
+    since = "0.7",
+    note = "Use `just` instead: it now works for many container types!"
+)]
 pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
     Seq(xs.into_iter().collect(), PhantomData)
 }
@@ -432,11 +522,13 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let single_line = seq::<_, _, Simple<char>>("//".chars())
-///     .then(take_until(text::newline()));
+/// let single_line = just::<_, Simple<char>>("//")
+///     .then(take_until(text::newline()))
+///     .ignored();
 ///
-/// let multi_line = seq::<_, _, Simple<char>>("/*".chars())
-///     .then(take_until(seq("*/".chars())));
+/// let multi_line = just::<_, Simple<char>>("/*")
+///     .then(take_until(just("*/")))
+///     .ignored();
 ///
 /// let comment = single_line.or(multi_line);
 ///
