@@ -57,7 +57,7 @@ Other examples include:
 
 - A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --example json --
   examples/sample.json`)
-- An [interpreter for simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
+- An [interpreter for a simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
 ## *What* is a parser combinator?

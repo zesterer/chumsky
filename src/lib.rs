@@ -1,8 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
-                      // TODO: Enable when stable
-                      //#![feature(once_cell)]
 
 /// Traits that allow chaining parser outputs together.
 pub mod chain;
