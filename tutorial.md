@@ -164,8 +164,8 @@ Combining these together, we now get an error for longer inputs. Unfortunately, 
 (particularly if you're working on a Unix-like platform): any whitespace before or after our digit will upset our
 parser and trigger an error.
 
-We can handle whitespace by adding a call to `padded` after our digit parser. This combinator simply ignores any
-leading or trailing whitespace around our pattern.
+We can handle whitespace by adding a call to `padded_by` (which ignores a given pattern before and after the first)
+after our digit parser, and a repeating filter for any whitespace characters.
 
 ```rust
 filter(|c: &char| c.is_ascii_digit())
@@ -362,6 +362,12 @@ let sum = product.clone()
 
 sum.then_ignore(end())
 ```
+
+The `Expr::Mul as fn(_, _) -> _` syntax might look a little unfamiliar, but don't worry! In Rust,
+[tuple enum variants are implicitly functions](https://stackoverflow.com/questions/54802045/what-is-this-strange-syntax-where-an-enum-variant-is-used-as-a-function).
+All we're doing here is making sure that Rust treats each of them as if they had the same type using the `as` cast, and
+then letting type inference do the rest. Those functions then get passed through the internals of the parser and end up
+in `op` within the `foldl` call.
 
 Another three combinators are introduced here:
 
