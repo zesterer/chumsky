@@ -135,6 +135,8 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 ///
 /// This is a wrapper around [`Recursive::declare`] and [`Recursive::define`].
 ///
+/// The output type of this parser is `O`, the same as the inner parser.
+///
 /// # Examples
 ///
 /// ```

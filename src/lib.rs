@@ -20,7 +20,6 @@ pub mod recursive;
 pub mod span;
 /// Token streams and behaviours.
 pub mod stream;
-/// Text-specific parsers and utilities.
 pub mod text;
 
 pub use crate::{error::Error, span::Span};
@@ -258,6 +257,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
     /// your parser. Additionally, its API is quite likely to change in future versions.
+    ///
+    /// This method will receive more extensive documentation as the crate's debugging features mature.
     fn parse_recovery_verbose<
         'a,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
@@ -307,7 +308,8 @@ pub trait Parser<I: Clone, O> {
     /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
     /// your parser. Additionally, its API is quite likely to change in future versions.
     /// Use this parser like a print statement, to display whatever you pass as the argument 'x'
-
+    ///
+    /// This method will receive more extensive documentation as the crate's debugging features mature.
     #[track_caller]
     fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self>
     where
@@ -317,6 +319,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Map the output of this parser to another value.
+    ///
+    /// The output type of this parser is `U`, the same as the function's output.
     ///
     /// # Examples
     ///
@@ -347,9 +351,28 @@ pub trait Parser<I: Clone, O> {
         Map(self, f, PhantomData)
     }
 
-    /// Map the output of this parser to another value, making use of the pattern's overall span.
+    /// Map the output of this parser to another value, making use of the pattern's span when doing so.
     ///
     /// This is very useful when generating an AST that attaches a span to each AST node.
+    ///
+    /// The output type of this parser is `U`, the same as the function's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// # use std::ops::Range;
+    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
+    /// #[derive(Debug, PartialEq)]
+    /// pub struct Spanned<T>(T, Range<usize>);
+    ///
+    /// let ident = text::ident::<_, Simple<char>>()
+    ///     .map_with_span(|ident, span| Spanned(ident, span))
+    ///     .padded();
+    ///
+    /// assert_eq!(ident.parse("hello"), Ok(Spanned("hello".to_string(), 0..5)));
+    /// assert_eq!(ident.parse("       hello   "), Ok(Spanned("hello".to_string(), 7..12)));
+    /// ```
     fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(
         self,
         f: F,
@@ -364,6 +387,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// This function is most useful when using a custom error type, allowing you to augment errors according to
     /// context.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
     where
         Self: Sized,
@@ -373,6 +398,11 @@ pub trait Parser<I: Clone, O> {
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
+    ///
+    /// If you wish parsing of this pattern to continue when an error is generated instead of halting, consider using
+    /// [`Parser::validate`] instead.
+    ///
+    /// The output type of this parser is `U`, the [`Ok`] return value of the function.
     ///
     /// # Examples
     ///
@@ -397,6 +427,11 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    ///
+    /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
+    /// [`Parser::try_map`] instead.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     ///
     /// # Examples
     ///
@@ -433,6 +468,11 @@ pub trait Parser<I: Clone, O> {
     ///
     /// This does not label errors where the labelled pattern consumed input (i.e: in unambiguous cases).
     ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// *Note: There is a chance that this method will be deprecated in favour of a more general solution in later
+    /// versions of the crate.*
+    ///
     /// # Examples
     ///
     /// ```
@@ -456,6 +496,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Transform all outputs of this parser to a pretermined value.
+    ///
+    /// The output type of this parser is `U`, the type of the predetermined value.
     ///
     /// # Examples
     ///
@@ -483,6 +525,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// The output of the original parser must be of type `(A, impl IntoIterator<Item = B>)`.
     ///
+    /// The output type of this parser is `A`, the left-hand component of the original parser's output.
+    ///
     /// # Examples
     ///
     /// ```
@@ -509,6 +553,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
     /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
+    ///
+    /// The output type of this parser is `B`, the right-hand component of the original parser's output.
     ///
     /// # Examples
     ///
@@ -543,6 +589,8 @@ pub trait Parser<I: Clone, O> {
     /// [do not allocate](https://doc.rust-lang.org/std/vec/struct.Vec.html#guarantees)). For example, it's common to
     /// want to ignore whitespace in many grammars (see [`text::whitespace`]).
     ///
+    /// The output type of this parser is `()`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -567,6 +615,8 @@ pub trait Parser<I: Clone, O> {
     /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
     /// [`HashMap`] and is analagous to [`Iterator::collect`].
     ///
+    /// The output type of this parser is `C`, the type being collected into.
+    ///
     /// # Examples
     ///
     /// ```
@@ -588,6 +638,8 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse one thing and then another thing, yielding a tuple of the two outputs.
     ///
+    /// The output type of this parser is `(O, U)`, a combination of the outputs of both parsers.
+    ///
     /// # Examples
     ///
     /// ```
@@ -608,6 +660,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
+    ///
+    /// The output type of this parser is `Vec<T>`, composed of the elements of the outputs of both parsers.
     ///
     /// # Examples
     ///
@@ -647,6 +701,9 @@ pub trait Parser<I: Clone, O> {
     /// Flatten a nested collection.
     ///
     /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
+    ///
+    /// The output type of this parser is `Vec<T>`, where the original parser output was
+    /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
     fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>, O>
     where
         Self: Sized,
@@ -657,6 +714,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Parse one thing and then another thing, yielding only the output of the latter.
+    ///
+    /// The output type of this parser is `U`, the same as the second parser.
     ///
     /// # Examples
     ///
@@ -680,6 +739,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Parse one thing and then another thing, yielding only the output of the former.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     ///
     /// # Examples
     ///
@@ -715,6 +776,8 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
     ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
     /// # Examples
     ///
     /// ```
@@ -738,6 +801,8 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Parse the pattern surrounded by the given delimiters.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     ///
     /// # Examples
     ///
@@ -800,6 +865,8 @@ pub trait Parser<I: Clone, O> {
     /// ruggedly defined is not a problem. By its nature, it only occurs when the parser encounters an error and so can
     /// never result in valid syntax failing to be parsed.
     ///
+    /// The output type of this parser is `O`, the output of both parsers.
+    ///
     /// # Examples
     ///
     /// ```
@@ -830,6 +897,8 @@ pub trait Parser<I: Clone, O> {
     /// Rest assured that this case is generally quite rare and only happens for very loose, almost-ambiguous syntax.
     /// If you run into cases that you believe should parse but do not, try removing or moving recovery strategies to
     /// fix the problem.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     ///
     /// # Examples
     ///
@@ -872,6 +941,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// If parsing of the pattern is successful, the output is `Some(_)`. Otherwise, the output is `None`.
     ///
+    /// The output type of this parser is `Option<O>`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -898,6 +969,8 @@ pub trait Parser<I: Clone, O> {
     /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
     ///
+    /// The output type of this parser is `Vec<O>`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -923,6 +996,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
     /// separators.
+    ///
+    /// The output type of this parser is `Vec<O>`.
     ///
     /// # Examples
     ///
@@ -951,10 +1026,14 @@ pub trait Parser<I: Clone, O> {
         }
     }
 
-    /// Parse something and then rewind the state so that it only looks ahead and does not consume input.
-    /// Chumsky's parsers are always rewind the state when they fail.
-    /// But this combinator makes a parsers to rewind the state whether it succeeds or fails.
-    /// A typical use-case of this is that you want to parse something which is not followed by something else.
+    /// Parse a pattern. Afterwards, the input stream will be rewound to its original state, as if parsing had not
+    /// occurred.
+    ///
+    /// This combinator is useful for cases in which you wish to avoid a parser accidentally consuming too much input,
+    /// causing later parsers to fail as a result. A typical use-case of this is that you want to parse something that
+    /// is not followed by something else.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     ///
     /// # Examples
     ///
@@ -989,7 +1068,9 @@ pub trait Parser<I: Clone, O> {
     ///
     /// - Places where you need to name the type of a parser
     ///
-    /// Boxing a parser is broadly equivalent to boxing other combinators, such as [`Iterator`].
+    /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
     fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error>
     where
         Self: Sized + 'a,

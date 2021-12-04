@@ -33,9 +33,12 @@ impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> P
     }
 }
 
-/// A parser primitive that allows you to define your own custom parsers. In theory you shouldn't need to use this
-/// unless you have particularly bizarre requirements, but it's a cleaner and more sustainable alternative to
-/// implementing [`Parser`] by hand.
+/// A parser primitive that allows you to define your own custom parsers.
+///
+/// In theory you shouldn't need to use this unless you have particularly bizarre requirements, but it's a cleaner and
+//// more sustainable alternative to implementing [`Parser`] by hand.
+///
+/// The output type of this parser is determined by the parse result of the function.
 pub fn custom<F, E>(f: F) -> Custom<F, E> {
     Custom(f, PhantomData)
 }
@@ -81,12 +84,37 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
 
 /// A parser that accepts only the end of input.
 ///
+/// This parser is very useful when you wish to force a parser to consume *all* of the input. It is typically combined
+/// with [`Parser::then_ignore`].
+///
+/// The output type of this parser is `()`.
+///
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// assert_eq!(end::<Cheap<char>>().parse(""), Ok(()));
-/// assert!(end::<Cheap<char>>().parse("hello").is_err());
+/// # use chumsky::prelude::*;
+/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
+/// assert!(end::<Simple<char>>().parse("hello").is_err());
+/// ```
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// let digits = text::digits::<_, Simple<char>>(10);
+///
+/// // This parser parses digits!
+/// assert_eq!(digits.parse("1234"), Ok("1234".to_string()));
+///
+/// // However, parsers are lazy and do not consume trailing input.
+/// // This can be inconvenient if we want to validate all of the input.
+/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK"), Ok("1234".to_string()));
+///
+/// // To fix this problem, we require that the end of input follows any successfully parsed input
+/// let only_digits = digits.then_ignore(end());
+///
+/// // Now our parser correctly produces an error if any trailing input is found...
+/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").is_err());
+/// // ...while still behaving correctly for inputs that only consist of valid patterns
+/// assert_eq!(only_digits.parse("1234"), Ok("1234".to_string()));
 /// ```
 pub fn end<E>() -> End<E> {
     End(PhantomData)
@@ -220,6 +248,8 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
 
 /// A parser that accepts only the given input.
 ///
+/// The output type of this parser is `C`, the input or sequence that was provided.
+///
 /// # Examples
 ///
 /// ```
@@ -233,8 +263,8 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").is_err());
 /// ```
-pub fn just<C, E>(tokens: C) -> Just<C, E> {
-    Just(tokens, PhantomData)
+pub fn just<C, E>(inputs: C) -> Just<C, E> {
+    Just(inputs, PhantomData)
 }
 
 /// See [`seq`].
@@ -284,6 +314,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 
 /// A parser that accepts only a sequence of specific inputs.
 ///
+/// The output type of this parser is `()`.
+///
 /// # Examples
 ///
 /// ```
@@ -302,7 +334,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 /// ```
 #[deprecated(
     since = "0.7",
-    note = "Use `just` instead: it now works for many container types!"
+    note = "Use `just` instead: it now works for many sequence-like types!"
 )]
 pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
     Seq(xs.into_iter().collect(), PhantomData)
@@ -326,7 +358,9 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, I, E> {
         match stream.next() {
-            (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => {
+                (Vec::new(), Ok((tok.clone(), None)))
+            }
             (at, span, found) => {
                 return (
                     Vec::new(),
@@ -351,6 +385,8 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
 
 /// A parser that accepts one of a sequence of specific inputs.
 ///
+/// The output type of this parser is `I`, the input that was found.
+///
 /// # Examples
 ///
 /// ```
@@ -363,8 +399,8 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
 /// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").is_err());
 /// ```
-pub fn one_of<C, E>(tokens: C) -> OneOf<C, E> {
-    OneOf(tokens, PhantomData)
+pub fn one_of<C, E>(inputs: C) -> OneOf<C, E> {
+    OneOf(inputs, PhantomData)
 }
 
 /// See [`empty`].
@@ -398,6 +434,8 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
 }
 
 /// A parser that parses no inputs.
+///
+/// The output type of this parser is `()`.
 pub fn empty<E>() -> Empty<E> {
     Empty(PhantomData)
 }
@@ -420,7 +458,9 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, I, E> {
         match stream.next() {
-            (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => {
+                (Vec::new(), Ok((tok.clone(), None)))
+            }
             (at, span, found) => {
                 return (
                     Vec::new(),
@@ -445,6 +485,8 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
 
 /// A parser that accepts any input that is *not* in a sequence of specific inputs.
 ///
+/// The output type of this parser is `I`, the input that was found.
+///
 /// # Examples
 ///
 /// ```
@@ -459,8 +501,8 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
 /// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").is_err());
 /// ```
-pub fn none_of<C, E>(tokens: C) -> NoneOf<C, E> {
-    NoneOf(tokens, PhantomData)
+pub fn none_of<C, E>(inputs: C) -> NoneOf<C, E> {
+    NoneOf(inputs, PhantomData)
 }
 
 /// See [`take_until`].
@@ -517,6 +559,9 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 }
 
 /// A parser that accepts any number of inputs until a terminating pattern is reached.
+///
+/// The output type of this parser is `(Vec<I>, O)`, a combination of the preceding inputs and the output of the
+/// final patterns.
 ///
 /// # Examples
 ///
@@ -597,6 +642,8 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
 
 /// A parser that accepts only inputs that match the given predicate.
 ///
+/// The output type of this parser is `I`, the input that was found.
+///
 /// # Examples
 ///
 /// ```
@@ -659,6 +706,8 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 ///
 /// This function allows integration with custom error types to allow for custom parser errors.
 ///
+/// The output type of this parser is `I`, the input that was found.
+///
 /// # Examples
 ///
 /// ```
@@ -680,6 +729,8 @@ pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) ->
 pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 
 /// A parser that accepts any input (but not the end of input).
+///
+/// The output type of this parser is `I`, the input that was found.
 ///
 /// # Examples
 ///
