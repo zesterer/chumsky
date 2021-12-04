@@ -3,17 +3,19 @@
 *Please note that this tutorial is kept up to date with the `master` branch and not the most stable release: small
 details may differ!*
 
-In this tutorial, we'll develop a parser (and interpreter!) for a simple programming language called 'Foo'.
+In this tutorial, we'll develop a parser (and interpreter!) for a programming language called 'Foo'.
 
 Foo is a simple language, but it's enough for us to have some fun. It isn't
 [Turing-complete](https://en.wikipedia.org/wiki/Turing_completeness), but it is complex enough to
-allow us to get to grips with parsing using Chumsky. Here's some sample code from Foo:
+allow us to get to grips with parsing using Chumsky. Here's some sample code written in Foo:
 
 ```
 let seven = 7;
 fn add x y = x + y;
 add(2, 3) * -seven
 ```
+
+You can find the source code for the full interpreter in `examples/foo.rs` in the main repository.
 
 ## Setting up
 
@@ -168,7 +170,7 @@ leading or trailing whitespace around our pattern.
 ```rust
 filter(|c: &char| c.is_ascii_digit())
     .map(|c| Expr::Num(c.to_digit(10).unwrap() as f64))
-    .padded_by(filter(|c: &char| c.is_whitespace()))
+    .padded_by(filter(|c: &char| c.is_whitespace()).repeated())
     .then_ignore(end())
 ```
 
@@ -178,6 +180,8 @@ This example should have taught you a few important things about Chumsky's parse
 
 2. Whitespace is not automatically ignored. Chumsky is a general-purpose parsing library, and some languages care very
    much about the structure of whitespace, so Chumsky does too
+
+## Cleaning up and taking shortcuts
 
 At this point, things are starting to look a little messy. We've ended up writing 4 lines of code to properly parse a
 single digit. Let's clean things up a bit. We'll also make use of a bunch of text-based parser primitives that
@@ -740,7 +744,7 @@ add(five, eight)
 
 Here ends our exploration into Chumsky's API. We only scratched the surface of what Chumsky can do, but now you'll need
 to rely on the examples in the repository and the API doc examples for further help. Nonetheless, I hope it was an
-interesting foray into the use of parser combinators for the development of parser.
+interesting foray into the use of parser combinators for the development of parsers.
 
 If nothing else, you've now got a neat little calculator language to play with.
 
