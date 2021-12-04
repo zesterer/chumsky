@@ -283,6 +283,48 @@ impl<A> Repeated<A> {
         self.2 = Some(max);
         self
     }
+
+    /// Require that the pattern appear exactly the given number of times.
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let ring = just::<_, Simple<char>>('O');
+    ///
+    /// let for_the_elves = ring
+    ///     .repeated()
+    ///     .exactly(3);
+    ///
+    /// let for_the_dwarves = ring
+    ///     .repeated()
+    ///     .exactly(6);
+    ///
+    /// let for_the_humans = ring
+    ///     .repeated()
+    ///     .exactly(9);
+    ///
+    /// let for_sauron = ring
+    ///     .repeated()
+    ///     .exactly(1);
+    ///
+    /// let rings = for_the_elves
+    ///     .then(for_the_dwarves)
+    ///     .then(for_the_humans)
+    ///     .then(for_sauron)
+    ///     .then_ignore(end());
+    ///
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").is_err()); // Too few rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").is_err()); // Too many rings!
+    /// // The perfect number of rings
+    /// assert_eq!(
+    ///     rings.parse("OOOOOOOOOOOOOOOOOOO"),
+    ///     Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
+    /// );
+    /// ````
+    pub fn exactly(mut self, n: usize) -> Self {
+        self.1 = n;
+        self.2 = Some(n);
+        self
+    }
 }
 
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
@@ -371,6 +413,7 @@ pub struct SeparatedBy<A, B, U> {
     pub(crate) item: A,
     pub(crate) delimiter: B,
     pub(crate) at_least: usize,
+    pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
     pub(crate) phantom: PhantomData<U>,
@@ -438,6 +481,57 @@ impl<A, B, U> SeparatedBy<A, B, U> {
         self.at_least = n;
         self
     }
+
+    /// Require that the pattern appear at most a maximum number of times.
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let row_4 = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .at_most(4);
+    ///
+    /// let matrix_4x4 = row_4
+    ///     .separated_by(just(','))
+    ///     .at_most(4);
+    ///
+    /// assert_eq!(
+    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"),
+    ///     Ok(vec![
+    ///         vec!["0".to_string(), "1".to_string(), "2".to_string(), "3".to_string()],
+    ///         vec!["4".to_string(), "5".to_string(), "6".to_string(), "7".to_string()],
+    ///         vec!["8".to_string(), "9".to_string(), "10".to_string(), "11".to_string()],
+    ///         vec!["12".to_string(), "13".to_string(), "14".to_string(), "15".to_string()],
+    ///     ]),
+    /// );
+    /// ````
+    pub fn at_most(mut self, n: usize) -> Self {
+        self.at_most = Some(n);
+        self
+    }
+
+    /// Require that the pattern appear exactly the given number of times.
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let coordinate_3d = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .exactly(3)
+    ///     .then_ignore(end());
+    ///
+    /// // Not enough elements
+    /// assert!(coordinate_3d.parse("4, 3").is_err());
+    /// // Too many elements
+    /// assert!(coordinate_3d.parse("7, 2, 13, 4").is_err());
+    /// // Just the right number of elements
+    /// assert_eq!(coordinate_3d.parse("5, 0, 12"), Ok(vec!["5".to_string(), "0".to_string(), "12".to_string()]));
+    /// ````
+    pub fn exactly(mut self, n: usize) -> Self {
+        self.at_least = n;
+        self.at_most = Some(n);
+        self
+    }
 }
 
 impl<A: Copy, B: Copy, U> Copy for SeparatedBy<A, B, U> {}
@@ -447,6 +541,7 @@ impl<A: Clone, B: Clone, U> Clone for SeparatedBy<A, B, U> {
             item: self.item.clone(),
             delimiter: self.delimiter.clone(),
             at_least: self.at_least,
+            at_most: self.at_most,
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
             phantom: PhantomData,
@@ -465,6 +560,15 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
+        self.at_most.map(|at_most| {
+            assert!(
+                self.at_least <= at_most,
+                "SeparatedBy cannot parse at least {} and at most {}",
+                self.at_least,
+                at_most
+            )
+        });
+
         enum State<I, E> {
             Terminated(Located<I, E>),
             Continue,
@@ -522,13 +626,21 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             parse(&self.item, stream, debugger, &mut outputs, &mut errors, alt);
 
         let mut offset = stream.save();
-        let error: Located<I, E>;
+        let error: Option<Located<I, E>>;
         loop {
             if let State::Terminated(err) = state {
-                error = err;
+                error = Some(err);
                 break;
             }
             offset = stream.save();
+
+            if self
+                .at_most
+                .map_or(false, |at_most| outputs.len() >= at_most)
+            {
+                error = None;
+                break;
+            }
 
             match stream.try_parse(|stream| {
                 #[allow(deprecated)]
@@ -556,11 +668,13 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
 
         if outputs.len() >= self.at_least {
-            alt = merge_alts(alt, Some(error));
+            alt = merge_alts(alt, error);
             (errors, Ok((outputs, alt)))
-        } else {
+        } else if let Some(error) = error {
             // In all paths where `State = State::Terminated`, Some(err) is inserted into alt.
             (errors, Err(error))
+        } else {
+            (errors, Ok((outputs, alt)))
         }
     }
 

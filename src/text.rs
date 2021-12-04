@@ -1,6 +1,6 @@
 //! Text-specific parsers and utilities.
 //!
-//! The parsers in this module are generic over both UTF-8 ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
+//! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
 //! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
 //!
 //! The [`TextParser`] trait is an extension on top of the main [`Parser`] trait that adds combinators unique to the

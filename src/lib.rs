@@ -1020,6 +1020,7 @@ pub trait Parser<I: Clone, O> {
             item: self,
             delimiter: other,
             at_least: 0,
+            at_most: None,
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
