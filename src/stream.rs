@@ -244,6 +244,20 @@ impl<'a> From<&'a str>
     }
 }
 
+impl<'a> From<String>
+    for Stream<'a, char, Range<usize>, Box<dyn Iterator<Item = (char, Range<usize>)>>>
+{
+    /// Please note that Chumsky currently uses character indices and not byte offsets in this impl. This is likely to
+    /// change in the future. If you wish to use byte offsets, you can do so with [`Stream::from_iter`].
+    fn from(s: String) -> Self {
+        let chars = s.chars().collect::<Vec<_>>();
+        Self::from_iter(
+            chars.len()..chars.len() + 1,
+            Box::new(chars.into_iter().enumerate().map(|(i, c)| (c, i..i + 1))),
+        )
+    }
+}
+
 impl<'a, T: Clone> From<&'a [T]>
     for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
 {

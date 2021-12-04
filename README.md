@@ -60,6 +60,11 @@ Other examples include:
 - An [interpreter for a simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
+## Tutorial
+
+See [this page](https://github.com/zesterer/chumsky/blob/master/tutorial.md) for a step-by-step tutorial that teaches
+you how to write your own simple programming language with Chumsky.
+
 ## *What* is a parser combinator?
 
 Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting

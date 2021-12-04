@@ -283,12 +283,12 @@ impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
     }
 }
 
-impl<I: fmt::Display + Hash, S: Span + fmt::Display> fmt::Display for Simple<I, S> {
+impl<I: fmt::Display + Hash, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Take `self.reason` into account
 
         if let Some(found) = &self.found {
-            write!(f, "found '{}' at {} ", found, self.span)?;
+            write!(f, "found '{}' ", found)?;
         } else {
             write!(f, "found end of input ")?;
         }
