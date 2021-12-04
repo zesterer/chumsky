@@ -73,7 +73,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
     });
 
     let decl = recursive(|decl| {
-        let r#let = just("let")
+        let r#let = text::keyword("let")
             .ignore_then(ident)
             .then_ignore(just('='))
             .then(expr.clone())
@@ -85,7 +85,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                 then: Box::new(then),
             });
 
-        let r#fn = just("fn")
+        let r#fn = text::keyword("fn")
             .ignore_then(ident)
             .then(ident.repeated())
             .then_ignore(just('='))

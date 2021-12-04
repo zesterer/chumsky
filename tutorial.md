@@ -500,7 +500,7 @@ let expr = recursive(|expr| {
 });
 
 let decl = recursive(|decl| {
-    let r#let = just("let")
+    let r#let = text::keyword("let")
         .ignore_then(ident)
         .then_ignore(just('='))
         .then(expr.clone())
@@ -522,9 +522,12 @@ decl
     .then_ignore(end())
 ```
 
-There's nothing in the definition of `r#let` that you haven't seen before: familiar combinators, but combined in
-different ways. It selectively ignores parts of the syntax that we don't care about after validating that it exists,
-then uses those elements that it does care about to create an `Expr::Let` AST node.
+`keyword` is simply a parser that looks for an exact identifier (i.e: it doesn't match identifiers that only start with
+a keyword).
+
+Other than that, there's nothing in the definition of `r#let` that you haven't seen before: familiar combinators, but
+combined in different ways. It selectively ignores parts of the syntax that we don't care about after validating that
+it exists, then uses those elements that it does care about to create an `Expr::Let` AST node.
 
 Another thing to note is that the definition of `ident` will parse `"let"`. To avoid the parser accidentally deciding
 that `"let"` is a variable, we place `r#let` earlier in the or chain than `expr` so that it prioritises the correct
@@ -606,7 +609,7 @@ looks very much like the existing definition of `r#let`:
 
 ```rust
 let decl = recursive(|decl| {
-    let r#let = just("let")
+    let r#let = text::keyword("let")
         .ignore_then(ident)
         .then_ignore(just('='))
         .then(expr.clone())
@@ -618,7 +621,7 @@ let decl = recursive(|decl| {
             then: Box::new(then),
         });
 
-    let r#fn = just("fn")
+    let r#fn = text::keyword("fn")
         .ignore_then(ident)
         .then(ident.repeated())
         .then_ignore(just('='))
