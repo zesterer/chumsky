@@ -24,8 +24,10 @@ mod private {
 ///
 /// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
 pub trait Character: private::Sealed + Copy + PartialEq {
+    /// The default unsized [`str`]-like type of a linear sequence of this character.
+    type Str: ?Sized + PartialEq;
     /// The default type that this character collects into.
-    type Collection: Chain<Self> + FromIterator<Self>;
+    type Collection: Chain<Self> + FromIterator<Self> + AsRef<Self::Str> + 'static;
 
     /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
@@ -41,6 +43,7 @@ pub trait Character: private::Sealed + Copy + PartialEq {
 }
 
 impl Character for u8 {
+    type Str = [u8];
     type Collection = Vec<u8>;
 
     fn is_whitespace(&self) -> bool {
@@ -58,6 +61,7 @@ impl Character for u8 {
 }
 
 impl Character for char {
+    type Str = str;
     type Collection = String;
 
     fn is_whitespace(&self) -> bool {
@@ -148,4 +152,28 @@ pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, C::Collection, Error
             filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_').repeated(),
         )
         .collect()
+}
+
+/// Like [`ident`], but only accepts an exact identifier while ignoring trailing identifier characters.
+///
+/// # Example
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// let def = text::keyword::<_, _, Simple<char>>("def");
+///
+/// // Exactly 'def' was found
+/// assert_eq!(def.parse("def"), Ok(()));
+/// // Exactly 'def' was found, with non-identifier trailing characters
+/// assert_eq!(def.parse("def(foo, bar)"), Ok(()));
+/// // 'def' was found, but only as part of a larger identifier, so this fails to parse
+/// assert!(def.parse("define").is_err());
+/// ```
+pub fn keyword<'a, C: Character + 'a, S: AsRef<C::Str> + 'a + Clone, E: Error<C> + 'a>(keyword: S) -> impl Parser<C, (), Error = E> + Clone + 'a {
+    // TODO: use .filter(...), improve error messages
+    ident().try_map(move |s: C::Collection, span| if s.as_ref() == keyword.as_ref() {
+        Ok(())
+    } else {
+        Err(E::expected_input_found(span, None, None))
+    })
 }

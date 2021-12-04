@@ -309,15 +309,15 @@ pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> S
 }
 
 /// See [`one_of`].
-pub struct OneOf<I, E>(Vec<I>, PhantomData<E>);
+pub struct OneOf<C, E>(C, PhantomData<E>);
 
-impl<I: Clone, E> Clone for OneOf<I, E> {
+impl<C: Clone, E> Clone for OneOf<C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
+impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -326,13 +326,13 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, I, E> {
         match stream.next() {
-            (_, _, Some(tok)) if self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => (Vec::new(), Ok((tok.clone(), None))),
             (at, span, found) => {
                 return (
                     Vec::new(),
                     Err(Located::at(
                         at,
-                        E::expected_input_found(span, self.0.clone(), found),
+                        E::expected_input_found(span, self.0.get_iter(), found),
                     )),
                 )
             }
@@ -355,7 +355,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let digits = one_of::<_, _, Cheap<char>>("0123456789".chars())
+/// let digits = one_of::<_, Cheap<char>>("0123456789")
 ///     .repeated().at_least(1)
 ///     .then_ignore(end())
 ///     .collect::<String>();
@@ -363,8 +363,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for OneOf<I, E> {
 /// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").is_err());
 /// ```
-pub fn one_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> OneOf<I, E> {
-    OneOf(xs.into_iter().collect(), PhantomData)
+pub fn one_of<C, E>(tokens: C) -> OneOf<C, E> {
+    OneOf(tokens, PhantomData)
 }
 
 /// See [`empty`].
@@ -403,15 +403,15 @@ pub fn empty<E>() -> Empty<E> {
 }
 
 /// See [`none_of`].
-pub struct NoneOf<I, E>(Vec<I>, PhantomData<E>);
+pub struct NoneOf<C, E>(C, PhantomData<E>);
 
-impl<I: Clone, E> Clone for NoneOf<I, E> {
+impl<C: Clone, E> Clone for NoneOf<C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
+impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf<C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -420,7 +420,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, I, E> {
         match stream.next() {
-            (_, _, Some(tok)) if !self.0.contains(&tok) => (Vec::new(), Ok((tok.clone(), None))),
+            (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => (Vec::new(), Ok((tok.clone(), None))),
             (at, span, found) => {
                 return (
                     Vec::new(),
@@ -449,9 +449,9 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let string = one_of::<_, _, Cheap<char>>("\"'".chars())
-///     .ignore_then(none_of("\"'".chars()).repeated())
-///     .then_ignore(one_of("\"'".chars()))
+/// let string = one_of::<_, Cheap<char>>("\"'")
+///     .ignore_then(none_of("\"'").repeated())
+///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end())
 ///     .collect::<String>();
 ///
@@ -459,8 +459,8 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, I> for NoneOf<I, E> {
 /// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").is_err());
 /// ```
-pub fn none_of<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> NoneOf<I, E> {
-    NoneOf(xs.into_iter().collect(), PhantomData)
+pub fn none_of<C, E>(tokens: C) -> NoneOf<C, E> {
+    NoneOf(tokens, PhantomData)
 }
 
 /// See [`take_until`].

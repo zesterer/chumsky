@@ -59,14 +59,14 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Str);
 
     // A parser for operators
-    let op = one_of("+-*/!=".chars())
+    let op = one_of("+-*/!=")
         .repeated()
         .at_least(1)
         .collect::<String>()
         .map(Token::Op);
 
     // A parser for control characters (delimiters, semicolons, etc.)
-    let ctrl = one_of("()[]{};,".chars()).map(|c| Token::Ctrl(c));
+    let ctrl = one_of("()[]{};,").map(|c| Token::Ctrl(c));
 
     // A parser for identifiers and keywords
     let ident = text::ident().map(|ident: String| match ident.as_str() {
