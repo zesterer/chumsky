@@ -1,5 +1,8 @@
 # Chumsky: A Tutorial
 
+*Please note that this tutorial is kept up to date with the `master` branch and not the most stable release: small
+details may differ!*
+
 In this tutorial, we'll develop a parser (and interpreter!) for a simple programming language called 'Foo'.
 
 Foo is a simple language, but it's enough for us to have some fun. It isn't
@@ -41,6 +44,7 @@ so we'll call it `Expr`.
 #[derive(Debug)]
 enum Expr {
     Num(f64),
+    Var(String),
 
     Neg(Box<Expr>),
     Add(Box<Expr>, Box<Expr>),
@@ -195,14 +199,14 @@ We'll now take a diversion away from the parser to create a function that can ev
 our interpreter and is the thing that actually performs the computation of programs.
 
 ```rust
-fn eval(expr: Expr) -> Result<f64, String> {
+fn eval(expr: &Expr) -> Result<f64, String> {
     match expr {
-        Expr::Num(x) => Ok(x),
-        Expr::Neg(a) => Ok(-eval(*a)?),
-        Expr::Add(a, b) => Ok(eval(*a)? + eval(*b)?),
-        Expr::Sub(a, b) => Ok(eval(*a)? - eval(*b)?),
-        Expr::Mul(a, b) => Ok(eval(*a)? * eval(*b)?),
-        Expr::Div(a, b) => Ok(eval(*a)? / eval(*b)?),
+        Expr::Num(x) => Ok(*x),
+        Expr::Neg(a) => Ok(-eval(a)?),
+        Expr::Add(a, b) => Ok(eval(a)? + eval(b)?),
+        Expr::Sub(a, b) => Ok(eval(a)? - eval(b)?),
+        Expr::Mul(a, b) => Ok(eval(a)? * eval(b)?),
+        Expr::Div(a, b) => Ok(eval(a)? / eval(b)?),
         _ => todo!(), // We'll handle other cases later
     }
 }
@@ -359,7 +363,7 @@ Another three combinators are introduced here:
 - `or` attempts to parse a pattern and, if unsuccessful, instead attempts another pattern
 
 - `to` is similar to `map`, but instead of mapping the output, entirely overrides the output with a new value. In our
-  case, we use it to convert each binary operator to a function that produces the relevant AST node.
+  case, we use it to convert each binary operator to a function that produces the relevant AST node for that operator.
 
 - `foldl` is very similar to `foldr` in the last section but, instead of operating on a `(Vec<_>, _)`, it operates
   upon a `(_, Vec<_>)`, going backwards to combine values together with the function
@@ -408,9 +412,8 @@ recursive(|expr| {
             .repeated())
         .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
-    sum
+    sum.padded()
 })
-    .padded()
     .then_ignore(end())
 ```
 
@@ -437,8 +440,158 @@ following cases work correctly:
 
 ## Parsing lets
 
-*TODO*
+Our next step is to handle `let`. Unlike Rust and other imperative languages, `let` in Foo is an expression and not an
+statement (Foo has no statements) that takes the following form:
+
+```
+let <ident> = <expr>; <expr>
+```
+
+We only want `let`s to appear at the outermost level of the expression, so we leave it out of the original recursive
+expression definition. However, we also want to be able to chain `let`s together, so we put them in their own recursive
+definition. We call it `decl` ('declaration') because we're eventually going to be adding `fn` syntax too.
+
+```rust
+let ident = text::ident()
+    .padded();
+
+let expr = recursive(|expr| {
+    let int = text::int(10)
+        .map(|s: String| Expr::Num(s.parse().unwrap()))
+        .padded();
+
+    let atom = int
+        .or(expr.delimited_by('(', ')'))
+        .or(ident.map(Expr::Var));
+
+    let op = |c| just(c).padded();
+
+    let unary = op('-')
+        .repeated()
+        .then(atom)
+        .foldr(|_op, rhs| Expr::Neg(Box::new(rhs)));
+
+    let product = unary.clone()
+        .then(op('*').to(Expr::Mul as fn(_, _) -> _)
+            .or(op('/').to(Expr::Div as fn(_, _) -> _))
+            .then(unary)
+            .repeated())
+        .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+
+    let sum = product.clone()
+        .then(op('+').to(Expr::Add as fn(_, _) -> _)
+            .or(op('-').to(Expr::Sub as fn(_, _) -> _))
+            .then(product)
+            .repeated())
+        .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+
+    sum.padded()
+});
+
+let decl = recursive(|decl| {
+    let r#let = just("let")
+        .ignore_then(ident)
+        .then_ignore(just('='))
+        .then(expr.clone())
+        .then_ignore(just(';'))
+        .then(decl)
+        .map(|((name, rhs), then)| Expr::Let {
+            name,
+            rhs: Box::new(rhs),
+            then: Box::new(then),
+        });
+
+    r#let
+        // Must be later in the chain than `r#let` to avoid ambiguity
+        .or(expr)
+        .padded()
+});
+
+decl
+    .then_ignore(end())
+```
+
+There's nothing in the definition of `r#let` that you haven't seen before: familiar combinators, but combined in
+different ways. It selectively ignores parts of the syntax that we don't care about after validating that it exists,
+then uses those elements that it does care about to create an `Expr::Let` AST node.
+
+Another thing to note is that the definition of `ident` will parse `"let"`. To avoid the parser accidentally deciding
+that `"let"` is a variable, we place `r#let` earlier in the or chain than `expr` so that it prioritises the correct
+interpretation. As mentioned in previous sections, Chumsky handles ambiguity simply by choosing the first successful
+parse it encounters, so making sure that we declare things in the right order can sometimes be important.
+
+You should now be able to run the interpreter and have it accept an input such as
+
+```
+let five = 5;
+five * 3
+```
+
+Unfortunately, the `eval` function will panic because we've not yet handled `Expr::Var` or `Expr::Let`. Let's do that
+now.
+
+```rust
+fn eval<'a>(expr: &'a Expr, vars: &mut Vec<(&'a String, f64)>) -> Result<f64, String> {
+    match expr {
+        Expr::Num(x) => Ok(*x),
+        Expr::Var(name) => if let Some((_, val)) = vars.iter().rev().find(|(var, _)| *var == name) {
+            Ok(*val)
+        } else {
+            Err(format!("Cannot find variable `{}` in scope", name))
+        },
+        Expr::Neg(a) => Ok(-eval(a, vars)?),
+        Expr::Add(a, b) => Ok(eval(a, vars)? + eval(b, vars)?),
+        Expr::Sub(a, b) => Ok(eval(a, vars)? - eval(b, vars)?),
+        Expr::Mul(a, b) => Ok(eval(a, vars)? * eval(b, vars)?),
+        Expr::Div(a, b) => Ok(eval(a, vars)? / eval(b, vars)?),
+        Expr::Let { name, rhs, then } => {
+            let rhs = eval(rhs, vars)?;
+            vars.push((name, rhs));
+            let output = eval(then, vars);
+            vars.pop();
+            output
+        },
+        _ => todo!(),
+    }
+}
+```
+
+Woo! That got a bit more complicated. Don't fear, there are only 3 important changes:
+
+1. Because we need to keep track of variables that were previously defined, we use a `Vec` to remember them. Because
+   `eval` is a recursive function, we also need to pass is to all recursive calls.
+
+2. When we encounter an `Expr::Let`, we first evaluate the right-hand side (`rhs`). Once evaluated, we push it to the
+   `vars` stack and evaluate the trailing `then` expression (i.e: all of the remaining code that appears after the
+   semicolon). Popping it afterwards is not *technically* necessary because Foo does not permit nested declarations,
+   but we do it anyway because it's good practice and it's what we'd want to do if we ever decided to add nesting.
+
+3. When we encounter an `Expr::Var` (i.e: an inline variable) we search the stack *backwards* (because Foo permits
+   [variable shadowing](https://en.wikipedia.org/wiki/Variable_shadowing) and we only want to find the most recently
+   declared variable with the same name) to find the variables's value. If we can't find a variable of that name, we
+   generate a runtime error which gets propagated back up the stack.
+
+Make sure to test the interpreter. Try experimenting with `let` declarations to make sure things aren't broken. In
+particular, it's worth testing variable shadowing by ensuring that the following program produces `8`:
+
+```
+let x = 5;
+let x = 3 + x;
+x
+```
 
 ## Parsing functions
 
 *TODO*
+
+## Extension tasks
+
+- Split token lexing into a separate compilation stage to avoid the need for `.padded()` in the parser
+
+- Add more operators
+
+- Add an `if <expr> then <expr> else <expr>` ternary operator
+
+- Add values of different types by turning `f64` into an `enum`.
+
+- Format the error message in a more useful way, perhaps by providing a reference to the original code
