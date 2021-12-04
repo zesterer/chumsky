@@ -52,6 +52,7 @@ enum Expr {
     Mul(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
 
+    Call(String, Vec<Expr>),
     Let {
         name: String,
         rhs: Box<Expr>,
@@ -60,7 +61,7 @@ enum Expr {
     Fn {
         name: String,
         args: Vec<String>,
-        rhs: Box<Expr>,
+        body: Box<Expr>,
         then: Box<Expr>,
     },
 }
@@ -222,7 +223,7 @@ fn main() {
     let src = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
 
     match parser().parse(src) {
-        Ok(ast) => match eval(ast) {
+        Ok(ast) => match eval(&ast) {
             Ok(output) => println!("{}", output),
             Err(eval_err) => println!("Evaluation error: {}", eval_err),
         },
@@ -311,15 +312,15 @@ parsers. To parse an expression like `3 + 4 * 2`, it's necessary to understand t
 [binds more eagerly than addition](https://en.wikipedia.org/wiki/Order_of_operations) and hence is applied first.
 Therefore, the result of this expression is `11` and not `14`.
 
-Parsers employ a range of strategies to handle these cases, but for Chumsky things are simply: the most eagerly binding
+Parsers employ a range of strategies to handle these cases, but for Chumsky things are simple: the most eagerly binding
 (highest 'precedence') operators should be those that get considered first when parsing.
 
 It's worth noting that summation operators (`+` and `-`) are typically considered to have the *same* precedence as
-one-another. The same also applies to product operators (`*` and `/`). For this reason, we each group as a single
+one-another. The same also applies to product operators (`*` and `/`). For this reason, we treat each group as a single
 pattern.
 
-At each stage, we're looking for a simple pattern: a unary value, following by any number of a combination of an
-operator and a unary value. More formally:
+At each stage, we're looking for a simple pattern: a unary expression, following by any number of a combination of an
+operator and a unary expression. More formally:
 
 ```
 expr = unary + (op + unary)*
@@ -534,16 +535,16 @@ now.
 fn eval<'a>(expr: &'a Expr, vars: &mut Vec<(&'a String, f64)>) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),
-        Expr::Var(name) => if let Some((_, val)) = vars.iter().rev().find(|(var, _)| *var == name) {
-            Ok(*val)
-        } else {
-            Err(format!("Cannot find variable `{}` in scope", name))
-        },
         Expr::Neg(a) => Ok(-eval(a, vars)?),
         Expr::Add(a, b) => Ok(eval(a, vars)? + eval(b, vars)?),
         Expr::Sub(a, b) => Ok(eval(a, vars)? - eval(b, vars)?),
         Expr::Mul(a, b) => Ok(eval(a, vars)? * eval(b, vars)?),
         Expr::Div(a, b) => Ok(eval(a, vars)? / eval(b, vars)?),
+        Expr::Var(name) => if let Some((_, val)) = vars.iter().rev().find(|(var, _)| *var == name) {
+            Ok(*val)
+        } else {
+            Err(format!("Cannot find variable `{}` in scope", name))
+        },
         Expr::Let { name, rhs, then } => {
             let rhs = eval(rhs, vars)?;
             vars.push((name, rhs));
@@ -571,6 +572,12 @@ Woo! That got a bit more complicated. Don't fear, there are only 3 important cha
    declared variable with the same name) to find the variables's value. If we can't find a variable of that name, we
    generate a runtime error which gets propagated back up the stack.
 
+Obviously, the signature of `eval` has changed so we'll update the call in `main` to become:
+
+```rust
+eval(&ast, &mut Vec::new())
+```
+
 Make sure to test the interpreter. Try experimenting with `let` declarations to make sure things aren't broken. In
 particular, it's worth testing variable shadowing by ensuring that the following program produces `8`:
 
@@ -582,9 +589,167 @@ x
 
 ## Parsing functions
 
-*TODO*
+We're almost at a complete implementation of Foo. There's just one thing left: *functions*.
+
+Surprisingly, parsing functions is the easy part. All we need to modify if the definition of `decl` to add `r#fn`. It
+looks very much like the existing definition of `r#let`:
+
+```rust
+let decl = recursive(|decl| {
+    let r#let = just("let")
+        .ignore_then(ident)
+        .then_ignore(just('='))
+        .then(expr.clone())
+        .then_ignore(just(';'))
+        .then(decl.clone())
+        .map(|((name, rhs), then)| Expr::Let {
+            name,
+            rhs: Box::new(rhs),
+            then: Box::new(then),
+        });
+
+    let r#fn = just("fn")
+        .ignore_then(ident)
+        .then(ident.repeated())
+        .then_ignore(just('='))
+        .then(expr.clone())
+        .then_ignore(just(';'))
+        .then(decl)
+        .map(|(((name, args), body), then)| Expr::Fn {
+            name,
+            args,
+            body: Box::new(body),
+            then: Box::new(then),
+        });
+
+    r#let
+        .or(r#fn)
+        .or(expr)
+        .padded()
+});
+```
+
+There's nothing new here, you understand this all already.
+
+Obviously, we also need to add support for *calling* functions by modifying `atom`:
+
+```rust
+let call = ident
+    .then(expr.clone()
+        .separated_by(just(','))
+        .allow_trailing() // Foo is Rust-like, so allow trailing commas to appear in arg lists
+        .delimited_by('(', ')'))
+    .map(|(f, args)| Expr::Call(f, args));
+
+let atom = int
+    .or(expr.delimited_by('(', ')'))
+    .or(call)
+    .or(ident.map(Expr::Var));
+```
+
+The only new combinator here is `separated_by` which behaves like `repeated`, but requires a separator pattern between
+each element. It has a method called `allow_trailing` which allows for parsing a trailing separator at the end of the
+elements.
+
+Next, we modify our `eval` function to support a function stack.
+
+```rust
+fn eval<'a>(
+    expr: &'a Expr,
+    vars: &mut Vec<(&'a String, f64)>,
+    funcs: &mut Vec<(&'a String, &'a [String], &'a Expr)>,
+) -> Result<f64, String> {
+    match expr {
+        Expr::Num(x) => Ok(*x),
+        Expr::Neg(a) => Ok(-eval(a, vars, funcs)?),
+        Expr::Add(a, b) => Ok(eval(a, vars, funcs)? + eval(b, vars, funcs)?),
+        Expr::Sub(a, b) => Ok(eval(a, vars, funcs)? - eval(b, vars, funcs)?),
+        Expr::Mul(a, b) => Ok(eval(a, vars, funcs)? * eval(b, vars, funcs)?),
+        Expr::Div(a, b) => Ok(eval(a, vars, funcs)? / eval(b, vars, funcs)?),
+        Expr::Var(name) => if let Some((_, val)) = vars.iter().rev().find(|(var, _)| *var == name) {
+            Ok(*val)
+        } else {
+            Err(format!("Cannot find variable `{}` in scope", name))
+        },
+        Expr::Let { name, rhs, then } => {
+            let rhs = eval(rhs, vars, funcs)?;
+            vars.push((name, rhs));
+            let output = eval(then, vars, funcs);
+            vars.pop();
+            output
+        },
+        Expr::Call(name, args) => if let Some((_, arg_names, body)) = funcs
+            .iter()
+            .rev()
+            .find(|(var, _, _)| *var == name)
+            .copied()
+        {
+            if arg_names.len() == args.len() {
+                let mut args = args
+                    .iter()
+                    .map(|arg| eval(arg, vars, funcs))
+                    .zip(arg_names.iter())
+                    .map(|(val, name)| Ok((name, val?)))
+                    .collect::<Result<_, String>>()?;
+                vars.append(&mut args);
+                let output = eval(body, vars, funcs);
+                vars.truncate(vars.len() - args.len());
+                output
+            } else {
+                Err(format!(
+                    "Wrong number of arguments for function `{}`: expected {}, found {}",
+                    name,
+                    arg_names.len(),
+                    args.len(),
+                ))
+            }
+        } else {
+            Err(format!("Cannot find function `{}` in scope", name))
+        },
+        Expr::Fn { name, args, body, then } => {
+            funcs.push((name, args, body));
+            let output = eval(then, vars, funcs);
+            funcs.pop();
+            output
+        },
+    }
+}
+```
+
+Another big change! On closer inspection, however, this looks a lot like the change we made previously when we added
+support for `let` declarations. Whenever we encounter an `Expr::Fn`, we just push the function to the `funcs` stack and
+continue. Whenever we encounter an `Expr::Call`, we search the function stack backwards, as we did for variables, and
+then execute the body of the function (making sure to evaluate and push the arguments!).
+
+As before, we'll need to change the `eval` call in `main` to:
+
+```rust
+eval(&ast, &mut Vec::new(), &mut Vec::new())
+```
+
+Give the interpreter a test: see what you can do with it! Here's an example program to get you started:
+
+```
+let five = 5;
+let eight = 3 + five;
+fn add x y = x + y;
+add(five, eight)
+```
+
+## Conclusion
+
+Here ends our exploration into Chumsky's API. We only scratched the surface of what Chumsky can do, but now you'll need
+to rely on the examples in the repository and the API doc examples for further help. Nonetheless, I hope it was an
+interesting foray into the use of parser combinators for the development of parser.
+
+If nothing else, you've now got a neat little calculator language to play with.
+
+Interestingly, there is a subtle bug in Foo's `eval` function that produces unexpected scoping behaviour with function
+calls. I'll leave finding it as an exercise for the reader.
 
 ## Extension tasks
+
+- Find the interesting function scoping bug and consider how it could be fixed
 
 - Split token lexing into a separate compilation stage to avoid the need for `.padded()` in the parser
 
@@ -592,6 +757,8 @@ x
 
 - Add an `if <expr> then <expr> else <expr>` ternary operator
 
-- Add values of different types by turning `f64` into an `enum`.
+- Add values of different types by turning `f64` into an `enum`
+
+- Add lambdas to the language
 
 - Format the error message in a more useful way, perhaps by providing a reference to the original code
