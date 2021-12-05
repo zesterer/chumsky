@@ -201,16 +201,16 @@ impl<T: Clone> Container<T> for std::collections::BinaryHeap<T> {
 }
 
 /// See [`just`].
-pub struct Just<C, E>(C, PhantomData<E>);
+pub struct Just<I, C, E>(C, PhantomData<(I, E)>);
 
-impl<C: Copy, E> Copy for Just<C, E> {}
-impl<C: Clone, E> Clone for Just<C, E> {
+impl<I, C: Copy, E> Copy for Just<I, C, E> {}
+impl<I, C: Clone, E> Clone for Just<I, C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> for Just<C, E> {
+impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -254,7 +254,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let question = just::<_, Cheap<char>>('?');
+/// let question = just::<_, _, Cheap<char>>('?');
 ///
 /// assert_eq!(question.parse("?"), Ok('?'));
 /// assert!(question.parse("!").is_err());
@@ -263,7 +263,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").is_err());
 /// ```
-pub fn just<C, E>(inputs: C) -> Just<C, E> {
+pub fn just<I, C: Container<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> {
     Just(inputs, PhantomData)
 }
 
@@ -341,15 +341,15 @@ pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> S
 }
 
 /// See [`one_of`].
-pub struct OneOf<C, E>(C, PhantomData<E>);
+pub struct OneOf<I, C, E>(C, PhantomData<(I, E)>);
 
-impl<C: Clone, E> Clone for OneOf<C, E> {
+impl<I, C: Clone, E> Clone for OneOf<I, C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<C, E> {
+impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -391,7 +391,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let digits = one_of::<_, Cheap<char>>("0123456789")
+/// let digits = one_of::<_, _, Cheap<char>>("0123456789")
 ///     .repeated().at_least(1)
 ///     .then_ignore(end())
 ///     .collect::<String>();
@@ -399,7 +399,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
 /// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").is_err());
 /// ```
-pub fn one_of<C, E>(inputs: C) -> OneOf<C, E> {
+pub fn one_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> OneOf<I, C, E> {
     OneOf(inputs, PhantomData)
 }
 
@@ -441,15 +441,15 @@ pub fn empty<E>() -> Empty<E> {
 }
 
 /// See [`none_of`].
-pub struct NoneOf<C, E>(C, PhantomData<E>);
+pub struct NoneOf<I, C, E>(C, PhantomData<(I, E)>);
 
-impl<C: Clone, E> Clone for NoneOf<C, E> {
+impl<I, C: Clone, E> Clone for NoneOf<I, C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf<C, E> {
+impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -491,7 +491,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let string = one_of::<_, Cheap<char>>("\"'")
+/// let string = one_of::<_, _, Cheap<char>>("\"'")
 ///     .ignore_then(none_of("\"'").repeated())
 ///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end())
@@ -501,7 +501,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
 /// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").is_err());
 /// ```
-pub fn none_of<C, E>(inputs: C) -> NoneOf<C, E> {
+pub fn none_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> NoneOf<I, C, E> {
     NoneOf(inputs, PhantomData)
 }
 
@@ -567,11 +567,11 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Cheap};
-/// let single_line = just::<_, Simple<char>>("//")
+/// let single_line = just::<_, _, Simple<char>>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, Simple<char>>("/*")
+/// let multi_line = just::<_, _, Simple<char>>("/*")
 ///     .then(take_until(just("*/")))
 ///     .ignored();
 ///

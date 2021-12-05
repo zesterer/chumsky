@@ -288,7 +288,7 @@ impl<A> Repeated<A> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let ring = just::<_, Simple<char>>('O');
+    /// let ring = just::<_, _, Simple<char>>('O');
     ///
     /// let for_the_elves = ring
     ///     .repeated()
@@ -469,7 +469,7 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let numbers = just::<_, Simple<char>>('-')
+    /// let numbers = just::<_, _, Simple<char>>('-')
     ///     .separated_by(just('.'))
     ///     .at_least(2);
     ///
@@ -1193,7 +1193,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .at_least(3);
 
@@ -1202,7 +1202,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .at_least(3);
 
@@ -1211,7 +1211,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .at_least(3)
             .then(end());
@@ -1221,7 +1221,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .allow_leading()
             .at_least(3);
@@ -1232,7 +1232,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3);
@@ -1243,7 +1243,7 @@ mod tests {
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just::<_, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>>('-')
             .separated_by(just(','))
             .chain(just(','));
         assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-', ',']))
