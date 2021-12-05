@@ -306,9 +306,10 @@ pub trait Parser<I: Clone, O> {
     ///
     /// This method will receive more extensive documentation as the crate's debugging features mature.
     #[track_caller]
-    fn debug<T: fmt::Display + 'static>(self, x: T) -> Debug<Self>
+    fn debug<T>(self, x: T) -> Debug<Self>
     where
         Self: Sized,
+        T: fmt::Display + 'static,
     {
         Debug(self, Rc::new(x), *std::panic::Location::caller())
     }
@@ -339,9 +340,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(token.parse("test"), Ok(Token::Word("test".to_string())));
     /// assert_eq!(token.parse("42"), Ok(Token::Num(42)));
     /// ```
-    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F, O>
+    fn map<U, F>(self, f: F) -> Map<Self, F, O>
     where
         Self: Sized,
+        F: Fn(O) -> U,
     {
         Map(self, f, PhantomData)
     }
@@ -368,12 +370,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(ident.parse("hello"), Ok(Spanned("hello".to_string(), 0..5)));
     /// assert_eq!(ident.parse("       hello   "), Ok(Spanned("hello".to_string(), 7..12)));
     /// ```
-    fn map_with_span<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> U>(
-        self,
-        f: F,
-    ) -> MapWithSpan<Self, F, O>
+    fn map_with_span<U, F>(self, f: F) -> MapWithSpan<Self, F, O>
     where
         Self: Sized,
+        F: Fn(O, <Self::Error as Error<I>>::Span) -> U,
     {
         MapWithSpan(self, f, PhantomData)
     }
@@ -385,9 +385,10 @@ pub trait Parser<I: Clone, O> {
     ///
     /// The output type of this parser is `O`, the same as the original parser.
     // TODO: Map E -> D, not E -> E
-    fn map_err<F: Fn(Self::Error) -> Self::Error>(self, f: F) -> MapErr<Self, F>
+    fn map_err<F>(self, f: F) -> MapErr<Self, F>
     where
         Self: Sized,
+        F: Fn(Self::Error) -> Self::Error,
     {
         MapErr(self, f)
     }
@@ -412,12 +413,10 @@ pub trait Parser<I: Clone, O> {
     /// assert!(byte.parse("255").is_ok());
     /// assert!(byte.parse("256").is_err()); // Out of range
     /// ```
-    fn try_map<U, F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>>(
-        self,
-        f: F,
-    ) -> TryMap<Self, F, O>
+    fn try_map<U, F>(self, f: F) -> TryMap<Self, F, O>
     where
         Self: Sized,
+        F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>,
     {
         TryMap(self, f, PhantomData)
     }
@@ -443,12 +442,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(large_int.parse("537"), Ok(537));
     /// assert!(large_int.parse("243").is_err());
     /// ```
-    fn validate<F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O>(
-        self,
-        f: F,
-    ) -> Validate<Self, F>
+    fn validate<F>(self, f: F) -> Validate<Self, F>
     where
         Self: Sized,
+        F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O,
     {
         Validate(self, f)
     }
@@ -484,9 +481,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(frac.parse("hello"), Err(vec![Cheap::expected_input_found(0..1, None, Some('h')).with_label("number")]));
     /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, Some('.'), Some('!')).with_label("number")]));
     /// ```
-    fn labelled<L: Into<<Self::Error as Error<I>>::Label> + Clone>(self, label: L) -> Label<Self, L>
+    fn labelled<L>(self, label: L) -> Label<Self, L>
     where
         Self: Sized,
+        L: Into<<Self::Error as Error<I>>::Label> + Clone,
     {
         Label(self, label)
     }
@@ -510,9 +508,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(op.parse("+"), Ok(Op::Add));
     /// assert_eq!(op.parse("/"), Ok(Op::Div));
     /// ```
-    fn to<U: Clone>(self, x: U) -> To<Self, O, U>
+    fn to<U>(self, x: U) -> To<Self, O, U>
     where
         Self: Sized,
+        U: Clone,
     {
         To(self, x, PhantomData)
     }
@@ -537,10 +536,11 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
     /// assert_eq!(sum.parse("6"), Ok(6));
     /// ```
-    fn foldl<A, B, F: Fn(A, B::Item) -> A>(self, f: F) -> Foldl<Self, F, A, B>
+    fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B>
     where
         Self: Parser<I, (A, B)> + Sized,
         B: IntoIterator,
+        F: Fn(A, B::Item) -> A,
     {
         Foldl(self, f, PhantomData)
     }
@@ -569,11 +569,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(signed.parse("-17"), Ok(-17));
     /// assert_eq!(signed.parse("--+-+-5"), Ok(5));
     /// ```
-    fn foldr<'a, A, B, F: Fn(A::Item, B) -> B + 'a>(self, f: F) -> Foldr<Self, F, A, B>
+    fn foldr<'a, A, B, F>(self, f: F) -> Foldr<Self, F, A, B>
     where
         Self: Parser<I, (A, B)> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
+        F: Fn(A::Item, B) -> B + 'a,
     {
         Foldr(self, f, PhantomData)
     }
@@ -624,10 +625,11 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(word.parse("hello"), Ok("hello".to_string()));
     /// ```
     // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
-    fn collect<C: core::iter::FromIterator<O::Item>>(self) -> Map<Self, fn(O) -> C, O>
+    fn collect<C>(self) -> Map<Self, fn(O) -> C, O>
     where
         Self: Sized,
         O: IntoIterator,
+        C: core::iter::FromIterator<O::Item>,
     {
         self.map(|items| C::from_iter(items.into_iter()))
     }
@@ -648,9 +650,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
     /// assert!(two_words.parse("hedgehog").is_err());
     /// ```
-    fn then<U, P: Parser<I, U, Error = Self::Error>>(self, other: P) -> Then<Self, P>
+    fn then<U, P>(self, other: P) -> Then<Self, P>
     where
         Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
     {
         Then(self, other)
     }
@@ -677,14 +680,12 @@ pub trait Parser<I: Clone, O> {
     /// assert!(int.parse("-0").is_err());
     /// assert!(int.parse("05").is_err());
     /// ```
-    fn chain<T, U, P: Parser<I, U, Error = Self::Error>>(
-        self,
-        other: P,
-    ) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
     where
         Self: Sized,
         U: Chain<T>,
         O: Chain<T>,
+        P: Parser<I, U, Error = Self::Error>,
     {
         self.then(other).map(|(a, b)| {
             let mut v = Vec::with_capacity(a.len() + b.len());
@@ -727,12 +728,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(integer.parse("00064"), Ok(64));
     /// assert_eq!(integer.parse("32"), Ok(32));
     /// ```
-    fn ignore_then<U, P: Parser<I, U, Error = Self::Error>>(
-        self,
-        other: P,
-    ) -> IgnoreThen<Self, P, O, U>
+    fn ignore_then<U, P>(self, other: P) -> IgnoreThen<Self, P, O, U>
     where
         Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
     {
         Map(Then(self, other), |(_, u)| u, PhantomData)
     }
@@ -766,12 +765,10 @@ pub trait Parser<I: Clone, O> {
     ///     ]),
     /// );
     /// ```
-    fn then_ignore<U, P: Parser<I, U, Error = Self::Error>>(
-        self,
-        other: P,
-    ) -> ThenIgnore<Self, P, O, U>
+    fn then_ignore<U, P>(self, other: P) -> ThenIgnore<Self, P, O, U>
     where
         Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
     {
         Map(Then(self, other), |(o, _)| o, PhantomData)
     }
@@ -792,12 +789,10 @@ pub trait Parser<I: Clone, O> {
     /// assert!(ident.parse("!hello").is_err());
     /// assert!(ident.parse("hello").is_err());
     /// ```
-    fn padded_by<U, P: Parser<I, U, Error = Self::Error> + Clone>(
-        self,
-        other: P,
-    ) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
+    fn padded_by<U, P>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
     where
         Self: Sized,
+        P: Parser<I, U, Error = Self::Error> + Clone,
     {
         other.clone().ignore_then(self).then_ignore(other)
     }
@@ -885,9 +880,10 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(op.parse("/"), Ok('/'));
     /// assert!(op.parse("!").is_err());
     /// ```
-    fn or<P: Parser<I, O, Error = Self::Error>>(self, other: P) -> Or<Self, P>
+    fn or<P>(self, other: P) -> Or<Self, P>
     where
         Self: Sized,
+        P: Parser<I, O, Error = Self::Error>,
     {
         Or(self, other)
     }
@@ -935,9 +931,10 @@ pub trait Parser<I: Clone, O> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<S: Strategy<I, O, Self::Error>>(self, strategy: S) -> Recovery<Self, S>
+    fn recover_with<S>(self, strategy: S) -> Recovery<Self, S>
     where
         Self: Sized,
+        S: Strategy<I, O, Self::Error>,
     {
         Recovery(self, strategy)
     }
@@ -1017,12 +1014,10 @@ pub trait Parser<I: Clone, O> {
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, P: Parser<I, U, Error = Self::Error>>(
-        self,
-        other: P,
-    ) -> SeparatedBy<Self, P, U>
+    fn separated_by<U, P>(self, other: P) -> SeparatedBy<Self, P, U>
     where
         Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
     {
         SeparatedBy {
             item: self,
