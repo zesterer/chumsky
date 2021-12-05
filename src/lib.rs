@@ -27,7 +27,14 @@ pub use crate::{error::Error, span::Span};
 
 pub use crate::stream::{BoxStream, Flat, Stream};
 
-use crate::{chain::Chain, combinator::*, debug::*, primitive::*, recovery::*};
+use crate::{
+    chain::Chain,
+    combinator::*,
+    debug::*,
+    error::{merge_alts, Located},
+    primitive::*,
+    recovery::*,
+};
 
 use std::{
     cmp::Ordering,
@@ -37,6 +44,7 @@ use std::{
     marker::PhantomData,
     ops::Range,
     rc::Rc,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -54,6 +62,7 @@ pub mod prelude {
         primitive::{any, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until},
         recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
+        select,
         span::Span as _,
         text,
         text::TextParser as _,
@@ -65,68 +74,6 @@ pub mod prelude {
 enum ControlFlow<C, B> {
     Continue(C),
     Break(B),
-}
-
-/// An internal type used to facilitate error prioritisation. You shouldn't need to interact with this type during
-/// normal use of the crate.
-pub struct Located<I, E> {
-    at: usize,
-    error: E,
-    phantom: PhantomData<I>,
-}
-
-impl<I, E: Error<I>> Located<I, E> {
-    /// Create a new [`Located`] with the give input position and error.
-    pub fn at(at: usize, error: E) -> Self {
-        Self {
-            at,
-            error,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Get the maximum of two located errors. If they hold the same position in the input, merge them.
-    pub fn max(self, other: impl Into<Option<Self>>) -> Self {
-        let other = match other.into() {
-            Some(other) => other,
-            None => return self,
-        };
-        match self.at.cmp(&other.at) {
-            Ordering::Greater => self,
-            Ordering::Less => other,
-            Ordering::Equal => Self {
-                error: self.error.merge(other.error),
-                ..self
-            },
-        }
-    }
-
-    /// Map the error with the given function.
-    pub fn map<U, F: FnOnce(E) -> U>(self, f: F) -> Located<I, U> {
-        Located {
-            at: self.at,
-            error: f(self.error),
-            phantom: PhantomData,
-        }
-    }
-}
-
-// Merge two alternative errors
-fn merge_alts<I, E: Error<I>, T: IntoIterator<Item = Located<I, E>>>(
-    mut error: Option<Located<I, E>>,
-    errors: T,
-) -> Option<Located<I, E>> {
-    for other in errors {
-        match (error, other) {
-            (Some(a), b) => {
-                error = Some(b.max(a));
-            }
-            (None, b) => {
-                error = Some(b);
-            }
-        }
-    }
-    error
 }
 
 // ([], Ok((out, alt_err))) => parsing successful,
@@ -433,7 +380,8 @@ pub trait Parser<I: Clone, O> {
     /// ```
     /// # use chumsky::prelude::*;
     /// let large_int = text::int::<char, _>(10)
-    ///     .map(|s| s.parse().unwrap())
+    ///     .from_str()
+    ///     .unwrapped()
     ///     .validate(|x: u32, span, emit| {
     ///         if x < 256 { emit(Simple::custom(span, format!("{} must be 256 or higher.", x))) }
     ///         x
@@ -527,7 +475,8 @@ pub trait Parser<I: Clone, O> {
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
     /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .map(|s| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// let sum = int
     ///     .then(just('+').ignore_then(int).repeated())
@@ -557,7 +506,8 @@ pub trait Parser<I: Clone, O> {
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
     /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .map(|s| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// let signed = just('+').to(1)
     ///     .or(just('-').to(-1))
@@ -672,7 +622,8 @@ pub trait Parser<I: Clone, O> {
     ///     .or(just('0').map(|c| vec![c]))
     ///     .then_ignore(end())
     ///     .collect::<String>()
-    ///     .map(|s| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// assert_eq!(int.parse("0"), Ok(0));
     /// assert_eq!(int.parse("415"), Ok(415));
@@ -723,7 +674,8 @@ pub trait Parser<I: Clone, O> {
     /// let integer = zeroes
     ///     .ignore_then(digits)
     ///     .collect::<String>()
-    ///     .map(|s| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// assert_eq!(integer.parse("00064"), Ok(64));
     /// assert_eq!(integer.parse("32"), Ok(32));
@@ -818,7 +770,8 @@ pub trait Parser<I: Clone, O> {
     ///     .collect::<String>();
     ///
     /// let num = text::int(10)
-    ///     .map(|s: String| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// let s_expr = recursive(|s_expr| s_expr
     ///     .padded()
@@ -980,7 +933,8 @@ pub trait Parser<I: Clone, O> {
     /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
-    ///     .map(|s| s.parse().unwrap());
+    ///     .from_str()
+    ///     .unwrapped();
     ///
     /// let sum = num.then(just('+').ignore_then(num).repeated())
     ///     .foldl(|a, b| a + b);
@@ -1080,6 +1034,66 @@ pub trait Parser<I: Clone, O> {
         Self: Sized + 'a,
     {
         BoxedParser(Rc::new(self))
+    }
+
+    /// Attempt to convert the output of this parser into something else using Rust's [`FromStr`] trait.
+    ///
+    /// This is most useful when wanting to convert literal values into their corresponding Rust type, such as when
+    /// parsing integers.
+    ///
+    /// The output type of this parser is `Result<U, U::Err>`, the result of attempting to parse the output, `O`, into
+    /// the value `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let uint64 = text::int::<_, Simple<char>>(10)
+    ///     .from_str::<u64>()
+    ///     .unwrapped();
+    ///
+    /// assert_eq!(uint64.parse("7"), Ok(7));
+    /// assert_eq!(uint64.parse("42"), Ok(42));
+    /// ```
+    fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>, O>
+    where
+        Self: Sized,
+        U: FromStr,
+        O: AsRef<str>,
+    {
+        self.map(|o| o.as_ref().parse())
+    }
+
+    /// For parsers that produce a [`Result`] as their output, unwrap the result (panicking if an [`Err`] is
+    /// encountered).
+    ///
+    /// In general, this method should be avoided except in cases where all possible that the parser might produce can
+    /// by parsed using [`FromStr`] without producing an error.
+    ///
+    /// This combinator is not named `unwrap` to avoid confusion: it unwraps *during parsing*, not immediately.
+    ///
+    /// The output type of this parser is `U`, the [`Ok`] value of the [`Result`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let boolean = just::<_, _, Simple<char>>("true")
+    ///     .or(just("false"))
+    ///     .from_str::<bool>()
+    ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
+    ///
+    /// assert_eq!(boolean.parse("true"), Ok(true));
+    /// assert_eq!(boolean.parse("false"), Ok(false));
+    /// // Does not panic, because the original parser only accepts "true" or "false"
+    /// assert!(boolean.parse("42").is_err());
+    /// ```
+    fn unwrapped<U, E>(self) -> Map<Self, fn(Result<U, E>) -> U, Result<U, E>>
+    where
+        Self: Sized + Parser<I, Result<U, E>>,
+        E: fmt::Debug,
+    {
+        self.map(|o| o.unwrap())
     }
 }
 
@@ -1245,4 +1259,73 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
+}
+
+/// Create a parser that selects one or more input patterns and map them to an output value.
+///
+/// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
+/// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
+/// input patterns will become syntax errors, just as with [`filter`].
+///
+/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
+/// confusing.
+///
+/// This is semantically similar to [`match`] and so supports
+/// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// // The type of our parser's input (tokens like this might be emitted by your compiler's lexer)
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     Num(u64),
+///     Bool(bool),
+///     LParen,
+///     RParen,
+/// }
+///
+/// // The type of our parser's output, a syntax tree
+/// #[derive(Debug, PartialEq)]
+/// enum Ast {
+///     Num(u64),
+///     Bool(bool),
+///     List(Vec<Ast>),
+/// }
+///
+/// // Our parser converts a stream of input tokens into an AST
+/// // `select!` is used to deconstruct some of the tokens and turn them into AST nodes
+/// let ast = recursive::<_, _, _, _, Cheap<Token>>(|ast| {
+///     let literal = select! {
+///         Token::Num(x) => Ast::Num(x),
+///         Token::Bool(x) => Ast::Bool(x),
+///     };
+///
+///     literal.or(ast
+///         .repeated()
+///         .delimited_by(Token::LParen, Token::RParen)
+///         .map(Ast::List))
+/// });
+///
+/// use Token::*;
+/// assert_eq!(
+///     ast.parse(vec![LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]),
+///     Ok(Ast::List(vec![
+///         Ast::Num(5),
+///         Ast::List(vec![
+///             Ast::Bool(false),
+///             Ast::Num(42),
+///         ]),
+///     ])),
+/// );
+/// ```
+#[macro_export]
+macro_rules! select {
+    ($($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::primitive::filter_map(|span, x| match x {
+            $($p $(if $guard)? => ::core::result::Result::Ok($out)),+,
+            _ => ::core::result::Result::Err($crate::error::Error::expected_input_found(span, ::core::option::Option::None, ::core::option::Option::Some(x))),
+        })
+    });
 }

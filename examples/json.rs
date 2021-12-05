@@ -32,7 +32,8 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .chain(frac.or_not().flatten())
             .chain::<char, _, _>(exp.or_not().flatten())
             .collect::<String>()
-            .map(|s| s.parse().unwrap())
+            .from_str()
+            .unwrapped()
             .labelled("number");
 
         let escape = just('\\').ignore_then(

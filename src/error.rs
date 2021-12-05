@@ -366,3 +366,65 @@ impl<I, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
         self
     }
 }
+
+/// An internal type used to facilitate error prioritisation. You shouldn't need to interact with this type during
+/// normal use of the crate.
+pub struct Located<I, E> {
+    pub(crate) at: usize,
+    pub(crate) error: E,
+    pub(crate) phantom: PhantomData<I>,
+}
+
+impl<I, E: Error<I>> Located<I, E> {
+    /// Create a new [`Located`] with the give input position and error.
+    pub fn at(at: usize, error: E) -> Self {
+        Self {
+            at,
+            error,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Get the maximum of two located errors. If they hold the same position in the input, merge them.
+    pub fn max(self, other: impl Into<Option<Self>>) -> Self {
+        let other = match other.into() {
+            Some(other) => other,
+            None => return self,
+        };
+        match self.at.cmp(&other.at) {
+            Ordering::Greater => self,
+            Ordering::Less => other,
+            Ordering::Equal => Self {
+                error: self.error.merge(other.error),
+                ..self
+            },
+        }
+    }
+
+    /// Map the error with the given function.
+    pub fn map<U, F: FnOnce(E) -> U>(self, f: F) -> Located<I, U> {
+        Located {
+            at: self.at,
+            error: f(self.error),
+            phantom: PhantomData,
+        }
+    }
+}
+
+// Merge two alternative errors
+pub(crate) fn merge_alts<I, E: Error<I>, T: IntoIterator<Item = Located<I, E>>>(
+    mut error: Option<Located<I, E>>,
+    errors: T,
+) -> Option<Located<I, E>> {
+    for other in errors {
+        match (error, other) {
+            (Some(a), b) => {
+                error = Some(b.max(a));
+            }
+            (None, b) => {
+                error = Some(b);
+            }
+        }
+    }
+    error
+}

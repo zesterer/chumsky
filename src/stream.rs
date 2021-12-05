@@ -270,6 +270,18 @@ impl<'a, T: Clone> From<&'a [T]>
     }
 }
 
+impl<'a, T: Clone + 'a> From<Vec<T>>
+    for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
+{
+    fn from(s: Vec<T>) -> Self {
+        let len = s.len();
+        Self::from_iter(
+            len..len + 1,
+            Box::new(s.into_iter().enumerate().map(|(i, x)| (x, i..i + 1))),
+        )
+    }
+}
+
 impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
     for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
 {
