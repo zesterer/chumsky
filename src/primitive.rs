@@ -151,6 +151,20 @@ impl<'a> Container<char> for &'a str {
     }
 }
 
+impl<'a, T: Clone> Container<T> for &'a [T] {
+    type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
+    fn get_iter(&self) -> Self::Iter {
+        self.iter().cloned()
+    }
+}
+
+impl<'a, T: Clone, const N: usize> Container<T> for &'a [T; N] {
+    type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
+    fn get_iter(&self) -> Self::Iter {
+        self.iter().cloned()
+    }
+}
+
 impl<T: Clone, const N: usize> Container<T> for [T; N] {
     type Iter = std::array::IntoIter<T, N>;
     fn get_iter(&self) -> Self::Iter {

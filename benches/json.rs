@@ -88,10 +88,10 @@ mod chumsky {
                 .collect::<HashMap<String, Json>>()
                 .map(Json::Object);
 
-            seq(b"null".iter().copied())
+            just(b"null")
                 .to(Json::Null)
-                .or(seq(b"true".iter().copied()).to(Json::Bool(true)))
-                .or(seq(b"false".iter().copied()).to(Json::Bool(false)))
+                .or(just(b"true").to(Json::Bool(true)))
+                .or(just(b"false").to(Json::Bool(false)))
                 .or(number.map(Json::Num))
                 .or(string.map(Json::Str))
                 .or(array)
