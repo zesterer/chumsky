@@ -760,3 +760,72 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 pub fn any<I, E>() -> Any<I, E> {
     Filter(|_| true, PhantomData)
 }
+
+/// See [`todo`].
+pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
+
+/// A parser that can be used wherever you need to implement a parser later.
+///
+/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros.
+///
+/// This function is useful when developing your parser, allowing you to prototype and run parts of your parser without
+/// committing to implementing the entire thing immediately.
+///
+/// The parser will panic if it's ever used to parse input.
+///
+/// The output type of this parser is whatever you want it to be: it'll never produce output!
+///
+/// # Examples
+///
+/// ```should_panic
+/// # use chumsky::prelude::*;
+/// let int = just::<_, _, Simple<char>>("0x").ignore_then(todo())
+///     .or(just("0b").ignore_then(text::digits(2)))
+///     .or(text::int(10));
+///
+/// // Decimal numbers are parsed
+/// assert_eq!(int.parse("12"), Ok("12".to_string()));
+/// // Binary numbers are parsed
+/// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
+/// // Trying to parse hexidecimal numbers results in a panic because their parser is unimplemented
+/// int.parse("0xd4");
+/// ```
+pub fn todo<I, O, E>() -> Todo<I, O, E> {
+    Todo(PhantomData)
+}
+
+impl<I, O, E> Copy for Todo<I, O, E> {}
+impl<I, O, E> Clone for Todo<I, O, E> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
+    type Error = E;
+
+    fn parse_inner<D: Debugger>(
+        &self,
+        _debugger: &mut D,
+        _stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        todo!("Attempted to use an unimplemented parser.")
+    }
+
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
