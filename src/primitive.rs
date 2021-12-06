@@ -761,17 +761,16 @@ pub fn any<I, E>() -> Any<I, E> {
     Filter(|_| true, PhantomData)
 }
 
-/// See [`todo`].
+/// See [`fn@todo`].
 pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
 
 /// A parser that can be used wherever you need to implement a parser later.
 ///
-/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros.
+/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros, but will produce a panic when used to
+/// parse input, not immediately when invoked.
 ///
 /// This function is useful when developing your parser, allowing you to prototype and run parts of your parser without
 /// committing to implementing the entire thing immediately.
-///
-/// The parser will panic if it's ever used to parse input.
 ///
 /// The output type of this parser is whatever you want it to be: it'll never produce output!
 ///
@@ -787,7 +786,7 @@ pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
 /// assert_eq!(int.parse("12"), Ok("12".to_string()));
 /// // Binary numbers are parsed
 /// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
-/// // Trying to parse hexidecimal numbers results in a panic because their parser is unimplemented
+/// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
 pub fn todo<I, O, E>() -> Todo<I, O, E> {

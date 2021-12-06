@@ -1272,7 +1272,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
 /// confusing.
 ///
-/// This is semantically similar to [`match`] and so supports
+/// The macro is semantically similar to a `match` expression and so supports
 /// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
 ///
 /// # Examples
