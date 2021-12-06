@@ -1,17 +1,17 @@
 use super::*;
 
 /// See [`custom`].
-pub struct Custom<F, E>(F, PhantomData<E>);
+pub struct Custom<I, O, F, E>(F, PhantomData<(I, O, E)>);
 
-impl<F: Copy, E> Copy for Custom<F, E> {}
-impl<F: Clone, E> Clone for Custom<F, E> {
+impl<I, O, F: Copy, E> Copy for Custom<I, O, F, E> {}
+impl<I, O, F: Clone, E> Clone for Custom<I, O, F, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O>
-    for Custom<F, E>
+impl<I: Clone, O, S, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O, S>
+    for Custom<I, O, F, E>
 {
     type Error = E;
 
@@ -35,11 +35,20 @@ impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> P
 
 /// A parser primitive that allows you to define your own custom parsers.
 ///
-/// In theory you shouldn't need to use this unless you have particularly bizarre requirements, but it's a cleaner and
-//// more sustainable alternative to implementing [`Parser`] by hand.
+/// This is a last resort: only use this function if none of the other parser combinators suit your needs. If you find
+/// yourself needing to us it, it's likely because there's an API hole that needs filling: please report your use-case
+/// [on the main repository](https://github.com/zesterer/chumsky/issues/new).
+///
+/// That said, using this function is preferable to implementing [`Parser`] by hand because it has some quirky and
+/// implementation-specific API features that are undocumented, unstable, and difficult to use correctly.
 ///
 /// The output type of this parser is determined by the parse result of the function.
-pub fn custom<F, E>(f: F) -> Custom<F, E> {
+pub fn custom<I, O, F, E>(f: F) -> Custom<I, O, F, E>
+where
+    I: Clone,
+    F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>,
+    E: Error<I>,
+{
     Custom(f, PhantomData)
 }
 
@@ -52,7 +61,7 @@ impl<E> Clone for End<E> {
     }
 }
 
-impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
+impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for End<E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -224,7 +233,7 @@ impl<I, C: Clone, E> Clone for Just<I, C, E> {
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I> + Clone, E: Error<I>> Parser<I, C, S> for Just<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -290,7 +299,7 @@ impl<I: Clone, E> Clone for Seq<I, E> {
     }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
+impl<I: Clone + PartialEq, S, E: Error<I>> Parser<I, (), S> for Seq<I, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -363,7 +372,7 @@ impl<I, C: Clone, E> Clone for OneOf<I, C, E> {
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for OneOf<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -463,7 +472,7 @@ impl<I, C: Clone, E> Clone for NoneOf<I, C, E> {
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for NoneOf<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -523,7 +532,7 @@ pub fn none_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> NoneOf<I, C, E> {
 #[derive(Copy, Clone)]
 pub struct TakeUntil<A>(A);
 
-impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
+impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A> {
     type Error = A::Error;
 
     fn parse_inner<D: Debugger>(
@@ -624,7 +633,7 @@ impl<F: Clone, E> Clone for Filter<F, E> {
     }
 }
 
-impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
+impl<I: Clone, S, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I, S> for Filter<F, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -684,7 +693,7 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
     }
 }
 
-impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
+impl<I: Clone, O, S, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O, S> for FilterMap<F, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -764,10 +773,10 @@ pub fn any<I, E>() -> Any<I, E> {
 /// See [`fn@todo`].
 pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
 
-/// A parser that can be used wherever you need to implement a parser later.
+/// A parser that can be used whenever you want to implement a parser later.
 ///
-/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros, but will produce a panic when used to
-/// parse input, not immediately when invoked.
+/// This parser is analagous to the [`todo!`] macro, but will produce a panic when used to parse input, not
+/// immediately.
 ///
 /// This function is useful when developing your parser, allowing you to prototype and run parts of your parser without
 /// committing to implementing the entire thing immediately.
@@ -800,7 +809,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
     }
 }
 
-impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
+impl<I: Clone, O, S, E: Error<I>> Parser<I, O, S> for Todo<I, O, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(

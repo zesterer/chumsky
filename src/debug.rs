@@ -44,7 +44,7 @@ pub trait Debugger {
     /// Emit a parse event, if the debugger supports them.
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, f: F);
     /// Invoke the given parser with a mode specific to this debugger.
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    fn invoke<I: Clone, O, S, P: Parser<I, O, S> + ?Sized>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,
@@ -103,7 +103,7 @@ impl Debugger for Verbose {
         self.events.push(Ok(f()));
     }
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    fn invoke<I: Clone, O, S, P: Parser<I, O, S> + ?Sized>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,
@@ -135,7 +135,7 @@ impl Debugger for Silent {
     }
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, _: F) {}
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    fn invoke<I: Clone, O, S, P: Parser<I, O, S> + ?Sized>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,

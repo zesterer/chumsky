@@ -96,20 +96,21 @@ fn parse_recovery_inner<
     'a,
     I: Clone,
     O,
-    P: Parser<I, O>,
+    S,
+    P: Parser<I, O, S>,
     D: Debugger,
     Iter: Iterator<Item = (I, <P::Error as Error<I>>::Span)> + 'a,
-    S: Into<Stream<'a, I, <P::Error as Error<I>>::Span, Iter>>,
+    Input: Into<Stream<'a, I, <P::Error as Error<I>>::Span, Iter>>,
 >(
     parser: &P,
     debugger: &mut D,
-    stream: S,
+    input: Input,
 ) -> (Option<O>, Vec<P::Error>)
 where
     P: Sized,
 {
     #[allow(deprecated)]
-    let (mut errors, res) = parser.parse_inner(debugger, &mut stream.into());
+    let (mut errors, res) = parser.parse_inner(debugger, &mut input.into());
     let out = match res {
         Ok((out, _)) => Some(out),
         Err(err) => {
@@ -139,7 +140,7 @@ where
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<I: Clone, O> {
+pub trait Parser<I: Clone, O, S = ()> {
     /// The type of errors emitted by this parser.
     type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
 
@@ -192,13 +193,13 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// `&[I]`, a [`&str`], or a [`Stream`] to it.
-    fn parse_recovery<'a, Iter, S>(&self, stream: S) -> (Option<O>, Vec<Self::Error>)
+    fn parse_recovery<'a, Iter, Input>(&self, input: Input) -> (Option<O>, Vec<Self::Error>)
     where
         Self: Sized,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+        Input: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     {
-        parse_recovery_inner(self, &mut Silent::new(), stream)
+        parse_recovery_inner(self, &mut Silent::new(), input)
     }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way. Unlike
@@ -213,14 +214,14 @@ pub trait Parser<I: Clone, O> {
     /// your parser. Additionally, its API is quite likely to change in future versions.
     ///
     /// This method will receive more extensive documentation as the crate's debugging features mature.
-    fn parse_recovery_verbose<'a, Iter, S>(&self, stream: S) -> (Option<O>, Vec<Self::Error>)
+    fn parse_recovery_verbose<'a, Iter, Input>(&self, input: Input) -> (Option<O>, Vec<Self::Error>)
     where
         Self: Sized,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+        Input: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     {
         let mut debugger = Verbose::new();
-        let res = parse_recovery_inner(self, &mut debugger, stream);
+        let res = parse_recovery_inner(self, &mut debugger, input);
         debugger.print();
         res
     }
@@ -231,13 +232,13 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[I]`], a [`&str`], or a [`Stream`] to it.
-    fn parse<'a, Iter, S>(&self, stream: S) -> Result<O, Vec<Self::Error>>
+    fn parse<'a, Iter, Input>(&self, input: Input) -> Result<O, Vec<Self::Error>>
     where
         Self: Sized,
         Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+        Input: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
     {
-        let (output, errors) = self.parse_recovery(stream);
+        let (output, errors) = self.parse_recovery(input);
         if errors.is_empty() {
             Ok(output.expect(
                 "Parsing failed, but no errors were emitted. This is troubling, to say the least.",
@@ -489,7 +490,7 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B>
     where
-        Self: Parser<I, (A, B)> + Sized,
+        Self: Parser<I, (A, B), S> + Sized,
         B: IntoIterator,
         F: Fn(A, B::Item) -> A,
     {
@@ -523,7 +524,7 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn foldr<'a, A, B, F>(self, f: F) -> Foldr<Self, F, A, B>
     where
-        Self: Parser<I, (A, B)> + Sized,
+        Self: Parser<I, (A, B), S> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
         F: Fn(A::Item, B) -> B + 'a,
@@ -605,7 +606,7 @@ pub trait Parser<I: Clone, O> {
     fn then<U, P>(self, other: P) -> Then<Self, P>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        P: Parser<I, U, S, Error = Self::Error>,
     {
         Then(self, other)
     }
@@ -638,7 +639,7 @@ pub trait Parser<I: Clone, O> {
         Self: Sized,
         U: Chain<T>,
         O: Chain<T>,
-        P: Parser<I, U, Error = Self::Error>,
+        P: Parser<I, U, S, Error = Self::Error>,
     {
         self.then(other).map(|(a, b)| {
             let mut v = Vec::with_capacity(a.len() + b.len());
@@ -685,7 +686,7 @@ pub trait Parser<I: Clone, O> {
     fn ignore_then<U, P>(self, other: P) -> IgnoreThen<Self, P, O, U>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        P: Parser<I, U, S, Error = Self::Error>,
     {
         Map(Then(self, other), |(_, u)| u, PhantomData)
     }
@@ -722,7 +723,7 @@ pub trait Parser<I: Clone, O> {
     fn then_ignore<U, P>(self, other: P) -> ThenIgnore<Self, P, O, U>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        P: Parser<I, U, S, Error = Self::Error>,
     {
         Map(Then(self, other), |(o, _)| o, PhantomData)
     }
@@ -746,7 +747,7 @@ pub trait Parser<I: Clone, O> {
     fn padded_by<U, P>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error> + Clone,
+        P: Parser<I, U, S, Error = Self::Error> + Clone,
     {
         other.clone().ignore_then(self).then_ignore(other)
     }
@@ -838,7 +839,7 @@ pub trait Parser<I: Clone, O> {
     fn or<P>(self, other: P) -> Or<Self, P>
     where
         Self: Sized,
-        P: Parser<I, O, Error = Self::Error>,
+        P: Parser<I, O, S, Error = Self::Error>,
     {
         Or(self, other)
     }
@@ -886,10 +887,10 @@ pub trait Parser<I: Clone, O> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<S>(self, strategy: S) -> Recovery<Self, S>
+    fn recover_with<R>(self, strategy: R) -> Recovery<Self, R>
     where
         Self: Sized,
-        S: Strategy<I, O, Self::Error>,
+        R: Strategy<I, O, Self::Error>,
     {
         Recovery(self, strategy)
     }
@@ -973,7 +974,7 @@ pub trait Parser<I: Clone, O> {
     fn separated_by<U, P>(self, other: P) -> SeparatedBy<Self, P, U>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        P: Parser<I, U, S, Error = Self::Error>,
     {
         SeparatedBy {
             item: self,
@@ -1031,7 +1032,7 @@ pub trait Parser<I: Clone, O> {
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
-    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error>
+    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error, S>
     where
         Self: Sized + 'a,
     {
@@ -1092,14 +1093,14 @@ pub trait Parser<I: Clone, O> {
     /// ```
     fn unwrapped<U, E>(self) -> Map<Self, fn(Result<U, E>) -> U, Result<U, E>>
     where
-        Self: Sized + Parser<I, Result<U, E>>,
+        Self: Sized + Parser<I, Result<U, E>, S>,
         E: fmt::Debug,
     {
         self.map(|o| o.unwrap())
     }
 }
 
-impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
+impl<'a, I: Clone, O, S, T: Parser<I, O, S> + ?Sized> Parser<I, O, S> for &'a T {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(
@@ -1107,7 +1108,7 @@ impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(*self, stream)
+        debugger.invoke::<_, _, _, T>(*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1128,7 +1129,7 @@ impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
+impl<I: Clone, O, S, T: Parser<I, O, S> + ?Sized> Parser<I, O, S> for Box<T> {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(
@@ -1136,7 +1137,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, _, T>(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1157,7 +1158,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
+impl<I: Clone, O, S, T: Parser<I, O, S> + ?Sized> Parser<I, O, S> for Rc<T> {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(
@@ -1165,7 +1166,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, _, T>(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1186,7 +1187,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
+impl<I: Clone, O, S, T: Parser<I, O, S> + ?Sized> Parser<I, O, S> for Arc<T> {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(
@@ -1194,7 +1195,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, _, T>(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1225,15 +1226,15 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 #[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
+pub struct BoxedParser<'a, I, O, E: Error<I>, S = ()>(Rc<dyn Parser<I, O, S, Error = E> + 'a>);
 
-impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
+impl<'a, I, O, S, E: Error<I>> Clone for BoxedParser<'a, I, O, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
+impl<'a, I: Clone, O, S, E: Error<I>> Parser<I, O, S> for BoxedParser<'a, I, O, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(

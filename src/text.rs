@@ -10,7 +10,7 @@ use super::*;
 use core::iter::FromIterator;
 
 /// The type of a parser that accepts (and ignores) any number of whitespace characters.
-pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>;
+pub type Padding<I, E> = Custom<I, (), fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>;
 
 /// The type of a parser that accepts (and ignores) any number of whitespace characters before or after another
 /// pattern.
@@ -174,7 +174,7 @@ pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
 /// assert_eq!(newline.parse("\u{2028}"), Ok(()));
 /// assert_eq!(newline.parse("\u{2029}"), Ok(()));
 /// ```
-pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> + Copy + Clone {
+pub fn newline<E: Error<char>, S>() -> impl Parser<char, (), S, Error = E> + Copy + Clone {
     just('\r')
         .or_not()
         .ignore_then(just('\n'))
@@ -208,9 +208,9 @@ pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> + Copy + Cl
 /// assert_eq!(digits.parse("0000"), Ok("0000".to_string()));
 /// assert!(digits.parse("").is_err());
 /// ```
-pub fn digits<C: Character, E: Error<C>>(
+pub fn digits<C: Character, E: Error<C>, S>(
     radix: u32,
-) -> impl Parser<C, C::Collection, Error = E> + Copy + Clone {
+) -> impl Parser<C, C::Collection, S, Error = E> + Copy + Clone {
     filter(move |c: &C| c.is_digit(radix))
         .repeated()
         .at_least(1)
@@ -248,9 +248,9 @@ pub fn digits<C: Character, E: Error<C>>(
 /// assert_eq!(hex.parse("b4"), Ok("b4".to_string()));
 /// assert!(hex.parse("0B").is_err());
 /// ```
-pub fn int<C: Character, E: Error<C>>(
+pub fn int<C: Character, E: Error<C>, S>(
     radix: u32,
-) -> impl Parser<C, C::Collection, Error = E> + Copy + Clone {
+) -> impl Parser<C, C::Collection, S, Error = E> + Copy + Clone {
     filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
         .chain::<C, Vec<_>, _>(filter(move |c: &C| c.is_digit(radix)).repeated())
@@ -265,7 +265,7 @@ pub fn int<C: Character, E: Error<C>>(
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, C::Collection, Error = E> + Copy + Clone
+pub fn ident<C: Character, E: Error<C>, S>() -> impl Parser<C, C::Collection, S, Error = E> + Copy + Clone
 {
     filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .map(Some)
@@ -292,9 +292,9 @@ pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, C::Collection, Error
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").is_err());
 /// ```
-pub fn keyword<'a, C: Character + 'a, S: AsRef<C::Str> + 'a + Clone, E: Error<C> + 'a>(
-    keyword: S,
-) -> impl Parser<C, (), Error = E> + Clone + 'a {
+pub fn keyword<'a, C: Character + 'a, Str: AsRef<<C as Character>::Str> + Clone + 'a, E: Error<C> + 'a, S: 'a>(
+    keyword: Str,
+) -> impl Parser<C, (), S, Error = E> + Clone + 'a {
     // TODO: use .filter(...), improve error messages
     ident().try_map(move |s: C::Collection, span| {
         if s.as_ref() == keyword.as_ref() {

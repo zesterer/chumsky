@@ -13,7 +13,7 @@ pub type ThenIgnore<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 #[derive(Copy, Clone)]
 pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O>
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, B: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, O, S>
     for Or<A, B>
 {
     type Error = E;
@@ -139,7 +139,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
 #[derive(Copy, Clone)]
 pub struct OrNot<A>(pub(crate) A);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for OrNot<A> {
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Option<O>, S> for OrNot<A> {
     type Error = E;
 
     #[inline]
@@ -181,8 +181,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
 #[derive(Copy, Clone)]
 pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 
-impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>>
-    Parser<I, (O, U)> for Then<A, B>
+impl<I: Clone, O, U, S, A: Parser<I, O, S, Error = E>, B: Parser<I, U, S, Error = E>, E: Error<I>>
+    Parser<I, (O, U), S> for Then<A, B>
 {
     type Error = E;
 
@@ -233,7 +233,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
 
-impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O>
+impl<I: Clone + PartialEq, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, O, S>
     for DelimitedBy<A, I>
 {
     type Error = E;
@@ -327,7 +327,7 @@ impl<A> Repeated<A> {
     }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Vec<O>, S> for Repeated<A> {
     type Error = E;
 
     #[inline]
@@ -549,8 +549,8 @@ impl<A: Clone, B: Clone, U> Clone for SeparatedBy<A, B, U> {
     }
 }
 
-impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: Error<I>>
-    Parser<I, Vec<O>> for SeparatedBy<A, B, U>
+impl<I: Clone, O, U, S, A: Parser<I, O, S, Error = E>, B: Parser<I, U, S, Error = E>, E: Error<I>>
+    Parser<I, Vec<O>, S> for SeparatedBy<A, B, U>
 {
     type Error = E;
 
@@ -574,7 +574,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             Continue,
         }
 
-        fn parse_or_not<U, B: Parser<I, U, Error = E>, I: Clone, E: Error<I>, D: Debugger>(
+        fn parse_or_not<U, B: Parser<I, U, S, Error = E>, I: Clone, E: Error<I>, S, D: Debugger>(
             delimiter: &B,
             stream: &mut StreamOf<I, E>,
             debugger: &mut D,
@@ -590,7 +590,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             }
         }
 
-        fn parse<O, A: Parser<I, O, Error = E>, I: Clone, E: Error<I>, D: Debugger>(
+        fn parse<O, A: Parser<I, O, S, Error = E>, I: Clone, E: Error<I>, S, D: Debugger>(
             item: &A,
             stream: &mut StreamOf<I, E>,
             debugger: &mut D,
@@ -707,7 +707,7 @@ impl<A: Clone> Clone for Debug<A> {
     }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debug<A> {
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, O, S> for Debug<A> {
     type Error = E;
 
     #[inline]
@@ -749,7 +749,7 @@ impl<A: Clone, F: Clone, O> Clone for Map<A, F, O> {
     }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, U>
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Parser<I, U, S>
     for Map<A, F, O>
 {
     type Error = E;
@@ -788,7 +788,7 @@ impl<A: Clone, F: Clone, O> Clone for MapWithSpan<A, F, O> {
     }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Error<I>> Parser<I, U>
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, U, F: Fn(O, E::Span) -> U, E: Error<I>> Parser<I, U, S>
     for MapWithSpan<A, F, O>
 {
     type Error = E;
@@ -828,10 +828,11 @@ pub struct Validate<A, F>(pub(crate) A, pub(crate) F);
 impl<
         I: Clone,
         O,
-        A: Parser<I, O, Error = E>,
+        S,
+        A: Parser<I, O, S, Error = E>,
         F: Fn(O, E::Span, &mut dyn FnMut(E)) -> O,
         E: Error<I>,
-    > Parser<I, O> for Validate<A, F>
+    > Parser<I, O, S> for Validate<A, F>
 {
     type Error = E;
 
@@ -883,11 +884,12 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldl<A, F, O, U> {
 impl<
         I: Clone,
         O,
-        A: Parser<I, (O, U), Error = E>,
+        S,
+        A: Parser<I, (O, U), S, Error = E>,
         U: IntoIterator,
         F: Fn(O, U::Item) -> O,
         E: Error<I>,
-    > Parser<I, O> for Foldl<A, F, O, U>
+    > Parser<I, O, S> for Foldl<A, F, O, U>
 {
     type Error = E;
 
@@ -929,11 +931,12 @@ impl<A: Clone, F: Clone, O, U> Clone for Foldr<A, F, O, U> {
 impl<
         I: Clone,
         O: IntoIterator,
-        A: Parser<I, (O, U), Error = E>,
         U,
+        S,
+        A: Parser<I, (O, U), S, Error = E>,
         F: Fn(O::Item, U) -> U,
         E: Error<I>,
-    > Parser<I, U> for Foldr<A, F, O, U>
+    > Parser<I, U, S> for Foldr<A, F, O, U>
 where
     O::IntoIter: DoubleEndedIterator,
 {
@@ -968,7 +971,7 @@ where
 #[derive(Copy, Clone)]
 pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O>
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser<I, O, S>
     for MapErr<A, F>
 {
     type Error = E;
@@ -1013,11 +1016,12 @@ impl<A: Clone, F: Clone, O> Clone for TryMap<A, F, O> {
 impl<
         I: Clone,
         O,
-        A: Parser<I, O, Error = E>,
         U,
+        S,
+        A: Parser<I, O, S, Error = E>,
         F: Fn(O, E::Span) -> Result<U, E>,
         E: Error<I>,
-    > Parser<I, U> for TryMap<A, F, O>
+    > Parser<I, U, S> for TryMap<A, F, O>
 {
     type Error = E;
 
@@ -1056,7 +1060,7 @@ impl<
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Error<I>> Parser<I, O>
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, L: Into<E::Label> + Clone, E: Error<I>> Parser<I, O, S>
     for Label<A, L>
 {
     type Error = E;
@@ -1111,7 +1115,7 @@ impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
     }
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U> for To<A, O, U> {
+impl<I: Clone, O, U: Clone, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, U, S> for To<A, O, U> {
     type Error = E;
 
     #[inline]
@@ -1139,9 +1143,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
 /// See [`Parser::rewind`].
 pub struct Rewind<A>(pub(crate) A);
 
-impl<I: Clone, O, E: Error<I>, A> Parser<I, O> for Rewind<A>
+impl<I: Clone, O, S, E: Error<I>, A> Parser<I, O, S> for Rewind<A>
 where
-    A: Parser<I, O, Error = E>,
+    A: Parser<I, O, S, Error = E>,
 {
     type Error = E;
 

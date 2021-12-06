@@ -28,12 +28,12 @@ enum RecursiveInner<T> {
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
-pub struct Recursive<'a, I, O, E: Error<I>>(
-    RecursiveInner<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>,
+pub struct Recursive<'a, I, O, E: Error<I>, S = ()>(
+    RecursiveInner<OnceCell<Box<dyn Parser<I, O, S, Error = E> + 'a>>>,
 );
 
-impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
-    fn cell(&self) -> Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>> {
+impl<'a, I: Clone, O, S, E: Error<I>> Recursive<'a, I, O, E, S> {
+    fn cell(&self) -> Rc<OnceCell<Box<dyn Parser<I, O, S, Error = E> + 'a>>> {
         match &self.0 {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -85,14 +85,14 @@ impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    pub fn define<P: Parser<I, O, Error = E> + 'a>(&mut self, parser: P) {
+    pub fn define<P: Parser<I, O, S, Error = E> + 'a>(&mut self, parser: P) {
         self.cell()
             .set(Box::new(parser))
             .unwrap_or_else(|_| panic!("Parser defined more than once"));
     }
 }
 
-impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
+impl<'a, I: Clone, O, S, E: Error<I>> Clone for Recursive<'a, I, O, E, S> {
     fn clone(&self) -> Self {
         Self(match &self.0 {
             RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
@@ -101,7 +101,7 @@ impl<'a, I: Clone, O, E: Error<I>> Clone for Recursive<'a, I, O, E> {
     }
 }
 
-impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
+impl<'a, I: Clone, O, S, E: Error<I>> Parser<I, O, S> for Recursive<'a, I, O, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -181,12 +181,13 @@ pub fn recursive<
     'a,
     I: Clone,
     O,
-    P: Parser<I, O, Error = E> + 'a,
-    F: FnOnce(Recursive<'a, I, O, E>) -> P,
+    S,
+    P: Parser<I, O, S, Error = E> + 'a,
+    F: FnOnce(Recursive<'a, I, O, E, S>) -> P,
     E: Error<I>,
 >(
     f: F,
-) -> Recursive<'a, I, O, E> {
+) -> Recursive<'a, I, O, E, S> {
     let mut parser = Recursive::declare();
     parser.define(f(Recursive(match &parser.0 {
         RecursiveInner::Owned(x) => RecursiveInner::Unowned(Rc::downgrade(x)),
