@@ -1,17 +1,17 @@
 use super::*;
 
 /// See [`custom`].
-pub struct Custom<I, O, F, E>(F, PhantomData<(I, O, E)>);
+pub struct Custom<I, O, F, E, S = ()>(F, PhantomData<(I, O, E, S)>);
 
-impl<I, O, F: Copy, E> Copy for Custom<I, O, F, E> {}
-impl<I, O, F: Clone, E> Clone for Custom<I, O, F, E> {
+impl<I, O, F: Copy, E, S> Copy for Custom<I, O, F, E, S> {}
+impl<I, O, F: Clone, E, S> Clone for Custom<I, O, F, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
 impl<I: Clone, O, S, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O, S>
-    for Custom<I, O, F, E>
+    for Custom<I, O, F, E, S>
 {
     type Error = E;
 
@@ -25,11 +25,11 @@ impl<I: Clone, O, S, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
 }
 
@@ -43,7 +43,7 @@ impl<I: Clone, O, S, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>
 /// implementation-specific API features that are undocumented, unstable, and difficult to use correctly.
 ///
 /// The output type of this parser is determined by the parse result of the function.
-pub fn custom<I, O, F, E>(f: F) -> Custom<I, O, F, E>
+pub fn custom<I, O, F, E, S>(f: F) -> Custom<I, O, F, E, S>
 where
     I: Clone,
     F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>,
@@ -53,15 +53,16 @@ where
 }
 
 /// See [`end`].
-pub struct End<E>(PhantomData<E>);
+pub struct End<E, S = ()>(PhantomData<(E, S)>);
 
-impl<E> Clone for End<E> {
+impl<E, S> Copy for End<E, S> {}
+impl<E, S> Clone for End<E, S> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for End<E> {
+impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for End<E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -83,11 +84,11 @@ impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for End<E> {
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (), S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (), S>::parse_inner(self, d, s)
     }
 }
 
@@ -125,7 +126,7 @@ impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for End<E> {
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
 /// assert_eq!(only_digits.parse("1234"), Ok("1234".to_string()));
 /// ```
-pub fn end<E>() -> End<E> {
+pub fn end<E, S>() -> End<E, S> {
     End(PhantomData)
 }
 
@@ -224,16 +225,16 @@ impl<T: Clone> Container<T> for std::collections::BinaryHeap<T> {
 }
 
 /// See [`just`].
-pub struct Just<I, C, E>(C, PhantomData<(I, E)>);
+pub struct Just<I, C, E, S = ()>(C, PhantomData<(I, E, S)>);
 
-impl<I, C: Copy, E> Copy for Just<I, C, E> {}
-impl<I, C: Clone, E> Clone for Just<I, C, E> {
+impl<I, C: Copy, E, S> Copy for Just<I, C, E, S> {}
+impl<I, C: Clone, E, S> Clone for Just<I, C, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, S, C: Container<I> + Clone, E: Error<I>> Parser<I, C, S> for Just<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I> + Clone, E: Error<I>> Parser<I, C, S> for Just<I, C, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -286,7 +287,7 @@ impl<I: Clone + PartialEq, S, C: Container<I> + Clone, E: Error<I>> Parser<I, C,
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").is_err());
 /// ```
-pub fn just<I, C: Container<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> {
+pub fn just<I, C: Container<I>, E: Error<I>, S>(inputs: C) -> Just<I, C, E, S> {
     Just(inputs, PhantomData)
 }
 
@@ -327,11 +328,11 @@ impl<I: Clone + PartialEq, S, E: Error<I>> Parser<I, (), S> for Seq<I, E> {
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (), S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (), S>::parse_inner(self, d, s)
     }
 }
 
@@ -364,15 +365,16 @@ pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> S
 }
 
 /// See [`one_of`].
-pub struct OneOf<I, C, E>(C, PhantomData<(I, E)>);
+pub struct OneOf<I, C, E, S = ()>(C, PhantomData<(I, E, S)>);
 
-impl<I, C: Clone, E> Clone for OneOf<I, C, E> {
+impl<I, C: Copy, E, S> Copy for OneOf<I, C, E, S> {}
+impl<I, C: Clone, E, S> Clone for OneOf<I, C, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for OneOf<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for OneOf<I, C, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -398,11 +400,11 @@ impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for 
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, I, S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, I, S>::parse_inner(self, d, s)
     }
 }
 
@@ -422,20 +424,21 @@ impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for 
 /// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").is_err());
 /// ```
-pub fn one_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> OneOf<I, C, E> {
+pub fn one_of<I, C: Container<I>, E: Error<I>, S>(inputs: C) -> OneOf<I, C, E, S> {
     OneOf(inputs, PhantomData)
 }
 
 /// See [`empty`].
-pub struct Empty<E>(PhantomData<E>);
+pub struct Empty<E, S = ()>(PhantomData<(E, S)>);
 
-impl<E> Clone for Empty<E> {
+impl<E, S> Copy for Empty<E, S> {}
+impl<E, S> Clone for Empty<E, S> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
+impl<I: Clone, S, E: Error<I>> Parser<I, (), S> for Empty<E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -459,20 +462,21 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
-pub fn empty<E>() -> Empty<E> {
+pub fn empty<E, S>() -> Empty<E, S> {
     Empty(PhantomData)
 }
 
 /// See [`none_of`].
-pub struct NoneOf<I, C, E>(C, PhantomData<(I, E)>);
+pub struct NoneOf<I, C, E, S = ()>(C, PhantomData<(I, E, S)>);
 
-impl<I, C: Clone, E> Clone for NoneOf<I, C, E> {
+impl<I, C: Copy, E, S> Copy for NoneOf<I, C, E, S> {}
+impl<I, C: Clone, E, S> Clone for NoneOf<I, C, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for NoneOf<I, C, E> {
+impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for NoneOf<I, C, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -498,11 +502,11 @@ impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for 
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, I, S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, I, S>::parse_inner(self, d, s)
     }
 }
 
@@ -524,15 +528,21 @@ impl<I: Clone + PartialEq, S, C: Container<I>, E: Error<I>> Parser<I, I, S> for 
 /// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").is_err());
 /// ```
-pub fn none_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> NoneOf<I, C, E> {
+pub fn none_of<I, C: Container<I>, E: Error<I>, S>(inputs: C) -> NoneOf<I, C, E, S> {
     NoneOf(inputs, PhantomData)
 }
 
 /// See [`take_until`].
-#[derive(Copy, Clone)]
-pub struct TakeUntil<A>(A);
+pub struct TakeUntil<A, S = ()>(A, PhantomData<S>);
 
-impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A> {
+impl<A: Copy, S> Copy for TakeUntil<A, S> {}
+impl<A: Clone, S> Clone for TakeUntil<A, S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A, S> {
     type Error = A::Error;
 
     fn parse_inner<D: Debugger>(
@@ -569,7 +579,7 @@ impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A>
         s: &mut StreamOf<I, A::Error>,
     ) -> PResult<I, (Vec<I>, O), A::Error> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (Vec<I>, O), S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(
         &self,
@@ -577,7 +587,7 @@ impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A>
         s: &mut StreamOf<I, A::Error>,
     ) -> PResult<I, (Vec<I>, O), A::Error> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, (Vec<I>, O), S>::parse_inner(self, d, s)
     }
 }
 
@@ -619,21 +629,21 @@ impl<I: Clone, O, S, A: Parser<I, O>> Parser<I, (Vec<I>, O), S> for TakeUntil<A>
 ///     // ...comments between them
 /// "#), Ok(vec!["these".to_string(), "are".to_string(), "tokens".to_string()]));
 /// ```
-pub fn take_until<A>(until: A) -> TakeUntil<A> {
-    TakeUntil(until)
+pub fn take_until<A, S>(until: A) -> TakeUntil<A, S> {
+    TakeUntil(until, PhantomData)
 }
 
 /// See [`filter`].
-pub struct Filter<F, E>(F, PhantomData<E>);
+pub struct Filter<F, E, S>(F, PhantomData<(E, S)>);
 
-impl<F: Copy, E> Copy for Filter<F, E> {}
-impl<F: Clone, E> Clone for Filter<F, E> {
+impl<F: Copy, E, S> Copy for Filter<F, E, S> {}
+impl<F: Clone, E, S> Clone for Filter<F, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone, S, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I, S> for Filter<F, E> {
+impl<I: Clone, S, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I, S> for Filter<F, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -679,21 +689,21 @@ impl<I: Clone, S, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I, S> for Filter<F, 
 /// assert_eq!(lowercase.parse("hello"), Ok("hello".to_string()));
 /// assert!(lowercase.parse("Hello").is_err());
 /// ```
-pub fn filter<I, F: Fn(&I) -> bool, E>(f: F) -> Filter<F, E> {
+pub fn filter<I, F: Fn(&I) -> bool, E, S>(f: F) -> Filter<F, E, S> {
     Filter(f, PhantomData)
 }
 
 /// See [`filter_map`].
-pub struct FilterMap<F, E>(F, PhantomData<E>);
+pub struct FilterMap<F, E, S = ()>(F, PhantomData<(E, S)>);
 
-impl<F: Copy, E> Copy for FilterMap<F, E> {}
-impl<F: Clone, E> Clone for FilterMap<F, E> {
+impl<F: Copy, E, S> Copy for FilterMap<F, E, S> {}
+impl<F: Clone, E, S> Clone for FilterMap<F, E, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone, O, S, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O, S> for FilterMap<F, E> {
+impl<I: Clone, O, S, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O, S> for FilterMap<F, E, S> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -717,11 +727,11 @@ impl<I: Clone, O, S, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
 }
 
@@ -744,12 +754,12 @@ impl<I: Clone, O, S, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O
 /// assert_eq!(numeral.parse("7"), Ok(7));
 /// assert_eq!(numeral.parse("f"), Err(vec![Simple::custom(0..1, "'f' is not a digit")]));
 /// ```
-pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
+pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>, S>(f: F) -> FilterMap<F, E, S> {
     FilterMap(f, PhantomData)
 }
 
 /// See [`any`].
-pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
+pub type Any<I, E, S = ()> = Filter<fn(&I) -> bool, E, S>;
 
 /// A parser that accepts any input (but not the end of input).
 ///
@@ -766,7 +776,7 @@ pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
 /// assert_eq!(any.parse("\t"), Ok('\t'));
 /// assert!(any.parse("").is_err());
 /// ```
-pub fn any<I, E>() -> Any<I, E> {
+pub fn any<I, E, S>() -> Any<I, E, S> {
     Filter(|_| true, PhantomData)
 }
 
@@ -826,7 +836,7 @@ impl<I: Clone, O, S, E: Error<I>> Parser<I, O, S> for Todo<I, O, E> {
         s: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
     fn parse_inner_silent(
         &self,
@@ -834,6 +844,6 @@ impl<I: Clone, O, S, E: Error<I>> Parser<I, O, S> for Todo<I, O, E> {
         s: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        self.parse_inner(d, s)
+        Parser::<I, O, S>::parse_inner(self, d, s)
     }
 }

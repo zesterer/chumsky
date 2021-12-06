@@ -1,7 +1,7 @@
 use super::*;
 
 /// See [`Parser::ignored`].
-pub type Ignored<P, O> = To<P, O, ()>;
+pub type Ignored<P, O, S> = To<P, O, (), S>;
 
 /// See [`Parser::ignore_then`].
 pub type IgnoreThen<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
@@ -268,19 +268,35 @@ impl<I: Clone + PartialEq, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Par
 }
 
 /// See [`Parser::repeated`].
-#[derive(Copy, Clone)]
-pub struct Repeated<A>(pub(crate) A, pub(crate) usize, pub(crate) Option<usize>);
+pub struct Repeated<A, S> {
+    pub(crate) item: A,
+    pub(crate) at_least: usize,
+    pub(crate) at_most: Option<usize>,
+    pub(crate) phantom: PhantomData<S>,
+}
 
-impl<A> Repeated<A> {
+impl<A: Copy, S> Copy for Repeated<A, S> {}
+impl<A: Clone, S> Clone for Repeated<A, S> {
+    fn clone(&self) -> Self {
+        Self {
+            item: self.item.clone(),
+            at_least: self.at_least,
+            at_most: self.at_most,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<A, S> Repeated<A, S> {
     /// Require that the pattern appear at least a minimum number of times.
     pub fn at_least(mut self, min: usize) -> Self {
-        self.1 = min;
+        self.at_least = min;
         self
     }
 
     /// Require that the pattern appear at most a maximum number of times.
     pub fn at_most(mut self, max: usize) -> Self {
-        self.2 = Some(max);
+        self.at_most = Some(max);
         self
     }
 
@@ -321,13 +337,13 @@ impl<A> Repeated<A> {
     /// );
     /// ````
     pub fn exactly(mut self, n: usize) -> Self {
-        self.1 = n;
-        self.2 = Some(n);
+        self.at_least = n;
+        self.at_most = Some(n);
         self
     }
 }
 
-impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Vec<O>, S> for Repeated<A> {
+impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Vec<O>, S> for Repeated<A, S> {
     type Error = E;
 
     #[inline]
@@ -342,11 +358,11 @@ impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Vec<O
         let mut old_offset = None;
 
         loop {
-            if self.2.map_or(false, |max| outputs.len() >= max) {
+            if self.at_most.map_or(false, |max| outputs.len() >= max) {
                 break (errors, Ok((outputs, alt)));
             }
 
-            if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] debugger.invoke(&self.0, stream) } {
+            if let ControlFlow::Break(b) = stream.attempt(|stream| match { #[allow(deprecated)] debugger.invoke(&self.item, stream) } {
                 (mut a_errors, Ok((a_out, a_alt))) => {
                     errors.append(&mut a_errors);
                     alt = merge_alts(alt.take(), a_alt);
@@ -363,7 +379,7 @@ impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, Vec<O
 
                     (true, ControlFlow::Continue(()))
                 },
-                (mut a_errors, Err(a_err)) if outputs.len() < self.1 => {
+                (mut a_errors, Err(a_err)) if outputs.len() < self.at_least => {
                     errors.append(&mut a_errors);
                     (true, ControlFlow::Break((
                         std::mem::take(&mut errors),
@@ -1106,16 +1122,16 @@ impl<I: Clone, O, S, A: Parser<I, O, S, Error = E>, L: Into<E::Label> + Clone, E
 }
 
 /// See [`Parser::to`].
-pub struct To<A, O, U>(pub(crate) A, pub(crate) U, pub(crate) PhantomData<O>);
+pub struct To<A, O, U, S>(pub(crate) A, pub(crate) U, pub(crate) PhantomData<(O, S)>);
 
-impl<A: Copy, U: Copy, O> Copy for To<A, O, U> {}
-impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
+impl<A: Copy, U: Copy, O, S> Copy for To<A, O, U, S> {}
+impl<A: Clone, U: Clone, O, S> Clone for To<A, O, U, S> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone(), PhantomData)
     }
 }
 
-impl<I: Clone, O, U: Clone, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, U, S> for To<A, O, U> {
+impl<I: Clone, O, U: Clone, S, A: Parser<I, O, S, Error = E>, E: Error<I>> Parser<I, U, S> for To<A, O, U, S> {
     type Error = E;
 
     #[inline]
@@ -1197,7 +1213,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .at_least(3);
 
@@ -1206,7 +1222,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .at_least(3);
 
@@ -1215,7 +1231,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .at_least(3)
             .then(end());
@@ -1225,7 +1241,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .allow_leading()
             .at_least(3);
@@ -1236,7 +1252,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3);
@@ -1247,7 +1263,7 @@ mod tests {
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just::<_, _, Simple<char>>('-')
+        let parser = just::<_, _, Simple<char>, ()>('-')
             .separated_by(just(','))
             .chain(just(','));
         assert_eq!(parser.parse("-,-,-,"), Ok(vec!['-', '-', '-', ',']))

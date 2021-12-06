@@ -459,7 +459,7 @@ pub trait Parser<I: Clone, O, S = ()> {
     /// assert_eq!(op.parse("+"), Ok(Op::Add));
     /// assert_eq!(op.parse("/"), Ok(Op::Div));
     /// ```
-    fn to<U>(self, x: U) -> To<Self, O, U>
+    fn to<U>(self, x: U) -> To<Self, O, U, S>
     where
         Self: Sized,
         U: Clone,
@@ -553,7 +553,7 @@ pub trait Parser<I: Clone, O, S = ()> {
     /// assert_eq!(whitespace.parse("    "), Ok(vec![(); 4]));
     /// assert_eq!(whitespace.parse("  hello"), Ok(vec![(); 2]));
     /// ```
-    fn ignored(self) -> Ignored<Self, O>
+    fn ignored(self) -> Ignored<Self, O, S>
     where
         Self: Sized,
     {
@@ -944,11 +944,16 @@ pub trait Parser<I: Clone, O, S = ()> {
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self>
+    fn repeated(self) -> Repeated<Self, S>
     where
         Self: Sized,
     {
-        Repeated(self, 0, None)
+        Repeated {
+            item: self,
+            at_least: 0,
+            at_most: None,
+            phantom: PhantomData,
+        }
     }
 
     /// Parse an expression, separated by another, any number of times.
