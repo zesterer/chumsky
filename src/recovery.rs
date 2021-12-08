@@ -196,11 +196,11 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                     break false;
                 }
             } {
-                if balance == 0 {
-                    break true;
-                } else if balance < 0 {
+                match balance.cmp(&0) {
+                    Ordering::Equal => break true,
                     // The end of a delimited section is not a valid recovery pattern
-                    break false;
+                    Ordering::Less => break false,
+                    Ordering::Greater => (),
                 }
             } else if balance == 0 {
                 // A non-delimiter input before anything else is not a valid recovery pattern
