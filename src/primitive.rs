@@ -376,7 +376,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
                 (Vec::new(), Ok((tok, None)))
             }
             (at, span, found) => {
-                return (
+                (
                     Vec::new(),
                     Err(Located::at(
                         at,
@@ -476,7 +476,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
                 (Vec::new(), Ok((tok, None)))
             }
             (at, span, found) => {
-                return (
+                (
                     Vec::new(),
                     Err(Located::at(
                         at,
