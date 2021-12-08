@@ -240,7 +240,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
                         Vec::new(),
                         Err(Located::at(
                             at,
-                            E::expected_input_found(span, Some(expected.clone()), found),
+                            E::expected_input_found(span, Some(expected), found),
                         )),
                     )
                 }
@@ -373,7 +373,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
     ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => {
-                (Vec::new(), Ok((tok.clone(), None)))
+                (Vec::new(), Ok((tok, None)))
             }
             (at, span, found) => {
                 return (
@@ -473,7 +473,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
     ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => {
-                (Vec::new(), Ok((tok.clone(), None)))
+                (Vec::new(), Ok((tok, None)))
             }
             (at, span, found) => {
                 return (
