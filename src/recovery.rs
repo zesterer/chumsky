@@ -149,13 +149,13 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                     true
                 }
                 (at, span, Some(t)) => {
-                    for i in 0..N {
-                        if t == self.2[i].0 {
-                            balance_others[i] += 1;
-                        } else if t == self.2[i].1 {
-                            balance_others[i] -= 1;
+                    for (balance_other, others) in balance_others.iter_mut().zip(self.2.iter()) {
+                        if t == others.0 {
+                            *balance_other += 1;
+                        } else if t == others.1 {
+                            *balance_other -= 1;
 
-                            if balance_others[i] < 0 && balance == 1 {
+                            if *balance_other < 0 && balance == 1 {
                                 // stream.revert(pre_state);
                                 error.get_or_insert_with(|| {
                                     Located::at(
