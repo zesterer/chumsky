@@ -560,14 +560,14 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
-        self.at_most.map(|at_most| {
+        if let Some(at_most) = self.at_most {
             assert!(
                 self.at_least <= at_most,
                 "SeparatedBy cannot parse at least {} and at most {}",
                 self.at_least,
                 at_most
-            )
-        });
+            );
+        }
 
         enum State<I, E> {
             Terminated(Located<I, E>),
