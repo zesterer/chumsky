@@ -105,7 +105,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                 a_res.1.map(|(out, alt)| {
                     (
                         out,
-                        merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))),
+                        merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
                     )
                 }),
             )
@@ -116,7 +116,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                 b_res.1.map(|(out, alt)| {
                     (
                         out,
-                        merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))),
+                        merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
                     )
                 }),
             )
