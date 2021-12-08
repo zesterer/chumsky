@@ -347,7 +347,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
 /// assert!(onetwothree.parse([2, 1, 3]).is_err());
 /// ```
 #[deprecated(
-    since = "0.7",
+    since = "0.7.0",
     note = "Use `just` instead: it now works for many sequence-like types!"
 )]
 pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
