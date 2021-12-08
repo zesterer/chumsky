@@ -31,7 +31,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let a_state = stream.save();
 
         // If the first parser succeeded and produced no secondary errors, don't bother trying the second parser
-        if a_res.0.len() == 0 {
+        if a_res.0.is_empty() {
             if let (a_errors, Ok(a_out)) = a_res {
                 return (a_errors, Ok(a_out));
             }
