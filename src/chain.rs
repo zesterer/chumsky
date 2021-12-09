@@ -1,4 +1,6 @@
 
+use super::*;
+
 mod private {
     pub trait Sealed<T> {}
 

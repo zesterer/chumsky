@@ -120,8 +120,6 @@ where
     (out, errors.into_iter().map(|e| e.error).collect())
 }
 
-type MapHelper<T, U, R> = Map<T, fn(U) -> R, U>;
-
 /// A trait implemented by parsers.
 ///
 /// Parsers take a stream of tokens of type `I` and attempt to parse them into a value of type `O`. In doing so, they
@@ -635,7 +633,7 @@ pub trait Parser<I: Clone, O> {
     /// assert!(int.parse("-0").is_err());
     /// assert!(int.parse("05").is_err());
     /// ```
-    fn chain<T, U, P>(self, other: P) -> MapHelper<Then<Self, P>, (O, U), Vec<T>>
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
     where
         Self: Sized,
         U: Chain<T>,
@@ -1059,7 +1057,7 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(uint64.parse("7"), Ok(7));
     /// assert_eq!(uint64.parse("42"), Ok(42));
     /// ```
-    fn from_str<U>(self) -> MapHelper<Self, O, Result<U, U::Err>>
+    fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>, O>
     where
         Self: Sized,
         U: FromStr,
@@ -1092,7 +1090,7 @@ pub trait Parser<I: Clone, O> {
     /// // Does not panic, because the original parser only accepts "true" or "false"
     /// assert!(boolean.parse("42").is_err());
     /// ```
-    fn unwrapped<U, E>(self) -> MapHelper<Self, Result<U, E>, U>
+    fn unwrapped<U, E>(self) -> Map<Self, fn(Result<U, E>) -> U, Result<U, E>>
     where
         Self: Sized + Parser<I, Result<U, E>>,
         E: fmt::Debug,
