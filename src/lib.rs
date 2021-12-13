@@ -610,6 +610,33 @@ pub trait Parser<I: Clone, O> {
         Then(self, other)
     }
 
+    /// Parse one thing and then another thing, creating the second parser from the result of
+    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
+    ///
+    /// The output of this parser is `U`, the result of the second parser
+    ///
+    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
+    /// recovery then the second produces an error, the error will point to the location in the
+    /// second parser which failed, ignoring that the first parser may be the root cause.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    /// let letter_up = one_of::<_, _, Cheap<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
+    ///     .then_with(|letter: u8| just(letter + 1));
+    ///
+    /// assert_eq!(letter_up.parse(*b"ab"), Ok(b'b'));
+    /// assert!(letter_up.parse(*b"ac").is_err());
+    /// ```
+    fn then_with<U, P, F: Fn(O) -> P>(self, other: F) -> ThenWith<I, O, U, Self, P, F>
+    where
+        Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
+    {
+        ThenWith(self, other, PhantomData)
+    }
+
     /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
     ///
     /// The output type of this parser is `Vec<T>`, composed of the elements of the outputs of both parsers.
