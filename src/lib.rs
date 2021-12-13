@@ -616,8 +616,9 @@ pub trait Parser<I: Clone, O> {
     /// The output of this parser is `U`, the result of the second parser
     ///
     /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
-    /// recovery then the second produces an error, the error will point to the location in the
-    /// second parser which failed, ignoring that the first parser may be the root cause.
+    /// recovery then the second produces an error, the primary error will point to the location in
+    /// the second parser which failed, ignoring that the first parser may be the root cause. There
+    /// may be other pathological errors cases as well.
     ///
     /// # Examples
     ///
