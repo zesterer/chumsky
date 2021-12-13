@@ -230,8 +230,15 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 }
 
 /// See [`Parser::then_with`]
-#[derive(Copy, Clone)]
 pub struct ThenWith<I, O1, O2, A, B, F>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(I, O1, O2, B)>);
+
+impl<I, O1, O2, A: Clone, B, F: Clone> Clone for ThenWith<I, O1, O2, A, B, F> {
+    fn clone(&self) -> Self {
+        ThenWith(self.0.clone(), self.1.clone(), PhantomData)
+    }
+}
+
+impl<I, O1, O2, A: Copy, B, F: Copy> Copy for ThenWith<I, O1, O2, A, B, F> {}
 
 impl<I: Clone, O1, O2, A: Parser<I, O1, Error = E>, B: Parser<I, O2, Error = E>, F: Fn(O1) -> B, E: Error<I>> Parser<I, O2>
     for ThenWith<I, O1, O2, A, B, F>
