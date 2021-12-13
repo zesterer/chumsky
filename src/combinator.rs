@@ -31,7 +31,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let a_state = stream.save();
 
         // If the first parser succeeded and produced no secondary errors, don't bother trying the second parser
-        if a_res.0.len() == 0 {
+        if a_res.0.is_empty() {
             if let (a_errors, Ok(a_out)) = a_res {
                 return (a_errors, Ok(a_out));
             }
@@ -105,7 +105,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                 a_res.1.map(|(out, alt)| {
                     (
                         out,
-                        merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))),
+                        merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
                     )
                 }),
             )
@@ -116,7 +116,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                 b_res.1.map(|(out, alt)| {
                     (
                         out,
-                        merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(|e| Some(e))),
+                        merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
                     )
                 }),
             )
@@ -560,14 +560,14 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
-        self.at_most.map(|at_most| {
+        if let Some(at_most) = self.at_most {
             assert!(
                 self.at_least <= at_most,
                 "SeparatedBy cannot parse at least {} and at most {}",
                 self.at_least,
                 at_most
-            )
-        });
+            );
+        }
 
         enum State<I, E> {
             Terminated(Located<I, E>),
@@ -1067,18 +1067,18 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, O, E> {
-        let pre_state = stream.save();
+        // let pre_state = stream.save();
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
         let res = res.map_err(|e| {
-            if e.at > pre_state || true
             /* TODO: Not this? */
-            {
+            /*if e.at > pre_state
+            {*/
                 // Only add the label if we committed to this pattern somewhat
                 e.map(|e| e.with_label(self.1.clone().into()))
-            } else {
+            /*} else {
                 e
-            }
+            }*/
         });
         (
             errors

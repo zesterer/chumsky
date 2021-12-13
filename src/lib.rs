@@ -139,6 +139,7 @@ where
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
+#[allow(clippy::type_complexity)]
 pub trait Parser<I: Clone, O> {
     /// The type of errors emitted by this parser.
     type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
@@ -660,7 +661,7 @@ pub trait Parser<I: Clone, O> {
         O: IntoIterator<Item = Inner>,
         Inner: IntoIterator<Item = T>,
     {
-        self.map(|xs| xs.into_iter().map(|xs| xs.into_iter()).flatten().collect())
+        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
     /// Parse one thing and then another thing, yielding only the output of the latter.
@@ -1057,6 +1058,7 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(uint64.parse("7"), Ok(7));
     /// assert_eq!(uint64.parse("42"), Ok(42));
     /// ```
+    #[allow(clippy::wrong_self_convention)]
     fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>, O>
     where
         Self: Sized,

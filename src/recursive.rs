@@ -24,16 +24,18 @@ enum RecursiveInner<T> {
     Unowned(Weak<T>),
 }
 
+type OnceParser<'a, I, O, E> = OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>;
+
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
 pub struct Recursive<'a, I, O, E: Error<I>>(
-    RecursiveInner<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>>,
+    RecursiveInner<OnceParser<'a, I, O, E>>,
 );
 
 impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {
-    fn cell(&self) -> Rc<OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>> {
+    fn cell(&self) -> Rc<OnceParser<'a, I, O, E>> {
         match &self.0 {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x

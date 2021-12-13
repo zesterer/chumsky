@@ -29,6 +29,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
         loop {
+            #[allow(clippy::blocks_in_if_conditions)]
             if !stream.attempt(|stream| {
                 if stream.next().2.map_or(true, |tok| self.0.contains(&tok)) {
                     (false, false)
@@ -123,6 +124,9 @@ pub struct NestedDelimiters<I, F, const N: usize>(
 impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E>
     for NestedDelimiters<I, F, N>
 {
+    // This looks like something weird with clippy, it warns in a weird spot and isn't fixed by
+    // marking it at the spot.
+    #[allow(clippy::blocks_in_if_conditions)]
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
         mut a_errors: Vec<Located<I, P::Error>>,
@@ -149,13 +153,13 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                     true
                 }
                 (at, span, Some(t)) => {
-                    for i in 0..N {
-                        if t == self.2[i].0 {
-                            balance_others[i] += 1;
-                        } else if t == self.2[i].1 {
-                            balance_others[i] -= 1;
+                    for (balance_other, others) in balance_others.iter_mut().zip(self.2.iter()) {
+                        if t == others.0 {
+                            *balance_other += 1;
+                        } else if t == others.1 {
+                            *balance_other -= 1;
 
-                            if balance_others[i] < 0 && balance == 1 {
+                            if *balance_other < 0 && balance == 1 {
                                 // stream.revert(pre_state);
                                 error.get_or_insert_with(|| {
                                     Located::at(
@@ -196,11 +200,11 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                     break false;
                 }
             } {
-                if balance == 0 {
-                    break true;
-                } else if balance < 0 {
+                match balance.cmp(&0) {
+                    Ordering::Equal => break true,
                     // The end of a delimited section is not a valid recovery pattern
-                    break false;
+                    Ordering::Less => break false,
+                    Ordering::Greater => (),
                 }
             } else if balance == 0 {
                 // A non-delimiter input before anything else is not a valid recovery pattern
