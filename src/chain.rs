@@ -1,6 +1,4 @@
 
-use super::*;
-
 mod private {
     pub trait Sealed<T> {}
 
@@ -13,7 +11,8 @@ mod private {
 
 /// A utility trait that facilitates chaining parser outputs together into [`Vec`]s.
 ///
-/// See [`Parser::chain`].
+/// See [`Parser::chain`](super::Parser).
+#[allow(clippy::len_without_is_empty)]
 pub trait Chain<T>: private::Sealed<T> {
     /// The number of items that this chain link consists of.
     fn len(&self) -> usize;
