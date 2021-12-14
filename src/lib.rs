@@ -60,7 +60,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         primitive::{
-            any, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until, todo,
+            any, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until, todo, choice,
         },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},

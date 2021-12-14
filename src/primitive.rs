@@ -828,3 +828,113 @@ impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
         self.parse_inner(d, s)
     }
 }
+
+/// See [`choice`].
+pub struct Choice<T, E>(pub(crate) T, pub(crate) PhantomData<E>);
+
+impl<T: Copy, E> Copy for Choice<T, E> {}
+impl<T: Clone, E> Clone for Choice<T, E> {
+    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+}
+
+macro_rules! impl_for_tuple {
+    () => {};
+    ($head:ident $($X:ident)*) => {
+        impl_for_tuple!($($X)*);
+        impl_for_tuple!(~ $head $($X)*);
+    };
+    (~ $($X:ident)*) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<I: Clone, O, E: Error<I>, $($X: Parser<I, O, Error = E>),*> Parser<I, O> for Choice<($($X,)*), E> {
+            type Error = E;
+
+            fn parse_inner<D: Debugger>(
+                &self,
+                debugger: &mut D,
+                stream: &mut StreamOf<I, Self::Error>,
+            ) -> PResult<I, O, Self::Error> {
+                let Choice(($($X,)*), _) = self;
+                let mut alt = None;
+                $(
+                    match stream.try_parse(|stream| {
+                        #[allow(deprecated)]
+                        debugger.invoke($X, stream)
+                    }) {
+                        (errors, Ok(out)) => return (errors, Ok(out)),
+                        (errors, Err(a_alt)) => {
+                            alt = merge_alts(alt.take(), Some(a_alt));
+                        },
+                    };
+                )*
+                (Vec::new(), Err(alt.unwrap()))
+            }
+
+            fn parse_inner_verbose(
+                &self,
+                d: &mut Verbose,
+                s: &mut StreamOf<I, Self::Error>,
+            ) -> PResult<I, O, Self::Error> {
+                #[allow(deprecated)]
+                self.parse_inner(d, s)
+            }
+            fn parse_inner_silent(
+                &self,
+                d: &mut Silent,
+                s: &mut StreamOf<I, Self::Error>,
+            ) -> PResult<I, O, Self::Error> {
+                #[allow(deprecated)]
+                self.parse_inner(d, s)
+            }
+        }
+    };
+}
+
+impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+
+/// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
+///
+/// This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
+///
+/// - Rust's trait solver seems to resolve the [`Parser`] impl for this type much faster, significantly reducing
+///   compilation times.
+///
+/// - Parsing is likely a little faster in some cases because the resulting parser is 'less careful' about error
+///   routing, and doesn't perform the same fine-grained error prioritisation that [`Parser::or`] does.
+///
+/// These qualities make this parser ideal for lexers.
+///
+/// The output type of this parser is the output type of the inner parsers.
+///
+/// # Examples
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     If,
+///     For,
+///     While,
+///     Fn,
+///     Int(u64),
+///     Ident(String),
+/// }
+///
+/// let tokens = choice::<_, Simple<char>>((
+///     text::keyword("if").to(Token::If),
+///     text::keyword("for").to(Token::For),
+///     text::keyword("while").to(Token::While),
+///     text::keyword("fn").to(Token::Fn),
+///     text::int(10).from_str().unwrapped().map(Token::Int),
+///     text::ident().map(Token::Ident),
+/// ))
+///     .padded()
+///     .repeated();
+///
+/// use Token::*;
+/// assert_eq!(
+///     tokens.parse("if 56 for foo while 42 fn bar"),
+///     Ok(vec![If, Int(56), For, Ident("foo".to_string()), While, Int(42), Fn, Ident("bar".to_string())]),
+/// );
+/// ```
+pub fn choice<T, E>(parsers: T) -> Choice<T, E> {
+    Choice(parsers, PhantomData)
+}
