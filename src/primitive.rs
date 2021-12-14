@@ -215,10 +215,10 @@ impl<T: Clone> Container<T> for std::collections::BinaryHeap<T> {
 }
 
 /// See [`just`].
-pub struct Just<I, C, E>(C, PhantomData<(I, E)>);
+pub struct Just<I, C: Container<I>, E>(C, PhantomData<(I, E)>);
 
-impl<I, C: Copy, E> Copy for Just<I, C, E> {}
-impl<I, C: Clone, E> Clone for Just<I, C, E> {
+impl<I, C: Copy + Container<I>, E> Copy for Just<I, C, E> {}
+impl<I, C: Clone + Container<I>, E> Clone for Just<I, C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
