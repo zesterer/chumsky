@@ -5,8 +5,9 @@
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
 [![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
 
-A friendly parser combinator crate that makes writing [LL(k)](https://en.wikipedia.org/wiki/LL_parser) parsers with
-error recovery and partial parsing easy.
+A friendly parser combinator crate that makes writing parsers for
+[context-free](https://en.wikipedia.org/wiki/Context-free_grammar) grammars with error recovery and partial parsing
+easy.
 
 <a href = "https://www.github.com/zesterer/tao">
     <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
@@ -22,8 +23,9 @@ error recovery and partial parsing easy.
 - Inline mapping to your AST
 - Text-specific parsers for both `u8`s and `char`s
 - Recursive parsers
-- Automatic support for backtracking, allowing parsing of LL(k) grammars
+- Backtracking is fully supported, allowing the parsing of all known context-free grammars
 - Parsing of nesting inputs, allowing you to move delimiter parsing to the lexical stage (as Rust does!)
+- Built-in parser debugging
 
 ## Example [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) Parser
 
@@ -42,13 +44,15 @@ enum Instr {
 }
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
-    recursive(|bf| bf.delimited_by('[', ']').map(Instr::Loop)
-        .or(just('<').to(Instr::Left))
-        .or(just('>').to(Instr::Right))
-        .or(just('+').to(Instr::Incr))
-        .or(just('-').to(Instr::Decr))
-        .or(just(',').to(Instr::Read))
-        .or(just('.').to(Instr::Write))
+    recursive(|bf| choice((
+        just('<').to(Instr::Left),
+        just('>').to(Instr::Right),
+        just('+').to(Instr::Incr),
+        just('-').to(Instr::Decr),
+        just(',').to(Instr::Read),
+        just('.').to(Instr::Write),
+        bf.delimited_by('[', ']').map(Instr::Loop),
+    ))
         .repeated())
 }
 ```
@@ -62,8 +66,9 @@ Other examples include:
 
 ## Tutorial
 
-See [this page](https://github.com/zesterer/chumsky/blob/master/tutorial.md) for a step-by-step tutorial that teaches
-you how to write your own simple programming language with Chumsky.
+Chumsky has [a tutorial](https://github.com/zesterer/chumsky/blob/master/tutorial.md) that teaches you how to write a
+parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence, functions,
+let declarations, and calls.
 
 ## *What* is a parser combinator?
 
@@ -85,6 +90,13 @@ for rapidly iterating upon a syntax.
 Parser combinators are also a great fit for domain-specific languages for which an existing parser does not exist.
 Writing a reliable, fault-tolerant parser for such situations can go from being a multi-day task to a half-hour task
 with the help of a decent parser combinator library.
+
+## Classification
+
+Chumsky's parsers are [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) parsers and are
+capable of parsing [parsing expression grammars (PEGs)](https://en.wikipedia.org/wiki/Parsing_expression_grammar), which
+includes all known context-free languages. It is theoretically possible to extend Chumsky further to accept limited
+context-sensitive grammars too, although this is rarely required.
 
 ## Error Recovery
 
@@ -128,7 +140,7 @@ I've included results from [`pom`](https://github.com/J-F-Liu/pom), another pars
 design, as a point of reference. The sample file being parsed is broadly represenative of typical JSON data and has
 3,018 lines. This translates to a little over 500,000 lines of JSON per second.
 
-Clearly, this is somewhat slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
+Clearly, this is a little slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
 *fast enough*. If you've written enough code in your language that parsing performance even starts to be a problem,
 you've already committed enough time and resources to your language that hand-writing a parser is the best choice going!
 

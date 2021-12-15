@@ -22,19 +22,18 @@ enum Instr {
 
 fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
     use Instr::*;
-    recursive(|bf| {
-        bf.delimited_by('[', ']')
-            .map(Loop)
-            .or(just('<').to(Left))
-            .or(just('>').to(Right))
-            .or(just('+').to(Incr))
-            .or(just('-').to(Decr))
-            .or(just(',').to(Read))
-            .or(just('.').to(Write))
-            .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
-            .recover_with(skip_then_retry_until([']']))
-            .repeated()
-    })
+    recursive(|bf| choice((
+        just('<').to(Left),
+        just('>').to(Right),
+        just('+').to(Incr),
+        just('-').to(Decr),
+        just(',').to(Read),
+        just('.').to(Write),
+    ))
+        .or(bf.delimited_by('[', ']').map(Loop))
+        .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
+        .recover_with(skip_then_retry_until([']']))
+        .repeated())
     .then_ignore(end())
 }
 

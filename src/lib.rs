@@ -813,13 +813,16 @@ pub trait Parser<I: Clone, O> {
     ///
     /// The output of both parsers must be of the same type, because either output can be produced.
     ///
-    /// If the first parser produces an error, even if recovered, both parsers will be tried and the 'most correct'
-    /// result of either will be produced. 'Most correct' is not a well-defined term and its meaning may change in
-    /// future versions. For now, it means that non-terminal errors are preferred over terminal errors and the number
-    /// of errors is minimised, where possible. Failing this, the parser will look at which parser made the most
-    /// progress through the input and choose which result to use based on that. The fact that this behaviour is not
-    /// ruggedly defined is not a problem. By its nature, it only occurs when the parser encounters an error and so can
-    /// never result in valid syntax failing to be parsed.
+    /// If both parser succeed, the output of the first parser is guaranteed to be prioritised over the output of the
+    /// second.
+    ///
+    /// If both parsers produce errors, the combinator will attempt to select from or combine the errors to produce an
+    /// error that is most likely to be useful to a human attempting to understand the problem. The exact algorithm
+    /// used is left unspecified, and is not part of the crate's semver guarantees, although regressions in error
+    /// quality should be reported in the issue tracker of the main repository.
+    ///
+    /// Please note that long chains of [`Parser::or`] combinators have been known to result in poor compilation times.
+    /// If you feel you are experiencing this, consider using [`choice`] instead.
     ///
     /// The output type of this parser is `O`, the output of both parsers.
     ///
@@ -922,7 +925,7 @@ pub trait Parser<I: Clone, O> {
         OrNot(self)
     }
 
-    /// Parse an expression any number of times (including zero times).
+    /// Parse a pattern any number of times (including zero times).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
@@ -951,7 +954,7 @@ pub trait Parser<I: Clone, O> {
         Repeated(self, 0, None)
     }
 
-    /// Parse an expression, separated by another, any number of times.
+    /// Parse a pattern, separated by another, any number of times.
     ///
     /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
     /// separators.
