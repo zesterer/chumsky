@@ -5,9 +5,7 @@
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
 [![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
 
-A friendly parser combinator crate that makes writing parsers for
-[context-free](https://en.wikipedia.org/wiki/Context-free_grammar) grammars with error recovery and partial parsing
-easy.
+A parser library for humans with powerful error recovery.
 
 <a href = "https://www.github.com/zesterer/tao">
     <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
