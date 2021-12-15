@@ -1119,7 +1119,6 @@ impl<
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, O, E> {
-        let start = stream.save();
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
 

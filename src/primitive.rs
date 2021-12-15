@@ -720,6 +720,8 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
 ///
 /// This function allows integration with custom error types to allow for custom parser errors.
 ///
+/// Before using this function, consider whether the [`select`] macro would serve you better.
+///
 /// The output type of this parser is `I`, the input that was found.
 ///
 /// # Examples
