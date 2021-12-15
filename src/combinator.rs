@@ -422,6 +422,8 @@ pub struct SeparatedBy<A, B, U> {
 impl<A, B, U> SeparatedBy<A, B, U> {
     /// Allow a leading separator to appear before the first item.
     ///
+    /// Note that even if no items are parsed, a leading separator *is* permitted.
+    ///
     /// # Examples
     ///
     /// ```
@@ -446,6 +448,8 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     }
 
     /// Allow a trailing separator to appear after the last item.
+    ///
+    /// Note that if no items are parsed, no leading separator is permitted.
     ///
     /// # Examples
     ///
@@ -663,7 +667,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
         stream.revert(offset);
 
-        if self.allow_trailing {
+        if self.allow_trailing && !outputs.is_empty() {
             alt = parse_or_not(&self.delimiter, stream, debugger, alt);
         }
 
@@ -983,8 +987,51 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
         let (errors, res) = debugger.invoke(&self.0, stream);
         let mapper = |e: Located<I, E>| e.map(&self.1);
         (
-            errors.into_iter().map(mapper).collect(),
-            res.map(|(out, alt)| (out, alt.map(mapper))).map_err(mapper),
+            errors,//errors.into_iter().map(mapper).collect(),
+            res/*.map(|(out, alt)| (out, alt.map(mapper)))*/.map_err(mapper),
+        )
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
+/// See [`Parser::map_err_with_span`].
+#[derive(Copy, Clone)]
+pub struct MapErrWithSpan<A, F>(pub(crate) A, pub(crate) F);
+
+impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E, E::Span) -> E, E: Error<I>> Parser<I, O>
+    for MapErrWithSpan<A, F>
+{
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
+        let start = stream.save();
+        #[allow(deprecated)]
+        let (errors, res) = debugger.invoke(&self.0, stream);
+        let mapper = |e: Located<I, E>| {
+            let at = e.at;
+            e.map(|e| {
+                let span = stream.attempt(|stream| { stream.revert(at); (false, stream.span_since(start)) });
+                (self.1)(e, span)
+            })
+        };
+        (
+            errors,
+            res.map_err(mapper),
         )
     }
 

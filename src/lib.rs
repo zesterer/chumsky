@@ -308,7 +308,8 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// # use std::ops::Range;
+    /// use std::ops::Range;
+    ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, Range<usize>);
@@ -341,6 +342,23 @@ pub trait Parser<I: Clone, O> {
         F: Fn(Self::Error) -> Self::Error,
     {
         MapErr(self, f)
+    }
+
+    /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
+    /// to the point at which the error was encountered.
+    ///
+    /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
+    /// pattern, for example to add a "while parsing" clause to your error messages.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    // TODO: Map E -> D, not E -> E
+    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Error, <Self::Error as Error<I>>::Span) -> Self::Error,
+    {
+        MapErrWithSpan(self, f)
     }
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
@@ -429,8 +447,8 @@ pub trait Parser<I: Clone, O> {
     ///     .labelled("number");
     ///
     /// assert_eq!(frac.parse("42.3"), Ok("42.3".to_string()));
-    /// assert_eq!(frac.parse("hello"), Err(vec![Cheap::expected_input_found(0..1, None, Some('h')).with_label("number")]));
-    /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, Some('.'), Some('!')).with_label("number")]));
+    /// assert_eq!(frac.parse("hello"), Err(vec![Cheap::expected_input_found(0..1, Vec::new(), Some('h')).with_label("number")]));
+    /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, vec![Some('.')], Some('!')).with_label("number")]));
     /// ```
     fn labelled<L>(self, label: L) -> Label<Self, L>
     where

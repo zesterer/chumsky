@@ -95,7 +95,7 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                         a_errors,
                         Err(Located::at(
                             at,
-                            E::expected_input_found(span, self.0.clone(), None),
+                            E::expected_input_found(span, self.0.iter().cloned().map(Some), None),
                         )),
                     )
                 }
@@ -193,7 +193,7 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                             ),
                             None => Located::at(
                                 at,
-                                P::Error::expected_input_found(span, Some(self.1.clone()), None),
+                                P::Error::expected_input_found(span, Some(Some(self.1.clone())), None),
                             ),
                         });
                     }

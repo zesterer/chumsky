@@ -66,7 +66,7 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
                 Vec::new(),
                 Err(Located::at(
                     at,
-                    E::expected_input_found(span, Vec::new(), found),
+                    E::expected_input_found(span, Some(None), found),
                 )),
             ),
         }
@@ -240,7 +240,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
                         Vec::new(),
                         Err(Located::at(
                             at,
-                            E::expected_input_found(span, Some(expected), found),
+                            E::expected_input_found(span, Some(Some(expected)), found),
                         )),
                     )
                 }
@@ -306,7 +306,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
                         Vec::new(),
                         Err(Located::at(
                             at,
-                            E::expected_input_found(span, Some(expected.clone()), found),
+                            E::expected_input_found(span, Some(Some(expected.clone())), found),
                         )),
                     )
                 }
@@ -380,7 +380,7 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
                     Vec::new(),
                     Err(Located::at(
                         at,
-                        E::expected_input_found(span, self.0.get_iter(), found),
+                        E::expected_input_found(span, self.0.get_iter().map(Some), found),
                     )),
                 )
             }

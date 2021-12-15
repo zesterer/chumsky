@@ -21,7 +21,7 @@ type RandomState = std::collections::hash_set::RandomState;
 /// // A custom error type
 /// #[derive(Debug, PartialEq)]
 /// enum MyError {
-///     ExpectedFound(Span, Vec<char>, Option<char>),
+///     ExpectedFound(Span, Vec<Option<char>>, Option<char>),
 ///     NotADigit(Span, char),
 /// }
 ///
@@ -29,7 +29,7 @@ type RandomState = std::collections::hash_set::RandomState;
 ///     type Span = Span;
 ///     type Label = ();
 ///
-///     fn expected_input_found<Iter: IntoIterator<Item = char>>(
+///     fn expected_input_found<Iter: IntoIterator<Item = Option<char>>>(
 ///         span: Span,
 ///         expected: Iter,
 ///         found: Option<char>,
@@ -71,8 +71,10 @@ pub trait Error<I>: Sized {
 
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
-    /// Using a `None` as `found` indicates that the end of input was reached, but was not expected.
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+    /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
+    ///
+    /// An expected input having the value `None` indicates that the end of input was expected.
+    fn expected_input_found<Iter: IntoIterator<Item = Option<I>>>(
         span: Self::Span,
         expected: Iter,
         found: Option<I>,
@@ -94,7 +96,7 @@ pub trait Error<I>: Sized {
         found: Option<I>,
     ) -> Self {
         #![allow(unused_variables)]
-        Self::expected_input_found(span, Some(expected), found)
+        Self::expected_input_found(span, Some(Some(expected)), found)
     }
 
     /// Indicate that the error occured while parsing a particular syntactic structure.
@@ -154,7 +156,7 @@ pub enum SimpleReason<I, S> {
 pub struct Simple<I: Hash, S = Range<usize>> {
     span: S,
     reason: SimpleReason<I, S>,
-    expected: HashSet<I, RandomState>,
+    expected: HashSet<Option<I>, RandomState>,
     found: Option<I>,
     label: Option<&'static str>,
 }
@@ -177,7 +179,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
     }
 
     /// Returns an iterator over possible expected patterns.
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = &I> + '_ {
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &Option<I>> + '_ {
         self.expected.iter()
     }
 
@@ -211,7 +213,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
                 SimpleReason::Unexpected => SimpleReason::Unexpected,
                 SimpleReason::Custom(msg) => SimpleReason::Custom(msg),
             },
-            expected: self.expected.into_iter().map(&mut f).collect(),
+            expected: self.expected.into_iter().map(|e| e.map(&mut f)).collect(),
             found: self.found.map(f),
             label: self.label,
         }
@@ -222,7 +224,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     type Span = S;
     type Label = &'static str;
 
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+    fn expected_input_found<Iter: IntoIterator<Item = Option<I>>>(
         span: Self::Span,
         expected: Iter,
         found: Option<I>,
@@ -249,7 +251,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
                 span: unclosed_span,
                 delimiter,
             },
-            expected: std::iter::once(expected).collect(),
+            expected: std::iter::once(Some(expected)).collect(),
             found,
             label: None,
         }
@@ -288,24 +290,30 @@ impl<I: fmt::Display + Hash, S: Span> fmt::Display for Simple<I, S> {
         // TODO: Take `self.reason` into account
 
         if let Some(found) = &self.found {
-            write!(f, "found '{}' ", found)?;
+            write!(f, "found '{}'", found)?;
         } else {
-            write!(f, "found end of input ")?;
+            write!(f, "found end of input")?;
         }
 
         match self.expected.len() {
-            0 => write!(f, "but end of input was expected")?,
+            0 => {},//write!(f, " but end of input was expected")?,
             1 => write!(
                 f,
-                "but {} was expected",
-                self.expected.iter().next().unwrap()
+                " but {} was expected",
+                match self.expected.iter().next().unwrap() {
+                    Some(x) => format!("{}", x),
+                    None => format!("end of input"),
+                },
             )?,
             _ => write!(
                 f,
-                "but one of {} was expected",
+                " but one of {} was expected",
                 self.expected
                     .iter()
-                    .map(|expected| expected.to_string())
+                    .map(|expected| match expected {
+                        Some(x) => format!("{}", x),
+                        None => format!("end of input"),
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             )?,
@@ -345,7 +353,7 @@ impl<I, S: Span + Clone + fmt::Debug> Error<I> for Cheap<I, S> {
     type Span = S;
     type Label = &'static str;
 
-    fn expected_input_found<Iter: IntoIterator<Item = I>>(
+    fn expected_input_found<Iter: IntoIterator<Item = Option<I>>>(
         span: Self::Span,
         _: Iter,
         _: Option<I>,

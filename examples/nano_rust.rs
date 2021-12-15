@@ -609,10 +609,13 @@ fn main() {
                             "Unexpected end of input"
                         },
                         if e.expected().len() == 0 {
-                            "end of input".to_string()
+                            "something else".to_string()
                         } else {
                             e.expected()
-                                .map(|x| x.to_string())
+                                .map(|expected| match expected {
+                                    Some(expected) => expected.to_string(),
+                                    None => "end of input".to_string()
+                                })
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         }
