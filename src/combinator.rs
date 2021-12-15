@@ -1099,6 +1099,53 @@ impl<
     }
 }
 
+/// See [`Parser::or_else`].
+#[derive(Copy, Clone)]
+pub struct OrElse<A, F>(pub(crate) A, pub(crate) F);
+
+impl<
+        I: Clone,
+        O,
+        A: Parser<I, O, Error = E>,
+        F: Fn(E) -> Result<O, E>,
+        E: Error<I>,
+    > Parser<I, O> for OrElse<A, F>
+{
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
+        let start = stream.save();
+        #[allow(deprecated)]
+        let (errors, res) = debugger.invoke(&self.0, stream);
+
+        let res = match res {
+            Ok(out) => Ok(out),
+            Err(err) => match (&self.1)(err.error) {
+                Err(e) => Err(Located { at: err.at, error: e, phantom: PhantomData }),
+                Ok(out) => Ok((out, None)),
+            },
+        };
+
+        (errors, res)
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 /// See [`Parser::labelled`].
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);
@@ -1184,6 +1231,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
 }
 
 /// See [`Parser::rewind`].
+#[derive(Copy, Clone)]
 pub struct Rewind<A>(pub(crate) A);
 
 impl<I: Clone, O, E: Error<I>, A> Parser<I, O> for Rewind<A>

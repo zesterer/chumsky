@@ -344,6 +344,17 @@ pub trait Parser<I: Clone, O> {
         MapErr(self, f)
     }
 
+    /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
+    ///
+    /// The output type of this parser is `U`, the [`Ok`] type of the result.
+    fn or_else<F>(self, f: F) -> OrElse<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Error) -> Result<O, Self::Error>,
+    {
+        OrElse(self, f)
+    }
+
     /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
     /// to the point at which the error was encountered.
     ///
