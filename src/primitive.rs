@@ -120,10 +120,27 @@ pub fn end<E>() -> End<E> {
     End(PhantomData)
 }
 
+mod private {
+    pub trait Sealed<T> {}
+
+    impl<T> Sealed<T> for T {}
+    impl Sealed<char> for String {}
+    impl<'a> Sealed<char> for &'a str {}
+    impl<'a, T> Sealed<T> for &'a [T] {}
+    impl<T, const N: usize> Sealed<T> for [T; N] {}
+    impl<'a, T, const N: usize> Sealed<T> for &'a [T; N] {}
+    impl<T> Sealed<T> for Vec<T> {}
+    impl<T> Sealed<T> for std::collections::LinkedList<T> {}
+    impl<T> Sealed<T> for std::collections::VecDeque<T> {}
+    impl<T> Sealed<T> for std::collections::HashSet<T> {}
+    impl<T> Sealed<T> for std::collections::BTreeSet<T> {}
+    impl<T> Sealed<T> for std::collections::BinaryHeap<T> {}
+}
+
 /// A utility trait to abstract over linear container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
-pub trait Container<T> {
+pub trait Container<T>: private::Sealed<T> {
     /// An iterator over the items within this container, by value.
     type Iter: Iterator<Item = T>;
     /// Iterate over the elements of the container (using internal iteration because GATs are unstable).
@@ -375,15 +392,13 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
             (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => {
                 (Vec::new(), Ok((tok, None)))
             }
-            (at, span, found) => {
-                (
-                    Vec::new(),
-                    Err(Located::at(
-                        at,
-                        E::expected_input_found(span, self.0.get_iter().map(Some), found),
-                    )),
-                )
-            }
+            (at, span, found) => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, self.0.get_iter().map(Some), found),
+                )),
+            ),
         }
     }
 
@@ -475,15 +490,13 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
             (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => {
                 (Vec::new(), Ok((tok, None)))
             }
-            (at, span, found) => {
-                (
-                    Vec::new(),
-                    Err(Located::at(
-                        at,
-                        E::expected_input_found(span, Vec::new(), found),
-                    )),
-                )
-            }
+            (at, span, found) => (
+                Vec::new(),
+                Err(Located::at(
+                    at,
+                    E::expected_input_found(span, Vec::new(), found),
+                )),
+            ),
         }
     }
 
@@ -836,7 +849,9 @@ pub struct Choice<T, E>(pub(crate) T, pub(crate) PhantomData<E>);
 
 impl<T: Copy, E> Copy for Choice<T, E> {}
 impl<T: Clone, E> Clone for Choice<T, E> {
-    fn clone(&self) -> Self { Self(self.0.clone(), PhantomData) }
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 macro_rules! impl_for_tuple {

@@ -1,4 +1,3 @@
-
 mod private {
     pub trait Sealed<T> {}
 

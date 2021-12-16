@@ -31,6 +31,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let a_state = stream.save();
 
         // If the first parser succeeded and produced no secondary errors, don't bother trying the second parser
+        // TODO: Perhaps we should *alwaus* take this route, even if recoverable errors did occur? Seems like an
+        // inconsistent application of PEG rules...
         if a_res.0.is_empty() {
             if let (a_errors, Ok(a_out)) = a_res {
                 return (a_errors, Ok(a_out));
@@ -428,7 +430,7 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let r#enum = seq::<_, _, Simple<char>>("enum".chars())
+    /// let r#enum = text::keyword::<_, _, Simple<char>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -987,8 +989,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
         let (errors, res) = debugger.invoke(&self.0, stream);
         let mapper = |e: Located<I, E>| e.map(&self.1);
         (
-            errors,//errors.into_iter().map(mapper).collect(),
-            res/*.map(|(out, alt)| (out, alt.map(mapper)))*/.map_err(mapper),
+            errors, //errors.into_iter().map(mapper).collect(),
+            res /*.map(|(out, alt)| (out, alt.map(mapper)))*/
+                .map_err(mapper),
         )
     }
 
@@ -1025,14 +1028,14 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E, E::Span) -> E, E: Error<I
         let mapper = |e: Located<I, E>| {
             let at = e.at;
             e.map(|e| {
-                let span = stream.attempt(|stream| { stream.revert(at); (false, stream.span_since(start)) });
+                let span = stream.attempt(|stream| {
+                    stream.revert(at);
+                    (false, stream.span_since(start))
+                });
                 (self.1)(e, span)
             })
         };
-        (
-            errors,
-            res.map_err(mapper),
-        )
+        (errors, res.map_err(mapper))
     }
 
     #[inline]
@@ -1103,13 +1106,8 @@ impl<
 #[derive(Copy, Clone)]
 pub struct OrElse<A, F>(pub(crate) A, pub(crate) F);
 
-impl<
-        I: Clone,
-        O,
-        A: Parser<I, O, Error = E>,
-        F: Fn(E) -> Result<O, E>,
-        E: Error<I>,
-    > Parser<I, O> for OrElse<A, F>
+impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error<I>> Parser<I, O>
+    for OrElse<A, F>
 {
     type Error = E;
 
@@ -1125,7 +1123,11 @@ impl<
         let res = match res {
             Ok(out) => Ok(out),
             Err(err) => match (&self.1)(err.error) {
-                Err(e) => Err(Located { at: err.at, error: e, phantom: PhantomData }),
+                Err(e) => Err(Located {
+                    at: err.at,
+                    error: e,
+                    phantom: PhantomData,
+                }),
                 Ok(out) => Ok((out, None)),
             },
         };
@@ -1167,8 +1169,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
             /* TODO: Not this? */
             /*if e.at > pre_state
             {*/
-                // Only add the label if we committed to this pattern somewhat
-                e.map(|e| e.with_label(self.1.clone().into()))
+            // Only add the label if we committed to this pattern somewhat
+            e.map(|e| e.with_label(self.1.clone().into()))
             /*} else {
                 e
             }*/

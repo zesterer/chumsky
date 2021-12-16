@@ -60,7 +60,8 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
         primitive::{
-            any, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until, todo, choice,
+            any, choice, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until,
+            todo,
         },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
@@ -345,6 +346,10 @@ pub trait Parser<I: Clone, O> {
     }
 
     /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
+    ///
+    /// Note that even if the function returns an [`Ok`], the input stream will still be 'stuck' at the input following
+    /// the input that triggered the error. You'll need to follow uses of this combinator with a parser that resets
+    /// the input stream to a known-good state (for example, [`take_until`]).
     ///
     /// The output type of this parser is `U`, the [`Ok`] type of the result.
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
@@ -879,13 +884,14 @@ pub trait Parser<I: Clone, O> {
     /// Apply a fallback recovery strategy to this parser should it fail.
     ///
     /// There is no silver bullet for error recovery, so this function allows you to specify one of several different
-    /// strategies at the location of your choice.
+    /// strategies at the location of your choice. Prefer an error recovery strategy that more precisely mirrors valid
+    /// syntax where possible to make error recovery more reliable.
     ///
-    /// Note that for implementation reasons, adding an error recovery strategy can cause a parser to 'over-commit',
-    /// missing potentially valid alternative parse routes (*TODO: document this and explain why and when it happens*).
-    /// Rest assured that this case is generally quite rare and only happens for very loose, almost-ambiguous syntax.
-    /// If you run into cases that you believe should parse but do not, try removing or moving recovery strategies to
-    /// fix the problem.
+    /// Because chumsky is a [PEG](https://en.m.wikipedia.org/wiki/Parsing_expression_grammar) parser, which always
+    /// take the first successful parsing route through a grammar, recovering from an error may cause the parser to
+    /// erroneously miss alternative valid routes through the grammar that do not generate recoverable errors. If you
+    /// run into cases where valid syntax fails to parse without errors, this might be happening: consider removing
+    /// error recovery or switching to a more specific error recovery strategy.
     ///
     /// The output type of this parser is `O`, the same as the original parser.
     ///

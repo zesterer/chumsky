@@ -193,7 +193,11 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
                             ),
                             None => Located::at(
                                 at,
-                                P::Error::expected_input_found(span, Some(Some(self.1.clone())), None),
+                                P::Error::expected_input_found(
+                                    span,
+                                    Some(Some(self.1.clone())),
+                                    None,
+                                ),
                             ),
                         });
                     }

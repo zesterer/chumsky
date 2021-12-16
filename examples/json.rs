@@ -116,7 +116,7 @@ fn main() {
                 e.expected()
                     .map(|expected| match expected {
                         Some(expected) => expected.to_string(),
-                        None => "end of input".to_string()
+                        None => "end of input".to_string(),
                     })
                     .collect::<Vec<_>>()
                     .join(", ")

@@ -296,7 +296,7 @@ impl<I: fmt::Display + Hash, S: Span> fmt::Display for Simple<I, S> {
         }
 
         match self.expected.len() {
-            0 => {},//write!(f, " but end of input was expected")?,
+            0 => {} //write!(f, " but end of input was expected")?,
             1 => write!(
                 f,
                 " but {} was expected",
