@@ -231,6 +231,70 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     }
 }
 
+/// See [`Parser::then_with`]
+pub struct ThenWith<I, O1, O2, A, B, F>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(I, O1, O2, B)>);
+
+impl<I, O1, O2, A: Clone, B, F: Clone> Clone for ThenWith<I, O1, O2, A, B, F> {
+    fn clone(&self) -> Self {
+        ThenWith(self.0.clone(), self.1.clone(), PhantomData)
+    }
+}
+
+impl<I, O1, O2, A: Copy, B, F: Copy> Copy for ThenWith<I, O1, O2, A, B, F> {}
+
+impl<I: Clone, O1, O2, A: Parser<I, O1, Error = E>, B: Parser<I, O2, Error = E>, F: Fn(O1) -> B, E: Error<I>> Parser<I, O2>
+    for ThenWith<I, O1, O2, A, B, F>
+{
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O2, E> {
+        let state = stream.save();
+
+        match {
+            #[allow(deprecated)]
+            debugger.invoke(&self.0, stream)
+        } {
+            (mut first_errs, Ok((first_out, first_alt))) => {
+                let second_out = self.1(first_out);
+                match {
+                    #[allow(deprecated)]
+                    debugger.invoke(&second_out, stream)
+                } {
+                    (second_errs, Ok((second_out, second_alt))) => {
+                        first_errs.extend(second_errs);
+                        (first_errs, Ok((second_out, first_alt.or(second_alt))))
+                    }
+                    (second_errs, Err(e)) => {
+                        stream.revert(state);
+                        first_errs.extend(second_errs);
+                        (first_errs, Err(e))
+                    }
+                }
+            }
+            (errs, Err(e)) => {
+                stream.revert(state);
+                (errs, Err(e))
+            }
+        }
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O2, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O2, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 /// See [`Parser::delimited_by`].
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
