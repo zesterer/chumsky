@@ -1354,8 +1354,18 @@ where
 #[cfg(test)]
 mod tests {
     use error::Simple;
+    use text::TextParser;
 
     use super::*;
+
+    #[test]
+    fn delimited_by_complex() {
+        let parser = just::<_, _, Simple<char>>('-')
+            .delimited_by(text::ident().padded(), text::int(10).padded())
+            .separated_by(just(','));
+
+        assert_eq!(parser.parse("one - 1,two - 2,three - 3"), Ok(vec!['-', '-', '-']));
+    }
 
     #[test]
     fn separated_by_at_least() {
