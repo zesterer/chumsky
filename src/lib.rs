@@ -842,7 +842,7 @@ pub trait Parser<I: Clone, O> {
     ///     .padded()
     ///     .repeated()
     ///     .map(SExpr::List)
-    ///     .delimited_by('(', ')')
+    ///     .delimited_by(just('('), just(')'))
     ///     .or(ident.map(SExpr::Ident))
     ///     .or(num.map(SExpr::Num)));
     ///
@@ -863,12 +863,18 @@ pub trait Parser<I: Clone, O> {
     ///     ),
     /// );
     /// ```
-    fn delimited_by(self, start: I, end: I) -> DelimitedBy<Self, I>
+    fn delimited_by<U, V, L, R>(self, start: L, end: R) -> DelimitedBy<Self, L, R, U, V>
     where
         Self: Sized,
-        I: PartialEq,
+        L: Parser<I, U, Error = Self::Error>,
+        R: Parser<I, V, Error = Self::Error>,
     {
-        DelimitedBy(self, start, end)
+        DelimitedBy {
+            item: self,
+            start,
+            end,
+            phantom: PhantomData,
+        }
     }
 
     /// Parse one thing or, on failure, another thing.
@@ -936,7 +942,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// let expr = recursive::<_, _, _, _, Simple<char>>(|expr| expr
     ///     .separated_by(just(','))
-    ///     .delimited_by('[', ']')
+    ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
     ///     .recover_with(nested_delimiters('[', ']', [], |_| Expr::Error))
@@ -1374,7 +1380,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 ///
 ///     literal.or(ast
 ///         .repeated()
-///         .delimited_by(Token::LParen, Token::RParen)
+///         .delimited_by(just(Token::LParen), just(Token::RParen))
 ///         .map(Ast::List))
 /// });
 ///

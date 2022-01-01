@@ -31,7 +31,7 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
             just(',').to(Read),
             just('.').to(Write),
         ))
-        .or(bf.delimited_by('[', ']').map(Loop))
+        .or(bf.delimited_by(just('['), just(']')).map(Loop))
         .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
         .recover_with(skip_then_retry_until([']']))
         .repeated()

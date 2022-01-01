@@ -74,7 +74,7 @@ mod chumsky {
                 .chain(just(b',').ignore_then(value.clone()).repeated())
                 .or_not()
                 .flatten()
-                .delimited_by(b'[', b']')
+                .delimited_by(just(b'['), just(b']'))
                 .map(Json::Array);
 
             let member = string.then_ignore(just(b':').padded()).then(value);
@@ -84,7 +84,7 @@ mod chumsky {
                 .or_not()
                 .flatten()
                 .padded()
-                .delimited_by(b'{', b'}')
+                .delimited_by(just(b'{'), just(b'}'))
                 .collect::<HashMap<String, Json>>()
                 .map(Json::Object);
 
