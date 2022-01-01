@@ -301,8 +301,7 @@ pub struct DelimitedBy<A, L, R, U, V> {
     pub(crate) item: A,
     pub(crate) start: L,
     pub(crate) end: R,
-    pub(crate) phantom_start: PhantomData<U>,
-    pub(crate) phantom_end: PhantomData<V>,
+    pub(crate) phantom: PhantomData<(U, V)>,
 }
 
 impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone, R: Parser<I, V, Error = E> + Clone, U, V, E: Error<I>> Parser<I, O>

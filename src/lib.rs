@@ -873,8 +873,7 @@ pub trait Parser<I: Clone, O> {
             item: self,
             start,
             end,
-            phantom_start: PhantomData,
-            phantom_end: PhantomData,
+            phantom: PhantomData,
         }
     }
 
