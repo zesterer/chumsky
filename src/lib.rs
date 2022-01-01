@@ -1086,7 +1086,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// - Dynamically building up parsers at runtime
     ///
-    /// - Improving compilation times (Rust can struggle to compile code containing very long times)
+    /// - Improving compilation times (Rust can struggle to compile code containing very long types)
     ///
     /// - Passing a parser over an FFI boundary
     ///
