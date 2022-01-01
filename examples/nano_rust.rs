@@ -212,7 +212,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
 
             let list = items
                 .clone()
-                .delimited_by(Token::Ctrl('['), Token::Ctrl(']'))
+                .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
                 .map(Expr::List);
 
             // 'Atoms' are expressions that contain no ambiguity
@@ -224,14 +224,14 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .or(just(Token::Print)
                     .ignore_then(
                         expr.clone()
-                            .delimited_by(Token::Ctrl('('), Token::Ctrl(')')),
+                            .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))),
                     )
                     .map(|expr| Expr::Print(Box::new(expr))))
                 .map_with_span(|expr, span| (expr, span))
                 // Atoms can also just be normal expressions, but surrounded with parentheses
                 .or(expr
                     .clone()
-                    .delimited_by(Token::Ctrl('('), Token::Ctrl(')')))
+                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
                 // Attempt to recover anything that looks like a parenthesised expression but contains errors
                 .recover_with(nested_delimiters(
                     Token::Ctrl('('),
@@ -257,7 +257,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             let call = atom
                 .then(
                     items
-                        .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
+                        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
                         .map_with_span(|args, span| (args, span))
                         .repeated(),
                 )
@@ -308,7 +308,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         // Blocks are expressions but delimited with braces
         let block = expr
             .clone()
-            .delimited_by(Token::Ctrl('{'), Token::Ctrl('}'))
+            .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
             // Attempt to recover anything that looks like a block but contains errors
             .recover_with(nested_delimiters(
                 Token::Ctrl('{'),
@@ -387,7 +387,7 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .clone()
         .separated_by(just(Token::Ctrl(',')))
         .allow_trailing()
-        .delimited_by(Token::Ctrl('('), Token::Ctrl(')'))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         .labelled("function args");
 
     let func = just(Token::Fn)
@@ -399,7 +399,7 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .then(args)
         .then(
             expr_parser()
-                .delimited_by(Token::Ctrl('{'), Token::Ctrl('}'))
+                .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
                 // Attempt to recover anything that looks like a function body but contains errors
                 .recover_with(nested_delimiters(
                     Token::Ctrl('{'),

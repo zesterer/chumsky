@@ -150,7 +150,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
 /// // Parser that recursively parses nested lists
 /// let tree = recursive::<_, _, _, _, Simple<char>>(|tree| tree
 ///     .separated_by(just(','))
-///     .delimited_by('[', ']')
+///     .delimited_by(just('['), just(']'))
 ///     .map(Tree::Branch)
 ///     .or(text::ident().map(Tree::Leaf))
 ///     .padded());

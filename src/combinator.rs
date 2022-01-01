@@ -297,10 +297,15 @@ impl<I: Clone, O1, O2, A: Parser<I, O1, Error = E>, B: Parser<I, O2, Error = E>,
 
 /// See [`Parser::delimited_by`].
 #[derive(Copy, Clone)]
-pub struct DelimitedBy<A, I>(pub(crate) A, pub(crate) I, pub(crate) I);
+pub struct DelimitedBy<A, L, R, U> {
+    pub(crate) item: A,
+    pub(crate) start: L,
+    pub(crate) end: R,
+    pub(crate) phantom: PhantomData<U>
+}
 
-impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O>
-    for DelimitedBy<A, I>
+impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone, R: Parser<I, U, Error = E> + Clone, U, E: Error<I>> Parser<I, O>
+    for DelimitedBy<A, L, R, U>
 {
     type Error = E;
 
@@ -313,9 +318,9 @@ impl<I: Clone + PartialEq, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I,
         // TODO: Don't clone!
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(
-            &just(self.1.clone())
-                .ignore_then(&self.0)
-                .then_ignore(just(self.2.clone())),
+            &self.start.clone()
+                .ignore_then(&self.item)
+                .then_ignore(self.end.clone()),
             stream,
         );
         (errors, res)
@@ -525,7 +530,7 @@ impl<A, B, U> SeparatedBy<A, B, U> {
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
-    ///     .delimited_by('(', ')');
+    ///     .delimited_by(just('('), just(')'));
     ///
     /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
     /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));

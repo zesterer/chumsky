@@ -58,7 +58,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .chain(just(',').ignore_then(value.clone()).repeated())
             .or_not()
             .flatten()
-            .delimited_by('[', ']')
+            .delimited_by(just('['), just(']'))
             .map(Json::Array)
             .labelled("array");
 
@@ -69,7 +69,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
             .or_not()
             .flatten()
             .padded()
-            .delimited_by('{', '}')
+            .delimited_by(just('{'), just('}'))
             .collect::<HashMap<String, Json>>()
             .map(Json::Object)
             .labelled("object");

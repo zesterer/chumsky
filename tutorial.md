@@ -400,7 +400,7 @@ recursive(|expr| {
         .padded();
 
     let atom = int
-        .or(expr.delimited_by('(', ')'));
+        .or(expr.delimited_by(just('('), just(')')));
 
     let op = |c| just(c).padded();
 
@@ -472,7 +472,7 @@ let expr = recursive(|expr| {
         .padded();
 
     let atom = int
-        .or(expr.delimited_by('(', ')'))
+        .or(expr.delimited_by(just('('), just(')')))
         .or(ident.map(Expr::Var));
 
     let op = |c| just(c).padded();
@@ -651,11 +651,11 @@ let call = ident
     .then(expr.clone()
         .separated_by(just(','))
         .allow_trailing() // Foo is Rust-like, so allow trailing commas to appear in arg lists
-        .delimited_by('(', ')'))
+        .delimited_by(just('('), just(')')))
     .map(|(f, args)| Expr::Call(f, args));
 
 let atom = int
-    .or(expr.delimited_by('(', ')'))
+    .or(expr.delimited_by(just('('), just(')')))
     .or(call)
     .or(ident.map(Expr::Var));
 ```

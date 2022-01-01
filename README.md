@@ -49,7 +49,7 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
         just('-').to(Instr::Decr),
         just(',').to(Instr::Read),
         just('.').to(Instr::Write),
-        bf.delimited_by('[', ']').map(Instr::Loop),
+        bf.delimited_by(just('['), just(']')).map(Instr::Loop),
     ))
         .repeated())
 }

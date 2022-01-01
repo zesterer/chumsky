@@ -40,12 +40,12 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                 expr.clone()
                     .separated_by(just(','))
                     .allow_trailing()
-                    .delimited_by('(', ')'),
+                    .delimited_by(just('('), just(')')),
             )
             .map(|(f, args)| Expr::Call(f, args));
 
         let atom = int
-            .or(expr.delimited_by('(', ')'))
+            .or(expr.delimited_by(just('('), just(')')))
             .or(call)
             .or(ident.map(Expr::Var));
 
