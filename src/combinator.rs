@@ -297,15 +297,16 @@ impl<I: Clone, O1, O2, A: Parser<I, O1, Error = E>, B: Parser<I, O2, Error = E>,
 
 /// See [`Parser::delimited_by`].
 #[derive(Copy, Clone)]
-pub struct DelimitedBy<A, L, R, U> {
+pub struct DelimitedBy<A, L, R, U, V> {
     pub(crate) item: A,
     pub(crate) start: L,
     pub(crate) end: R,
-    pub(crate) phantom: PhantomData<U>
+    pub(crate) phantom_start: PhantomData<U>,
+    pub(crate) phantom_end: PhantomData<V>,
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone, R: Parser<I, U, Error = E> + Clone, U, E: Error<I>> Parser<I, O>
-    for DelimitedBy<A, L, R, U>
+impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone, R: Parser<I, V, Error = E> + Clone, U, V, E: Error<I>> Parser<I, O>
+    for DelimitedBy<A, L, R, U, V>
 {
     type Error = E;
 
