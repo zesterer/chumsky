@@ -286,11 +286,26 @@ impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
     for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
 {
     fn from(s: [T; N]) -> Self {
-        let len = s.len();
         Self::from_iter(
-            len..len + 1,
+            N..N + 1,
             Box::new(
                 std::array::IntoIter::new(s)
+                    .enumerate()
+                    .map(|(i, x)| (x, i..i + 1)),
+            ),
+        )
+    }
+}
+
+impl<'a, T: Clone, const N: usize> From<&'a [T; N]>
+    for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
+{
+    fn from(s: &'a [T; N]) -> Self {
+        Self::from_iter(
+            N..N + 1,
+            Box::new(
+                s.iter()
+                    .cloned()
                     .enumerate()
                     .map(|(i, x)| (x, i..i + 1)),
             ),
