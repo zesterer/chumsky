@@ -7,6 +7,11 @@ use std::collections::HashSet;
 #[cfg(not(feature = "std"))]
 use hashbrown::HashSet;
 
+#[cfg(any(feature = "ahash", not(feature = "std")))]
+type RandomState = hashbrown::hash_map::DefaultHashBuilder;
+#[cfg(all(not(feature = "ahash"), feature = "std"))]
+type RandomState = std::collections::hash_map::RandomState;
+
 /// A trait that describes parser error types.
 ///
 /// If you have a custom error type in your compiler, or your needs are not sufficiently met by [`Simple`], you should
@@ -157,7 +162,7 @@ pub enum SimpleReason<I, S> {
 pub struct Simple<I: Hash + Eq, S = Range<usize>> {
     span: S,
     reason: SimpleReason<I, S>,
-    expected: HashSet<Option<I>>,
+    expected: HashSet<Option<I>, RandomState>,
     found: Option<I>,
     label: Option<&'static str>,
 }
