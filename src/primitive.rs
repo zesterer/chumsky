@@ -124,17 +124,21 @@ mod private {
     pub trait Sealed<T> {}
 
     impl<T> Sealed<T> for T {}
-    impl Sealed<char> for String {}
+    impl Sealed<char> for alloc::string::String {}
     impl<'a> Sealed<char> for &'a str {}
     impl<'a, T> Sealed<T> for &'a [T] {}
     impl<T, const N: usize> Sealed<T> for [T; N] {}
     impl<'a, T, const N: usize> Sealed<T> for &'a [T; N] {}
-    impl<T> Sealed<T> for Vec<T> {}
-    impl<T> Sealed<T> for std::collections::LinkedList<T> {}
-    impl<T> Sealed<T> for std::collections::VecDeque<T> {}
+    impl<T> Sealed<T> for alloc::vec::Vec<T> {}
+    impl<T> Sealed<T> for alloc::collections::LinkedList<T> {}
+    impl<T> Sealed<T> for alloc::collections::VecDeque<T> {}
+    impl<T> Sealed<T> for alloc::collections::BTreeSet<T> {}
+    impl<T> Sealed<T> for alloc::collections::BinaryHeap<T> {}
+
+    #[cfg(feature = "std")]
     impl<T> Sealed<T> for std::collections::HashSet<T> {}
-    impl<T> Sealed<T> for std::collections::BTreeSet<T> {}
-    impl<T> Sealed<T> for std::collections::BinaryHeap<T> {}
+    #[cfg(not(feature = "std"))]
+    impl<T> Sealed<T> for hashbrown::HashSet<T> {}
 }
 
 /// A utility trait to abstract over linear container-like things.
@@ -148,68 +152,69 @@ pub trait Container<T>: private::Sealed<T> {
 }
 
 impl<T: Clone> Container<T> for T {
-    type Iter = std::iter::Once<T>;
+    type Iter = core::iter::Once<T>;
     fn get_iter(&self) -> Self::Iter {
-        std::iter::once(self.clone())
+        core::iter::once(self.clone())
     }
 }
 
 impl Container<char> for String {
-    type Iter = std::vec::IntoIter<char>;
+    type Iter = alloc::vec::IntoIter<char>;
     fn get_iter(&self) -> Self::Iter {
         self.chars().collect::<Vec<_>>().into_iter()
     }
 }
 
 impl<'a> Container<char> for &'a str {
-    type Iter = std::str::Chars<'a>;
+    type Iter = alloc::str::Chars<'a>;
     fn get_iter(&self) -> Self::Iter {
         self.chars()
     }
 }
 
 impl<'a, T: Clone> Container<T> for &'a [T] {
-    type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
+    type Iter = core::iter::Cloned<core::slice::Iter<'a, T>>;
     fn get_iter(&self) -> Self::Iter {
         self.iter().cloned()
     }
 }
 
 impl<'a, T: Clone, const N: usize> Container<T> for &'a [T; N] {
-    type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
+    type Iter = core::iter::Cloned<core::slice::Iter<'a, T>>;
     fn get_iter(&self) -> Self::Iter {
         self.iter().cloned()
     }
 }
 
 impl<T: Clone, const N: usize> Container<T> for [T; N] {
-    type Iter = std::array::IntoIter<T, N>;
+    type Iter = core::array::IntoIter<T, N>;
     fn get_iter(&self) -> Self::Iter {
-        std::array::IntoIter::new(self.clone())
+        core::array::IntoIter::new(self.clone())
     }
 }
 
 impl<T: Clone> Container<T> for Vec<T> {
-    type Iter = std::vec::IntoIter<T>;
+    type Iter = alloc::vec::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
         self.clone().into_iter()
     }
 }
 
-impl<T: Clone> Container<T> for std::collections::LinkedList<T> {
-    type Iter = std::collections::linked_list::IntoIter<T>;
+impl<T: Clone> Container<T> for alloc::collections::LinkedList<T> {
+    type Iter = alloc::collections::linked_list::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
         self.clone().into_iter()
     }
 }
 
-impl<T: Clone> Container<T> for std::collections::VecDeque<T> {
-    type Iter = std::collections::vec_deque::IntoIter<T>;
+impl<T: Clone> Container<T> for alloc::collections::VecDeque<T> {
+    type Iter = alloc::collections::vec_deque::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
         self.clone().into_iter()
     }
 }
 
+#[cfg(feature = "std")]
 impl<T: Clone> Container<T> for std::collections::HashSet<T> {
     type Iter = std::collections::hash_set::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
@@ -217,15 +222,24 @@ impl<T: Clone> Container<T> for std::collections::HashSet<T> {
     }
 }
 
-impl<T: Clone> Container<T> for std::collections::BTreeSet<T> {
-    type Iter = std::collections::btree_set::IntoIter<T>;
+#[cfg(not(feature = "std"))]
+impl<T: Clone> Container<T> for hashbrown::HashSet<T> {
+    type Iter = hashbrown::hash_set::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
         self.clone().into_iter()
     }
 }
 
-impl<T: Clone> Container<T> for std::collections::BinaryHeap<T> {
-    type Iter = std::collections::binary_heap::IntoIter<T>;
+
+impl<T: Clone> Container<T> for alloc::collections::BTreeSet<T> {
+    type Iter = alloc::collections::btree_set::IntoIter<T>;
+    fn get_iter(&self) -> Self::Iter {
+        self.clone().into_iter()
+    }
+}
+
+impl<T: Clone> Container<T> for alloc::collections::BinaryHeap<T> {
+    type Iter = alloc::collections::binary_heap::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {
         self.clone().into_iter()
     }

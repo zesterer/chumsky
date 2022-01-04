@@ -1,10 +1,11 @@
 use super::*;
 
-use std::{borrow::Cow, panic::Location};
+use alloc::borrow::Cow;
+use core::panic::Location;
 
 /// Information about a specific parser.
+#[allow(dead_code)]
 pub struct ParserInfo {
-    #[allow(dead_code)]
     name: Cow<'static, str>,
     display: Rc<dyn fmt::Display>,
     location: Location<'static>,
@@ -62,7 +63,10 @@ impl Verbose {
         Self { events: Vec::new() }
     }
 
+    #[allow(unused_variables)]
     fn print_inner(&self, depth: usize) {
+        // a no-op on no_std!
+        #[cfg(feature = "std")]
         for event in &self.events {
             for _ in 0..depth * 4 {
                 print!(" ");

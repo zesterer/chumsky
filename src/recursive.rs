@@ -1,19 +1,19 @@
 use super::*;
 
-use std::rc::{Rc, Weak};
+use alloc::rc::{Rc, Weak};
 
 // TODO: Remove when `OnceCell` is stable
-struct OnceCell<T>(std::cell::RefCell<Option<T>>);
+struct OnceCell<T>(core::cell::RefCell<Option<T>>);
 impl<T> OnceCell<T> {
     pub fn new() -> Self {
-        Self(std::cell::RefCell::new(None))
+        Self(core::cell::RefCell::new(None))
     }
     pub fn set(&self, x: T) -> Result<(), ()> {
         *self.0.try_borrow_mut().map_err(|_| ())? = Some(x);
         Ok(())
     }
-    pub fn get(&self) -> Option<std::cell::Ref<T>> {
-        Some(std::cell::Ref::map(self.0.borrow(), |x| {
+    pub fn get(&self) -> Option<core::cell::Ref<T>> {
+        Some(core::cell::Ref::map(self.0.borrow(), |x| {
             x.as_ref().unwrap()
         }))
     }

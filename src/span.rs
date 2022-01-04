@@ -1,4 +1,4 @@
-use std::ops::Range;
+use core::ops::Range;
 
 /// A trait that describes a span over a particular range of inputs.
 ///
