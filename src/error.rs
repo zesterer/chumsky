@@ -1,3 +1,11 @@
+//! Error types, traits and utilities.
+//!
+//! *“I like the cover," he said. "Don't Panic. It's the first helpful or intelligible thing anybody's said to me all
+//! day.”*
+//!
+//! You can implement the [`Error`] trait to create your own parser errors, or you can use one provided by the crate
+//! like [`Simple`] or [`Cheap`].
+
 use super::*;
 use std::{collections::HashSet, hash::Hash};
 

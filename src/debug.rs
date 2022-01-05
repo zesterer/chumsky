@@ -1,3 +1,8 @@
+//! Utilities for debugging parsers.
+//!
+//! *“He was staring at the instruments with the air of one who is trying to convert Fahrenheit to centigrade in his
+//! head while his house is burning down.”*
+
 use super::*;
 
 use std::{borrow::Cow, panic::Location};

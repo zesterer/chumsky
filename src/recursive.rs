@@ -1,3 +1,13 @@
+//! Recursive parsers (parser that include themselves within their patterns).
+//!
+//! *“It's unpleasantly like being drunk."
+//! "What's so unpleasant about being drunk?"
+//! "You ask a glass of water.”*
+//!
+//! The [`recursive`] function covers most cases, but sometimes it's necessary to manually control the declaration and
+//! definition of parsers more corefully, particularly for mutually-recursive parsers. In such cases, the functions on
+//! [`Recursive`] allow for this.
+
 use super::*;
 
 use std::rc::{Rc, Weak};

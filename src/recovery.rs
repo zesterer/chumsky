@@ -1,3 +1,7 @@
+//! Types and traits that facilitate error recovery.
+//!
+//! *“Do you find coming to terms with the mindless tedium of it all presents an interesting challenge?”*
+
 use super::*;
 
 /// A trait implemented by error recovery strategies.

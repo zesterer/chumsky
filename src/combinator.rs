@@ -1,3 +1,10 @@
+//! Combinators that allow combining and extending existing parsers.
+//!
+//! *“Ford... you're turning into a penguin. Stop it.”*
+//!
+//! Although it's *sometimes* useful to be able to name their type, most of these parsers are much easier to work with
+//! when accessed through their respective methods on [`Parser`].
+
 use super::*;
 
 /// See [`Parser::ignored`].

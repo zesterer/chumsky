@@ -3,23 +3,14 @@
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
 
-/// Traits that allow chaining parser outputs together.
 pub mod chain;
-/// Combinators that allow combining and extending existing parsers.
 pub mod combinator;
-/// Utilities for debugging parsers.
 pub mod debug;
-/// Error types, traits and utilities.
 pub mod error;
-/// Parser primitives that accept specific token patterns.
 pub mod primitive;
-/// Types and traits that facilitate error recovery.
 pub mod recovery;
-/// Recursive parsers (parser that include themselves within their patterns).
 pub mod recursive;
-/// Types and traits related to spans.
 pub mod span;
-/// Token streams and behaviours.
 pub mod stream;
 pub mod text;
 
@@ -56,6 +47,9 @@ use std::{
 };
 
 /// Commonly used functions, traits and types.
+///
+/// *Listen, three eyes,” he said, “don’t you try to outweird me, I get stranger things than you free with my breakfast
+/// cereal.”*
 pub mod prelude {
     pub use super::{
         error::{Error as _, Simple},
