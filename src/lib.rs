@@ -401,6 +401,8 @@ pub trait Parser<I: Clone, O> {
 
     /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
     ///
+    /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
+    ///
     /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
     /// [`Parser::try_map`] instead.
     ///
@@ -421,12 +423,12 @@ pub trait Parser<I: Clone, O> {
     /// assert_eq!(large_int.parse("537"), Ok(537));
     /// assert!(large_int.parse("243").is_err());
     /// ```
-    fn validate<F>(self, f: F) -> Validate<Self, F>
+    fn validate<F, U>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> O,
+        F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> U,
     {
-        Validate(self, f)
+        Validate(self, f, PhantomData)
     }
 
     /// Label the pattern parsed by this parser for more useful error messages.

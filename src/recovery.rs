@@ -248,7 +248,10 @@ pub fn nested_delimiters<I: PartialEq, F, const N: usize>(
     others: [(I, I); N],
     fallback: F,
 ) -> NestedDelimiters<I, F, N> {
-    assert!(start != end, "Start and end delimiters cannot be the same when using `NestedDelimiters`, consider using `Delimiters` instead");
+    assert!(
+        start != end,
+        "Start and end delimiters cannot be the same when using `NestedDelimiters`"
+    );
     NestedDelimiters(start, end, others, fallback)
 }
 

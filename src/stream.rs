@@ -310,12 +310,7 @@ impl<'a, T: Clone, const N: usize> From<&'a [T; N]>
     fn from(s: &'a [T; N]) -> Self {
         Self::from_iter(
             N..N + 1,
-            Box::new(
-                s.iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(i, x)| (x, i..i + 1)),
-            ),
+            Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))),
         )
     }
 }

@@ -239,7 +239,11 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 }
 
 /// See [`Parser::then_with`]
-pub struct ThenWith<I, O1, O2, A, B, F>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(I, O1, O2, B)>);
+pub struct ThenWith<I, O1, O2, A, B, F>(
+    pub(crate) A,
+    pub(crate) F,
+    pub(crate) PhantomData<(I, O1, O2, B)>,
+);
 
 impl<I, O1, O2, A: Clone, B, F: Clone> Clone for ThenWith<I, O1, O2, A, B, F> {
     fn clone(&self) -> Self {
@@ -249,8 +253,15 @@ impl<I, O1, O2, A: Clone, B, F: Clone> Clone for ThenWith<I, O1, O2, A, B, F> {
 
 impl<I, O1, O2, A: Copy, B, F: Copy> Copy for ThenWith<I, O1, O2, A, B, F> {}
 
-impl<I: Clone, O1, O2, A: Parser<I, O1, Error = E>, B: Parser<I, O2, Error = E>, F: Fn(O1) -> B, E: Error<I>> Parser<I, O2>
-    for ThenWith<I, O1, O2, A, B, F>
+impl<
+        I: Clone,
+        O1,
+        O2,
+        A: Parser<I, O1, Error = E>,
+        B: Parser<I, O2, Error = E>,
+        F: Fn(O1) -> B,
+        E: Error<I>,
+    > Parser<I, O2> for ThenWith<I, O1, O2, A, B, F>
 {
     type Error = E;
 
@@ -311,8 +322,16 @@ pub struct DelimitedBy<A, L, R, U, V> {
     pub(crate) phantom: PhantomData<(U, V)>,
 }
 
-impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone, R: Parser<I, V, Error = E> + Clone, U, V, E: Error<I>> Parser<I, O>
-    for DelimitedBy<A, L, R, U, V>
+impl<
+        I: Clone,
+        O,
+        A: Parser<I, O, Error = E>,
+        L: Parser<I, U, Error = E> + Clone,
+        R: Parser<I, V, Error = E> + Clone,
+        U,
+        V,
+        E: Error<I>,
+    > Parser<I, O> for DelimitedBy<A, L, R, U, V>
 {
     type Error = E;
 
@@ -325,7 +344,9 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Parser<I, U, Error = E> + Clone
         // TODO: Don't clone!
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(
-            &self.start.clone()
+            &self
+                .start
+                .clone()
                 .ignore_then(&self.item)
                 .then_ignore(self.end.clone()),
             stream,
@@ -904,16 +925,23 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
 }
 
 /// See [`Parser::validate`].
-#[derive(Copy, Clone)]
-pub struct Validate<A, F>(pub(crate) A, pub(crate) F);
+pub struct Validate<A, U, F>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<U>);
+
+impl<A: Copy, U, F: Copy> Copy for Validate<A, U, F> {}
+impl<A: Clone, U, F: Clone> Clone for Validate<A, U, F> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone(), PhantomData)
+    }
+}
 
 impl<
         I: Clone,
         O,
+        U,
         A: Parser<I, O, Error = E>,
-        F: Fn(O, E::Span, &mut dyn FnMut(E)) -> O,
+        F: Fn(O, E::Span, &mut dyn FnMut(E)) -> U,
         E: Error<I>,
-    > Parser<I, O> for Validate<A, F>
+    > Parser<I, U> for Validate<A, O, F>
 {
     type Error = E;
 
@@ -922,7 +950,7 @@ impl<
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, O, E> {
+    ) -> PResult<I, U, E> {
         let start = stream.save();
         #[allow(deprecated)]
         let (mut errors, res) = debugger.invoke(&self.0, stream);
@@ -941,12 +969,12 @@ impl<
     }
 
     #[inline]
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
     #[inline]
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, U, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
@@ -1370,7 +1398,10 @@ mod tests {
             .delimited_by(text::ident().padded(), text::int(10).padded())
             .separated_by(just(','));
 
-        assert_eq!(parser.parse("one - 1,two - 2,three - 3"), Ok(vec!['-', '-', '-']));
+        assert_eq!(
+            parser.parse("one - 1,two - 2,three - 3"),
+            Ok(vec!['-', '-', '-'])
+        );
     }
 
     #[test]
