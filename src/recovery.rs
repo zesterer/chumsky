@@ -9,7 +9,7 @@ pub trait Strategy<I: Clone, O, E: Error<I>> {
     /// Recover from a parsing failure.
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
-        recovered_errors: Vec<Located<I, P::Error>>,
+        recovered_errors: FlatList<Located<I, P::Error>>,
         fatal_error: Located<I, P::Error>,
         parser: P,
         debugger: &mut D,
@@ -26,7 +26,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
 {
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
-        a_errors: Vec<Located<I, P::Error>>,
+        a_errors: FlatList<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
         parser: P,
         debugger: &mut D,
@@ -71,7 +71,7 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
 {
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
-        mut a_errors: Vec<Located<I, P::Error>>,
+        mut a_errors: FlatList<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
         _parser: P,
         _debugger: &mut D,
@@ -133,7 +133,7 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
     #[allow(clippy::blocks_in_if_conditions)]
     fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
         &self,
-        mut a_errors: Vec<Located<I, P::Error>>,
+        mut a_errors: FlatList<Located<I, P::Error>>,
         a_err: Located<I, P::Error>,
         _parser: P,
         _debugger: &mut D,

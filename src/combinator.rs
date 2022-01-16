@@ -162,7 +162,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
             debugger.invoke(&self.0, stream)
         }) {
             (errors, Ok((out, alt))) => (errors, Ok((Some(out), alt))),
-            (_, Err(err)) => (Vec::new(), Ok((None, Some(err)))),
+            (_, Err(err)) => (FlatList::new(), Ok((None, Some(err)))),
         }
     }
 
@@ -435,7 +435,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, Vec<O>, E> {
-        let mut errors = Vec::new();
+        let mut errors = FlatList::new();
         let mut outputs = Vec::new();
         let mut alt = None;
         let mut old_offset = None;
@@ -698,7 +698,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
             stream: &mut StreamOf<I, E>,
             debugger: &mut D,
             outputs: &mut Vec<O>,
-            errors: &mut Vec<Located<I, E>>,
+            errors: &mut FlatList<Located<I, E>>,
             alt: Option<Located<I, E>>,
         ) -> (State<I, E>, Option<Located<I, E>>) {
             match stream.try_parse(|stream| {
@@ -718,7 +718,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
         }
 
         let mut outputs = Vec::new();
-        let mut errors = Vec::new();
+        let mut errors = FlatList::new();
         let mut alt = None;
 
         if self.allow_leading {

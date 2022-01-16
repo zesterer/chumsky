@@ -7,6 +7,7 @@ pub mod chain;
 pub mod combinator;
 pub mod debug;
 pub mod error;
+pub mod flatlist;
 pub mod primitive;
 pub mod recovery;
 pub mod recursive;
@@ -23,6 +24,7 @@ use crate::{
     combinator::*,
     debug::*,
     error::{merge_alts, Located},
+    flatlist::FlatList,
     primitive::*,
     recovery::*,
 };
@@ -79,7 +81,7 @@ enum ControlFlow<C, B> {
 // ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
 // TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
 type PResult<I, O, E> = (
-    Vec<Located<I, E>>,
+    FlatList<Located<I, E>>,
     Result<(O, Option<Located<I, E>>), Located<I, E>>,
 );
 
@@ -951,6 +953,7 @@ pub trait Parser<I: Clone, O> {
     /// // This input has two syntax errors...
     /// let (ast, errors) = expr.parse_recovery("[[1, two], [3, four]]");
     /// // ...and error recovery allows us to catch both of them!
+    /// dbg!(&errors);
     /// assert_eq!(errors.len(), 2);
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));

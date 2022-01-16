@@ -141,7 +141,7 @@ pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
         let state = stream.save();
         if stream.next().2.map_or(true, |b| !b.is_whitespace()) {
             stream.revert(state);
-            break (Vec::new(), Ok(((), None)));
+            break (FlatList::new(), Ok(((), None)));
         }
     })
 }

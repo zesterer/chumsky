@@ -76,9 +76,9 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, (), E> {
         match stream.next() {
-            (_, _, None) => (Vec::new(), Ok(((), None))),
+            (_, _, None) => (FlatList::new(), Ok(((), None))),
             (at, span, found) => (
-                Vec::new(),
+                FlatList::new(),
                 Err(Located::at(
                     at,
                     E::expected_input_found(span, Some(None), found),
@@ -269,7 +269,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
                 (_, _, Some(tok)) if tok == expected => {}
                 (at, span, found) => {
                     return (
-                        Vec::new(),
+                        FlatList::new(),
                         Err(Located::at(
                             at,
                             E::expected_input_found(span, Some(Some(expected)), found),
@@ -279,7 +279,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
             }
         }
 
-        (Vec::new(), Ok((self.0.clone(), None)))
+        (FlatList::new(), Ok((self.0.clone(), None)))
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, C, E> {
@@ -335,7 +335,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
                 (_, _, Some(tok)) if &tok == expected => {}
                 (at, span, found) => {
                     return (
-                        Vec::new(),
+                        FlatList::new(),
                         Err(Located::at(
                             at,
                             E::expected_input_found(span, Some(Some(expected.clone())), found),
@@ -345,7 +345,7 @@ impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
             }
         }
 
-        (Vec::new(), Ok(((), None)))
+        (FlatList::new(), Ok(((), None)))
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
@@ -405,10 +405,10 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
     ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => {
-                (Vec::new(), Ok((tok, None)))
+                (FlatList::new(), Ok((tok, None)))
             }
             (at, span, found) => (
-                Vec::new(),
+                FlatList::new(),
                 Err(Located::at(
                     at,
                     E::expected_input_found(span, self.0.get_iter().map(Some), found),
@@ -464,7 +464,7 @@ impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
         _debugger: &mut D,
         _: &mut StreamOf<I, E>,
     ) -> PResult<I, (), E> {
-        (Vec::new(), Ok(((), None)))
+        (FlatList::new(), Ok(((), None)))
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
@@ -503,10 +503,10 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
     ) -> PResult<I, I, E> {
         match stream.next() {
             (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => {
-                (Vec::new(), Ok((tok, None)))
+                (FlatList::new(), Ok((tok, None)))
             }
             (at, span, found) => (
-                Vec::new(),
+                FlatList::new(),
                 Err(Located::at(
                     at,
                     E::expected_input_found(span, Vec::new(), found),
@@ -661,9 +661,9 @@ impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
         stream: &mut StreamOf<I, E>,
     ) -> PResult<I, I, E> {
         match stream.next() {
-            (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
+            (_, _, Some(tok)) if (self.0)(&tok) => (FlatList::new(), Ok((tok, None))),
             (at, span, found) => (
-                Vec::new(),
+                FlatList::new(),
                 Err(Located::at(
                     at,
                     E::expected_input_found(span, Vec::new(), found),
@@ -722,10 +722,10 @@ impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> f
     ) -> PResult<I, O, E> {
         let (at, span, tok) = stream.next();
         match tok.map(|tok| (self.0)(span.clone(), tok)) {
-            Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
-            Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
+            Some(Ok(tok)) => (FlatList::new(), Ok((tok, None))),
+            Some(Err(err)) => (FlatList::new(), Err(Located::at(at, err))),
             None => (
-                Vec::new(),
+                FlatList::new(),
                 Err(Located::at(
                     at,
                     E::expected_input_found(span, Vec::new(), None),
@@ -898,7 +898,7 @@ macro_rules! impl_for_tuple {
                         },
                     };
                 )*
-                (Vec::new(), Err(alt.unwrap()))
+                (FlatList::new(), Err(alt.unwrap()))
             }
 
             fn parse_inner_verbose(
