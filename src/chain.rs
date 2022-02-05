@@ -1,3 +1,11 @@
+//! Traits that allow chaining parser outputs together.
+//!
+//! *“And what’s happened to the Earth?” “Ah. It’s been demolished.” “Has it,” said Arthur levelly. “Yes. It just
+//! boiled away into space.” “Look,” said Arthur, “I’m a bit upset about that.”*
+//!
+//! You usually don't need to interact with this trait, or even import it. It's only public so that you can see which
+//! types implement it. See [`Parser::chain`](super::Parser) for examples of its usage.
+
 use alloc::{string::String, vec::Vec};
 
 mod private {

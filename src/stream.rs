@@ -1,3 +1,10 @@
+//! Token streams and tools converting to and from them..
+//!
+//! *“What’s up?” “I don’t know,” said Marvin, “I’ve never been there.”*
+//!
+//! [`Stream`] is the primary type used to feed input data into a chumsky parser. You can create them in a number of
+//! ways: from strings, iterators, arrays, etc.
+
 use super::*;
 use alloc::vec;
 
@@ -239,7 +246,7 @@ impl<'a> From<&'a str>
     fn from(s: &'a str) -> Self {
         let len = s.chars().count();
         Self::from_iter(
-            len..len + 1,
+            len..len,
             Box::new(s.chars().enumerate().map(|(i, c)| (c, i..i + 1))),
         )
     }
@@ -253,7 +260,7 @@ impl<'a> From<String>
     fn from(s: String) -> Self {
         let chars = s.chars().collect::<Vec<_>>();
         Self::from_iter(
-            chars.len()..chars.len() + 1,
+            chars.len()..chars.len(),
             Box::new(chars.into_iter().enumerate().map(|(i, c)| (c, i..i + 1))),
         )
     }
@@ -287,14 +294,24 @@ impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
     for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
 {
     fn from(s: [T; N]) -> Self {
-        let len = s.len();
         Self::from_iter(
-            len..len + 1,
+            N..N + 1,
             Box::new(
                 core::array::IntoIter::new(s)
                     .enumerate()
                     .map(|(i, x)| (x, i..i + 1)),
             ),
+        )
+    }
+}
+
+impl<'a, T: Clone, const N: usize> From<&'a [T; N]>
+    for Stream<'a, T, Range<usize>, Box<dyn Iterator<Item = (T, Range<usize>)> + 'a>>
+{
+    fn from(s: &'a [T; N]) -> Self {
+        Self::from_iter(
+            N..N + 1,
+            Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))),
         )
     }
 }

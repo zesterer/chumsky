@@ -1,3 +1,18 @@
+//! Parser primitives that accept specific token patterns.
+//!
+//! *“These creatures you call mice, you see, they are not quite as they appear. They are merely the protrusion into
+//! our dimension of vastly hyperintelligent pandimensional beings.”*
+//!
+//! Chumsky parsers are created by combining together smaller parsers. Right at the bottom of the pile are the parser
+//! primitives, a parser developer's bread & butter. Each of these primitives are very easy to understand in isolation,
+//! usually only doing one thing.
+//!
+//! ## The Important Ones
+//!
+//! - [`just`]: parses a specific input or sequence of inputs
+//! - [`filter`]: parses a single input, if the given filter function returns `true`
+//! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
+
 use super::*;
 
 /// See [`custom`].

@@ -1,3 +1,9 @@
+//! Types and traits related to spans.
+//!
+//! *“We demand rigidly defined areas of doubt and uncertainty!”*
+//!
+//! You can use the [`Span`] trait to connect up chumsky to your compiler's knowledge of the input source.
+
 use core::ops::Range;
 
 /// A trait that describes a span over a particular range of inputs.

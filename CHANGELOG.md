@@ -9,9 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `then_with` combinator to allow limited support for parsing nested patterns
+- impl From<&[T; N]> for Stream
+
 ### Removed
 
 ### Changed
+
+- Allowed `Validate` to map the output type
+- Switched to zero-size End Of Input spans for default implementations of `Stream`
+- Made `delimited_by` take combinators instead of specific tokens
 
 ### Fixed
 
