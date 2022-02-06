@@ -184,6 +184,7 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
+    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
     /// If you don't care about producing an output if errors are encountered, use [`Parser::parse`] instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
@@ -200,6 +201,7 @@ pub trait Parser<I: Clone, O> {
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way. Unlike
     /// [`Parser::parse_recovery`], this function will produce verbose debugging output as it executes.
     ///
+    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
     /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
