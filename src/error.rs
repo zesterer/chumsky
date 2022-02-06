@@ -12,7 +12,7 @@ use std::{collections::HashSet, hash::Hash};
 #[cfg(feature = "ahash")]
 type RandomState = ahash::RandomState;
 #[cfg(not(feature = "ahash"))]
-type RandomState = std::collections::hash_set::RandomState;
+type RandomState = std::collections::hash_map::RandomState;
 
 /// A trait that describes parser error types.
 ///
