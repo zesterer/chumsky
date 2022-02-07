@@ -19,7 +19,29 @@ pub trait Strategy<I: Clone, O, E: Error<I>> {
 
 /// See [`skip_then_retry_until`].
 #[derive(Copy, Clone)]
-pub struct SkipThenRetryUntil<I, const N: usize>(pub(crate) [I; N]);
+pub struct SkipThenRetryUntil<I, const N: usize>(
+    pub(crate) [I; N],
+    pub(crate) bool,
+    pub(crate) bool,
+);
+
+impl<I, const N: usize> SkipThenRetryUntil<I, N> {
+    /// Alters this recovery strategy so that the first token will always be skipped.
+    ///
+    /// This is useful when the input being searched for also appears at the beginning of the pattern that failed to
+    /// parse.
+    pub fn skip_start(self) -> Self {
+        Self(self.0, self.1, true)
+    }
+
+    /// Alters this recovery strategy so that the synchronisation token will be consumed during recovery.
+    ///
+    /// This is useful when the input being searched for is a delimiter of a prior pattern rather than the start of a
+    /// new pattern and hence is no longer important once recovery has occurred.
+    pub fn consume_end(self) -> Self {
+        Self(self.0, true, self.2)
+    }
+}
 
 impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
     for SkipThenRetryUntil<I, N>
@@ -32,15 +54,18 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
         debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
+        if self.2 {
+            let _ = stream.next();
+        }
         loop {
             #[allow(clippy::blocks_in_if_conditions)]
-            if !stream.attempt(|stream| {
-                if stream.next().2.map_or(true, |tok| self.0.contains(&tok)) {
-                    (false, false)
-                } else {
-                    (true, true)
-                }
-            }) {
+            if !stream.attempt(
+                |stream| match stream.next().2.map(|tok| self.0.contains(&tok)) {
+                    Some(true) => (self.1, false),
+                    Some(false) => (true, true),
+                    None => (false, false),
+                },
+            ) {
                 break (a_errors, Err(a_err));
             }
             #[allow(deprecated)]
@@ -56,15 +81,40 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
 /// A recovery mode that simply skips to the next input on parser failure and tries again, until reaching one of
 /// several inputs.
 ///
+/// Also see [`SkipThenRetryUntil::consume_end`].
+///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
 pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryUntil<I, N> {
-    SkipThenRetryUntil(until)
+    SkipThenRetryUntil(until, false, false)
 }
 
 /// See [`skip_until`].
 #[derive(Copy, Clone)]
-pub struct SkipUntil<I, F, const N: usize>(pub(crate) [I; N], pub(crate) F);
+pub struct SkipUntil<I, F, const N: usize>(
+    pub(crate) [I; N],
+    pub(crate) F,
+    pub(crate) bool,
+    pub(crate) bool,
+);
+
+impl<I, F, const N: usize> SkipUntil<I, F, N> {
+    /// Alters this recovery strategy so that the first token will always be skipped.
+    ///
+    /// This is useful when the input being searched for also appears at the beginning of the pattern that failed to
+    /// parse.
+    pub fn skip_start(self) -> Self {
+        Self(self.0, self.1, self.2, true)
+    }
+
+    /// Alters this recovery strategy so that the synchronisation token will be consumed during recovery.
+    ///
+    /// This is useful when the input being searched for is a delimiter of a prior pattern rather than the start of a
+    /// new pattern and hence is no longer important once recovery has occurred.
+    pub fn consume_end(self) -> Self {
+        Self(self.0, self.1, true, self.3)
+    }
+}
 
 impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E>
     for SkipUntil<I, F, N>
@@ -78,13 +128,15 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
         let pre_state = stream.save();
-        let _ = stream.next();
+        if self.3 {
+            let _ = stream.next();
+        }
         a_errors.push(a_err);
         loop {
             match stream.attempt(|stream| {
                 let (at, span, tok) = stream.next();
                 match tok.map(|tok| self.0.contains(&tok)) {
-                    Some(true) => (false, Ok(true)),
+                    Some(true) => (self.2, Ok(true)),
                     Some(false) => (true, Ok(false)),
                     None => (true, Err((at, span))),
                 }
@@ -110,10 +162,12 @@ impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> 
 
 /// A recovery mode that skips input until one of several inputs is found.
 ///
+/// Also see [`SkipUntil::consume_end`].
+///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
 pub fn skip_until<I, F, const N: usize>(until: [I; N], fallback: F) -> SkipUntil<I, F, N> {
-    SkipUntil(until, fallback)
+    SkipUntil(until, fallback, false, false)
 }
 
 /// See [`nested_delimiters`].

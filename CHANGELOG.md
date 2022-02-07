@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `then_with` combinator to allow limited support for parsing nested patterns
 - impl From<&[T; N]> for Stream
+- `SkipUntil/SkipThenRetryUntil::skip_start/consume_end` for more precise control over skip-based recovery
 
 ### Changed
 
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Compilation error with `--no-default-features`
+- Made default behaviour of `skip_until` more sensible
 
 # [0.7.0] - 2021-12-16
 
