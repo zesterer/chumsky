@@ -2,7 +2,6 @@
 
 extern crate test;
 
-use std::collections::HashMap;
 use test::{black_box, Bencher};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -12,7 +11,7 @@ pub enum Json {
     Str(String),
     Num(f64),
     Array(Vec<Json>),
-    Object(HashMap<String, Json>),
+    Object(Vec<(String, Json)>),
 }
 
 static JSON: &'static [u8] = include_bytes!("sample.json");
@@ -35,14 +34,13 @@ mod chumsky {
     use chumsky::{error::Cheap, prelude::*};
 
     use super::Json;
-    use std::{collections::HashMap, str};
+    use std::str;
 
     pub fn json() -> impl Parser<u8, Json, Error = Cheap<u8>> {
         recursive(|value| {
             let frac = just(b'.').chain(text::digits(10));
 
-            let exp = just(b'e')
-                .or(just(b'E'))
+            let exp = one_of(b"eE")
                 .ignore_then(just(b'+').or(just(b'-')).or_not())
                 .chain(text::digits(10));
 
@@ -53,18 +51,16 @@ mod chumsky {
                 .chain::<u8, _, _>(exp.or_not().flatten())
                 .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
 
-            let escape = just(b'\\').ignore_then(
-                choice((
-                    just(b'\\'),
-                    just(b'/'),
-                    just(b'"'),
-                    just(b'b').to(b'\x08'),
-                    just(b'f').to(b'\x0C'),
-                    just(b'n').to(b'\n'),
-                    just(b'r').to(b'\r'),
-                    just(b't').to(b'\t'),
-                ))
-            );
+            let escape = just(b'\\').ignore_then(choice((
+                just(b'\\'),
+                just(b'/'),
+                just(b'"'),
+                just(b'b').to(b'\x08'),
+                just(b'f').to(b'\x0C'),
+                just(b'n').to(b'\n'),
+                just(b'r').to(b'\r'),
+                just(b't').to(b'\t'),
+            )));
 
             let string = just(b'"')
                 .ignore_then(filter(|c| *c != b'\\' && *c != b'"').or(escape).repeated())
@@ -73,21 +69,17 @@ mod chumsky {
 
             let array = value
                 .clone()
-                .chain(just(b',').ignore_then(value.clone()).repeated())
-                .or_not()
-                .flatten()
+                .separated_by(just(b',').padded())
+                .padded()
                 .delimited_by(just(b'['), just(b']'))
                 .map(Json::Array);
 
             let member = string.then_ignore(just(b':').padded()).then(value);
             let object = member
-                .clone()
-                .chain(just(b',').padded().ignore_then(member).repeated())
-                .or_not()
-                .flatten()
+                .separated_by(just(b',').padded())
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
-                .collect::<HashMap<String, Json>>()
+                .collect::<Vec<(String, Json)>>()
                 .map(Json::Object);
 
             choice((
@@ -99,7 +91,7 @@ mod chumsky {
                 array,
                 object,
             ))
-                .padded()
+            .padded()
         })
         .then_ignore(end())
     }
@@ -110,10 +102,7 @@ mod pom {
     use pom::Parser;
 
     use super::Json;
-    use std::{
-        collections::HashMap,
-        str::{self, FromStr},
-    };
+    use std::str::{self, FromStr};
 
     fn space() -> Parser<u8, ()> {
         one_of(b" \t\r\n").repeat(0..).discard()
@@ -149,11 +138,11 @@ mod pom {
         sym(b'[') * space() * elems - sym(b']')
     }
 
-    fn object() -> Parser<u8, HashMap<String, Json>> {
+    fn object() -> Parser<u8, Vec<(String, Json)>> {
         let member = string() - space() - sym(b':') - space() + call(value);
         let members = list(member, sym(b',') * space());
         let obj = sym(b'{') * space() * members - sym(b'}');
-        obj.map(|members| members.into_iter().collect::<HashMap<_, _>>())
+        obj.map(|members| members.into_iter().collect::<Vec<_>>())
     }
 
     fn value() -> Parser<u8, Json> {

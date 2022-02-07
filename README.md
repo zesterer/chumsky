@@ -130,13 +130,13 @@ etc. All that said, here are some numbers from the
 my Ryzen 7 3700x.
 
 ```ignore
-test chumsky ... bench:   5,969,794 ns/iter (+/- 75,548)
-test pom     ... bench:  12,858,594 ns/iter (+/- 181,703)
+test chumsky ... bench:   4,782,390 ns/iter (+/- 997,208)
+test pom     ... bench:  12,793,490 ns/iter (+/- 1,954,583)
 ```
 
 I've included results from [`pom`](https://github.com/J-F-Liu/pom), another parser combinator crate with a similar
 design, as a point of reference. The sample file being parsed is broadly represenative of typical JSON data and has
-3,018 lines. This translates to a little over 500,000 lines of JSON per second.
+3,018 lines. This translates to a little over 630,000 lines of JSON per second.
 
 Clearly, this is a little slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
 *fast enough*. If you've written enough code in your language that parsing performance even starts to be a problem,

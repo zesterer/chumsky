@@ -17,12 +17,47 @@ pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>
 
 /// The type of a parser that accepts (and ignores) any number of whitespace characters before or after another
 /// pattern.
-pub type Padded<P, I, O> = ThenIgnore<
-    IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>,
-    Padding<I, <P as Parser<I, O>>::Error>,
-    O,
-    (),
->;
+// pub type Padded<P, I, O> = ThenIgnore<
+//     IgnoreThen<Padding<I, <P as Parser<I, O>>::Error>, P, (), O>,
+//     Padding<I, <P as Parser<I, O>>::Error>,
+//     O,
+//     (),
+// >;
+
+/// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
+#[derive(Copy, Clone)]
+pub struct Padded<A>(A);
+
+impl<C: Character, O, A: Parser<C, O, Error = E>, E: Error<C>> Parser<C, O> for Padded<A> {
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<C, E>,
+    ) -> PResult<C, O, E> {
+        while stream.skip_if(|c| c.is_whitespace()) {}
+        match self.0.parse_inner(debugger, stream) {
+            (a_errors, Ok((a_out, a_alt))) => {
+                while stream.skip_if(|c| c.is_whitespace()) {}
+                (a_errors, Ok((a_out, a_alt)))
+            }
+            (a_errors, Err(err)) => (a_errors, Err(err)),
+        }
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<C, E>) -> PResult<C, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<C, E>) -> PResult<C, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
 
 mod private {
     pub trait Sealed {}
@@ -111,11 +146,12 @@ pub trait TextParser<I: Character, O>: Parser<I, O> {
     /// // A pattern with arbitrary whitespace surrounding it is also accepted
     /// assert_eq!(ident.parse(" \t \n  \t   world  \t  "), Ok("world".to_string()));
     /// ```
-    fn padded(self) -> Padded<Self, I, O>
+    fn padded(self) -> Padded<Self>
     where
         Self: Sized,
     {
-        whitespace().ignore_then(self).then_ignore(whitespace())
+        Padded(self)
+        // whitespace().ignore_then(self).then_ignore(whitespace())
     }
 }
 
