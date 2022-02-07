@@ -54,14 +54,16 @@ mod chumsky {
                 .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
 
             let escape = just(b'\\').ignore_then(
-                just(b'\\')
-                    .or(just(b'/'))
-                    .or(just(b'"'))
-                    .or(just(b'b').to(b'\x08'))
-                    .or(just(b'f').to(b'\x0C'))
-                    .or(just(b'n').to(b'\n'))
-                    .or(just(b'r').to(b'\r'))
-                    .or(just(b't').to(b'\t')),
+                choice((
+                    just(b'\\'),
+                    just(b'/'),
+                    just(b'"'),
+                    just(b'b').to(b'\x08'),
+                    just(b'f').to(b'\x0C'),
+                    just(b'n').to(b'\n'),
+                    just(b'r').to(b'\r'),
+                    just(b't').to(b'\t'),
+                ))
             );
 
             let string = just(b'"')
@@ -88,14 +90,15 @@ mod chumsky {
                 .collect::<HashMap<String, Json>>()
                 .map(Json::Object);
 
-            just(b"null")
-                .to(Json::Null)
-                .or(just(b"true").to(Json::Bool(true)))
-                .or(just(b"false").to(Json::Bool(false)))
-                .or(number.map(Json::Num))
-                .or(string.map(Json::Str))
-                .or(array)
-                .or(object)
+            choice((
+                just(b"null").to(Json::Null),
+                just(b"true").to(Json::Bool(true)),
+                just(b"false").to(Json::Bool(false)),
+                number.map(Json::Num),
+                string.map(Json::Str),
+                array,
+                object,
+            ))
                 .padded()
         })
         .then_ignore(end())
