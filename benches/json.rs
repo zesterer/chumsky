@@ -107,10 +107,11 @@ mod chumsky_zero_copy {
             )))
                 .ignored();
 
-            let string = just(b'"')
-                .then(filter(|c| *c != b'\\' && *c != b'"').ignored().or(escape).repeated())
-                .then(just(b'"'))
-                .map_slice(|bytes| bytes);
+            let string = filter(|c| *c != b'\\' && *c != b'"').ignored().or(escape)
+                .repeated()
+                .map_slice(|bytes| bytes)
+                .delimited_by(just(b'"'), just(b'"'));
+                // .boxed();
 
             let array = value
                 .clone()
