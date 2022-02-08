@@ -9,6 +9,8 @@ use core::{
 };
 use crate::Rc;
 use std::collections::HashMap;
+#[cfg(feature = "regex")]
+use ::regex as regex_crate;
 
 pub trait Span {
     type Context;
@@ -28,28 +30,28 @@ impl<Ctx, T> Span for (Ctx, Range<T>) {
 pub trait Input {
     type Offset: Copy;
     type Token;
-    type Slice: ?Sized;
     type Span: Span;
 
     fn start(&self) -> Self::Offset;
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
 
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice;
-    unsafe fn slice_unchecked(&self, range: Range<Self::Offset>) -> &Self::Slice { self.slice(range) }
-
     fn span(&self, range: Range<Self::Offset>) -> Self::Span;
 }
 
-pub trait FullInput: Input {
+pub trait SliceInput: Input {
+    type Slice: ?Sized;
+
+    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice;
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice;
-    unsafe fn slice_from_unchecked(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { self.slice_from(from) }
 }
+
+// Implemented by inputs that reference a string slice and use byte indices as their offset.
+pub trait StrInput: Input<Offset = usize> + SliceInput<Slice = str> {}
 
 impl Input for str {
     type Offset = usize;
     type Token = char;
-    type Slice = str;
     type Span = Range<usize>;
 
     fn start(&self) -> Self::Offset { 0 }
@@ -64,15 +66,16 @@ impl Input for str {
         }
     }
 
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { &self[range] }
-    unsafe fn slice_unchecked(&self, range: Range<Self::Offset>) -> &Self::Slice { self.get_unchecked(range) }
-
     fn span(&self, range: Range<Self::Offset>) -> Self::Span { range }
 }
 
-impl FullInput for str {
+impl StrInput for str {}
+
+impl SliceInput for str {
+    type Slice = str;
+
+    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { &self[range] }
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { &self[from] }
-    unsafe fn slice_from_unchecked(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { self.get_unchecked(from) }
 }
 
 pub struct ContextSrc<'a, Ctx>(pub Ctx, pub &'a str);
@@ -80,23 +83,27 @@ pub struct ContextSrc<'a, Ctx>(pub Ctx, pub &'a str);
 impl<'a, Ctx: Clone> Input for ContextSrc<'a, Ctx> {
     type Offset = usize;
     type Token = char;
-    type Slice = str;
     type Span = (Ctx, Range<usize>);
 
     fn start(&self) -> Self::Offset { 0 }
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) { self.1.next(offset) }
 
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { Input::slice(&*self.1, range) }
-    unsafe fn slice_unchecked(&self, range: Range<Self::Offset>) -> &Self::Slice { Input::slice_unchecked(&*self.1, range) }
-
     fn span(&self, range: Range<Self::Offset>) -> Self::Span { (self.0.clone(), range) }
 }
+
+impl<'a, Ctx: Clone> SliceInput for ContextSrc<'a, Ctx> {
+    type Slice = str;
+
+    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { <str as SliceInput>::slice(&*self.1, range) }
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { <str as SliceInput>::slice_from(&*self.1, from) }
+}
+
+impl<'a, Ctx: Clone> StrInput for ContextSrc<'a, Ctx> {}
 
 impl<T: Clone> Input for [T] {
     type Offset = usize;
     type Token = T;
-    type Slice = [T];
     type Span = Range<usize>;
 
     fn start(&self) -> Self::Offset { 0 }
@@ -109,15 +116,14 @@ impl<T: Clone> Input for [T] {
         }
     }
 
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { &self[range] }
-    unsafe fn slice_unchecked(&self, range: Range<Self::Offset>) -> &Self::Slice { self.get_unchecked(range) }
-
     fn span(&self, range: Range<Self::Offset>) -> Self::Span { range }
 }
 
-impl<T: Clone> FullInput for [T] {
+impl<T: Clone> SliceInput for [T] {
+    type Slice = [T];
+
+    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { &self[range] }
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { &self[from] }
-    unsafe fn slice_from_unchecked(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { self.get_unchecked(from) }
 }
 
 pub struct InputRef<'a, 'parse, I: Input + ?Sized, S> {
@@ -157,19 +163,27 @@ impl<'a, 'parse, I: Input + ?Sized, S> InputRef<'a, 'parse, I, S> {
         (offset, token)
     }
 
-    pub fn slice(&self, range: Range<I::Offset>) -> &'a I::Slice { self.input.slice(range) }
-    pub unsafe fn slice_unchecked(&self, range: Range<I::Offset>) -> &'a I::Slice { self.input.slice_unchecked(range) }
+    pub fn slice(&self, range: Range<I::Offset>) -> &'a I::Slice
+    where
+        I: SliceInput,
+    { self.input.slice(range) }
 
-    pub fn slice_from(&self, from: RangeFrom<I::Offset>) -> &'a I::Slice where I: FullInput {
-        self.input.slice_from(from)
-    }
-    pub unsafe fn slice_from_unchecked(&self, from: RangeFrom<I::Offset>) -> &'a I::Slice where I: FullInput {
-        self.input.slice_from_unchecked(from)
-    }
+    pub fn slice_from(&self, from: RangeFrom<I::Offset>) -> &'a I::Slice
+    where
+        I: SliceInput,
+    { self.input.slice_from(from) }
 
-    pub fn span_since(&self, before: I::Offset) -> I::Span {
-        self.input.span(before..self.offset)
-    }
+    pub fn slice_trailing(&self) -> &'a I::Slice
+    where
+        I: SliceInput,
+    { self.input.slice_from(self.offset..) }
+
+    pub fn span_since(&self, before: I::Offset) -> I::Span { self.input.span(before..self.offset) }
+
+    pub fn skip_bytes(&mut self, skip: usize)
+    where
+        I: StrInput
+    { self.offset += skip; }
 }
 
 pub trait Error<T> {
@@ -255,6 +269,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
     fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F, E, S>
     where
         Self: Sized,
+        I: SliceInput,
         I::Slice: 'a,
     {
         MapSlice { parser: self, mapper: f, phantom: PhantomData }
@@ -464,6 +479,45 @@ where
     go_extra!();
 }
 
+#[cfg(feature = "regex")]
+pub struct Regex<I: ?Sized, E = (), S = ()> {
+    regex: regex_crate::Regex,
+    phantom: PhantomData<(E, S, I)>,
+}
+
+#[cfg(feature = "regex")]
+pub fn regex<I: ?Sized, E, S>(s: &str) -> Regex<I, E, S> {
+    Regex {
+        regex: regex_crate::Regex::new(s).expect("Failed to compile regex"),
+        phantom: PhantomData,
+    }
+}
+
+#[cfg(feature = "regex")]
+impl<'a, I, E, S> Parser<'a, I, E, S> for Regex<I, E, S>
+where
+    I: Input + StrInput + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+{
+    type Output = &'a str;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+        self.regex
+            .find(inp.slice_trailing())
+            .filter(|m| m.start() == 0)
+            .map(|m| {
+                let before = inp.save();
+                inp.skip_bytes(m.end());
+                let after = inp.save();
+                M::bind(|| inp.slice(before..after))
+            })
+            .ok_or_else(|| E::create())
+    }
+
+    go_extra!();
+}
+
 pub struct MapSlice<A, F, E = (), S = ()> {
     parser: A,
     mapper: F,
@@ -483,7 +537,7 @@ impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapSlice<A, F, E, S>
 where
-    I: Input + ?Sized,
+    I: Input + SliceInput + ?Sized,
     E: Error<I::Token>,
     S: 'a,
     I::Slice: 'a,
@@ -1100,6 +1154,20 @@ fn zero_copy() {
             ((42, 24..30), Token::String("\"test\"")),
             ((42, 31..37), Token::Ident("tokens")),
         ]),
+    );
+}
+
+#[cfg(feature = "regex")]
+#[test]
+fn regex_parser() {
+
+    fn parser<'a>() -> impl Parser<'a, str, Output = &'a str> {
+        regex("[a-zA-Z_][a-zA-Z0-9_]*")
+    }
+
+    assert_eq!(
+        parser().parse("hello"),
+        Ok("hello"),
     );
 }
 
