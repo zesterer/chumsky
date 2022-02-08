@@ -1,12 +1,14 @@
 #![allow(missing_docs)]
 
 use core::{
-    borrow::Borrow,
+    cmp::Eq,
+    hash::Hash,
     ops::{Range, RangeFrom},
     marker::PhantomData,
     lazy::OnceCell,
 };
 use crate::Rc;
+use std::collections::HashMap;
 
 pub trait Input {
     type Offset: Copy;
@@ -35,7 +37,8 @@ impl Input for str {
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         if offset < self.len() {
-            let c = self[offset..].chars().next().unwrap();
+            // TODO: Can we `unwrap_unchecked` here?
+            let c = unsafe { self.get_unchecked(offset..).chars().next().unwrap() };
             (offset + c.len_utf8(), Some(c))
         } else {
             (offset, None)
@@ -139,9 +142,7 @@ pub trait Mode {
     fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V>;
-    fn vec<T>(x: Vec<Self::Output<T>>) -> Self::Output<Vec<T>>;
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
-    fn container<T, C: Container<T>>(x: C::Containing<Self::Output<T>>) -> Self::Output<C> where C: Container<T, Containing<T> = C>;
 
     fn invoke<'a, I: Input + ?Sized, P: Parser<'a, I> + ?Sized>(parser: &P, inp: &mut InputRef<'a, I>) -> Result<Self::Output<P::Output>, ()>;
 }
@@ -152,27 +153,23 @@ impl Mode for Emit {
     fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> { f() }
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> { f(x) }
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> { f(x, y) }
-    fn vec<T>(x: Vec<Self::Output<T>>) -> Self::Output<Vec<T>> { x }
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> { x }
-    fn container<T, C: Container<T>>(x: C::Containing<Self::Output<T>>) -> Self::Output<C> where C: Container<T, Containing<T> = C> { x }
 
     fn invoke<'a, I: Input + ?Sized, P: Parser<'a, I> + ?Sized>(parser: &P, inp: &mut InputRef<'a, I>) -> Result<Self::Output<P::Output>, ()> {
         parser.go_emit(inp)
     }
 }
 
-pub struct Ignore;
-impl Mode for Ignore {
+pub struct Check;
+impl Mode for Check {
     type Output<T> = ();
     fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {}
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> {}
-    fn vec<T>(x: Vec<Self::Output<T>>) -> Self::Output<Vec<T>> {}
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
-    fn container<T, C: Container<T>>(x: C::Containing<Self::Output<T>>) -> Self::Output<C> where C: Container<T, Containing<T> = C> {}
 
     fn invoke<'a, I: Input + ?Sized, P: Parser<'a, I> + ?Sized>(parser: &P, inp: &mut InputRef<'a, I>) -> Result<Self::Output<P::Output>, ()> {
-        parser.go_ignore(inp)
+        parser.go_check(inp)
     }
 }
 
@@ -181,8 +178,8 @@ macro_rules! go_extra {
         fn go_emit(&self, inp: &mut InputRef<'a, I>) -> Result<<Emit as Mode>::Output<Self::Output>, ()> {
             self.go::<Emit>(inp)
         }
-        fn go_ignore(&self, inp: &mut InputRef<'a, I>) -> Result<<Ignore as Mode>::Output<Self::Output>, ()> {
-            self.go::<Ignore>(inp)
+        fn go_check(&self, inp: &mut InputRef<'a, I>) -> Result<<Check as Mode>::Output<Self::Output>, ()> {
+            self.go::<Check>(inp)
         }
     };
 }
@@ -194,13 +191,17 @@ pub trait Parser<'a, I: Input + ?Sized> {
         self.go::<Emit>(&mut InputRef::new(input))
     }
 
+    fn check(&self, input: &'a I) -> Result<(), ()> where Self: Sized {
+        self.go::<Check>(&mut InputRef::new(input))
+    }
+
     #[doc(hidden)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, I>) -> Result<M::Output<Self::Output>, ()> where Self: Sized;
 
     #[doc(hidden)]
     fn go_emit(&self, inp: &mut InputRef<'a, I>) -> Result<<Emit as Mode>::Output<Self::Output>, ()>;
     #[doc(hidden)]
-    fn go_ignore(&self, inp: &mut InputRef<'a, I>) -> Result<<Ignore as Mode>::Output<Self::Output>, ()>;
+    fn go_check(&self, inp: &mut InputRef<'a, I>) -> Result<<Check as Mode>::Output<Self::Output>, ()>;
 
     fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F>
     where
@@ -217,11 +218,11 @@ pub trait Parser<'a, I: Input + ?Sized> {
         Map { parser: self, mapper: f }
     }
 
-    fn ignored(self) -> Map<Self, fn(Self::Output) -> ()>
+    fn ignored(self) -> Ignored<Self>
     where
         Self: Sized,
     {
-        Map { parser: self, mapper: |_| {} }
+        Ignored { parser: self, to: () }
     }
 
     fn to<O: Clone>(self, to: O) -> To<Self, O>
@@ -355,7 +356,7 @@ pub fn just<S, I>(seq: S) -> Just<S, I>
 where
     I: Input + ?Sized,
     I::Token: PartialEq,
-    S: Seq<I::Token>,
+    S: Seq<I::Token> + Clone,
 {
     Just {
         seq,
@@ -367,9 +368,9 @@ impl<'a, I, S> Parser<'a, I> for Just<S, I>
 where
     I: Input + ?Sized,
     I::Token: PartialEq,
-    S: Seq<I::Token>,
+    S: Seq<I::Token> + Clone,
 {
-    type Output = ();
+    type Output = S;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, I>) -> Result<M::Output<Self::Output>, ()> {
         let mut items = self.seq.iter();
@@ -379,7 +380,7 @@ where
                     (_, Some(tok)) if next == tok => {},
                     (_, Some(_) | None) => break Err(()),
                 },
-                None => break Ok(M::bind(|| ())),
+                None => break Ok(M::bind(|| self.seq.clone())),
             }
         }
     }
@@ -404,7 +405,7 @@ where
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, I>) -> Result<M::Output<Self::Output>, ()> {
         let before = inp.save();
-        match self.parser.go::<Ignore>(inp) {
+        match self.parser.go::<Check>(inp) {
             Ok(_) => {
                 let after = inp.save();
                 Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
@@ -489,12 +490,14 @@ where
     type Output = O;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, I>) -> Result<M::Output<Self::Output>, ()> {
-        self.parser.go::<M>(inp)
+        self.parser.go::<Check>(inp)
             .map(|_| M::bind(|| self.to.clone()))
     }
 
     go_extra!();
 }
+
+pub type Ignored<A> = To<A, ()>;
 
 #[derive(Copy, Clone)]
 pub struct Then<A, B> {
@@ -536,9 +539,9 @@ where
     type Output = A::Output;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, I>) -> Result<M::Output<Self::Output>, ()> {
-        let _ = self.start.go::<Ignore>(inp)?;
+        let _ = self.start.go::<Check>(inp)?;
         let b = self.parser.go::<M>(inp)?;
-        let _ = self.end.go::<Ignore>(inp)?;
+        let _ = self.end.go::<Check>(inp)?;
         Ok(b)
     }
 
@@ -655,19 +658,22 @@ where
 }
 
 pub trait Container<T>: Default {
-    type Containing<U>: Container<U>;
     fn push(&mut self, item: T);
 }
 
 impl<T> Container<T> for () {
-    type Containing<U> = ();
     fn push(&mut self, _: T) {}
 }
 
 impl<T> Container<T> for Vec<T> {
-    type Containing<U> = Vec<U>;
     fn push(&mut self, item: T) {
         (*self).push(item);
+    }
+}
+
+impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
+    fn push(&mut self, (key, value): (K, V)) {
+        (*self).insert(key, value);
     }
 }
 
