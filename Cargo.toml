@@ -21,6 +21,8 @@ nightly = []
 [dependencies]
 # Use `ahash` for maintaining sets of expected inputs
 ahash = { version = "^0.3", optional = true }
+# Enables regex combinators
+regex = { version = "1.5", optional = true }
 
 [dev-dependencies]
 ariadne = "0.1.2"
