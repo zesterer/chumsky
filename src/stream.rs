@@ -194,6 +194,17 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         self.buffer.get(offset)
     }
 
+    pub(crate) fn skip_if(&mut self, f: impl FnOnce(&I) -> bool) -> bool {
+        match self.pull_until(self.offset).cloned() {
+            Some((out, _)) if f(&out) => {
+                self.offset += 1;
+                true
+            }
+            Some(_) => false,
+            None => false,
+        }
+    }
+
     pub(crate) fn next(&mut self) -> (usize, S, Option<I>) {
         match self.pull_until(self.offset).cloned() {
             Some((out, span)) => {

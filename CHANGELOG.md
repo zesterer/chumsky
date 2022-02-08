@@ -9,18 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Removed
+
+### Changed
+
+### Fixed
+
+# [0.8.0] - 2022-02-07
+
+### Added
+
 - `then_with` combinator to allow limited support for parsing nested patterns
 - impl From<&[T; N]> for Stream
-
-### Removed
+- `SkipUntil/SkipThenRetryUntil::skip_start/consume_end` for more precise control over skip-based recovery
 
 ### Changed
 
 - Allowed `Validate` to map the output type
 - Switched to zero-size End Of Input spans for default implementations of `Stream`
 - Made `delimited_by` take combinators instead of specific tokens
+- Minor optimisations
+- Documentation improvements
 
 ### Fixed
+
+- Compilation error with `--no-default-features`
+- Made default behaviour of `skip_until` more sensible
 
 # [0.7.0] - 2021-12-16
 
