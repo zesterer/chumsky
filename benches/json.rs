@@ -35,6 +35,14 @@ fn chumsky_zero_copy(b: &mut Bencher) {
 }
 
 #[bench]
+fn chumsky_zero_copy_check(b: &mut Bencher) {
+    use ::chumsky::input::*;
+
+    let json = chumsky_zero_copy::json();
+    b.iter(|| black_box(json.check(JSON).unwrap()));
+}
+
+#[bench]
 fn chumsky(b: &mut Bencher) {
     use ::chumsky::prelude::*;
 
@@ -91,11 +99,11 @@ mod chumsky_zero_copy {
                 just(b'\\'),
                 just(b'/'),
                 just(b'"'),
-                just(b'b'),//.to(b'\x08'),
-                just(b'f'),//.to(b'\x0C'),
-                just(b'n'),//.to(b'\n'),
-                just(b'r'),//.to(b'\r'),
-                just(b't'),//.to(b'\t'),
+                just(b'b').to(b'\x08'),
+                just(b'f').to(b'\x0C'),
+                just(b'n').to(b'\n'),
+                just(b'r').to(b'\r'),
+                just(b't').to(b'\t'),
             )))
                 .ignored();
 
