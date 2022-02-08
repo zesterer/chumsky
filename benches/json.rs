@@ -14,7 +14,25 @@ pub enum Json {
     Object(Vec<(String, Json)>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum JsonZero<'a> {
+    Null,
+    Bool(bool),
+    Str(&'a [u8]),
+    Num(f64),
+    Array(Vec<JsonZero<'a>>),
+    Object(Vec<(&'a [u8], JsonZero<'a>)>),
+}
+
 static JSON: &'static [u8] = include_bytes!("sample.json");
+
+#[bench]
+fn chumsky_zero_copy(b: &mut Bencher) {
+    use ::chumsky::input::*;
+
+    let json = chumsky_zero_copy::json();
+    b.iter(|| black_box(json.parse(JSON).unwrap()));
+}
 
 #[bench]
 fn chumsky(b: &mut Bencher) {
@@ -25,9 +43,114 @@ fn chumsky(b: &mut Bencher) {
 }
 
 #[bench]
+fn serde_json(b: &mut Bencher) {
+    use serde_json::{from_slice, Value};
+
+    b.iter(|| black_box(from_slice::<Value>(JSON).unwrap()));
+}
+
+#[bench]
 fn pom(b: &mut Bencher) {
     let json = pom::json();
     b.iter(|| black_box(json.parse(JSON).unwrap()));
+}
+
+mod chumsky_zero_copy {
+    use chumsky::input::*;
+
+    use super::JsonZero;
+    use std::str;
+
+    pub fn json<'a>() -> impl Parser<'a, [u8], Output = JsonZero<'a>> {
+        recursive(|value| {
+            let digits = filter(|b: &u8| b.is_ascii_digit())
+                .repeated()
+                .at_least(1);
+
+            let frac = just(b'.').then(digits.clone());
+
+            let exp = just(b'e').or(just(b'E'))
+                .then(just(b'+').or(just(b'-')).or_not())
+                .then(digits.clone());
+
+            let number = just(b'-')
+                .or_not()
+                .then(digits/*text::int(10)*/)
+                .then(frac.or_not())
+                .then(exp.or_not())
+                .map_slice(|bytes| {
+                    str::from_utf8(bytes).unwrap().parse()
+                        .map_err(|e| {
+                            println!("Float: \"{}\"", str::from_utf8(bytes).unwrap());
+                            e
+                        })
+                        .unwrap()
+                });
+
+            let escape = just(b'\\').then(choice((
+                just(b'\\'),
+                just(b'/'),
+                just(b'"'),
+                just(b'b'),//.to(b'\x08'),
+                just(b'f'),//.to(b'\x0C'),
+                just(b'n'),//.to(b'\n'),
+                just(b'r'),//.to(b'\r'),
+                just(b't'),//.to(b'\t'),
+            )))
+                .ignored();
+
+            let string = just(b'"')
+                .then(filter(|c| *c != b'\\' && *c != b'"').ignored().or(escape).repeated())
+                .then(just(b'"'))
+                .map_slice(|bytes| bytes);
+
+            let array = value
+                .clone()
+                // .separated_by(just(b',').padded())
+                    .then(just(b',').padded())
+                    .map(|(x, _)| x)
+                    .repeated()
+                    .collect::<Vec<_>>()
+                    .then(value.clone().or_not())
+                    .map(|(mut xs, x)| {
+                        if let Some(x) = x { xs.push(x); }
+                        xs
+                    })
+                .padded()
+                .delimited_by(just(b'['), just(b']'))
+                .map(JsonZero::Array);
+
+            let member = string.clone().then(just(b':').padded()).map(|(s, _)| s).then(value);
+            let object = member.clone()
+                //.separated_by(just(b',').padded())
+                    .then(just(b',').padded())
+                    .map(|(x, _)| x)
+                    .repeated()
+                    .collect::<Vec<_>>()
+                    .then(member.clone().or_not())
+                    .map(|(mut xs, x)| {
+                        if let Some(x) = x { xs.push(x); }
+                        xs
+                    })
+                .padded()
+                .delimited_by(just(b'{'), just(b'}'))
+                // .collect::<Vec<(_, JsonZero)>>()
+                .map(JsonZero::Object);
+
+            choice((
+                just(b"null").to(JsonZero::Null),
+                just(b"true").to(JsonZero::Bool(true)),
+                just(b"false").to(JsonZero::Bool(false)),
+                number.map(JsonZero::Num),
+                string.map(JsonZero::Str),
+                array,
+                object,
+            ))
+            .padded()
+        })
+        .then(end())
+        .map(|(json, _)| json)
+    }
 }
 
 mod chumsky {

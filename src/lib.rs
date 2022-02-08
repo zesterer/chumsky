@@ -1,4 +1,12 @@
-#![cfg_attr(feature = "nightly", feature(rustc_attrs, bench_black_box))]
+#![cfg_attr(feature = "nightly", feature(
+    rustc_attrs,
+    bench_black_box,
+    generic_associated_types,
+    maybe_uninit_uninit_array,
+    maybe_uninit_array_assume_init,
+    maybe_uninit_extra,
+    once_cell,
+))]
 #![cfg_attr(not(any(doc, feature = "std")), no_std)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
