@@ -27,7 +27,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -177,7 +177,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -288,7 +288,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -359,7 +359,7 @@ impl<
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -430,7 +430,7 @@ impl<
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -525,7 +525,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -754,7 +754,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -911,7 +911,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debu
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -956,7 +956,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Par
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -996,7 +996,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1046,7 +1046,7 @@ impl<
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1103,7 +1103,7 @@ impl<
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1152,7 +1152,7 @@ where
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1187,7 +1187,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1225,7 +1225,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E, E::Span) -> E, E: Error<I
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1281,7 +1281,7 @@ impl<
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1322,7 +1322,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1373,7 +1373,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1427,7 +1427,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
     type Error = E;
 
     #[inline]
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, E>,
@@ -1459,7 +1459,7 @@ where
 {
     type Error = E;
 
-    fn parse_inner<D: Debugger>(
+    #[inline(always)] fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
