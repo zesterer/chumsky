@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "nightly", feature(rustc_attrs))]
+#![cfg_attr(feature = "nightly", feature(rustc_attrs, bench_black_box))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
@@ -7,6 +7,7 @@ pub mod chain;
 pub mod combinator;
 pub mod debug;
 pub mod error;
+pub mod input;
 pub mod primitive;
 pub mod recovery;
 pub mod recursive;
