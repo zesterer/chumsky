@@ -72,8 +72,12 @@ mod chumsky_zero_copy {
     pub fn json<'a>() -> impl Parser<'a, [u8], Output = JsonZero<'a>> {
         recursive(|value| {
             let digits = filter(|b: &u8| b.is_ascii_digit())
-                .repeated()
-                .at_least(1);
+                .then(filter(|b: &u8| b.is_ascii_digit()).repeated());
+
+            let int = filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
+                .then(filter(|b: &u8| b.is_ascii_digit()).repeated())
+                .ignored()
+                .or(just(b'0').ignored());
 
             let frac = just(b'.').then(digits.clone());
 
@@ -83,17 +87,11 @@ mod chumsky_zero_copy {
 
             let number = just(b'-')
                 .or_not()
-                .then(digits/*text::int(10)*/)
+                .then(int)
                 .then(frac.or_not())
                 .then(exp.or_not())
-                .map_slice(|bytes| {
-                    str::from_utf8(bytes).unwrap().parse()
-                        .map_err(|e| {
-                            println!("Float: \"{}\"", str::from_utf8(bytes).unwrap());
-                            e
-                        })
-                        .unwrap()
-                });
+                .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
+                .boxed();
 
             let escape = just(b'\\').then(choice((
                 just(b'\\'),
@@ -105,13 +103,14 @@ mod chumsky_zero_copy {
                 just(b'r').to(b'\r'),
                 just(b't').to(b'\t'),
             )))
-                .ignored();
+                .ignored()
+                .boxed();
 
             let string = filter(|c| *c != b'\\' && *c != b'"').ignored().or(escape)
                 .repeated()
                 .map_slice(|bytes| bytes)
-                .delimited_by(just(b'"'), just(b'"'));
-                // .boxed();
+                .delimited_by(just(b'"'), just(b'"'))
+                .boxed();
 
             let array = value
                 .clone()
@@ -127,7 +126,8 @@ mod chumsky_zero_copy {
                     })
                 .padded()
                 .delimited_by(just(b'['), just(b']'))
-                .map(JsonZero::Array);
+                .map(JsonZero::Array)
+                .boxed();
 
             let member = string.clone().then(just(b':').padded()).map(|(s, _)| s).then(value);
             let object = member.clone()
@@ -144,7 +144,8 @@ mod chumsky_zero_copy {
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
                 // .collect::<Vec<(_, JsonZero)>>()
-                .map(JsonZero::Object);
+                .map(JsonZero::Object)
+                .boxed();
 
             choice((
                 just(b"null").to(JsonZero::Null),
