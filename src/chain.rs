@@ -6,14 +6,16 @@
 //! You usually don't need to interact with this trait, or even import it. It's only public so that you can see which
 //! types implement it. See [`Parser::chain`](super::Parser) for examples of its usage.
 
+use alloc::{string::String, vec::Vec};
+
 mod private {
     pub trait Sealed<T> {}
 
     impl<T> Sealed<T> for T {}
     impl<T, A: Sealed<T>> Sealed<T> for (A, T) {}
     impl<T> Sealed<T> for Option<T> {}
-    impl<T> Sealed<T> for Vec<T> {}
-    impl Sealed<char> for String {}
+    impl<T> Sealed<T> for alloc::vec::Vec<T> {}
+    impl Sealed<char> for alloc::string::String {}
 }
 
 /// A utility trait that facilitates chaining parser outputs together into [`Vec`]s.

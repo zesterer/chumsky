@@ -1,8 +1,12 @@
 #![cfg_attr(feature = "nightly", feature(rustc_attrs))]
+#![cfg_attr(not(any(doc, feature = "std")), no_std)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
 
+extern crate alloc;
+
+/// Traits that allow chaining parser outputs together.
 pub mod chain;
 pub mod combinator;
 pub mod debug;
@@ -27,16 +31,21 @@ use crate::{
     recovery::*,
 };
 
-use std::{
+use core::{
     cmp::Ordering,
     // TODO: Enable when stable
     //lazy::OnceCell,
     fmt,
     marker::PhantomData,
     ops::Range,
-    rc::Rc,
     str::FromStr,
+};
+use alloc::{
+    boxed::Box,
+    rc::Rc,
+    string::String,
     sync::Arc,
+    vec::Vec,
 };
 
 #[cfg(doc)]
@@ -258,7 +267,7 @@ pub trait Parser<I: Clone, O> {
         Self: Sized,
         T: fmt::Display + 'static,
     {
-        Debug(self, Rc::new(x), *std::panic::Location::caller())
+        Debug(self, Rc::new(x), *core::panic::Location::caller())
     }
 
     /// Map the output of this parser to another value.

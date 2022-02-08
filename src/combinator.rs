@@ -465,7 +465,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
                 (mut a_errors, Err(a_err)) if outputs.len() < self.1 => {
                     errors.append(&mut a_errors);
                     (true, ControlFlow::Break((
-                        std::mem::take(&mut errors),
+                        core::mem::take(&mut errors),
                         Err(a_err),
                     )))
                 },
@@ -481,8 +481,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
                         ),
                     );
                     (false, ControlFlow::Break((
-                        std::mem::take(&mut errors),
-                        Ok((std::mem::take(&mut outputs), alt)),
+                        core::mem::take(&mut errors),
+                        Ok((core::mem::take(&mut outputs), alt)),
                     )))
                 },
             }) {
@@ -801,7 +801,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 pub struct Debug<A>(
     pub(crate) A,
     pub(crate) Rc<dyn fmt::Display>,
-    pub(crate) std::panic::Location<'static>,
+    pub(crate) core::panic::Location<'static>,
 );
 
 impl<A: Clone> Clone for Debug<A> {
@@ -1387,6 +1387,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use error::Simple;
     use text::TextParser;
 

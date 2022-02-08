@@ -14,13 +14,20 @@ exclude = [
 ]
 
 [features]
-default = ["ahash"]
+default = ["ahash", "std"]
+# Use `ahash` instead of the standard hasher for maintaining sets of expected inputs
+# (Also used if `std` is disabled)
+ahash = []
+# Integrate with the standard library
+std = []
 # Enable nightly-only features like better compiler diagnostics
 nightly = []
 
 [dependencies]
-# Use `ahash` for maintaining sets of expected inputs
-ahash = { version = "^0.3", optional = true }
+# Used if `std` is disabled.
+# Provides `ahash` for the corresponding feature as it uses it by default.
+# Due to https://github.com/rust-lang/cargo/issues/1839, this can't be optional
+hashbrown = "0.11"
 
 [dev-dependencies]
 ariadne = "0.1.2"

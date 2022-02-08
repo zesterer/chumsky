@@ -6,6 +6,7 @@
 //! ways: from strings, iterators, arrays, etc.
 
 use super::*;
+use alloc::vec;
 
 trait StreamExtend<T>: Iterator<Item = T> {
     /// Extend the vector with input. The actual amount can be more or less than `n`, but must be at least 1 (0 implies
@@ -154,10 +155,10 @@ impl<'a, I: Clone, S: Span + 'a> BoxStream<'a, I, S> {
         iter: Iter,
         mut flatten: F,
     ) -> Self {
-        let mut v: Vec<std::collections::VecDeque<(P, S)>> = vec![iter.collect()];
+        let mut v: Vec<alloc::collections::VecDeque<(P, S)>> = vec![iter.collect()];
         Self::from_iter(
             eoi,
-            Box::new(std::iter::from_fn(move || loop {
+            Box::new(core::iter::from_fn(move || loop {
                 if let Some(many) = v.last_mut() {
                     match many.pop_front().map(&mut flatten) {
                         Some(Flat::Single(input)) => break Some(input),
@@ -307,7 +308,7 @@ impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
         Self::from_iter(
             N..N + 1,
             Box::new(
-                std::array::IntoIter::new(s)
+                core::array::IntoIter::new(s)
                     .enumerate()
                     .map(|(i, x)| (x, i..i + 1)),
             ),

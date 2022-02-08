@@ -7,11 +7,21 @@
 //! like [`Simple`] or [`Cheap`].
 
 use super::*;
-use std::{collections::HashSet, hash::Hash};
+use core::hash::Hash;
+use alloc::{format, string::ToString};
 
-#[cfg(feature = "ahash")]
-type RandomState = ahash::RandomState;
-#[cfg(not(feature = "ahash"))]
+#[cfg(feature = "std")]
+use std::collections::HashSet;
+#[cfg(not(feature = "std"))]
+use hashbrown::HashSet;
+
+// (ahash + std) => ahash
+// (ahash)       => ahash
+// (std)         => std
+// ()            => ahash
+#[cfg(any(feature = "ahash", not(feature = "std")))]
+type RandomState = hashbrown::hash_map::DefaultHashBuilder;
+#[cfg(all(not(feature = "ahash"), feature = "std"))]
 type RandomState = std::collections::hash_map::RandomState;
 
 /// A trait that describes parser error types.
@@ -161,7 +171,7 @@ pub enum SimpleReason<I, S> {
 /// Please note that it uses a [`HashSet`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Cheap`] instead.
 #[derive(Clone, Debug)]
-pub struct Simple<I: Hash, S = Range<usize>> {
+pub struct Simple<I: Hash + Eq, S = Range<usize>> {
     span: S,
     reason: SimpleReason<I, S>,
     expected: HashSet<Option<I>, RandomState>,
@@ -259,7 +269,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
                 span: unclosed_span,
                 delimiter,
             },
-            expected: std::iter::once(Some(expected)).collect(),
+            expected: core::iter::once(Some(expected)).collect(),
             found,
             label: None,
         }
@@ -284,7 +294,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
     }
 }
 
-impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
+impl<I: Hash + Eq, S: PartialEq> PartialEq for Simple<I, S> {
     fn eq(&self, other: &Self) -> bool {
         self.span == other.span
             && self.found == other.found
@@ -293,7 +303,7 @@ impl<I: Hash + PartialEq, S: PartialEq> PartialEq for Simple<I, S> {
     }
 }
 
-impl<I: fmt::Display + Hash, S: Span> fmt::Display for Simple<I, S> {
+impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Take `self.reason` into account
 
@@ -331,7 +341,8 @@ impl<I: fmt::Display + Hash, S: Span> fmt::Display for Simple<I, S> {
     }
 }
 
-impl<I: fmt::Debug + fmt::Display + Hash, S: Span + fmt::Display + fmt::Debug> std::error::Error
+#[cfg(feature = "std")]
+impl<I: fmt::Debug + fmt::Display + Hash + Eq, S: Span + fmt::Display + fmt::Debug> std::error::Error
     for Simple<I, S>
 {
 }
