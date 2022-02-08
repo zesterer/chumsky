@@ -15,6 +15,10 @@ use std::collections::HashSet;
 #[cfg(not(feature = "std"))]
 use hashbrown::HashSet;
 
+// (ahash + std) => ahash
+// (ahash)       => ahash
+// (std)         => std
+// ()            => ahash
 #[cfg(any(feature = "ahash", not(feature = "std")))]
 type RandomState = hashbrown::hash_map::DefaultHashBuilder;
 #[cfg(all(not(feature = "ahash"), feature = "std"))]

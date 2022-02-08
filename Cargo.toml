@@ -16,6 +16,7 @@ exclude = [
 [features]
 default = ["ahash", "std"]
 # Use `ahash` instead of the standard hasher for maintaining sets of expected inputs
+# (Also used if `std` is disabled)
 ahash = []
 # Integrate with the standard library
 std = []
