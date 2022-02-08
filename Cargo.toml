@@ -14,10 +14,7 @@ exclude = [
 ]
 
 [features]
-default = ["ahash", "std", "spill-stack"]
-# Use `ahash` instead of the standard hasher for maintaining sets of expected inputs
-# (Also used if `std` is disabled)
-ahash = []
+default = ["std", "spill-stack"]
 # Integrate with the standard library
 std = []
 # Enable nightly-only features like better compiler diagnostics
@@ -31,6 +28,8 @@ spill-stack = ["stacker", "std"]
 # Due to https://github.com/rust-lang/cargo/issues/1839, this can't be optional
 hashbrown = "0.12.3"
 stacker = { version = "0.1", optional = true }
+# Enables regex combinators
+regex = { version = "1.5", optional = true }
 
 [dev-dependencies]
 ariadne = "0.1.2"
