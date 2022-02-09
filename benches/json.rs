@@ -71,8 +71,7 @@ mod chumsky_zero_copy {
 
     pub fn json<'a>() -> impl Parser<'a, [u8], Output = JsonZero<'a>> {
         recursive(|value| {
-            let digits = filter(|b: &u8| b.is_ascii_digit())
-                .then(filter(|b: &u8| b.is_ascii_digit()).repeated());
+            let digits = filter(|b: &u8| b.is_ascii_digit()).repeated();
 
             let int = filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
                 .then(filter(|b: &u8| b.is_ascii_digit()).repeated())
