@@ -47,7 +47,7 @@ pub trait SliceInput: Input {
 }
 
 // Implemented by inputs that reference a string slice and use byte indices as their offset.
-pub trait StrInput: Input<Offset = usize> + SliceInput<Slice = str> {}
+pub trait StrInput<C: Char>: Input<Offset = usize, Token = C> + SliceInput<Slice = C::Slice> {}
 
 impl Input for str {
     type Offset = usize;
@@ -69,7 +69,7 @@ impl Input for str {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span { range }
 }
 
-impl StrInput for str {}
+impl StrInput<char> for str {}
 
 impl SliceInput for str {
     type Slice = str;
@@ -99,7 +99,7 @@ impl<'a, Ctx: Clone> SliceInput for ContextSrc<'a, Ctx> {
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { <str as SliceInput>::slice_from(&*self.1, from) }
 }
 
-impl<'a, Ctx: Clone> StrInput for ContextSrc<'a, Ctx> {}
+impl<'a, Ctx: Clone> StrInput<char> for ContextSrc<'a, Ctx> {}
 
 impl<T: Clone> Input for [T] {
     type Offset = usize;
@@ -118,6 +118,8 @@ impl<T: Clone> Input for [T] {
 
     fn span(&self, range: Range<Self::Offset>) -> Self::Span { range }
 }
+
+impl StrInput<u8> for [u8] {}
 
 impl<T: Clone> SliceInput for [T] {
     type Slice = [T];
@@ -180,9 +182,10 @@ impl<'a, 'parse, I: Input + ?Sized, S> InputRef<'a, 'parse, I, S> {
 
     pub fn span_since(&self, before: I::Offset) -> I::Span { self.input.span(before..self.offset) }
 
-    pub fn skip_bytes(&mut self, skip: usize)
+    pub fn skip_bytes<C>(&mut self, skip: usize)
     where
-        I: StrInput
+        C: Char,
+        I: StrInput<C>,
     { self.offset += skip; }
 }
 
@@ -480,35 +483,35 @@ where
 }
 
 #[cfg(feature = "regex")]
-pub struct Regex<I: ?Sized, E = (), S = ()> {
-    regex: regex_crate::Regex,
+pub struct Regex<C: Char, I: ?Sized, E = (), S = ()> {
+    regex: C::Regex,
     phantom: PhantomData<(E, S, I)>,
 }
 
 #[cfg(feature = "regex")]
-pub fn regex<I: ?Sized, E, S>(s: &str) -> Regex<I, E, S> {
+pub fn regex<C: Char, I: ?Sized, E, S>(pattern: &str) -> Regex<C, I, E, S> {
     Regex {
-        regex: regex_crate::Regex::new(s).expect("Failed to compile regex"),
+        regex: C::new_regex(pattern),
         phantom: PhantomData,
     }
 }
 
 #[cfg(feature = "regex")]
-impl<'a, I, E, S> Parser<'a, I, E, S> for Regex<I, E, S>
+impl<'a, C, I, E, S> Parser<'a, I, E, S> for Regex<C, I, E, S>
 where
-    I: Input + StrInput + ?Sized,
+    C: Char,
+    C::Slice: 'a,
+    I: Input + StrInput<C> + ?Sized,
     E: Error<I::Token>,
     S: 'a,
 {
-    type Output = &'a str;
+    type Output = &'a C::Slice;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
-        self.regex
-            .find(inp.slice_trailing())
-            .filter(|m| m.start() == 0)
-            .map(|m| {
+        C::match_regex(&self.regex, inp.slice_trailing())
+            .map(|len| {
                 let before = inp.save();
-                inp.skip_bytes(m.end());
+                inp.skip_bytes(len);
                 let after = inp.save();
                 M::bind(|| inp.slice(before..after))
             })
@@ -829,15 +832,63 @@ macro_rules! impl_for_tuple {
 
 impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-pub trait Char {
+pub trait Char: Sized {
+    type Slice: ?Sized + StrInput<Self> + 'static;
+
+    #[cfg(feature = "regex")]
+    type Regex;
+
+    #[cfg(feature = "regex")]
+    #[doc(hidden)]
+    fn new_regex(pattern: &str) -> Self::Regex;
+    #[cfg(feature = "regex")]
+    #[doc(hidden)]
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize>;
+
     fn is_whitespace(&self) -> bool;
 }
 
 impl Char for char {
+    type Slice = str;
+
+    #[cfg(feature = "regex")]
+    type Regex = regex_crate::Regex;
+
+    #[cfg(feature = "regex")]
+    fn new_regex(pattern: &str) -> Self::Regex {
+        regex_crate::Regex::new(pattern).expect("Failed to compile regex")
+    }
+    #[cfg(feature = "regex")]
+    #[inline]
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize> {
+        regex
+            .find(trailing)
+            .filter(|m| m.start() == 0)
+            .map(|m| m.end())
+    }
+
     fn is_whitespace(&self) -> bool { (*self).is_whitespace() }
 }
 
 impl Char for u8 {
+    type Slice = [u8];
+
+    #[cfg(feature = "regex")]
+    type Regex = regex_crate::bytes::Regex;
+
+    #[cfg(feature = "regex")]
+    fn new_regex(pattern: &str) -> Self::Regex {
+        regex_crate::bytes::Regex::new(pattern).expect("Failed to compile regex")
+    }
+    #[cfg(feature = "regex")]
+    #[inline]
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize> {
+        regex
+            .find(trailing)
+            .filter(|m| m.start() == 0)
+            .map(|m| m.end())
+    }
+
     fn is_whitespace(&self) -> bool { self.is_ascii_whitespace() }
 }
 
@@ -1161,13 +1212,31 @@ fn zero_copy() {
 #[test]
 fn regex_parser() {
 
-    fn parser<'a>() -> impl Parser<'a, str, Output = &'a str> {
+    fn parser<'a, C: Char>() -> impl Parser<'a, C::Slice, Output = Vec<&'a C::Slice>> {
         regex("[a-zA-Z_][a-zA-Z0-9_]*")
+            .padded()
+            .repeated()
+            .collect()
     }
 
     assert_eq!(
-        parser().parse("hello"),
-        Ok("hello"),
+        parser::<char>().parse("hello world this works"),
+        Ok(vec![
+            "hello",
+            "world",
+            "this",
+            "works",
+        ]),
+    );
+
+    assert_eq!(
+        parser::<u8>().parse(b"hello world this works" as &[_]),
+        Ok(vec![
+            b"hello" as &[_],
+            b"world" as &[_],
+            b"this" as &[_],
+            b"works" as &[_],
+        ]),
     );
 }
 
