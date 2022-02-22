@@ -22,9 +22,9 @@ impl<T> Span for Range<T> {
     type Offset = T;
 }
 
-impl<Ctx, T> Span for (Ctx, Range<T>) {
+impl<Ctx, S: Span> Span for (Ctx, S) {
     type Context = Ctx;
-    type Offset = T;
+    type Offset = S::Offset;
 }
 
 pub trait Input {
@@ -78,29 +78,6 @@ impl SliceInput for str {
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { &self[from] }
 }
 
-pub struct ContextSrc<'a, Ctx>(pub Ctx, pub &'a str);
-
-impl<'a, Ctx: Clone> Input for ContextSrc<'a, Ctx> {
-    type Offset = usize;
-    type Token = char;
-    type Span = (Ctx, Range<usize>);
-
-    fn start(&self) -> Self::Offset { 0 }
-
-    fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) { self.1.next(offset) }
-
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span { (self.0.clone(), range) }
-}
-
-impl<'a, Ctx: Clone> SliceInput for ContextSrc<'a, Ctx> {
-    type Slice = str;
-
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { <str as SliceInput>::slice(&*self.1, range) }
-    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { <str as SliceInput>::slice_from(&*self.1, from) }
-}
-
-impl<'a, Ctx: Clone> StrInput<char> for ContextSrc<'a, Ctx> {}
-
 impl<T: Clone> Input for [T] {
     type Offset = usize;
     type Token = T;
@@ -127,6 +104,29 @@ impl<T: Clone> SliceInput for [T] {
     fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { &self[range] }
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { &self[from] }
 }
+
+pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
+
+impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
+    type Offset = I::Offset;
+    type Token = I::Token;
+    type Span = (Ctx, I::Span);
+
+    fn start(&self) -> Self::Offset { self.1.start() }
+
+    fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) { self.1.next(offset) }
+
+    fn span(&self, range: Range<Self::Offset>) -> Self::Span { (self.0.clone(), self.1.span(range)) }
+}
+
+impl<'a, Ctx: Clone, I: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx, I> {
+    type Slice = I::Slice;
+
+    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice { <I as SliceInput>::slice(&*self.1, range) }
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice { <I as SliceInput>::slice_from(&*self.1, from) }
+}
+
+impl<'a, Ctx: Clone, C: Char, I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>> StrInput<C> for WithContext<'a, Ctx, I> {}
 
 pub struct InputRef<'a, 'parse, I: Input + ?Sized, S> {
     input: &'a I,
@@ -206,7 +206,7 @@ pub trait Mode {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V>;
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E>;
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E>;
 }
 
 pub struct Emit;
@@ -217,7 +217,7 @@ impl Mode for Emit {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> { f(x, y) }
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> { x }
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
         parser.go_emit(inp)
     }
 }
@@ -230,7 +230,7 @@ impl Mode for Check {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> {}
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
         parser.go_check(inp)
     }
 }
@@ -399,27 +399,27 @@ where
 }
 
 pub trait Seq<T> {
-    type Iter<'a>: Iterator<Item = T>;
+    type Iter<'a>: Iterator<Item = T> where Self: 'a;
     fn iter(&self) -> Self::Iter<'_>;
 }
 
 impl<T: Clone> Seq<T> for T {
-    type Iter<'a> = core::iter::Once<T>;
+    type Iter<'a> where Self: 'a = core::iter::Once<T>;
     fn iter(&self) -> Self::Iter<'_> { core::iter::once(self.clone()) }
 }
 
 impl<T: Clone, const N: usize> Seq<T> for [T; N] {
-    type Iter<'a> = core::array::IntoIter<T, N>;
+    type Iter<'a> where Self: 'a = core::array::IntoIter<T, N>;
     fn iter(&self) -> Self::Iter<'_> { core::array::IntoIter::new(self.clone()) }
 }
 
 impl<'b, T: Clone, const N: usize> Seq<T> for &'b [T; N] {
-    type Iter<'a> = core::array::IntoIter<T, N>;
+    type Iter<'a> where Self: 'a = core::array::IntoIter<T, N>;
     fn iter(&self) -> Self::Iter<'_> { core::array::IntoIter::new((*self).clone()) }
 }
 
 impl Seq<char> for str {
-    type Iter<'a> = core::str::Chars<'a>;
+    type Iter<'a> where Self: 'a = core::str::Chars<'a>;
     fn iter(&self) -> Self::Iter<'_> { self.chars() }
 }
 
@@ -719,7 +719,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
-        Ok(M::combine(a, b, |a, b| (a, b)))
+        Ok(M::combine(a, b, |a: A::Output, b: B::Output| (a, b)))
     }
 
     go_extra!();
@@ -987,7 +987,7 @@ where
             let before = inp.save();
             match self.parser.go::<M>(inp) {
                 Ok(out) => {
-                    output = M::map(output, |mut output| {
+                    output = M::map(output, |mut output: C| {
                         M::map(out, |out| output.push(out));
                         output
                     });
@@ -1025,10 +1025,10 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
-            Ok(o) => M::map(o, Some),
+            Ok(o) => M::map::<A::Output, _, _>(o, Some),
             Err(_) => {
                 inp.rewind(before);
-                M::bind(|| None)
+                M::bind::<Option<A::Output>, _>(|| None)
             },
         })
     }
@@ -1063,7 +1063,7 @@ where
                     i += 1;
                     if i == N {
                         // SAFETY: All entries with an index < i are filled
-                        break Ok(M::array(unsafe { MaybeUninit::array_assume_init(output) }));
+                        break Ok(M::array::<A::Output, N>(unsafe { MaybeUninit::array_assume_init(output) }));
                     }
                 },
                 Err(e) => {
@@ -1175,9 +1175,11 @@ fn zero_copy() {
         String(&'a str),
     }
 
-    type Span = (i32, Range<usize>);
+    type FileId = u32;
 
-    fn parser<'a>() -> impl Parser<'a, ContextSrc<'a, i32>, Output = [(Span, Token<'a>); 6]> {
+    type Span = (FileId, Range<usize>);
+
+    fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, Output = [(Span, Token<'a>); 6]> {
         let ident = filter(|c: &char| c.is_alphanumeric())
             .repeated()
             .at_least(1)
@@ -1196,7 +1198,7 @@ fn zero_copy() {
     }
 
     assert_eq!(
-        parser().parse(&ContextSrc(42, r#"hello "world" these are "test" tokens"#)),
+        parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#)),
         Ok([
             ((42, 0..5), Token::Ident("hello")),
             ((42, 6..13), Token::String("\"world\"")),
