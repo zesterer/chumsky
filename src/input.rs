@@ -421,13 +421,12 @@ macro_rules! go_extra {
     };
 }
 
-impl<'a, 'b, T, I, E, S> Parser<'a, I, E, S> for &'b T
+impl<'a, T, I, E, S> Parser<'a, I, E, S> for &'a T
 where
-    'b: 'a,
     T: Parser<'a, I, E, S>,
     I: Input + ?Sized,
     E: Error<I::Token>,
-    S: 'b,
+    S: 'a,
 {
     type Output = T::Output;
 
