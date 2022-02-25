@@ -292,6 +292,13 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         MapWithSpan { parser: self, mapper: f }
     }
 
+    fn try_map<O, F: Fn(Self::Output, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
+    where
+        Self: Sized,
+    {
+        TryMap { parser: self, mapper: f }
+    }
+
     fn ignored(self) -> Ignored<Self, E, S>
     where
         Self: Sized,
@@ -299,7 +306,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         Ignored { parser: self, to: (), phantom: PhantomData }
     }
 
-    fn to<O: Clone>(self, to: O) -> To<Self, O>
+    fn to<O: Clone>(self, to: O) -> To<Self, O, E, S>
     where
         Self: Sized,
     {
@@ -311,6 +318,20 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         Self: Sized,
     {
         Then { parser_a: self, parser_b: other, phantom: PhantomData }
+    }
+
+    fn ignore_then<B: Parser<'a, I, E, S>>(self, other: B) -> IgnoreThen<Self, B, E, S>
+    where
+        Self: Sized,
+    {
+        IgnoreThen { parser_a: self, parser_b: other, phantom: PhantomData }
+    }
+
+    fn then_ignore<B: Parser<'a, I, E, S>>(self, other: B) -> ThenIgnore<Self, B, E, S>
+    where
+        Self: Sized,
+    {
+        ThenIgnore { parser_a: self, parser_b: other, phantom: PhantomData }
     }
 
     fn delimited_by<B: Parser<'a, I, E, S>, C: Parser<'a, I, E, S>>(self, start: B, end: C) -> DelimitedBy<Self, B, C>
@@ -348,6 +369,33 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         RepeatedExactly { parser: self }
     }
 
+    fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
+    where
+        Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
+        A: IntoIterator,
+        A::IntoIter: DoubleEndedIterator,
+        F: Fn(A::Item, B) -> B,
+    {
+        Foldr {
+            parser: self,
+            folder: f,
+            phantom: PhantomData,
+        }
+    }
+
+    fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
+    where
+        Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
+        B: IntoIterator,
+        F: Fn(A, B::Item) -> A,
+    {
+        Foldl {
+            parser: self,
+            folder: f,
+            phantom: PhantomData,
+        }
+    }
+
     fn padded(self) -> Padded<Self>
     where
         Self: Sized,
@@ -371,6 +419,26 @@ macro_rules! go_extra {
             Parser::<I, E, S>::go::<Check>(self, inp)
         }
     };
+}
+
+impl<'a, 'b, T, I, E, S> Parser<'a, I, E, S> for &'b T
+where
+    'b: 'a,
+    T: Parser<'a, I, E, S>,
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'b,
+{
+    type Output = T::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        (*self).go::<M>(inp)
+    }
+
+    go_extra!();
 }
 
 #[derive(Copy, Clone)]
@@ -419,6 +487,16 @@ impl<'b, T: Clone, const N: usize> Seq<T> for &'b [T; N] {
 }
 
 impl Seq<char> for str {
+    type Iter<'a> where Self: 'a = core::str::Chars<'a>;
+    fn iter(&self) -> Self::Iter<'_> { self.chars() }
+}
+
+impl<'b> Seq<char> for &'b str {
+    type Iter<'a> where Self: 'a = core::str::Chars<'a>;
+    fn iter(&self) -> Self::Iter<'_> { self.chars() }
+}
+
+impl Seq<char> for String {
     type Iter<'a> where Self: 'a = core::str::Chars<'a>;
     fn iter(&self) -> Self::Iter<'_> { self.chars() }
 }
@@ -476,6 +554,56 @@ where
                 },
                 None => break Ok(M::bind(|| self.seq.clone())),
             }
+        }
+    }
+
+    go_extra!();
+}
+
+pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
+    seq: T,
+    phantom: PhantomData<(E, S, I)>,
+}
+
+impl<T: Copy, I: ?Sized, E, S> Copy for NoneOf<T, I, E, S> {}
+impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+pub fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    I::Token: PartialEq,
+    T: Seq<I::Token> + Clone,
+{
+    NoneOf {
+        seq,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, E, S, T> Parser<'a, I, E, S> for NoneOf<T, I, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    I::Token: PartialEq,
+    T: Seq<I::Token> + Clone,
+{
+    type Output = I::Token;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+        match inp.next() {
+            (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => {
+                Ok(M::bind(|| tok))
+            }
+            (at, found) => Err(E::create()),
         }
     }
 
@@ -563,13 +691,13 @@ where
     go_extra!();
 }
 
-pub struct Filter<F, I: ?Sized> {
+pub struct Filter<F, I: ?Sized, E> {
     filter: F,
-    phantom: PhantomData<I>,
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<F: Copy, I: ?Sized> Copy for Filter<F, I> {}
-impl<F: Clone, I: ?Sized> Clone for Filter<F, I> {
+impl<F: Copy, I: ?Sized, E> Copy for Filter<F, I, E> {}
+impl<F: Clone, I: ?Sized, E> Clone for Filter<F, I, E> {
     fn clone(&self) -> Self {
         Self {
             filter: self.filter.clone(),
@@ -578,11 +706,11 @@ impl<F: Clone, I: ?Sized> Clone for Filter<F, I> {
     }
 }
 
-pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized>(filter: F) -> Filter<F, I> {
+pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized, E: Error<I::Token>>(filter: F) -> Filter<F, I, E> {
     Filter { filter, phantom: PhantomData }
 }
 
-impl<'a, I, E, S, F> Parser<'a, I, E, S> for Filter<F, I>
+impl<'a, I, E, S, F> Parser<'a, I, E, S> for Filter<F, I, E>
 where
     I: Input + ?Sized,
     E: Error<I::Token>,
@@ -647,6 +775,36 @@ where
             let span = inp.span_since(before);
             (self.mapper)(out, span)
         }))
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct TryMap<A, F> {
+    parser: A,
+    mapper: F,
+}
+
+impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMap<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(A::Output, I::Span) -> Result<O, E>,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).and_then(|out| {
+            let span = inp.span_since(before);
+            match (self.mapper)(out, span) {
+                Ok(out) => Ok(M::bind(|| out)),
+                Err(e) => Err(e),
+            }
+        })
     }
 
     go_extra!();
@@ -720,6 +878,78 @@ where
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::combine(a, b, |a: A::Output, b: B::Output| (a, b)))
+    }
+
+    go_extra!();
+}
+
+pub struct IgnoreThen<A, B, E = (), S = ()> {
+    parser_a: A,
+    parser_b: B,
+    phantom: PhantomData<(E, S)>,
+}
+
+impl<A: Copy, B: Copy, E, S> Copy for IgnoreThen<A, B, E, S> {}
+impl<A: Clone, B: Clone, E, S> Clone for IgnoreThen<A, B, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for IgnoreThen<A, B, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+{
+    type Output = B::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+        let _a = self.parser_a.go::<Check>(inp)?;
+        let b = self.parser_b.go::<M>(inp)?;
+        Ok(M::map(b, |b: B::Output| b))
+    }
+
+    go_extra!();
+}
+
+pub struct ThenIgnore<A, B, E = (), S = ()> {
+    parser_a: A,
+    parser_b: B,
+    phantom: PhantomData<(E, S)>,
+}
+
+impl<A: Copy, B: Copy, E, S> Copy for ThenIgnore<A, B, E, S> {}
+impl<A: Clone, B: Clone, E, S> Clone for ThenIgnore<A, B, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for ThenIgnore<A, B, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+        let a = self.parser_a.go::<M>(inp)?;
+        let _b = self.parser_b.go::<Check>(inp)?;
+        Ok(M::map(a, |a: A::Output| a))
     }
 
     go_extra!();
@@ -960,7 +1190,8 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
     }
 
     pub fn collect<D: Container<A::Output>>(self) -> Repeated<A, I, D, E, S>
-        where A: Parser<'a, I, E, S>
+    where
+        A: Parser<'a, I, E, S>
     {
         Repeated {
             parser: self.parser,
@@ -970,7 +1201,7 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
     }
 }
 
-impl<'a, I, E, S, A, C> Parser<'a, I, E, S> for Repeated<A, I, C>
+impl<'a, I, E, S, A, C> Parser<'a, I, E, S> for Repeated<A, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I::Token>,
@@ -1076,6 +1307,83 @@ where
                 },
             }
         }
+    }
+
+    go_extra!();
+}
+
+pub struct Foldr<P, F, A, B, E = (), S = ()> {
+    parser: P,
+    folder: F,
+    phantom: PhantomData<(A, B, E, S)>,
+}
+
+impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldr<P, F, A, B, E, S> {}
+impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldr<P, F, A, B, E, S> {
+    fn clone(&self) -> Self {
+        Foldr {
+            parser: self.parser.clone(),
+            folder: self.folder.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldr<P, F, A, B, E, S>
+where
+    I: Input + ?Sized,
+    P: Parser<'a, I, E, S, Output = (A, B)>,
+    E: Error<I::Token>,
+    S: 'a,
+    A: IntoIterator,
+    A::IntoIter: DoubleEndedIterator,
+    F: Fn(A::Item, B) -> B,
+{
+    type Output = B;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> where Self: Sized {
+        self.parser.go::<M>(inp)
+            .map(|out|
+                M::map(out, |(init, end)| init.into_iter().rev().fold(end, |b, a| (self.folder)(a, b)))
+            )
+    }
+
+    go_extra!();
+}
+
+pub struct Foldl<P, F, A, B, E = (), S = ()> {
+    parser: P,
+    folder: F,
+    phantom: PhantomData<(A, B, E, S)>,
+}
+
+impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldl<P, F, A, B, E, S> {}
+impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldl<P, F, A, B, E, S> {
+    fn clone(&self) -> Self {
+        Foldl {
+            parser: self.parser.clone(),
+            folder: self.folder.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldl<P, F, A, B, E, S>
+where
+    I: Input + ?Sized,
+    P: Parser<'a, I, E, S, Output = (A, B)>,
+    E: Error<I::Token>,
+    S: 'a,
+    B: IntoIterator,
+    F: Fn(A, B::Item) -> A,
+{
+    type Output = A;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> where Self: Sized {
+        self.parser.go::<M>(inp)
+            .map(|out|
+                M::map(out, |(head, tail)| tail.into_iter().fold(head, &self.folder))
+            )
     }
 
     go_extra!();
