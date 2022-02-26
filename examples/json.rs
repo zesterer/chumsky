@@ -23,7 +23,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
 
         let exp = just('e')
             .or(just('E'))
-            .ignore_then(just('+').or(just('-')).or_not())
+            .chain(just('+').or(just('-')).or_not())
             .chain(text::digits(10));
 
         let number = just('-')
