@@ -4,7 +4,7 @@
 //! "What's so unpleasant about being drunk?"
 //! "You ask a glass of water.”*
 //!
-//! The [`recursive`] function covers most cases, but sometimes it's necessary to manually control the declaration and
+//! The [`recursive()`] function covers most cases, but sometimes it's necessary to manually control the declaration and
 //! definition of parsers more corefully, particularly for mutually-recursive parsers. In such cases, the functions on
 //! [`Recursive`] allow for this.
 
