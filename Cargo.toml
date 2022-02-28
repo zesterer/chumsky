@@ -27,4 +27,5 @@ regex = { version = "1.5", optional = true }
 [dev-dependencies]
 ariadne = "0.1.2"
 pom = "3.0"
+nom = "7.1"
 serde_json = { version = "1.0", features = ["preserve_order"] }
