@@ -119,14 +119,25 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        debugger.invoke(
-            self.cell()
-                .get()
-                .expect("Recursive parser used before being defined")
-                .as_ref(),
-            stream,
-        )
+        #[cfg(feature = "stacker")]
+        #[inline(always)]
+        fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
+            stacker::maybe_grow(1024 * 1024, 1024 * 1024, f)
+        }
+        #[cfg(not(feature = "stacker"))]
+        #[inline(always)]
+        fn recurse<R, F: FnOnce() -> R>(f: F) -> R { f() }
+
+        recurse(|| {
+            #[allow(deprecated)]
+            debugger.invoke(
+                self.cell()
+                    .get()
+                    .expect("Recursive parser used before being defined")
+                    .as_ref(),
+                stream,
+            )
+        })
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
