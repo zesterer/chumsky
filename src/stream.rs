@@ -215,14 +215,15 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
         }
     }
 
-    pub(crate) fn span_since(&mut self, start: usize) -> S {
+    pub(crate) fn span_since(&mut self, start_offset: usize) -> S {
+        debug_assert!(start_offset <= self.offset, "{} > {}", self.offset, start_offset);
         let start = self
-            .pull_until(start)
+            .pull_until(start_offset)
             .as_ref()
             .map(|(_, s)| s.start())
             .unwrap_or_else(|| self.eoi.start());
         let end = self
-            .pull_until(self.offset.saturating_sub(1))
+            .pull_until(self.offset.saturating_sub(1).max(start_offset))
             .as_ref()
             .map(|(_, s)| s.end())
             .unwrap_or_else(|| self.eoi.end());
@@ -283,7 +284,7 @@ impl<'a, T: Clone> From<&'a [T]>
     fn from(s: &'a [T]) -> Self {
         let len = s.len();
         Self::from_iter(
-            len..len + 1,
+            len..len,
             Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))),
         )
     }
@@ -295,7 +296,7 @@ impl<'a, T: Clone + 'a> From<Vec<T>>
     fn from(s: Vec<T>) -> Self {
         let len = s.len();
         Self::from_iter(
-            len..len + 1,
+            len..len,
             Box::new(s.into_iter().enumerate().map(|(i, x)| (x, i..i + 1))),
         )
     }
@@ -306,7 +307,7 @@ impl<'a, T: Clone + 'a, const N: usize> From<[T; N]>
 {
     fn from(s: [T; N]) -> Self {
         Self::from_iter(
-            N..N + 1,
+            N..N,
             Box::new(
                 core::array::IntoIter::new(s)
                     .enumerate()
@@ -321,7 +322,7 @@ impl<'a, T: Clone, const N: usize> From<&'a [T; N]>
 {
     fn from(s: &'a [T; N]) -> Self {
         Self::from_iter(
-            N..N + 1,
+            N..N,
             Box::new(s.iter().cloned().enumerate().map(|(i, x)| (x, i..i + 1))),
         )
     }
