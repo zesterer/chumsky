@@ -44,7 +44,20 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
                 .or(just('f').to('\x0C'))
                 .or(just('n').to('\n'))
                 .or(just('r').to('\r'))
-                .or(just('t').to('\t')),
+                .or(just('t').to('\t'))
+                .or(just('u').ignore_then(
+                    filter(|c: &char| c.is_digit(16))
+                        .repeated()
+                        .exactly(4)
+                        .collect::<String>()
+                        .validate(|digits, span, emit| {
+                            char::from_u32(u32::from_str_radix(&digits, 16).unwrap())
+                                .unwrap_or_else(|| {
+                                    emit(Simple::custom(span, "invalid character"));
+                                    '\u{FFFD}' // unicode replacement character
+                                })
+                        }),
+                )),
         );
 
         let string = just('"')
