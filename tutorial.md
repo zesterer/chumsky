@@ -604,7 +604,7 @@ x
 
 We're almost at a complete implementation of Foo. There's just one thing left: *functions*.
 
-Surprisingly, parsing functions is the easy part. All we need to modify if the definition of `decl` to add `r#fn`. It
+Surprisingly, parsing functions is the easy part. All we need to modify is the definition of `decl` to add `r#fn`. It
 looks very much like the existing definition of `r#let`:
 
 ```rust
@@ -740,7 +740,7 @@ As before, we'll need to change the `eval` call in `main` to:
 eval(&ast, &mut Vec::new(), &mut Vec::new())
 ```
 
-Give the interpreter a test: see what you can do with it! Here's an example program to get you started:
+Give the interpreter a test - see what you can do with it! Here's an example program to get you started:
 
 ```
 let five = 5;
