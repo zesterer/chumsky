@@ -319,7 +319,7 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
                 f,
                 " but {} was expected",
                 match self.expected.iter().next().unwrap() {
-                    Some(x) => format!("{}", x),
+                    Some(x) => format!("'{}'", x),
                     None => format!("end of input"),
                 },
             )?,
@@ -329,7 +329,7 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
                 self.expected
                     .iter()
                     .map(|expected| match expected {
-                        Some(x) => format!("{}", x),
+                        Some(x) => format!("'{}'", x),
                         None => format!("end of input"),
                     })
                     .collect::<Vec<_>>()
