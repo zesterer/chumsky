@@ -740,7 +740,7 @@ As before, we'll need to change the `eval` call in `main` to:
 eval(&ast, &mut Vec::new(), &mut Vec::new())
 ```
 
-Give the interpreter a test and see what you can do with it! Here's an example program to get you started:
+Give the interpreter a test - see what you can do with it! Here's an example program to get you started:
 
 ```
 let five = 5;
