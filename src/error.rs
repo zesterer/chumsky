@@ -7,13 +7,13 @@
 //! like [`Simple`] or [`Cheap`].
 
 use super::*;
-use core::hash::Hash;
 use alloc::{format, string::ToString};
+use core::hash::Hash;
 
-#[cfg(feature = "std")]
-use std::collections::HashSet;
 #[cfg(not(feature = "std"))]
 use hashbrown::HashSet;
+#[cfg(feature = "std")]
+use std::collections::HashSet;
 
 // (ahash + std) => ahash
 // (ahash)       => ahash
@@ -342,8 +342,8 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
 }
 
 #[cfg(feature = "std")]
-impl<I: fmt::Debug + fmt::Display + Hash + Eq, S: Span + fmt::Display + fmt::Debug> std::error::Error
-    for Simple<I, S>
+impl<I: fmt::Debug + fmt::Display + Hash + Eq, S: Span + fmt::Display + fmt::Debug>
+    std::error::Error for Simple<I, S>
 {
 }
 

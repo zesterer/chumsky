@@ -245,7 +245,6 @@ impl<T: Clone> Container<T> for hashbrown::HashSet<T> {
     }
 }
 
-
 impl<T: Clone> Container<T> for alloc::collections::BTreeSet<T> {
     type Iter = alloc::collections::btree_set::IntoIter<T>;
     fn get_iter(&self) -> Self::Iter {

@@ -53,7 +53,7 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
                         .validate(|digits, span, emit| {
                             char::from_u32(u32::from_str_radix(&digits, 16).unwrap())
                                 .unwrap_or_else(|| {
-                                    emit(Simple::custom(span, "invalid character"));
+                                    emit(Simple::custom(span, "invalid unicode character"));
                                     '\u{FFFD}' // unicode replacement character
                                 })
                         }),
@@ -111,42 +111,49 @@ fn main() {
     let (json, errs) = parser().parse_recovery(src.trim());
     println!("{:#?}", json);
     errs.into_iter().for_each(|e| {
-        let msg = format!(
-            "{}{}, expected {}",
-            if e.found().is_some() {
-                "Unexpected token"
-            } else {
-                "Unexpected end of input"
-            },
-            if let Some(label) = e.label() {
-                format!(" while parsing {}", label)
-            } else {
-                String::new()
-            },
-            if e.expected().len() == 0 {
-                "something else".to_string()
-            } else {
-                e.expected()
-                    .map(|expected| match expected {
-                        Some(expected) => expected.to_string(),
-                        None => "end of input".to_string(),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            },
-        );
+        let msg = if let chumsky::error::SimpleReason::Custom(msg) = e.reason() {
+            msg.clone()
+        } else {
+            format!(
+                "{}{}, expected {}",
+                if e.found().is_some() {
+                    "Unexpected token"
+                } else {
+                    "Unexpected end of input"
+                },
+                if let Some(label) = e.label() {
+                    format!(" while parsing {}", label)
+                } else {
+                    String::new()
+                },
+                if e.expected().len() == 0 {
+                    "something else".to_string()
+                } else {
+                    e.expected()
+                        .map(|expected| match expected {
+                            Some(expected) => expected.to_string(),
+                            None => "end of input".to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                },
+            )
+        };
 
         let report = Report::build(ReportKind::Error, (), e.span().start)
             .with_code(3)
             .with_message(msg)
             .with_label(
                 Label::new(e.span())
-                    .with_message(format!(
-                        "Unexpected {}",
-                        e.found()
-                            .map(|c| format!("token {}", c.fg(Color::Red)))
-                            .unwrap_or_else(|| "end of input".to_string())
-                    ))
+                    .with_message(match e.reason() {
+                        chumsky::error::SimpleReason::Custom(msg) => msg.clone(),
+                        _ => format!(
+                            "Unexpected {}",
+                            e.found()
+                                .map(|c| format!("token {}", c.fg(Color::Red)))
+                                .unwrap_or_else(|| "end of input".to_string())
+                        ),
+                    })
                     .with_color(Color::Red),
             );
 
@@ -160,11 +167,7 @@ fn main() {
                     .with_color(Color::Yellow),
             ),
             chumsky::error::SimpleReason::Unexpected => report,
-            chumsky::error::SimpleReason::Custom(msg) => report.with_label(
-                Label::new(e.span())
-                    .with_message(format!("{}", msg.fg(Color::Yellow)))
-                    .with_color(Color::Yellow),
-            ),
+            chumsky::error::SimpleReason::Custom(_) => report,
         };
 
         report.finish().print(Source::from(&src)).unwrap();

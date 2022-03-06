@@ -216,7 +216,12 @@ impl<'a, I: Clone, S: Span> Stream<'a, I, S> {
     }
 
     pub(crate) fn span_since(&mut self, start_offset: usize) -> S {
-        debug_assert!(start_offset <= self.offset, "{} > {}", self.offset, start_offset);
+        debug_assert!(
+            start_offset <= self.offset,
+            "{} > {}",
+            self.offset,
+            start_offset
+        );
         let start = self
             .pull_until(start_offset)
             .as_ref()

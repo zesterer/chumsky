@@ -126,7 +126,9 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for Recursive<'a, I, O, E> {
         }
         #[cfg(not(feature = "stacker"))]
         #[inline(always)]
-        fn recurse<R, F: FnOnce() -> R>(f: F) -> R { f() }
+        fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
+            f()
+        }
 
         recurse(|| {
             #[allow(deprecated)]

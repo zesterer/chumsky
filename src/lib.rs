@@ -31,6 +31,7 @@ use crate::{
     recovery::*,
 };
 
+use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec::Vec};
 use core::{
     cmp::Ordering,
     // TODO: Enable when stable
@@ -39,13 +40,6 @@ use core::{
     marker::PhantomData,
     ops::Range,
     str::FromStr,
-};
-use alloc::{
-    boxed::Box,
-    rc::Rc,
-    string::String,
-    sync::Arc,
-    vec::Vec,
 };
 
 #[cfg(doc)]
