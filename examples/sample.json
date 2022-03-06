@@ -15,6 +15,7 @@
     "origin": 981339097
   },
   "though": ~true,
+  "invalid": "\uDFFF",
   "activity": "value",
   "office": -342325541.1937506,
   "noise": fallse,
