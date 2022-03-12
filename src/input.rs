@@ -128,25 +128,44 @@ impl<'a, Ctx: Clone, I: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx,
 
 impl<'a, Ctx: Clone, C: Char, I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>> StrInput<C> for WithContext<'a, Ctx, I> {}
 
-pub struct InputRef<'a, 'parse, I: Input + ?Sized, S> {
-    input: &'a I,
+// Represents the progress of a parser through the input
+pub(crate) struct Marker<I: Input + ?Sized> {
     offset: I::Offset,
-    state: &'parse mut S,
+    err_count: usize,
 }
 
-impl<'a, 'parse, I: Input + ?Sized, S> InputRef<'a, 'parse, I, S> {
+impl<I: Input + ?Sized> Copy for Marker<I> {}
+impl<I: Input + ?Sized> Clone for Marker<I> {
+    fn clone(&self) -> Self { *self }
+}
+
+pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I::Token>, S> {
+    input: &'a I,
+    marker: Marker<I>,
+    state: &'parse mut S,
+    errors: Vec<E>,
+}
+
+impl<'a, 'parse, I: Input + ?Sized, E: Error<I::Token>, S> InputRef<'a, 'parse, I, E, S> {
     fn new(input: &'a I, state: &'parse mut S) -> Self {
         Self {
             input,
-            offset: input.start(),
+            marker: Marker {
+                offset: input.start(),
+                err_count: 0,
+            },
             state,
+            errors: Vec::new(),
         }
     }
 
-    pub fn save(&mut self) -> I::Offset { self.offset }
-    pub fn rewind(&mut self, offset: I::Offset) { self.offset = offset; }
+    pub(crate) fn save(&mut self) -> Marker<I> { self.marker }
+    pub(crate) fn rewind(&mut self, marker: Marker<I>) {
+        self.errors.truncate(marker.err_count);
+        self.marker = marker;
+    }
 
-    pub fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
+    pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let before = self.save();
             match self.next() {
@@ -159,34 +178,36 @@ impl<'a, 'parse, I: Input + ?Sized, S> InputRef<'a, 'parse, I, S> {
         }
     }
 
-    pub fn next(&mut self) -> (I::Offset, Option<I::Token>) {
-        let (offset, token) = self.input.next(self.offset);
-        self.offset = offset;
+    pub(crate) fn next(&mut self) -> (I::Offset, Option<I::Token>) {
+        let (offset, token) = self.input.next(self.marker.offset);
+        self.marker.offset = offset;
         (offset, token)
     }
 
-    pub fn slice(&self, range: Range<I::Offset>) -> &'a I::Slice
+    pub(crate) fn slice(&self, range: Range<Marker<I>>) -> &'a I::Slice
     where
         I: SliceInput,
-    { self.input.slice(range) }
+    { self.input.slice(range.start.offset..range.end.offset) }
 
-    pub fn slice_from(&self, from: RangeFrom<I::Offset>) -> &'a I::Slice
+    pub(crate) fn slice_from(&self, from: RangeFrom<Marker<I>>) -> &'a I::Slice
     where
         I: SliceInput,
-    { self.input.slice_from(from) }
+    { self.input.slice_from(from.start.offset..) }
 
-    pub fn slice_trailing(&self) -> &'a I::Slice
+    pub(crate) fn slice_trailing(&self) -> &'a I::Slice
     where
         I: SliceInput,
-    { self.input.slice_from(self.offset..) }
+    { self.input.slice_from(self.marker.offset..) }
 
-    pub fn span_since(&self, before: I::Offset) -> I::Span { self.input.span(before..self.offset) }
+    pub(crate) fn span_since(&self, before: Marker<I>) -> I::Span { self.input.span(before.offset..self.marker.offset) }
 
-    pub fn skip_bytes<C>(&mut self, skip: usize)
+    pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
     where
         C: Char,
         I: StrInput<C>,
-    { self.offset += skip; }
+    { self.marker.offset += skip; }
+
+    pub(crate) fn emit(&mut self, error: E) { self.errors.push(error); }
 }
 
 pub trait Error<T> {
@@ -206,7 +227,7 @@ pub trait Mode {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V>;
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E>;
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Self, P::Output, E>;
 }
 
 pub struct Emit;
@@ -217,7 +238,7 @@ impl Mode for Emit {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> { f(x, y) }
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> { x }
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Self, P::Output, E> {
         parser.go_emit(inp)
     }
 }
@@ -230,7 +251,7 @@ impl Mode for Check {
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(x: Self::Output<T>, y: Self::Output<U>, f: F) -> Self::Output<V> {}
     fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Self, P::Output, E> {
+    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(parser: &P, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Self, P::Output, E> {
         parser.go_check(inp)
     }
 }
@@ -262,12 +283,12 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
     }
 
     #[doc(hidden)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> where Self: Sized;
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> where Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Emit, Self::Output, E>;
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, Self::Output, E>;
     #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Check, Self::Output, E>;
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, Self::Output, E>;
 
     fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F, E, S>
     where
@@ -412,10 +433,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
 
 macro_rules! go_extra {
     () => {
-        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Emit, Self::Output, E> {
+        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, Self::Output, E> {
             Parser::<I, E, S>::go::<Emit>(self, inp)
         }
-        fn go_check(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<Check, Self::Output, E> {
+        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, Self::Output, E> {
             Parser::<I, E, S>::go::<Check>(self, inp)
         }
     };
@@ -430,7 +451,7 @@ where
 {
     type Output = T::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
     where
         Self: Sized,
     {
@@ -455,7 +476,7 @@ where
 {
     type Output = ();
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
             (_, Some(_)) => Err(E::create()),
@@ -543,7 +564,7 @@ where
 {
     type Output = T;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let mut items = self.seq.iter();
         loop {
             match items.next() {
@@ -597,7 +618,7 @@ where
 {
     type Output = I::Token;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => {
                 Ok(M::bind(|| tok))
@@ -634,7 +655,7 @@ where
 {
     type Output = &'a C::Slice;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
                 let before = inp.save();
@@ -676,7 +697,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         match self.parser.go::<Check>(inp) {
             Ok(_) => {
@@ -718,7 +739,7 @@ where
 {
     type Output = I::Token;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         match inp.next() {
             (_, Some(tok)) if (self.filter)(&tok) => Ok(M::bind(|| tok)),
             (_, Some(_) | None) => Err(E::create()),
@@ -744,7 +765,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         self.parser.go::<M>(inp)
             .map(|out| M::map(out, &self.mapper))
     }
@@ -768,7 +789,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         self.parser.go::<M>(inp).map(|out| M::map(out, |out| {
             let span = inp.span_since(before);
@@ -795,7 +816,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
@@ -836,7 +857,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         self.parser.go::<Check>(inp)
             .map(|_| M::bind(|| self.to.clone()))
     }
@@ -873,7 +894,7 @@ where
 {
     type Output = (A::Output, B::Output);
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::combine(a, b, |a: A::Output, b: B::Output| (a, b)))
@@ -909,7 +930,7 @@ where
 {
     type Output = B::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let _a = self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::map(b, |b: B::Output| b))
@@ -945,7 +966,7 @@ where
 {
     type Output = A::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<Check>(inp)?;
         Ok(M::map(a, |a: A::Output| a))
@@ -972,7 +993,7 @@ where
 {
     type Output = A::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let _ = self.start.go::<Check>(inp)?;
         let b = self.parser.go::<M>(inp)?;
         let _ = self.end.go::<Check>(inp)?;
@@ -998,7 +1019,7 @@ where
 {
     type Output = A::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => Ok(out),
@@ -1039,7 +1060,7 @@ macro_rules! impl_for_tuple {
         {
             type Output = O;
 
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
                 let before = inp.save();
 
                 let Choice { parsers: ($($X,)*), .. } = self;
@@ -1136,7 +1157,7 @@ where
 {
     type Output = A::Output;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         inp.skip_while(|c| c.is_whitespace());
         let out = self.parser.go::<M>(inp)?;
         inp.skip_while(|c| c.is_whitespace());
@@ -1210,7 +1231,7 @@ where
 {
     type Output = C;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let mut count = 0;
         let mut output = M::bind::<C, _>(|| C::default());
         loop {
@@ -1252,7 +1273,7 @@ where
 {
     type Output = Option<A::Output>;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
             Ok(o) => M::map::<A::Output, _, _>(o, Some),
@@ -1280,7 +1301,7 @@ where
 {
     type Output = [A::Output; N];
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         use std::mem::MaybeUninit;
 
         let mut i = 0;
@@ -1340,7 +1361,7 @@ where
 {
     type Output = B;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> where Self: Sized {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> where Self: Sized {
         self.parser.go::<M>(inp)
             .map(|out|
                 M::map(out, |(init, end)| init.into_iter().rev().fold(end, |b, a| (self.folder)(a, b)))
@@ -1378,7 +1399,7 @@ where
 {
     type Output = A;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> where Self: Sized {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> where Self: Sized {
         self.parser.go::<M>(inp)
             .map(|out|
                 M::map(out, |(head, tail)| tail.into_iter().fold(head, &self.folder))
@@ -1439,7 +1460,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         M::invoke(
             self.cell()
                 .get()
@@ -1481,7 +1502,7 @@ where
 {
     type Output = O;
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         M::invoke(&*self.inner, inp)
     }
 
@@ -1550,7 +1571,6 @@ fn zero_copy() {
 #[cfg(feature = "regex")]
 #[test]
 fn regex_parser() {
-
     fn parser<'a, C: Char>() -> impl Parser<'a, C::Slice, Output = Vec<&'a C::Slice>> {
         regex("[a-zA-Z_][a-zA-Z0-9_]*")
             .padded()
@@ -1583,7 +1603,7 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::new(input, &mut state);
+    let mut input = InputRef::<_, (), _>::new(input, &mut state);
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);
