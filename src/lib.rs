@@ -6,7 +6,6 @@
 
 extern crate alloc;
 
-/// Traits that allow chaining parser outputs together.
 pub mod chain;
 pub mod combinator;
 pub mod debug;
