@@ -1344,11 +1344,27 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
 /// input patterns will become syntax errors, just as with [`filter`].
 ///
-/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
-/// confusing.
-///
 /// The macro is semantically similar to a `match` expression and so supports
 /// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
+///
+/// ```ignore
+/// select! {
+///     Token::Bool(x) if x => Expr::True,
+///     Token::Bool(x) if !x => Expr::False,
+/// }
+/// ```
+///
+/// If you require access to the input's span, you may add an argument after the pattern to gain access to it.
+///
+/// ```ignore
+/// select! {
+///     Token::Num(x), span => Expr::Num(x).spanned(span),
+///     Token::Str(s), span => Expr::Str(s).spanned(span),
+/// }
+/// ```
+///
+/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
+/// confusing.
 ///
 /// # Examples
 ///
@@ -1399,9 +1415,9 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
         $crate::primitive::filter_map(move |span, x| match x {
-            $($p $(if $guard)? => ::core::result::Result::Ok($out)),+,
+            $($p $(if $guard)? => ::core::result::Result::Ok({ $(let $span = span;)? $out })),+,
             _ => ::core::result::Result::Err($crate::error::Error::expected_input_found(span, ::core::option::Option::None, ::core::option::Option::Some(x))),
         })
     });
