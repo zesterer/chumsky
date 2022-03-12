@@ -1399,6 +1399,12 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// ```
 #[macro_export]
 macro_rules! select {
+    ($span:ident, $($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::primitive::filter_map(move |$span, x| match x {
+            $($p $(if $guard)? => ::core::result::Result::Ok($out)),+,
+            _ => ::core::result::Result::Err($crate::error::Error::expected_input_found($span, ::core::option::Option::None, ::core::option::Option::Some(x))),
+        })
+    });
     ($($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
         $crate::primitive::filter_map(move |span, x| match x {
             $($p $(if $guard)? => ::core::result::Result::Ok($out)),+,
