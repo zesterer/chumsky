@@ -1,13 +1,15 @@
-#![cfg_attr(feature = "nightly", feature(
-    rustc_attrs,
-    bench_black_box,
-    generic_associated_types,
-    maybe_uninit_uninit_array,
-    maybe_uninit_array_assume_init,
-    maybe_uninit_extra,
-    once_cell,
-))]
-#![cfg_attr(not(any(doc, feature = "std")), no_std)]
+#![cfg_attr(
+    feature = "nightly",
+    feature(
+        rustc_attrs,
+        bench_black_box,
+        generic_associated_types,
+        maybe_uninit_uninit_array,
+        maybe_uninit_array_assume_init,
+        maybe_uninit_extra,
+        once_cell,
+    )
+)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
@@ -18,13 +20,13 @@ pub mod chain;
 pub mod combinator;
 pub mod debug;
 pub mod error;
-pub mod input;
 pub mod primitive;
 pub mod recovery;
 pub mod recursive;
 pub mod span;
 pub mod stream;
 pub mod text;
+pub mod zero_copy;
 
 pub use crate::{error::Error, span::Span};
 
