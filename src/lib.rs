@@ -659,11 +659,12 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Cheap};
-    /// let letter_up = one_of::<_, _, Cheap<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
+    /// // A parser that parses a single letter and then its successor
+    /// let successive_letters = one_of::<_, _, Cheap<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
     ///     .then_with(|letter: u8| just(letter + 1));
     ///
-    /// assert_eq!(letter_up.parse(*b"ab"), Ok(b'b'));
-    /// assert!(letter_up.parse(*b"ac").is_err());
+    /// assert_eq!(successive_letters.parse(*b"ab"), Ok(b'b')); // 'b' follows 'a'
+    /// assert!(successive_letters.parse(*b"ac").is_err()); // 'c' does not follow 'a'
     /// ```
     fn then_with<U, P, F: Fn(O) -> P>(self, other: F) -> ThenWith<I, O, U, Self, P, F>
     where
