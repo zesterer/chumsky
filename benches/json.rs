@@ -124,13 +124,6 @@ mod chumsky_zero_copy {
                 .clone()
                 .separated_by(just(b',').padded())
                 .collect::<Vec<_>>()
-                .then(value.clone().or_not())
-                .map(|(mut xs, x)| {
-                    if let Some(x) = x {
-                        xs.push(x);
-                    }
-                    xs
-                })
                 .padded()
                 .delimited_by(just(b'['), just(b']'))
                 .map(JsonZero::Array)
@@ -145,13 +138,6 @@ mod chumsky_zero_copy {
                 .clone()
                 .separated_by(just(b',').padded())
                 .collect::<Vec<_>>()
-                .then(member.clone().or_not())
-                .map(|(mut xs, x)| {
-                    if let Some(x) = x {
-                        xs.push(x);
-                    }
-                    xs
-                })
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
                 // .collect::<Vec<(_, JsonZero)>>()
