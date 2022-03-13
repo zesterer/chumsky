@@ -271,6 +271,16 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         }
     }
 
+    fn padded_by<B: Parser<'a, I, E, S>>(self, padding: B) -> PaddedBy<Self, B>
+    where
+        Self: Sized,
+    {
+        PaddedBy {
+            parser: self,
+            padding,
+        }
+    }
+
     fn or<B: Parser<'a, I, E, S, Output = Self::Output>>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
@@ -295,6 +305,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         Repeated {
             parser: self,
             at_least: 0,
+            at_most: None,
             phantom: PhantomData,
         }
     }
@@ -304,6 +315,21 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         Self: Sized,
     {
         RepeatedExactly { parser: self }
+    }
+
+    fn separated_by<B: Parser<'a, I, E, S>>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
+    where
+        Self: Sized,
+    {
+        SeparatedBy {
+            parser: self,
+            separator,
+            at_least: 0,
+            at_most: None,
+            allow_leading: false,
+            allow_trailing: false,
+            phantom: PhantomData,
+        }
     }
 
     fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
@@ -439,6 +465,32 @@ fn zero_copy() {
             ((42, 31..37), Token::Ident("tokens")),
         ]),
     );
+}
+
+#[test]
+fn zero_copy_repetition() {
+    use self::prelude::*;
+
+    fn parser<'a>() -> impl Parser<'a, str, Output = Vec<u64>> {
+        filter(|c: &char| c.is_ascii_digit())
+            .repeated()
+            .at_least(1)
+            .at_most(3)
+            .map_slice(|b: &str| b.parse::<u64>().unwrap())
+            .padded()
+            .separated_by(just(',').padded())
+            .allow_trailing()
+            .collect()
+            .delimited_by(just('['), just(']'))
+    }
+    
+    assert_eq!(parser().parse("[122 , 23,43,    4, ]"), Ok(vec![122, 23, 43, 4]));
+    assert_eq!(parser().parse("[0, 3, 6, 900,120]"), Ok(vec![0, 3, 6, 900, 120]));
+    assert_eq!(parser().parse("[200,400,50  ,0,0, ]"), Ok(vec![200, 400, 50, 0, 0]));
+
+    assert!(parser().parse("[1234,123,12,1]").is_err());
+    assert!(parser().parse("[,0, 1, 456]").is_err());
+    assert!(parser().parse("[3, 4, 5, 67 89,]").is_err());
 }
 
 #[cfg(feature = "regex")]
