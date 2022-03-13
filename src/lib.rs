@@ -1,3 +1,4 @@
+#![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(
     feature = "nightly",
     feature(

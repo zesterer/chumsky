@@ -25,7 +25,7 @@ pub mod text;
 pub mod prelude {
     pub use super::{
         error::Error as _,
-        primitive::{choice, end, filter, just, none_of},
+        primitive::{any, choice, empty, end, filter, just, none_of, one_of},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -36,6 +36,12 @@ pub mod prelude {
     };
 }
 
+use alloc::{
+    boxed::Box,
+    rc::{Rc, Weak},
+    string::String,
+    vec::Vec,
+};
 use core::{
     cmp::Eq,
     hash::Hash,
@@ -43,8 +49,7 @@ use core::{
     marker::PhantomData,
     ops::{Range, RangeFrom},
 };
-use std::collections::HashMap;
-use std::rc::{Rc, Weak};
+use hashbrown::HashMap;
 
 use self::{
     combinator::*,
@@ -329,6 +334,18 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
+        }
+    }
+    
+    fn separated_by_exactly<B: Parser<'a, I, E, S>, const N: usize>(self, separator: B) -> SeparatedByExactly<Self, B, N>
+    where
+        Self: Sized,
+    {
+        SeparatedByExactly {
+            parser: self,
+            separator,
+            allow_leading: false,
+            allow_trailing: false,
         }
     }
 
