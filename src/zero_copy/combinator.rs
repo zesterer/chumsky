@@ -554,9 +554,9 @@ where
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         if self.allow_leading {
-            let before = inp.save();
+            let before_separator = inp.save();
             if let Err(_) = self.separator.go::<Check>(inp) {
-                inp.rewind(before);
+                inp.rewind(before_separator);
             }
         }
 
@@ -592,9 +592,9 @@ where
                     inp.rewind(before);
 
                     if self.allow_trailing {
-                        let before = inp.save();
+                        let before_separator = inp.save();
                         if let Err(_) = self.separator.go::<Check>(inp) {
-                            inp.rewind(before);
+                            inp.rewind(before_separator);
                         }
                     }
 
@@ -669,6 +669,91 @@ where
                         break Ok(M::array::<A::Output, N>(unsafe {
                             MaybeUninit::array_assume_init(output)
                         }));
+                    }
+                }
+                Err(e) => {
+                    inp.rewind(before);
+                    // SAFETY: All entries with an index < i are filled
+                    output[..i]
+                        .iter_mut()
+                        .for_each(|o| unsafe { o.assume_init_drop() });
+                    break Err(e);
+                }
+            }
+        }
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct SeparatedByExactly<A, B, const N: usize> {
+    pub(crate) parser: A,
+    pub(crate) separator: B,
+    pub(crate) allow_leading: bool,
+    pub(crate) allow_trailing: bool,
+}
+
+impl<A, B, const N: usize> SeparatedByExactly<A, B, N> {
+    pub fn allow_leading(self) -> Self {
+        Self { allow_leading: true, ..self }
+    }
+
+    pub fn allow_trailing(self) -> Self {
+        Self { allow_trailing: true, ..self }
+    }
+}
+
+impl<'a, I, E, S, A, B, const N: usize> Parser<'a, I, E, S> for SeparatedByExactly<A, B, N>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+{
+    type Output = [A::Output; N];
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        use std::mem::MaybeUninit;
+
+        if self.allow_leading {
+            let before_separator = inp.save();
+            if let Err(_) = self.separator.go::<Check>(inp) {
+                inp.rewind(before_separator);
+            }
+        }
+
+        let mut i = 0;
+        let mut output = MaybeUninit::uninit_array();
+        loop {
+            let before = inp.save();
+            match self.parser.go::<M>(inp) {
+                Ok(out) => {
+                    output[i].write(out);
+                    i += 1;
+                    if i == N {
+                        if self.allow_trailing {
+                            let before_separator = inp.save();
+                            if let Err(_) = self.separator.go::<Check>(inp) {
+                                inp.rewind(before_separator);
+                            }
+                        }
+
+                        // SAFETY: All entries with an index < i are filled
+                        break Ok(M::array::<A::Output, N>(unsafe {
+                            MaybeUninit::array_assume_init(output)
+                        }));
+                    } else {
+                        let before_separator = inp.save();
+                        if let Err(e) = self.separator.go::<Check>(inp) {
+                            inp.rewind(before_separator);
+                            // SAFETY: All entries with an index < i are filled
+                            output[..i]
+                                .iter_mut()
+                                .for_each(|o| unsafe { o.assume_init_drop() });
+                            break Err(e);
+                        }
                     }
                 }
                 Err(e) => {
