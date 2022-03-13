@@ -122,10 +122,7 @@ mod chumsky_zero_copy {
 
             let array = value
                 .clone()
-                // .separated_by(just(b',').padded())
-                .then(just(b',').padded())
-                .map(|(x, _)| x)
-                .repeated()
+                .separated_by(just(b',').padded())
                 .collect::<Vec<_>>()
                 .then(value.clone().or_not())
                 .map(|(mut xs, x)| {
@@ -146,10 +143,7 @@ mod chumsky_zero_copy {
                 .then(value);
             let object = member
                 .clone()
-                //.separated_by(just(b',').padded())
-                .then(just(b',').padded())
-                .map(|(x, _)| x)
-                .repeated()
+                .separated_by(just(b',').padded())
                 .collect::<Vec<_>>()
                 .then(member.clone().or_not())
                 .map(|(mut xs, x)| {
