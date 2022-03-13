@@ -25,6 +25,28 @@ where
     go_extra!();
 }
 
+#[derive(Copy, Clone)]
+pub struct Empty<I: ?Sized>(PhantomData<I>);
+
+pub fn empty<I: Input + ?Sized>() -> Empty<I> {
+    Empty(PhantomData)
+}
+
+impl<'a, I, E, S> Parser<'a, I, E, S> for Empty<I>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+{
+    type Output = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        Ok(M::bind(|| ()))
+    }
+
+    go_extra!();
+}
+
 pub trait Seq<T> {
     type Iter<'a>: Iterator<Item = T>
     where
@@ -151,6 +173,54 @@ where
     go_extra!();
 }
 
+pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
+    seq: T,
+    phantom: PhantomData<(E, S, I)>,
+}
+
+impl<T: Copy, I: ?Sized, E, S> Copy for OneOf<T, I, E, S> {}
+impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+pub fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    I::Token: PartialEq,
+    T: Seq<I::Token> + Clone,
+{
+    OneOf {
+        seq,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, E, S, T> Parser<'a, I, E, S> for OneOf<T, I, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    I::Token: PartialEq,
+    T: Seq<I::Token> + Clone,
+{
+    type Output = I::Token;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        match inp.next() {
+            (_, Some(tok)) if self.seq.iter().any(|not| not == tok) => Ok(M::bind(|| tok)),
+            (at, found) => Err(E::create()),
+        }
+    }
+
+    go_extra!();
+}
+
 pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
@@ -240,6 +310,12 @@ where
     }
 
     go_extra!();
+}
+
+pub type Any<I, E> = Filter<fn(&<I as Input>::Token) -> bool, I, E>;
+
+pub fn any<I: Input + ?Sized, E: Error<I::Token>>() -> Any<I, E> {
+    filter(|_| true)
 }
 
 #[derive(Copy, Clone)]
