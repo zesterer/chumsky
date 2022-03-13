@@ -300,6 +300,33 @@ where
     go_extra!();
 }
 
+
+#[derive(Copy, Clone)]
+pub struct PaddedBy<A, B> {
+    pub(crate) parser: A,
+    pub(crate) padding: B,
+}
+
+impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for PaddedBy<A, B>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let _ = self.padding.go::<Check>(inp)?;
+        let b = self.parser.go::<M>(inp)?;
+        let _ = self.padding.go::<Check>(inp)?;
+        Ok(b)
+    }
+
+    go_extra!();
+}
+
 #[derive(Copy, Clone)]
 pub struct Or<A, B> {
     pub(crate) parser_a: A,
@@ -353,6 +380,7 @@ impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
 pub struct Repeated<A, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
+    pub(crate) at_most: Option<usize>,
     pub(crate) phantom: PhantomData<(C, E, S, I)>,
 }
 
@@ -362,6 +390,7 @@ impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
         Self {
             parser: self.parser.clone(),
             at_least: self.at_least,
+            at_most: self.at_most,
             phantom: PhantomData,
         }
     }
@@ -374,6 +403,18 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
         Self { at_least, ..self }
     }
 
+    pub fn at_most(self, at_most: usize) -> Self {
+        Self { at_most: Some(at_most), ..self }
+    }
+
+    pub fn exactly(self, exactly: usize) -> Self {
+        Self {
+            at_least: exactly,
+            at_most: Some(exactly),
+            ..self
+        }
+    }
+
     pub fn collect<D: Container<A::Output>>(self) -> Repeated<A, I, D, E, S>
     where
         A: Parser<'a, I, E, S>,
@@ -381,6 +422,7 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
         Repeated {
             parser: self.parser,
             at_least: self.at_least,
+            at_most: self.at_most,
             phantom: PhantomData,
         }
     }
@@ -408,9 +450,154 @@ where
                         output
                     });
                     count += 1;
+
+                    if let Some(at_most) = self.at_most {
+                        if count >= at_most {
+                            break Ok(output);
+                        }
+                    }
                 }
                 Err(e) => {
                     inp.rewind(before);
+                    break if count >= self.at_least {
+                        Ok(output)
+                    } else {
+                        Err(e)
+                    };
+                }
+            }
+        }
+    }
+
+    go_extra!();
+}
+
+pub struct SeparatedBy<A, B, I: ?Sized, C = (), E = (), S = ()> {
+    pub(crate) parser: A,
+    pub(crate) separator: B,
+    pub(crate) at_least: usize,
+    pub(crate) at_most: Option<usize>,
+    pub(crate) allow_leading: bool,
+    pub(crate) allow_trailing: bool,
+    pub(crate) phantom: PhantomData<(C, E, S, I)>,
+}
+
+impl<A: Copy, B: Copy, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, I, C, E, S> {}
+impl<A: Clone, B: Clone, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, I, C, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            separator: self.separator.clone(),
+            at_least: self.at_least,
+            at_most: self.at_most,
+            allow_leading: self.allow_leading,
+            allow_trailing: self.allow_trailing,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, A: Parser<'a, I, E, S>, B: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a>
+    SeparatedBy<A, B, I, C, E, S>
+{
+    pub fn at_least(self, at_least: usize) -> Self {
+        Self { at_least, ..self }
+    }
+
+    pub fn at_most(self, at_most: usize) -> Self {
+        Self { at_most: Some(at_most), ..self }
+    }
+
+    pub fn exactly(self, exactly: usize) -> Self {
+        Self {
+            at_least: exactly,
+            at_most: Some(exactly),
+            ..self
+        }
+    }
+
+    pub fn allow_leading(self) -> Self {
+        Self { allow_leading: true, ..self }
+    }
+
+    pub fn allow_trailing(self) -> Self {
+        Self { allow_trailing: true, ..self }
+    }
+
+    pub fn collect<D: Container<A::Output>>(self) -> SeparatedBy<A, B, I, D, E, S>
+    where
+        A: Parser<'a, I, E, S>,
+        B: Parser<'a, I, E, S>,
+    {
+        SeparatedBy {
+            parser: self.parser,
+            separator: self.separator,
+            at_least: self.at_least,
+            at_most: self.at_most,
+            allow_leading: self.allow_leading,
+            allow_trailing: self.allow_trailing,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for SeparatedBy<A, B, I, C, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+    C: Container<A::Output>,
+{
+    type Output = C;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        if self.allow_leading {
+            let before = inp.save();
+            if let Err(_) = self.separator.go::<Check>(inp) {
+                inp.rewind(before);
+            }
+        }
+
+        let mut count = 0;
+        let mut output = M::bind::<C, _>(|| C::default());
+        loop {
+            let before = inp.save();
+            match self.parser.go::<M>(inp) {
+                Ok(out) => {
+                    output = M::map(output, |mut output: C| {
+                        M::map(out, |out| output.push(out));
+                        output
+                    });
+                    count += 1;
+
+                    let before_separator = inp.save();
+                    if let Err(e) = self.separator.go::<Check>(inp) {
+                        inp.rewind(before_separator);
+                        break if count >= self.at_least {
+                            Ok(output)
+                        } else {
+                            Err(e)
+                        };
+                    }
+
+                    if let Some(at_most) = self.at_most {
+                        if count >= at_most {
+                            break Ok(output);
+                        }
+                    }
+                }
+                Err(e) => {
+                    inp.rewind(before);
+
+                    if self.allow_trailing {
+                        let before = inp.save();
+                        if let Err(_) = self.separator.go::<Check>(inp) {
+                            inp.rewind(before);
+                        }
+                    }
+
                     break if count >= self.at_least {
                         Ok(output)
                     } else {
