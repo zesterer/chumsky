@@ -36,6 +36,12 @@ pub mod prelude {
     };
 }
 
+use alloc::{
+    boxed::Box,
+    rc::{Rc, Weak},
+    string::String,
+    vec::Vec,
+};
 use core::{
     cmp::Eq,
     hash::Hash,
@@ -43,8 +49,7 @@ use core::{
     marker::PhantomData,
     ops::{Range, RangeFrom},
 };
-use std::collections::HashMap;
-use std::rc::{Rc, Weak};
+use hashbrown::HashMap;
 
 use self::{
     combinator::*,
