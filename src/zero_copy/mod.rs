@@ -57,73 +57,78 @@ use self::{
     input::{Input, InputRef, SliceInput, StrInput, WithContext},
     span::Span,
     text::*,
+    internal::*,
 };
 
 pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, E>;
 
-pub trait Mode {
-    type Output<T>;
-    fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
-    fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
-    fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-        x: Self::Output<T>,
-        y: Self::Output<U>,
-        f: F,
-    ) -> Self::Output<V>;
-    fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
+mod internal {
+    use super::*;
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
-        parser: &P,
-        inp: &mut InputRef<'a, '_, I, E, S>,
-    ) -> PResult<Self, P::Output, E>;
-}
+    pub trait Mode {
+        type Output<T>;
+        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
+        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            x: Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) -> Self::Output<V>;
+        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-pub struct Emit;
-impl Mode for Emit {
-    type Output<T> = T;
-    fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
-        f()
-    }
-    fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
-        f(x)
-    }
-    fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-        x: Self::Output<T>,
-        y: Self::Output<U>,
-        f: F,
-    ) -> Self::Output<V> {
-        f(x, y)
-    }
-    fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
-        x
+        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E, S>,
+        ) -> PResult<Self, P::Output, E>;
     }
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
-        parser: &P,
-        inp: &mut InputRef<'a, '_, I, E, S>,
-    ) -> PResult<Self, P::Output, E> {
-        parser.go_emit(inp)
-    }
-}
+    pub struct Emit;
+    impl Mode for Emit {
+        type Output<T> = T;
+        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
+            f()
+        }
+        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
+            f(x)
+        }
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            x: Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) -> Self::Output<V> {
+            f(x, y)
+        }
+        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
+            x
+        }
 
-pub struct Check;
-impl Mode for Check {
-    type Output<T> = ();
-    fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-    fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {}
-    fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-        x: Self::Output<T>,
-        y: Self::Output<U>,
-        f: F,
-    ) -> Self::Output<V> {
+        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E, S>,
+        ) -> PResult<Self, P::Output, E> {
+            parser.go_emit(inp)
+        }
     }
-    fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-    fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
-        parser: &P,
-        inp: &mut InputRef<'a, '_, I, E, S>,
-    ) -> PResult<Self, P::Output, E> {
-        parser.go_check(inp)
+    pub struct Check;
+    impl Mode for Check {
+        type Output<T> = ();
+        fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
+        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {}
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            x: Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) -> Self::Output<V> {
+        }
+        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
+
+        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E, S>,
+        ) -> PResult<Self, P::Output, E> {
+            parser.go_check(inp)
+        }
     }
 }
 
