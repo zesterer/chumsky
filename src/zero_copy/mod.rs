@@ -315,11 +315,14 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         }
     }
 
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, N>
+    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, (), N>
     where
         Self: Sized,
     {
-        RepeatedExactly { parser: self }
+        RepeatedExactly {
+            parser: self,
+            phantom: PhantomData,
+        }
     }
 
     fn separated_by<B: Parser<'a, I, E, S>>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
@@ -336,8 +339,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
             phantom: PhantomData,
         }
     }
-    
-    fn separated_by_exactly<B: Parser<'a, I, E, S>, const N: usize>(self, separator: B) -> SeparatedByExactly<Self, B, N>
+
+    fn separated_by_exactly<B: Parser<'a, I, E, S>, const N: usize>(
+        self,
+        separator: B,
+    ) -> SeparatedByExactly<Self, B, (), N>
     where
         Self: Sized,
     {
@@ -346,6 +352,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
             separator,
             allow_leading: false,
             allow_trailing: false,
+            phantom: PhantomData,
         }
     }
 
@@ -469,6 +476,7 @@ fn zero_copy() {
             .map_with_span(|token, span| (span, token))
             .padded()
             .repeated_exactly()
+            .collect()
     }
 
     assert_eq!(
@@ -496,14 +504,23 @@ fn zero_copy_repetition() {
             .map_slice(|b: &str| b.parse::<u64>().unwrap())
             .padded()
             .separated_by(just(',').padded())
-            .allow_trailing()
             .collect()
+            .allow_trailing()
             .delimited_by(just('['), just(']'))
     }
-    
-    assert_eq!(parser().parse("[122 , 23,43,    4, ]"), Ok(vec![122, 23, 43, 4]));
-    assert_eq!(parser().parse("[0, 3, 6, 900,120]"), Ok(vec![0, 3, 6, 900, 120]));
-    assert_eq!(parser().parse("[200,400,50  ,0,0, ]"), Ok(vec![200, 400, 50, 0, 0]));
+
+    assert_eq!(
+        parser().parse("[122 , 23,43,    4, ]"),
+        Ok(vec![122, 23, 43, 4])
+    );
+    assert_eq!(
+        parser().parse("[0, 3, 6, 900,120]"),
+        Ok(vec![0, 3, 6, 900, 120])
+    );
+    assert_eq!(
+        parser().parse("[200,400,50  ,0,0, ]"),
+        Ok(vec![200, 400, 50, 0, 0])
+    );
 
     assert!(parser().parse("[1234,123,12,1]").is_err());
     assert!(parser().parse("[,0, 1, 456]").is_err());

@@ -123,7 +123,7 @@ mod chumsky_zero_copy {
             let array = value
                 .clone()
                 .separated_by(just(b',').padded())
-                .collect::<Vec<_>>()
+                .collect()
                 .padded()
                 .delimited_by(just(b'['), just(b']'))
                 .map(JsonZero::Array)
@@ -137,10 +137,9 @@ mod chumsky_zero_copy {
             let object = member
                 .clone()
                 .separated_by(just(b',').padded())
-                .collect::<Vec<_>>()
+                .collect()
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
-                // .collect::<Vec<(_, JsonZero)>>()
                 .map(JsonZero::Object)
                 .boxed();
 

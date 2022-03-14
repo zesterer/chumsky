@@ -1,4 +1,5 @@
 use super::*;
+use core::mem::MaybeUninit;
 
 pub struct MapSlice<A, F, E = (), S = ()> {
     pub(crate) parser: A,
@@ -300,7 +301,6 @@ where
     go_extra!();
 }
 
-
 #[derive(Copy, Clone)]
 pub struct PaddedBy<A, B> {
     pub(crate) parser: A,
@@ -411,7 +411,10 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
     }
 
     pub fn at_most(self, at_most: usize) -> Self {
-        Self { at_most: Some(at_most), ..self }
+        Self {
+            at_most: Some(at_most),
+            ..self
+        }
     }
 
     pub fn exactly(self, exactly: usize) -> Self {
@@ -504,15 +507,25 @@ impl<A: Clone, B: Clone, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, I, C, E
     }
 }
 
-impl<'a, A: Parser<'a, I, E, S>, B: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a>
-    SeparatedBy<A, B, I, C, E, S>
+impl<
+        'a,
+        A: Parser<'a, I, E, S>,
+        B: Parser<'a, I, E, S>,
+        I: Input + ?Sized,
+        C,
+        E: Error<I::Token>,
+        S: 'a,
+    > SeparatedBy<A, B, I, C, E, S>
 {
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
     }
 
     pub fn at_most(self, at_most: usize) -> Self {
-        Self { at_most: Some(at_most), ..self }
+        Self {
+            at_most: Some(at_most),
+            ..self
+        }
     }
 
     pub fn exactly(self, exactly: usize) -> Self {
@@ -524,11 +537,17 @@ impl<'a, A: Parser<'a, I, E, S>, B: Parser<'a, I, E, S>, I: Input + ?Sized, C, E
     }
 
     pub fn allow_leading(self) -> Self {
-        Self { allow_leading: true, ..self }
+        Self {
+            allow_leading: true,
+            ..self
+        }
     }
 
     pub fn allow_trailing(self) -> Self {
-        Self { allow_trailing: true, ..self }
+        Self {
+            allow_trailing: true,
+            ..self
+        }
     }
 
     pub fn collect<D: Container<A::Output>>(self) -> SeparatedBy<A, B, I, D, E, S>
@@ -646,44 +665,93 @@ where
     go_extra!();
 }
 
-#[derive(Copy, Clone)]
-pub struct RepeatedExactly<A, const N: usize> {
-    pub(crate) parser: A,
+pub trait ContainerExactly<T, const N: usize> {
+    type Uninit;
+    fn uninit() -> Self::Uninit;
+    fn write(uninit: &mut Self::Uninit, i: usize, item: T);
+    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize);
+    unsafe fn take(uninit: Self::Uninit) -> Self;
 }
 
-impl<'a, I, E, S, A, const N: usize> Parser<'a, I, E, S> for RepeatedExactly<A, N>
+impl<T, const N: usize> ContainerExactly<T, N> for () {
+    type Uninit = ();
+    fn uninit() -> Self::Uninit {}
+    fn write(uninit: &mut Self::Uninit, i: usize, item: T) {}
+    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {}
+    unsafe fn take(uninit: Self::Uninit) -> Self {}
+}
+
+impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
+    type Uninit = [MaybeUninit<T>; N];
+    fn uninit() -> Self::Uninit {
+        MaybeUninit::uninit_array()
+    }
+    fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
+        uninit[i].write(item);
+    }
+    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
+        uninit[..i].iter_mut().for_each(|o| o.assume_init_drop());
+    }
+    unsafe fn take(uninit: Self::Uninit) -> Self {
+        MaybeUninit::array_assume_init(uninit)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct RepeatedExactly<A, C, const N: usize> {
+    pub(crate) parser: A,
+    pub(crate) phantom: PhantomData<C>,
+}
+
+impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
+    pub fn collect<'a, I: Input, E: Error<I::Token>, S: 'a, D: ContainerExactly<A::Output, N>>(
+        self,
+    ) -> RepeatedExactly<A, D, N>
+    where
+        A: Parser<'a, I, E, S>,
+    {
+        RepeatedExactly {
+            parser: self.parser,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, C, const N: usize> Parser<'a, I, E, S> for RepeatedExactly<A, C, N>
 where
     I: Input + ?Sized,
     E: Error<I::Token>,
     S: 'a,
     A: Parser<'a, I, E, S>,
+    C: ContainerExactly<A::Output, N>,
 {
-    type Output = [A::Output; N];
+    type Output = C;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        use core::mem::MaybeUninit;
-
         let mut i = 0;
-        let mut output = MaybeUninit::uninit_array();
+        let mut output = M::bind(|| C::uninit());
         loop {
             let before = inp.save();
             match self.parser.go::<M>(inp) {
                 Ok(out) => {
-                    output[i].write(out);
+                    output = M::map(output, |mut output| {
+                        M::map(out, |out| {
+                            C::write(&mut output, i, out);
+                        });
+                        output
+                    });
                     i += 1;
                     if i == N {
                         // SAFETY: All entries with an index < i are filled
-                        break Ok(M::array::<A::Output, N>(unsafe {
-                            MaybeUninit::array_assume_init(output)
-                        }));
+                        break Ok(M::map(output, |output| unsafe { C::take(output) }));
                     }
                 }
                 Err(e) => {
                     inp.rewind(before);
                     // SAFETY: All entries with an index < i are filled
-                    output[..i]
-                        .iter_mut()
-                        .for_each(|o| unsafe { o.assume_init_drop() });
+                    unsafe {
+                        M::map(output, |mut output| C::drop_before(&mut output, i));
+                    }
                     break Err(e);
                 }
             }
@@ -694,36 +762,57 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct SeparatedByExactly<A, B, const N: usize> {
+pub struct SeparatedByExactly<A, B, C, const N: usize> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
+    pub(crate) phantom: PhantomData<C>,
 }
 
-impl<A, B, const N: usize> SeparatedByExactly<A, B, N> {
+impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
     pub fn allow_leading(self) -> Self {
-        Self { allow_leading: true, ..self }
+        Self {
+            allow_leading: true,
+            ..self
+        }
     }
 
     pub fn allow_trailing(self) -> Self {
-        Self { allow_trailing: true, ..self }
+        Self {
+            allow_trailing: true,
+            ..self
+        }
+    }
+
+    pub fn collect<'a, I: Input, E: Error<I::Token>, S: 'a, D: ContainerExactly<A::Output, N>>(
+        self,
+    ) -> SeparatedByExactly<A, B, D, N>
+    where
+        A: Parser<'a, I, E, S>,
+    {
+        SeparatedByExactly {
+            parser: self.parser,
+            separator: self.separator,
+            allow_leading: self.allow_leading,
+            allow_trailing: self.allow_trailing,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<'a, I, E, S, A, B, const N: usize> Parser<'a, I, E, S> for SeparatedByExactly<A, B, N>
+impl<'a, I, E, S, A, B, C, const N: usize> Parser<'a, I, E, S> for SeparatedByExactly<A, B, C, N>
 where
     I: Input + ?Sized,
     E: Error<I::Token>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
+    C: ContainerExactly<A::Output, N>,
 {
     type Output = [A::Output; N];
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        use core::mem::MaybeUninit;
-
         if self.allow_leading {
             let before_separator = inp.save();
             if let Err(_) = self.separator.go::<Check>(inp) {
