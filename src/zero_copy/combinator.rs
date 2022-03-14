@@ -273,6 +273,59 @@ where
     go_extra!();
 }
 
+pub struct ThenWith<A, B, F, I: ?Sized, E = (), S = ()> {
+    pub(crate) parser: A,
+    pub(crate) then: F,
+    pub(crate) phantom: PhantomData<(B, E, S, I)>,
+}
+
+impl<A: Copy, B, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, F, I, E, S> {}
+impl<A: Clone, B, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, F, I, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            then: self.then.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, B, F> Parser<'a, I, E, S> for ThenWith<A, B, F, I, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+    F: Fn(A::Output) -> B,
+{
+    type Output = B::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        match self.parser.go::<Emit>(inp) {
+            Ok(output) => {
+                let then = (self.then)(output);
+
+                let before = inp.save();
+                match then.go::<M>(inp) {
+                    Ok(output) => Ok(output),
+                    Err(e) => {
+                        inp.rewind(before);
+                        Err(e)
+                    }
+                }
+            }
+            Err(e) => {
+                inp.rewind(before);
+                Err(e)
+            }
+        }
+    }
+
+    go_extra!();
+}
+
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, B, C> {
     pub(crate) parser: A,
