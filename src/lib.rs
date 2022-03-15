@@ -968,6 +968,45 @@ pub trait Parser<I: Clone, O> {
         Recovery(self, strategy)
     }
 
+    /// Returns the result of the first parser if successful. Otherwise the second parser is used
+    /// in an attempt to recover from bad input. If the second parser succeeds, any errors from the
+    /// first parser are still logged. If both parsers fail however, only the first parser's errors
+    /// are used.
+    ///
+    /// The output of both parsers must be of the same type, because either output can be produced.
+    ///
+    /// This parser is similar to [`Parser::or`], except that it will keep the errors of the first
+    /// parser.
+    ///
+    /// The output type of this parser is `O`, the output of both parsers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    /// // Try to parse a symbol, allowing it to be absent
+    /// // but still logging an error
+    /// let symbol = |c| just::<_, _, Cheap<char>>(c)
+    ///     .recover_via(empty().map(|_| '0'));
+    ///
+    /// let sequence = symbol('1')
+    ///     .then(symbol('2'))
+    ///     .then(symbol('3'))
+    ///     .then(symbol('4'));
+    ///
+    /// assert_eq!(sequence.parse("1234"), Ok(((('1', '2'), '3'), '4')));
+    /// assert_eq!(sequence.parse("234"),  Ok(((('0', '2'), '3'), '4')));
+    /// assert_eq!(sequence.parse("13"),   Ok(((('1', '0'), '3'), '0')));
+    /// assert_eq!(sequence.parse(""),     Ok(((('0', '0'), '0'), '0')));
+    /// ```
+    fn recover_via<P>(self, other: P) -> RecoverVia<Self, P>
+    where
+        Self: Sized,
+        P: Parser<I, O, Error = Self::Error>,
+    {
+        RecoverVia(self, other)
+    }
+
     /// Attempt to parse something, but only if it exists.
     ///
     /// If parsing of the pattern is successful, the output is `Some(_)`. Otherwise, the output is `None`.

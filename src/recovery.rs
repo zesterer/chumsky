@@ -341,3 +341,55 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, E: Error<I>>
         self.parse_inner(d, s)
     }
 }
+
+/// A parser that includes a fallback recovery strategy should parsing result in an error.
+#[derive(Copy, Clone)]
+pub struct RecoverVia<A, S>(pub(crate) A, pub(crate) S);
+
+impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O>
+    for RecoverVia<A, B>
+{
+    type Error = E;
+
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
+        let pre_state = stream.save();
+
+        #[allow(deprecated)]
+        let (a_errors, a_out) = debugger.invoke(&self.0, stream);
+
+        if a_errors.is_empty() {
+            if let Ok(a_out) = a_out {
+                return (vec![], Ok(a_out));
+            }
+        }
+
+        stream.revert(pre_state);
+
+        #[allow(deprecated)]
+        let (b_errors, b_out) = debugger.invoke(&self.1, stream);
+
+        if b_errors.is_empty() {
+            if let Ok(b_out) = b_out {
+                // Keep the errors from the first parser
+                return (a_errors, Ok(b_out));
+            }
+        }
+
+        stream.revert(pre_state);
+        // Ignore errors from the failed recovery parser
+        (a_errors, a_out)
+    }
+
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
