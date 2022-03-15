@@ -52,84 +52,107 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let b_res = debugger.invoke(&self.1, stream);
         let b_state = stream.save();
 
-        fn zip_with<A, B, R, F: FnOnce(A, B) -> R>(a: Option<A>, b: Option<B>, f: F) -> Option<R> {
-            match (a, b) {
-                (Some(a), Some(b)) => Some(f(a, b)),
-                _ => None,
+        if b_res.0.is_empty() {
+            if let (b_errors, Ok(b_out)) = b_res {
+                return (b_errors, Ok(b_out));
             }
         }
 
-        let is_a = match (&a_res, &b_res) {
-            ((a_errors, Ok(a_out)), (b_errors, Ok(b_out))) => {
-                match a_errors.len().cmp(&b_errors.len()) {
-                    Ordering::Greater => false,
-                    Ordering::Less => true,
-                    Ordering::Equal => {
-                        match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at)) {
-                            Some(Ordering::Greater) => true,
-                            Some(Ordering::Less) => false,
-                            _ => match zip_with(a_out.1.as_ref(), b_out.1.as_ref(), |a, b| {
-                                a.at.cmp(&b.at)
-                            }) {
-                                Some(Ordering::Greater) => true,
-                                Some(Ordering::Less) => false,
-                                _ => true,
-                            },
-                        }
-                    }
+        #[inline]
+        fn choose_between<I: Clone, O, E: Error<I>>(
+            a_res: PResult<I, O, E>,
+            a_state: usize,
+            b_res: PResult<I, O, E>,
+            b_state: usize,
+            stream: &mut StreamOf<I, E>,
+        ) -> PResult<I, O, E> {
+            fn zip_with<A, B, R, F: FnOnce(A, B) -> R>(
+                a: Option<A>,
+                b: Option<B>,
+                f: F,
+            ) -> Option<R> {
+                match (a, b) {
+                    (Some(a), Some(b)) => Some(f(a, b)),
+                    _ => None,
                 }
             }
-            // ((a_errors, Ok(_)), (b_errors, Err(_))) if !a_errors.is_empty() => panic!("a_errors = {:?}", a_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-            ((_a_errors, Ok(_)), (_b_errors, Err(_))) => true,
-            // ((a_errors, Err(_)), (b_errors, Ok(_))) if !b_errors.is_empty() => panic!("b_errors = {:?}", b_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-            ((_a_errors, Err(_)), (_b_errors, Ok(_))) => false,
-            ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
-                Ordering::Greater => true,
-                Ordering::Less => false,
-                Ordering::Equal => match a_errors.len().cmp(&b_errors.len()) {
-                    Ordering::Greater => false,
-                    Ordering::Less => true,
-                    Ordering::Equal => {
-                        match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at)) {
-                            Some(Ordering::Greater) => true,
-                            Some(Ordering::Less) => false,
-                            // If the branches really do seem to be equally valid as parse options, try to unify them
-                            // We already know that both parsers produces hard errors, so unwrapping cannot fail here
-                            _ => {
-                                return (
-                                    a_res.0,
-                                    Err(a_res.1.err().unwrap().max(b_res.1.err().unwrap())),
-                                )
+
+            let is_a = match (&a_res, &b_res) {
+                ((a_errors, Ok(a_out)), (b_errors, Ok(b_out))) => {
+                    match a_errors.len().cmp(&b_errors.len()) {
+                        Ordering::Greater => false,
+                        Ordering::Less => true,
+                        Ordering::Equal => {
+                            match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at))
+                            {
+                                Some(Ordering::Greater) => true,
+                                Some(Ordering::Less) => false,
+                                _ => match zip_with(a_out.1.as_ref(), b_out.1.as_ref(), |a, b| {
+                                    a.at.cmp(&b.at)
+                                }) {
+                                    Some(Ordering::Greater) => true,
+                                    Some(Ordering::Less) => false,
+                                    _ => true,
+                                },
                             }
                         }
                     }
+                }
+                // ((a_errors, Ok(_)), (b_errors, Err(_))) if !a_errors.is_empty() => panic!("a_errors = {:?}", a_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
+                ((_a_errors, Ok(_)), (_b_errors, Err(_))) => true,
+                // ((a_errors, Err(_)), (b_errors, Ok(_))) if !b_errors.is_empty() => panic!("b_errors = {:?}", b_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
+                ((_a_errors, Err(_)), (_b_errors, Ok(_))) => false,
+                ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
+                    Ordering::Greater => true,
+                    Ordering::Less => false,
+                    Ordering::Equal => match a_errors.len().cmp(&b_errors.len()) {
+                        Ordering::Greater => false,
+                        Ordering::Less => true,
+                        Ordering::Equal => {
+                            match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at))
+                            {
+                                Some(Ordering::Greater) => true,
+                                Some(Ordering::Less) => false,
+                                // If the branches really do seem to be equally valid as parse options, try to unify them
+                                // We already know that both parsers produces hard errors, so unwrapping cannot fail here
+                                _ => {
+                                    return (
+                                        a_res.0,
+                                        Err(a_res.1.err().unwrap().max(b_res.1.err().unwrap())),
+                                    )
+                                }
+                            }
+                        }
+                    },
                 },
-            },
-        };
+            };
 
-        if is_a {
-            stream.revert(a_state);
-            (
-                a_res.0,
-                a_res.1.map(|(out, alt)| {
-                    (
-                        out,
-                        merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
-                    )
-                }),
-            )
-        } else {
-            stream.revert(b_state);
-            (
-                b_res.0,
-                b_res.1.map(|(out, alt)| {
-                    (
-                        out,
-                        merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
-                    )
-                }),
-            )
+            if is_a {
+                stream.revert(a_state);
+                (
+                    a_res.0,
+                    a_res.1.map(|(out, alt)| {
+                        (
+                            out,
+                            merge_alts(alt, b_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
+                        )
+                    }),
+                )
+            } else {
+                stream.revert(b_state);
+                (
+                    b_res.0,
+                    b_res.1.map(|(out, alt)| {
+                        (
+                            out,
+                            merge_alts(alt, a_res.1.map(|(_, alt)| alt).unwrap_or_else(Some)),
+                        )
+                    }),
+                )
+            }
         }
+
+        choose_between(a_res, a_state, b_res, b_state, stream)
     }
 
     #[inline]
