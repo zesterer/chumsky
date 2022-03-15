@@ -1004,3 +1004,31 @@ where
 
     go_extra!();
 }
+
+#[derive(Copy, Clone)]
+pub struct Rewind<A> {
+    pub(crate) parser: A
+}
+
+impl<'a, I, E, S, A> Parser<'a, I, E, S> for Rewind<A>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    A: Parser<'a, I, E, S>
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(o) => {
+                inp.rewind(before);
+                Ok(o)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    go_extra!();
+}
