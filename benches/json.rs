@@ -126,13 +126,11 @@ mod chumsky_zero_copy {
                 .collect()
                 .padded()
                 .delimited_by(just(b'['), just(b']'))
-                .map(JsonZero::Array)
                 .boxed();
 
             let member = string
                 .clone()
-                .then(just(b':').padded())
-                .map(|(s, _)| s)
+                .then_ignore(just(b':').padded())
                 .then(value);
             let object = member
                 .clone()
@@ -140,7 +138,6 @@ mod chumsky_zero_copy {
                 .collect()
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
-                .map(JsonZero::Object)
                 .boxed();
 
             choice((
@@ -149,8 +146,8 @@ mod chumsky_zero_copy {
                 just(b"false").to(JsonZero::Bool(false)),
                 number.map(JsonZero::Num),
                 string.map(JsonZero::Str),
-                array,
-                object,
+                array.map(JsonZero::Array),
+                object.map(JsonZero::Object),
             ))
             .padded()
         })
