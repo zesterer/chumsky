@@ -399,6 +399,13 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         }
     }
 
+    fn rewind(self) -> Rewind<Self>
+    where
+        Self: Sized,
+    {
+        Rewind { parser: self }
+    }
+
     fn padded(self) -> Padded<Self>
     where
         Self: Sized,
