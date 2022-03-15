@@ -266,6 +266,17 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         }
     }
 
+    fn then_with<B: Parser<'a, I, E, S>, F: Fn(Self::Output) -> B>(self, then: F) -> ThenWith<Self, B, F, I, E, S>
+    where
+        Self: Sized,
+    {
+        ThenWith {
+            parser: self,
+            then,
+            phantom: PhantomData,
+        }
+    }
+
     fn delimited_by<B: Parser<'a, I, E, S>, C: Parser<'a, I, E, S>>(
         self,
         start: B,
@@ -386,6 +397,13 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
             folder: f,
             phantom: PhantomData,
         }
+    }
+
+    fn rewind(self) -> Rewind<Self>
+    where
+        Self: Sized,
+    {
+        Rewind { parser: self }
     }
 
     fn padded(self) -> Padded<Self>
