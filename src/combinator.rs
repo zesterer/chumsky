@@ -25,7 +25,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -151,7 +151,7 @@ pub struct OrNot<A>(pub(crate) A);
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> for OrNot<A> {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -195,7 +195,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -265,7 +265,7 @@ impl<
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -335,7 +335,7 @@ impl<
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -429,7 +429,7 @@ impl<A> Repeated<A> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for Repeated<A> {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -657,7 +657,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -813,7 +813,7 @@ impl<A: Clone> Clone for Debug<A> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debug<A> {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -857,7 +857,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Par
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -896,7 +896,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -945,7 +945,7 @@ impl<
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1001,7 +1001,7 @@ impl<
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1049,7 +1049,7 @@ where
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1083,7 +1083,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1120,7 +1120,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E, E::Span) -> E, E: Error<I
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1175,7 +1175,7 @@ impl<
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1215,7 +1215,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1260,7 +1260,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1313,7 +1313,7 @@ impl<A: Clone, U: Clone, O> Clone for To<A, O, U> {
 impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U> for To<A, O, U> {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
@@ -1345,7 +1345,7 @@ where
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,
