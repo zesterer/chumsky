@@ -117,6 +117,58 @@ where
     (out, errors.into_iter().map(|e| e.error).collect())
 }
 
+/// Helper
+pub trait DynParser<I: Clone, O> {
+    /// Helper
+    type Error: Error<I>;
+
+    /// [`Parser::parse_inner`], but specialised for verbose output. Do not call this method directly.
+    ///
+    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
+    #[doc(hidden)]
+    #[deprecated(
+        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+    )]
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>;
+
+    /// [`Parser::parse_inner`], but specialised for silent output. Do not call this method directly.
+    ///
+    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
+    #[doc(hidden)]
+    #[deprecated(
+        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
+    )]
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error>;
+}
+
+impl<I: Clone, O, T: Parser<I, O>> DynParser<I, O> for T {
+    type Error = T::Error;
+
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        <T as Parser<I, O>>::parse_inner_verbose(self, d, s)
+    }
+
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        <T as Parser<I, O>>::parse_inner_silent(self, d, s)
+    }
+}
+
 /// A trait implemented by parsers.
 ///
 /// Parsers take a stream of tokens of type `I` and attempt to parse them into a value of type `O`. In doing so, they
@@ -137,7 +189,7 @@ where
     )
 )]
 #[allow(clippy::type_complexity)]
-pub trait Parser<I: Clone, O> {
+pub trait Parser<I: Clone, O>: Sized {
     /// The type of errors emitted by this parser.
     type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
 
@@ -1174,7 +1226,7 @@ pub trait Parser<I: Clone, O> {
     }
 }
 
-impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
+impl<'a, I: Clone, O, T: Parser<I, O> + Sized> Parser<I, O> for &'a T {
     type Error = T::Error;
 
     fn parse_inner<D: Debugger>(
@@ -1182,7 +1234,7 @@ impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(*self, stream)
+        debugger.invoke(self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1211,7 +1263,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke_unsized(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1240,7 +1292,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke_unsized(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1269,7 +1321,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke_unsized(&*self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1300,7 +1352,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 #[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
+pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn DynParser<I, O, Error = E> + 'a>);
 
 impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
     fn clone(&self) -> Self {
@@ -1317,7 +1369,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
         #[allow(deprecated)]
-        debugger.invoke(&self.0, stream)
+        debugger.invoke_unsized(&*self.0, stream)
     }
 
     fn parse_inner_verbose(

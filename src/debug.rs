@@ -40,7 +40,7 @@ pub enum ParseEvent {
 #[deprecated(
     note = "This trait is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
 )]
-pub trait Debugger {
+pub trait Debugger: Sized {
     /// Create a new debugging scope.
     fn scope<R, Info: FnOnce() -> ParserInfo, F: FnOnce(&mut Self) -> R>(
         &mut self,
@@ -50,11 +50,19 @@ pub trait Debugger {
     /// Emit a parse event, if the debugger supports them.
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, f: F);
     /// Invoke the given parser with a mode specific to this debugger.
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    #[doc(hidden)]
+    fn invoke<I: Clone, O, P: Parser<I, O>>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error>;
+    /// Invoke the given parser with a mode specific to this debugger.
+    #[doc(hidden)]
+    fn invoke_unsized<I: Clone, O, E: Error<I>>(
+        &mut self,
+        parser: &dyn DynParser<I, O, Error = E>,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E>;
 }
 
 /// A verbose debugger that emits debugging messages to the console.
@@ -112,11 +120,20 @@ impl Debugger for Verbose {
         self.events.push(Ok(f()));
     }
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    fn invoke<I: Clone, O, P: Parser<I, O>>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
+        // let parser = parser as &dyn Parser<I, O, Error = P::Error>;
+        parser.parse_inner_verbose(self, stream)
+    }
+
+    fn invoke_unsized<I: Clone, O, E: Error<I>>(
+        &mut self,
+        parser: &dyn DynParser<I, O, Error = E>,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
         parser.parse_inner_verbose(self, stream)
     }
 }
@@ -144,11 +161,20 @@ impl Debugger for Silent {
     }
     fn emit_with<F: FnOnce() -> ParseEvent>(&mut self, _: F) {}
 
-    fn invoke<I: Clone, O, P: Parser<I, O> + ?Sized>(
+    fn invoke<I: Clone, O, P: Parser<I, O>>(
         &mut self,
         parser: &P,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
+        // let parser = parser as &dyn Parser<I, O, Error = P::Error>;
+        parser.parse_inner_silent(self, stream)
+    }
+
+    fn invoke_unsized<I: Clone, O, E: Error<I>>(
+        &mut self,
+        parser: &dyn DynParser<I, O, Error = E>,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
         parser.parse_inner_silent(self, stream)
     }
 }
