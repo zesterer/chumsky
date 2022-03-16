@@ -359,7 +359,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let pre_state = stream.save();
 
         #[allow(deprecated)]
-        let (a_errors, a_out) = debugger.invoke(&self.0, stream);
+        let (mut a_errors, a_out) = debugger.invoke(&self.0, stream);
 
         if a_out.is_ok() {
             return (a_errors, a_out);
@@ -368,15 +368,14 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         stream.revert(pre_state);
 
         #[allow(deprecated)]
-        let (_b_errors, b_out) = debugger.invoke(&self.1, stream);
+        let (mut b_errors, b_out) = debugger.invoke(&self.1, stream);
 
         if b_out.is_ok() {
-            // Keep the errors from the first parser
+            a_errors.append(&mut b_errors);
             return (a_errors, b_out);
         }
 
         stream.revert(pre_state);
-        // Ignore errors from the failed recovery parser
         (a_errors, a_out)
     }
 
