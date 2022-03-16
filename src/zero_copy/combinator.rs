@@ -1,5 +1,6 @@
 use super::*;
 use core::mem::MaybeUninit;
+use hashbrown::HashSet;
 
 pub struct MapSlice<A, F, E = (), S = ()> {
     pub(crate) parser: A,
@@ -424,6 +425,12 @@ impl<T> Container<T> for Vec<T> {
     }
 }
 
+impl Container<char> for String {
+    fn push(&mut self, item: char) {
+        (*self).push(item)
+    }
+}
+
 impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
@@ -434,6 +441,31 @@ impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
 impl<K: Eq + Hash, V> Container<(K, V)> for std::collections::HashMap<K, V> {
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
+    }
+}
+
+impl<T: Eq + Hash> Container<T> for HashSet<T> {
+    fn push(&mut self, item: T) {
+        (*self).insert(item);
+    }
+}
+
+#[cfg(feature = "std")]
+impl<T: Eq + Hash> Container<T> for std::collections::HashSet<T> {
+    fn push(&mut self, item: T) {
+        (*self).insert(item);
+    }
+}
+
+impl<K: Ord, V> Container<(K, V)> for alloc::collections::BTreeMap<K, V> {
+    fn push(&mut self, (key, value): (K, V)) {
+        (*self).insert(key, value);
+    }
+}
+
+impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
+    fn push(&mut self, item: T) {
+        (*self).insert(item);
     }
 }
 
