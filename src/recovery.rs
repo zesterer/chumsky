@@ -361,22 +361,18 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         #[allow(deprecated)]
         let (a_errors, a_out) = debugger.invoke(&self.0, stream);
 
-        if a_errors.is_empty() {
-            if let Ok(a_out) = a_out {
-                return (a_errors, Ok(a_out));
-            }
+        if a_out.is_ok() {
+            return (a_errors, a_out);
         }
 
         stream.revert(pre_state);
 
         #[allow(deprecated)]
-        let (b_errors, b_out) = debugger.invoke(&self.1, stream);
+        let (_b_errors, b_out) = debugger.invoke(&self.1, stream);
 
-        if b_errors.is_empty() {
-            if let Ok(b_out) = b_out {
-                // Keep the errors from the first parser
-                return (a_errors, Ok(b_out));
-            }
+        if b_out.is_ok() {
+            // Keep the errors from the first parser
+            return (a_errors, b_out);
         }
 
         stream.revert(pre_state);
