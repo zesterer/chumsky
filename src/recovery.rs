@@ -363,7 +363,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
 
         if a_errors.is_empty() {
             if let Ok(a_out) = a_out {
-                return (vec![], Ok(a_out));
+                return (a_errors, Ok(a_out));
             }
         }
 
