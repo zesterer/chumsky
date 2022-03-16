@@ -361,9 +361,10 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         #[allow(deprecated)]
         let (mut a_errors, a_out) = debugger.invoke(&self.0, stream);
 
-        if a_out.is_ok() {
-            return (a_errors, a_out);
-        }
+        let a_error = match a_out {
+            Ok(_) => return (a_errors, a_out),
+            Err(error) => error,
+        };
 
         stream.revert(pre_state);
 
@@ -371,12 +372,13 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let (mut b_errors, b_out) = debugger.invoke(&self.1, stream);
 
         if b_out.is_ok() {
+            a_errors.push(a_error);
             a_errors.append(&mut b_errors);
             return (a_errors, b_out);
         }
 
         stream.revert(pre_state);
-        (a_errors, a_out)
+        (a_errors, Err(a_error))
     }
 
     fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
