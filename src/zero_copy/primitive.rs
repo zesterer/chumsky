@@ -318,6 +318,159 @@ pub fn any<I: Input + ?Sized, E: Error<I::Token>>() -> Any<I, E> {
     filter(|_| true)
 }
 
+pub struct FilterMap<F, E> {
+    filter: F,
+    phantom: PhantomData<E>,
+}
+
+impl<F: Copy, E> Copy for FilterMap<F, E> {}
+impl<F: Clone, E> Clone for FilterMap<F, E> {
+    fn clone(&self) -> Self {
+        Self { filter: self.filter.clone(), phantom: PhantomData }
+    }
+}
+
+pub fn filter_map<F, I, O, E>(filter: F) -> FilterMap<F, E>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    F: Fn(I::Span, &I::Token) -> Result<O, E>,
+{
+    FilterMap {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, F, I, O, E, S> Parser<'a, I, E, S> for FilterMap<F, E>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    F: Fn(I::Span, &I::Token) -> Result<O, E>,
+    S: 'a,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let start = inp.save();
+        match inp.next() {
+            (_, Some(tok)) => {
+                let span = inp.span_since(start);
+                match (self.filter)(span, &tok) {
+                    Ok(out) => Ok(M::bind(|| out)),
+                    Err(e) => Err(e),
+                }
+            },
+            (_, _) => Err(E::create()),
+        }
+    }
+
+    go_extra!();
+}
+
+pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
+    until: P,
+    phantom: PhantomData<(C, E, S, I)>,
+}
+
+impl<'a, I, E, S, P, C> TakeUntil<P, I, C, E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    P: Parser<'a, I, E, S>,
+{
+    fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, D> {
+        TakeUntil { until: self.until, phantom: PhantomData }
+    }
+}
+
+impl<P: Copy, I: ?Sized, C, E, S> Copy for TakeUntil<P, I, C, E, S> {}
+impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
+    fn clone(&self) -> Self {
+        TakeUntil {
+            until: self.until.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    P: Parser<'a, I, E, S>,
+{
+    TakeUntil {
+        until,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, P, I, E, S, C> Parser<'a, I, E, S> for TakeUntil<P, C>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+    P: Parser<'a, I, E, S>,
+    C: Container<I::Token>,
+{
+    type Output = (C, P::Output);
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let mut output = M::bind(|| C::default());
+
+        loop {
+            let start = inp.save();
+            match self.until.go::<M>(inp) {
+                Ok(out) => break Ok(M::combine(output, out, |output, out| (output, out))),
+                Err(_) => ()
+            }
+            inp.rewind(start);
+
+            match inp.next() {
+                (_, Some(tok)) => output = M::map(output, |mut output: C| {
+                    output.push(tok);
+                    output
+                }),
+                (_, None) => break Err(E::create()),
+            }
+        }
+    }
+
+    go_extra!();
+}
+
+pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
+
+impl<I: ?Sized, E> Copy for Todo<I, E> {}
+impl<I: ?Sized, E> Clone for Todo<I, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+pub fn todo<I: Input + ?Sized, E: Error<I::Token>>() -> Todo<I, E> {
+    Todo(PhantomData)
+}
+
+impl<'a, I, E, S> Parser<'a, I, E, S> for Todo<I, E>
+where
+    I: Input + ?Sized,
+    E: Error<I::Token>,
+    S: 'a,
+{
+    type Output = ();
+
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        todo!("Attempted to use an unimplemented parser")
+    }
+
+    go_extra!();
+}
+
+
 #[derive(Copy, Clone)]
 pub struct Choice<T, O> {
     parsers: T,
