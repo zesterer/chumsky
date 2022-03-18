@@ -395,7 +395,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
     }
 }
 
-fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
+pub fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
     E: Error<I::Token>,
