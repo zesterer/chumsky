@@ -423,10 +423,10 @@ where
 
         loop {
             let start = inp.save();
-            match self.until.go::<M>(inp) {
-                Ok(out) => break Ok(M::combine(output, out, |output, out| (output, out))),
-                Err(_) => ()
+            if let Ok(out) = self.until.go::<M>(inp) {
+                break Ok(M::combine(output, out, |output, out| (output, out)));
             }
+
             inp.rewind(start);
 
             match inp.next() {
