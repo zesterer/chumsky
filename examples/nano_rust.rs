@@ -163,7 +163,7 @@ enum Expr {
     Let(String, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
-    Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
+    Call(Box<Spanned<Self>>, Vec<Spanned<Self>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Print(Box<Spanned<Self>>),
 }
@@ -256,7 +256,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 )
                 .foldl(|f, args| {
                     let span = f.1.start..args.1.end;
-                    (Expr::Call(Box::new(f), args), span)
+                    (Expr::Call(Box::new(f), args.0), span)
                 });
 
             // Product ops (multiply and divide) have equal precedence
@@ -485,14 +485,14 @@ fn eval_expr(
         Expr::Binary(a, BinaryOp::NotEq, b) => {
             Value::Bool(eval_expr(a, funcs, stack)? != eval_expr(b, funcs, stack)?)
         }
-        Expr::Call(func, (args, args_span)) => {
+        Expr::Call(func, args) => {
             let f = eval_expr(func, funcs, stack)?;
             match f {
                 Value::Func(name) => {
                     let f = &funcs[&name];
                     let mut stack = if f.args.len() != args.len() {
                         return Err(Error {
-                            span: args_span.clone(),
+                            span: expr.1.clone(),
                             msg: format!("'{}' called with wrong number of arguments (expected {}, found {})", name, f.args.len(), args.len()),
                         });
                     } else {
