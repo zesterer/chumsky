@@ -178,28 +178,21 @@ struct Func {
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
-            let val = filter_map(|span, tok| match tok {
-                Token::Null => Ok(Expr::Value(Value::Null)),
-                Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-                Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
-                Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
-                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-            })
+            let val = select! {
+                Token::Null => Expr::Value(Value::Null),
+                Token::Bool(x) => Expr::Value(Value::Bool(x)),
+                Token::Num(n) => Expr::Value(Value::Num(n.parse().unwrap())),
+                Token::Str(s) => Expr::Value(Value::Str(s)),
+            }
             .labelled("value");
 
-            let ident = filter_map(|span, tok| match tok {
-                Token::Ident(ident) => Ok(ident.clone()),
-                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-            })
-            .labelled("identifier");
+            let ident = select! { Token::Ident(ident) => ident.clone() }.labelled("identifier");
 
             // A list of expressions
             let items = expr
                 .clone()
-                .chain(just(Token::Ctrl(',')).ignore_then(expr.clone()).repeated())
-                .then_ignore(just(Token::Ctrl(',')).or_not())
-                .or_not()
-                .map(|item| item.unwrap_or_else(Vec::new));
+                .separated_by(just(Token::Ctrl(',')))
+                .allow_trailing();
 
             // A let expression
             let let_ = just(Token::Let)
@@ -258,7 +251,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .then(
                     items
                         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-                        .map_with_span(|args, span| (args, span))
+                        .map_with_span(|args, span: Span| (args, span))
                         .repeated(),
                 )
                 .foldl(|f, args| {
@@ -329,7 +322,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                         .ignore_then(block.clone().or(if_))
                         .or_not(),
                 )
-                .map_with_span(|((cond, a), b), span| {
+                .map_with_span(|((cond, a), b), span: Span| {
                     (
                         Expr::If(
                             Box::new(cond),
@@ -547,12 +540,12 @@ fn main() {
     let (tokens, mut errs) = lexer().parse_recovery(src.as_str());
 
     let parse_errs = if let Some(tokens) = tokens {
-        // println!("Tokens = {:?}", tokens);
+        //dbg!(tokens);
         let len = src.chars().count();
         let (ast, parse_errs) =
             funcs_parser().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
 
-        println!("{:#?}", ast);
+        //dbg!(ast);
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
             if let Some(main) = funcs.get("main") {
                 assert_eq!(main.args.len(), 0);

@@ -3,13 +3,17 @@
 // Spans are propagated to the interpreted AST so you can even invoke runtime
 // errors and still have an error message that points to source code emitted!
 
+fn mul(x, y) {
+    x * y
+}
+
 // Calculate the factorial of a number
 fn factorial(x) {
     // Conditionals are supported!
     if x == 0 {
         1
     } else {
-        x * factorial(x - 1)
+        mul(x, factorial(x - 1))
     }
 }
 
