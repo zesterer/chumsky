@@ -7,6 +7,20 @@
 
 A parser library for humans with powerful error recovery.
 
+- [Chumsky](#chumsky)
+  - [Features](#features)
+  - [Example Brainfuck Parser](#example-brainfuck-parser)
+  - [Tutorial](#tutorial)
+  - [*What* is a parser combinator?](#what-is-a-parser-combinator)
+  - [*Why* use parser combinators?](#why-use-parser-combinators)
+  - [Classification](#classification)
+  - [Error Recovery](#error-recovery)
+  - [Performance](#performance)
+  - [Planned Features](#planned-features)
+  - [Philosophy](#philosophy)
+  - [Notes](#notes)
+  - [License](#license)
+
 <a href = "https://www.github.com/zesterer/tao">
     <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
 </a>
