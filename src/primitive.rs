@@ -13,7 +13,7 @@
 //! - [`filter`]: parses a single input, if the given filter function returns `true`
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
-use std::panic::Location;
+use core::panic::Location;
 use super::*;
 
 /// See [`custom`].
