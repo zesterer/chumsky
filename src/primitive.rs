@@ -13,6 +13,7 @@
 //! - [`filter`]: parses a single input, if the given filter function returns `true`
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
+use core::panic::Location;
 use super::*;
 
 /// See [`custom`].
@@ -805,7 +806,7 @@ pub fn any<I, E>() -> Any<I, E> {
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
+pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
 
 /// A parser that can be used wherever you need to implement a parser later.
 ///
@@ -832,14 +833,15 @@ pub struct Todo<I, O, E>(PhantomData<(I, O, E)>);
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
+#[track_caller]
 pub fn todo<I, O, E>() -> Todo<I, O, E> {
-    Todo(PhantomData)
+    Todo(Location::caller(), PhantomData)
 }
 
 impl<I, O, E> Copy for Todo<I, O, E> {}
 impl<I, O, E> Clone for Todo<I, O, E> {
     fn clone(&self) -> Self {
-        Self(PhantomData)
+        Self(self.0, PhantomData)
     }
 }
 
@@ -851,7 +853,7 @@ impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
         _debugger: &mut D,
         _stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        todo!("Attempted to use an unimplemented parser.")
+        todo!("Attempted to use an unimplemented parser. Parser defined at {}", self.0)
     }
 
     fn parse_inner_verbose(
