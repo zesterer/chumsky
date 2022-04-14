@@ -427,7 +427,7 @@ recursive(|expr| {
             .repeated())
         .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
-    sum.padded()
+    sum
 })
     .then_ignore(end())
 ```
@@ -500,7 +500,7 @@ let expr = recursive(|expr| {
             .repeated())
         .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
-    sum.padded()
+    sum
 });
 
 let decl = recursive(|decl| {

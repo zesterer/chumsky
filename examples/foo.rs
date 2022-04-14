@@ -78,7 +78,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
             )
             .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
-        sum.padded()
+        sum
     });
 
     let decl = recursive(|decl| {
@@ -108,10 +108,12 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                 then: Box::new(then),
             });
 
-        r#let.or(r#fn).or(expr).padded()
+        r#let.or(r#fn).or(expr)
+            .padded()
     });
 
-    decl.then_ignore(end())
+    decl
+        .then_ignore(end())
 }
 
 fn eval<'a>(
