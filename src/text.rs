@@ -80,6 +80,12 @@ pub trait Character: private::Sealed + Copy + PartialEq {
     /// For [`char`], this is [`String`]. For [`u8`], this is [`Vec<u8>`].
     type Collection: Chain<Self> + FromIterator<Self> + AsRef<Self::Str> + 'static;
 
+    /// Convert the given ASCII character to this character type.
+    fn from_ascii(c: u8) -> Self;
+
+    /// Returns true if the character is canonically considered to be inline whitespace (i.e: not part of a newline).
+    fn is_inline_whitespace(&self) -> bool;
+
     /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
 
@@ -97,6 +103,12 @@ impl Character for u8 {
     type Str = [u8];
     type Collection = Vec<u8>;
 
+    fn from_ascii(c: u8) -> Self {
+        c
+    }
+    fn is_inline_whitespace(&self) -> bool {
+        *self == b' ' || *self == b'\t'
+    }
     fn is_whitespace(&self) -> bool {
         self.is_ascii_whitespace()
     }
@@ -115,6 +127,12 @@ impl Character for char {
     type Str = str;
     type Collection = String;
 
+    fn from_ascii(c: u8) -> Self {
+        c as char
+    }
+    fn is_inline_whitespace(&self) -> bool {
+        *self == ' ' || *self == '\t'
+    }
     fn is_whitespace(&self) -> bool {
         char::is_whitespace(*self)
     }
@@ -213,16 +231,22 @@ pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
 /// assert_eq!(newline.parse("\u{2028}"), Ok(()));
 /// assert_eq!(newline.parse("\u{2029}"), Ok(()));
 /// ```
-pub fn newline<E: Error<char>>() -> impl Parser<char, (), Error = E> + Copy + Clone {
-    just('\r')
+pub fn newline<'a, C: Character + 'a, E: Error<C> + 'a>(
+) -> impl Parser<C, (), Error = E> + Copy + Clone + 'a {
+    just(C::from_ascii(b'\r'))
         .or_not()
-        .ignore_then(just('\n'))
-        .or(just('\r')) // Carriage return
-        .or(just('\x0B')) // Vertical tab
-        .or(just('\x0C')) // Form feed
-        .or(just('\u{0085}')) // Next line
-        .or(just('\u{2028}')) // Line separator
-        .or(just('\u{2029}')) // Paragraph separator
+        .ignore_then(just(C::from_ascii(b'\n')))
+        .or(filter(|c: &C| {
+            [
+                '\r',       // Carriage return
+                '\x0B',     // Vertical tab
+                '\x0C',     // Form feed
+                '\u{0085}', // Next line
+                '\u{2028}', // Line separator
+                '\u{2029}', // Paragraph separator
+            ]
+            .contains(&c.to_char())
+        }))
         .ignored()
 }
 
@@ -341,5 +365,69 @@ pub fn keyword<'a, C: Character + 'a, S: AsRef<C::Str> + 'a + Clone, E: Error<C>
         } else {
             Err(E::expected_input_found(span, None, None))
         }
+    })
+}
+
+/// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
+///
+/// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
+pub fn semantic_indentation<'a, C, Tok, T, F, E: Error<C> + 'a>(
+    token: T,
+    make_group: F,
+) -> impl Parser<C, Vec<Tok>, Error = E> + Clone + 'a
+where
+    C: Character + 'a,
+    Tok: 'a,
+    T: Parser<C, Tok, Error = E> + Clone + 'a,
+    F: Fn(Vec<Tok>) -> Tok + Clone + 'a,
+{
+    let line_ws = filter(|c: &C| c.is_inline_whitespace());
+
+    let line = token.padded_by(line_ws.ignored().repeated()).repeated();
+
+    let lines = line_ws
+        .repeated()
+        .then(line)
+        .separated_by(newline())
+        .padded();
+
+    lines.map(move |lines| {
+        fn collapse<C, Tok, F>(mut tree: Vec<(Vec<C>, Vec<Tok>)>, make_group: &F) -> Option<Tok>
+        where
+            F: Fn(Vec<Tok>) -> Tok,
+        {
+            while let Some((_, tts)) = tree.pop() {
+                let tt = make_group(tts);
+                if let Some(last) = tree.last_mut() {
+                    last.1.push(tt);
+                } else {
+                    return Some(tt);
+                }
+            }
+            None
+        }
+
+        let mut nesting = vec![(Vec::new(), Vec::new())];
+        for (indent, mut line) in lines {
+            let mut indent = indent.as_slice();
+            let mut i = 0;
+            while let Some(tail) = nesting
+                .get(i)
+                .and_then(|(n, _)| indent.strip_prefix(n.as_slice()))
+            {
+                indent = tail;
+                i += 1;
+            }
+            if let Some(tail) = collapse(nesting.split_off(i), &make_group) {
+                nesting.last_mut().unwrap().1.push(tail);
+            }
+            if indent.len() > 0 {
+                nesting.push((indent.to_vec(), line));
+            } else {
+                nesting.last_mut().unwrap().1.append(&mut line);
+            }
+        }
+
+        nesting.remove(0).1
     })
 }

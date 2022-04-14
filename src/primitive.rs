@@ -13,8 +13,8 @@
 //! - [`filter`]: parses a single input, if the given filter function returns `true`
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
-use core::panic::Location;
 use super::*;
+use core::panic::Location;
 
 /// See [`custom`].
 pub struct Custom<F, E>(F, PhantomData<E>);
@@ -853,7 +853,10 @@ impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
         _debugger: &mut D,
         _stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        todo!("Attempted to use an unimplemented parser. Parser defined at {}", self.0)
+        todo!(
+            "Attempted to use an unimplemented parser. Parser defined at {}",
+            self.0
+        )
     }
 
     fn parse_inner_verbose(
