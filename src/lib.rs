@@ -30,7 +30,7 @@ use crate::{
     recovery::*,
 };
 
-use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec::Vec, vec};
 use core::{
     cmp::Ordering,
     // TODO: Enable when stable

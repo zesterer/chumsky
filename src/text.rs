@@ -219,7 +219,7 @@ pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let newline = text::newline::<Simple<char>>()
+/// let newline = text::newline::<char, Simple<char>>()
 ///     .then_ignore(end());
 ///
 /// assert_eq!(newline.parse("\n"), Ok(()));
