@@ -1408,6 +1408,48 @@ where
     }
 }
 
+/// See [`Parser::unwrapped`]
+pub struct Unwrapped<A, U, E>(pub(crate) &'static Location<'static>, pub(crate) A, pub(crate) PhantomData<(U, E)>);
+
+impl<A: Clone, U, E> Clone for Unwrapped<A, U, E> {
+    fn clone(&self) -> Self {
+        Unwrapped(self.0, self.1.clone(), PhantomData)
+    }
+}
+impl<A: Copy, U, E> Copy for Unwrapped<A, U, E> {}
+
+impl<I: Clone, O, A: Parser<I, Result<O, U>, Error = E>, U: fmt::Debug, E: Error<I>> Parser<I, O>
+for Unwrapped<A, U, E>
+{
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        let (errors, res) = debugger.invoke(&self.1, stream);
+
+        (
+            errors,
+            res.map(|(out, alt)| (out.unwrap_or_else(|err| panic!("Parser defined at {} failed to unwrap. Error: {:?}", self.0, err)), alt))
+        )
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::vec;
