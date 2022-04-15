@@ -167,7 +167,7 @@ you've already committed enough time and resources to your language that hand-wr
 
 Chumsky should:
 
-- Be easy to use, even if you doesn't understand exactly what the parser is doing under the hood
+- Be easy to use, even if you don't understand exactly what the parser is doing under the hood
 - Be type-driven, pushing users away from anti-patterns at compile-time
 - Be a mature, 'batteries-included' solution for context-free parsing by default. If you need to implement either
   `Parser` or `Strategy` by hand, that's a problem that needs fixing
