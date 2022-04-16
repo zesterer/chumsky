@@ -39,6 +39,7 @@ use core::{
     marker::PhantomData,
     ops::Range,
     str::FromStr,
+    panic::Location,
 };
 
 #[cfg(doc)]
@@ -1165,12 +1166,13 @@ pub trait Parser<I: Clone, O> {
     /// // Does not panic, because the original parser only accepts "true" or "false"
     /// assert!(boolean.parse("42").is_err());
     /// ```
-    fn unwrapped<U, E>(self) -> Map<Self, fn(Result<U, E>) -> U, Result<U, E>>
+    #[track_caller]
+    fn unwrapped<U, E>(self) -> Unwrapped<Self, E, <Self as Parser<I, O>>::Error>
     where
         Self: Sized + Parser<I, Result<U, E>>,
         E: fmt::Debug,
     {
-        self.map(|o| o.unwrap())
+        Unwrapped(Location::caller(), self, PhantomData)
     }
 }
 
