@@ -429,6 +429,7 @@ recursive(|expr| {
 
     sum
 })
+    .padded()
     .then_ignore(end())
 ```
 
