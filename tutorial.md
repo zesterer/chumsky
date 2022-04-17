@@ -404,7 +404,7 @@ recursive(|expr| {
         .padded();
 
     let atom = int
-        .or(expr.delimited_by(just('('), just(')')));
+        .or(expr.delimited_by(just('('), just(')'))).padded();
 
     let op = |c| just(c).padded();
 
