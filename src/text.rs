@@ -177,7 +177,9 @@ impl<I: Character, O, P: Parser<I, O>> TextParser<I, O> for P {}
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
 ///
-/// The output type of this parser is `()`.
+/// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
+///
+/// The output type of this parser is `Vec<()>`.
 ///
 /// # Examples
 ///
@@ -186,18 +188,13 @@ impl<I: Character, O, P: Parser<I, O>> TextParser<I, O> for P {}
 /// let whitespace = text::whitespace::<_, Simple<char>>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse("   \t \n\n  \t  "), Ok(()));
+/// assert_eq!(whitespace.parse("\t \n  \r "), Ok(vec![(), (), (), (), (), (), ()]));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse(""), Ok(()));
+/// assert_eq!(whitespace.parse(""), Ok(vec![]));
 /// ```
-pub fn whitespace<C: Character, E: Error<C>>() -> Padding<C, E> {
-    custom(|stream: &mut StreamOf<C, E>| loop {
-        let state = stream.save();
-        if stream.next().2.map_or(true, |b| !b.is_whitespace()) {
-            stream.revert(state);
-            break (Vec::new(), Ok(((), None)));
-        }
-    })
+pub fn whitespace<'a, C: Character + 'a, E: Error<C> + 'a>(
+) -> Repeated<impl Parser<C, (), Error=E>+Copy+Clone + 'a>{
+    filter(|c: &C| c.is_whitespace()).ignored().repeated()
 }
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
