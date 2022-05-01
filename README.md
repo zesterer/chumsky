@@ -123,10 +123,15 @@ the parser can only make educated guesses as to the meaning of the input. Differ
 for different languages, and for different patterns within those languages.
 
 Chumsky provides a variety of recovery strategies (each implementing the `Strategy` trait), but it's important to
-understand that which you apply, where you apply them, and in what order will greatly affect the quality of the errors
-that Chumsky is able to produce, along with the extent to which it is able to recover a useful AST. Where possible, you
-should attempt more 'specific' recovery strategies first rather than those that mindlessly skip large swathes of the
-input.
+understand that all of
+
+- which you apply
+- where you apply them
+- what order you apply them
+
+will greatly affect the quality of the errors that Chumsky is able to produce, along with the extent to which it is able
+to recover a useful AST. Where possible, you should attempt more 'specific' recovery strategies first rather than those
+that mindlessly skip large swathes of the input.
 
 It is recommended that you experiment with applying different strategies in different situations and at different levels
 of the parser to find a configuration that you are happy with. If none of the provided error recovery strategies cover
