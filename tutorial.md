@@ -197,7 +197,7 @@ let int = text::int(10)
 int.then_ignore(end())
 ```
 
-That's better. We've also swapped out our custom digit parser with a built-in parser that parses any positive
+That's better. We've also swapped out our custom digit parser with a built-in parser that parses any non-negative
 integer.
 
 ## Evaluating simple expressions
