@@ -277,7 +277,7 @@ pub fn digits<C: Character, E: Error<C>>(
         .collect()
 }
 
-/// A parser that accepts a positive integer.
+/// A parser that accepts a non-negative integer.
 ///
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
