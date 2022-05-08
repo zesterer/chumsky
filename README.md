@@ -87,7 +87,7 @@ let declarations, and calls.
 
 Parser combinators are a technique for implementing parsers by defining them in terms of other parsers. The resulting
 parsers use a [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) strategy to transform a stream
-of tokens into an output. Using parser combinators to define parsers is roughly analagous to using Rust's
+of tokens into an output. Using parser combinators to define parsers is roughly analogous to using Rust's
 [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait to define iterative algorithms: the
 type-driven API of `Iterator` makes it more difficult to make mistakes and easier to encode complicated iteration logic
 than if one were to write the same code by hand. The same is true of parser combinators.
@@ -155,7 +155,7 @@ test pom     ... bench:  12,793,490 ns/iter (+/- 1,954,583)
 ```
 
 I've included results from [`pom`](https://github.com/J-F-Liu/pom), another parser combinator crate with a similar
-design, as a point of reference. The sample file being parsed is broadly represenative of typical JSON data and has
+design, as a point of reference. The sample file being parsed is broadly representative of typical JSON data and has
 3,018 lines. This translates to a little over 630,000 lines of JSON per second.
 
 Clearly, this is a little slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
