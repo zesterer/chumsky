@@ -303,6 +303,8 @@ impl<I: Hash + Eq, S: PartialEq> PartialEq for Simple<I, S> {
     }
 }
 
+impl<I: Hash + Eq, S: Eq> Eq for Simple<I, S> {}
+
 impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Take `self.reason` into account
