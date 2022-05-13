@@ -19,7 +19,10 @@ where
         let before = inp.save();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
-            (span, Some(tok)) => Err(E::expected_found(None, Some(tok), inp.span_since(before))),
+            (at, Some(tok)) => Err(Located::at(
+                at,
+                E::expected_found(None, Some(tok), inp.span_since(before)),
+            )),
         }
     }
 
@@ -166,9 +169,14 @@ where
                     let before = inp.save();
                     match inp.next() {
                         (_, Some(tok)) if next == tok => {}
-                        (_, tok) => break Err(E::expected_found(Some(Some(next)), tok, inp.span_since(before))),
+                        (at, tok) => {
+                            break Err(Located::at(
+                                at,
+                                E::expected_found(Some(Some(next)), tok, inp.span_since(before)),
+                            ))
+                        }
                     }
-                },
+                }
                 None => break Ok(M::bind(|| self.seq.clone())),
             }
         }
@@ -219,7 +227,10 @@ where
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().any(|not| not == tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(E::expected_found(self.seq.iter().map(Some), found, inp.span_since(before))),
+            (at, found) => Err(Located::at(
+                at,
+                E::expected_found(self.seq.iter().map(Some), found, inp.span_since(before)),
+            )),
         }
     }
 
@@ -268,7 +279,10 @@ where
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(E::expected_found(None, found, inp.span_since(before))),
+            (at, found) => Err(Located::at(
+                at,
+                E::expected_found(None, found, inp.span_since(before)),
+            )),
         }
     }
 
@@ -312,7 +326,10 @@ where
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if (self.filter)(&tok) => Ok(M::bind(|| tok)),
-            (_, found) => Err(E::expected_found(None, found, inp.span_since(before))),
+            (at, found) => Err(Located::at(
+                at,
+                E::expected_found(None, found, inp.span_since(before)),
+            )),
         }
     }
 
@@ -333,7 +350,10 @@ pub struct FilterMap<F, E> {
 impl<F: Copy, E> Copy for FilterMap<F, E> {}
 impl<F: Clone, E> Clone for FilterMap<F, E> {
     fn clone(&self) -> Self {
-        Self { filter: self.filter.clone(), phantom: PhantomData }
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -365,10 +385,13 @@ where
                 let span = inp.span_since(before);
                 match (self.filter)(span, &tok) {
                     Ok(out) => Ok(M::bind(|| out)),
-                    Err(e) => Err(e),
+                    Err(e) => Err(Located::at(inp.last_pos(), e)),
                 }
-            },
-            (_, None) => Err(E::expected_found(None, None, inp.span_since(before))),
+            }
+            (at, None) => Err(Located::at(
+                at,
+                E::expected_found(None, None, inp.span_since(before)),
+            )),
         }
     }
 
@@ -388,7 +411,10 @@ where
     P: Parser<'a, I, E, S>,
 {
     fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, D> {
-        TakeUntil { until: self.until, phantom: PhantomData }
+        TakeUntil {
+            until: self.until,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -438,10 +464,12 @@ where
             inp.rewind(start);
 
             match inp.next() {
-                (_, Some(tok)) => output = M::map(output, |mut output: C| {
-                    output.push(tok);
-                    output
-                }),
+                (_, Some(tok)) => {
+                    output = M::map(output, |mut output: C| {
+                        output.push(tok);
+                        output
+                    })
+                }
                 (_, None) => break Err(e),
             }
         }
@@ -478,7 +506,6 @@ where
     go_extra!();
 }
 
-
 #[derive(Copy, Clone)]
 pub struct Choice<T, O> {
     parsers: T,
@@ -514,18 +541,22 @@ macro_rules! impl_choice_for_tuple {
 
                 let Choice { parsers: ($($X,)*), .. } = self;
 
-                let mut err = None;
+                let mut err: Option<Located<E>> = None;
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
                         Err(e) => {
-                            err = Some(e); // TODO: prioritise errors
+                            // TODO: prioritise errors
+                            err = Some(match err {
+                                Some(err) => err.prioritize(e, |a, b| a.merge(b)),
+                                None => e,
+                            });
                             inp.rewind(before);
                         },
                     };
                 )*
 
-                Err(err.unwrap_or_else(|| E::expected_found(None, None, inp.span_since(before))))
+                Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
             }
 
             go_extra!();

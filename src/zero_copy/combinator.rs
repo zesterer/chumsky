@@ -120,7 +120,7 @@ where
             let span = inp.span_since(before);
             match (self.mapper)(out, span) {
                 Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(e),
+                Err(e) => Err(Located::at(inp.last_pos(), e)),
             }
         })
     }
@@ -401,10 +401,13 @@ where
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => Ok(out),
-            Err(_) => {
+            Err(ea) => {
                 // TODO: prioritise errors
                 inp.rewind(before);
-                self.parser_b.go::<M>(inp)
+                match self.parser_b.go::<M>(inp) {
+                    Ok(out) => Ok(out),
+                    Err(eb) => Err(ea.prioritize(eb, |a, b| a.merge(b))),
+                }
             }
         }
     }
@@ -436,9 +439,9 @@ where
                 inp.rewind(before);
                 match self.fallback.go::<M>(inp) {
                     Ok(out) => {
-                        inp.emit(e);
+                        inp.emit(e.err);
                         Ok(out)
-                    },
+                    }
                     Err(_) => Err(e),
                 }
             }
@@ -525,9 +528,7 @@ impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
     }
 }
 
-impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a>
-    Repeated<A, I, C, E, S>
-{
+impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a> Repeated<A, I, C, E, S> {
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
     }
@@ -1076,7 +1077,7 @@ where
 
 #[derive(Copy, Clone)]
 pub struct Rewind<A> {
-    pub(crate) parser: A
+    pub(crate) parser: A,
 }
 
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for Rewind<A>
@@ -1084,7 +1085,7 @@ where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>
+    A: Parser<'a, I, E, S>,
 {
     type Output = A::Output;
 
