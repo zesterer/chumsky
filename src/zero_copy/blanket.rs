@@ -4,7 +4,7 @@ impl<'a, T, I, E, S> Parser<'a, I, E, S> for &'a T
 where
     T: Parser<'a, I, E, S>,
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = T::Output;

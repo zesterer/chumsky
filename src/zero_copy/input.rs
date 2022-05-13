@@ -150,14 +150,14 @@ impl<I: Input + ?Sized> Clone for Marker<I> {
     }
 }
 
-pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I::Token>, S> {
+pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> {
     input: &'a I,
     marker: Marker<I>,
     state: &'parse mut S,
     errors: Vec<E>,
 }
 
-impl<'a, 'parse, I: Input + ?Sized, E: Error<I::Token>, S> InputRef<'a, 'parse, I, E, S> {
+impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S> {
     pub(crate) fn new(input: &'a I, state: &'parse mut S) -> Self {
         Self {
             input,

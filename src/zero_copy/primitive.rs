@@ -10,15 +10,16 @@ pub fn end<I: Input + ?Sized>() -> End<I> {
 impl<'a, I, E, S> Parser<'a, I, E, S> for End<I>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = ();
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
-            (_, Some(_)) => Err(E::create()),
+            (span, Some(tok)) => Err(E::expected_found(None, Some(tok), inp.span_since(before))),
         }
     }
 
@@ -35,7 +36,7 @@ pub fn empty<I: Input + ?Sized>() -> Empty<I> {
 impl<'a, I, E, S> Parser<'a, I, E, S> for Empty<I>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = ();
@@ -137,7 +138,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 pub fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
@@ -150,7 +151,7 @@ where
 impl<'a, I, E, S, T> Parser<'a, I, E, S> for Just<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
@@ -161,9 +162,12 @@ where
         let mut items = self.seq.iter();
         loop {
             match items.next() {
-                Some(next) => match inp.next() {
-                    (_, Some(tok)) if next == tok => {}
-                    (_, Some(_) | None) => break Err(E::create()),
+                Some(next) => {
+                    let before = inp.save();
+                    match inp.next() {
+                        (_, Some(tok)) if next == tok => {}
+                        (_, tok) => break Err(E::expected_found(Some(Some(next)), tok, inp.span_since(before))),
+                    }
                 },
                 None => break Ok(M::bind(|| self.seq.clone())),
             }
@@ -191,7 +195,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 pub fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
@@ -204,7 +208,7 @@ where
 impl<'a, I, E, S, T> Parser<'a, I, E, S> for OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
@@ -212,9 +216,10 @@ where
     type Output = I::Token;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().any(|not| not == tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(E::create()),
+            (at, found) => Err(E::expected_found(self.seq.iter().map(Some), found, inp.span_since(before))),
         }
     }
 
@@ -239,7 +244,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 pub fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
@@ -252,7 +257,7 @@ where
 impl<'a, I, E, S, T> Parser<'a, I, E, S> for NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
@@ -260,9 +265,10 @@ where
     type Output = I::Token;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(E::create()),
+            (at, found) => Err(E::expected_found(None, found, inp.span_since(before))),
         }
     }
 
@@ -284,7 +290,7 @@ impl<F: Clone, I: ?Sized, E> Clone for Filter<F, I, E> {
     }
 }
 
-pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized, E: Error<I::Token>>(
+pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized, E: Error<I>>(
     filter: F,
 ) -> Filter<F, I, E> {
     Filter {
@@ -296,16 +302,17 @@ pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized, E: Error<I::Token>>(
 impl<'a, I, E, S, F> Parser<'a, I, E, S> for Filter<F, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     F: Fn(&I::Token) -> bool,
 {
     type Output = I::Token;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if (self.filter)(&tok) => Ok(M::bind(|| tok)),
-            (_, Some(_) | None) => Err(E::create()),
+            (_, found) => Err(E::expected_found(None, found, inp.span_since(before))),
         }
     }
 
@@ -314,7 +321,7 @@ where
 
 pub type Any<I, E> = Filter<fn(&<I as Input>::Token) -> bool, I, E>;
 
-pub fn any<I: Input + ?Sized, E: Error<I::Token>>() -> Any<I, E> {
+pub fn any<I: Input + ?Sized, E: Error<I>>() -> Any<I, E> {
     filter(|_| true)
 }
 
@@ -333,7 +340,7 @@ impl<F: Clone, E> Clone for FilterMap<F, E> {
 pub fn filter_map<F, I, O, E>(filter: F) -> FilterMap<F, E>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     F: Fn(I::Span, &I::Token) -> Result<O, E>,
 {
     FilterMap {
@@ -345,23 +352,23 @@ where
 impl<'a, F, I, O, E, S> Parser<'a, I, E, S> for FilterMap<F, E>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     F: Fn(I::Span, &I::Token) -> Result<O, E>,
     S: 'a,
 {
     type Output = O;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        let start = inp.save();
+        let before = inp.save();
         match inp.next() {
             (_, Some(tok)) => {
-                let span = inp.span_since(start);
+                let span = inp.span_since(before);
                 match (self.filter)(span, &tok) {
                     Ok(out) => Ok(M::bind(|| out)),
                     Err(e) => Err(e),
                 }
             },
-            (_, _) => Err(E::create()),
+            (_, None) => Err(E::expected_found(None, None, inp.span_since(before))),
         }
     }
 
@@ -376,7 +383,7 @@ pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
 impl<'a, I, E, S, P, C> TakeUntil<P, I, C, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     P: Parser<'a, I, E, S>,
 {
@@ -398,7 +405,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 pub fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     P: Parser<'a, I, E, S>,
 {
@@ -411,7 +418,7 @@ where
 impl<'a, P, I, E, S, C> Parser<'a, I, E, S> for TakeUntil<P, C>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     P: Parser<'a, I, E, S>,
     C: Container<I::Token>,
@@ -423,9 +430,10 @@ where
 
         loop {
             let start = inp.save();
-            if let Ok(out) = self.until.go::<M>(inp) {
-                break Ok(M::combine(output, out, |output, out| (output, out)));
-            }
+            let e = match self.until.go::<M>(inp) {
+                Ok(out) => break Ok(M::combine(output, out, |output, out| (output, out))),
+                Err(e) => e,
+            };
 
             inp.rewind(start);
 
@@ -434,7 +442,7 @@ where
                     output.push(tok);
                     output
                 }),
-                (_, None) => break Err(E::create()),
+                (_, None) => break Err(e),
             }
         }
     }
@@ -451,14 +459,14 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
     }
 }
 
-pub fn todo<I: Input + ?Sized, E: Error<I::Token>>() -> Todo<I, E> {
+pub fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
     Todo(PhantomData)
 }
 
 impl<'a, I, E, S> Parser<'a, I, E, S> for Todo<I, E>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = ();
@@ -484,18 +492,18 @@ pub fn choice<T, O>(parsers: T) -> Choice<T, O> {
     }
 }
 
-macro_rules! impl_for_tuple {
+macro_rules! impl_choice_for_tuple {
     () => {};
     ($head:ident $($X:ident)*) => {
-        impl_for_tuple!($($X)*);
-        impl_for_tuple!(~ $head $($X)*);
+        impl_choice_for_tuple!($($X)*);
+        impl_choice_for_tuple!(~ $head $($X)*);
     };
     (~ $($X:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
         impl<'a, I, E, S, $($X),*, O> Parser<'a, I, E, S> for Choice<($($X,)*), O>
         where
             I: Input + ?Sized,
-            E: Error<I::Token>,
+            E: Error<I>,
             S: 'a,
             $($X: Parser<'a, I, E, S, Output = O>),*
         {
@@ -506,14 +514,18 @@ macro_rules! impl_for_tuple {
 
                 let Choice { parsers: ($($X,)*), .. } = self;
 
+                let mut err = None;
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
-                        Err(_) => inp.rewind(before),
+                        Err(e) => {
+                            err = Some(e); // TODO: prioritise errors
+                            inp.rewind(before);
+                        },
                     };
                 )*
 
-                Err(E::create())
+                Err(err.unwrap_or_else(|| E::expected_found(None, None, inp.span_since(before))))
             }
 
             go_extra!();
@@ -521,4 +533,4 @@ macro_rules! impl_for_tuple {
     };
 }
 
-impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);

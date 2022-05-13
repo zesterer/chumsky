@@ -17,7 +17,7 @@ where
     C: Char,
     C::Slice: 'a,
     I: Input + StrInput<C> + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = &'a C::Slice;
