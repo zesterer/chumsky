@@ -78,7 +78,7 @@ mod internal {
         ) -> Self::Output<V>;
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
         ) -> PResult<Self, P::Output, E>;
@@ -104,7 +104,7 @@ mod internal {
             x
         }
 
-        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
         ) -> PResult<Self, P::Output, E> {
@@ -125,7 +125,7 @@ mod internal {
         }
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-        fn invoke<'a, I: Input + ?Sized, E: Error<I::Token>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
         ) -> PResult<Self, P::Output, E> {
@@ -134,7 +134,7 @@ mod internal {
     }
 }
 
-pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
+pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     type Output;
 
     fn parse(&self, input: &'a I) -> Result<Self::Output, E>
@@ -417,6 +417,16 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I::Token> = (), S: 'a = ()> {
         Padded { parser: self }
     }
 
+    fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(self, fallback: F) -> RecoverWith<Self, F>
+    where
+        Self: Sized,
+    {
+        RecoverWith {
+            parser: self,
+            fallback,
+        }
+    }
+
     fn boxed(self) -> Boxed<'a, I, Self::Output, E, S>
     where
         Self: Sized + 'a,
@@ -442,7 +452,7 @@ impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
 impl<'a, I, E, S, O> Parser<'a, I, E, S> for Boxed<'a, I, O, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = O;

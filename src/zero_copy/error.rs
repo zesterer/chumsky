@@ -1,9 +1,17 @@
 use super::*;
 
-pub trait Error<T> {
-    fn create() -> Self;
+pub trait Error<I: Input + ?Sized> {
+    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
+        expected: E,
+        found: Option<I::Token>,
+        span: I::Span,
+    ) -> Self;
 }
 
-impl<T> Error<T> for () {
-    fn create() -> Self {}
+impl<I: Input> Error<I> for () {
+    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
+        expected: E,
+        found: Option<I::Token>,
+        span: I::Span,
+    ) -> Self {}
 }

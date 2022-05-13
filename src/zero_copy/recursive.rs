@@ -11,7 +11,7 @@ pub struct Recursive<'a, I: ?Sized, O, E, S = ()> {
     inner: RecursiveInner<OnceParser<'a, I, O, E, S>>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: Error<I::Token>, S> Recursive<'a, I, O, E, S> {
+impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<'a, I, O, E, S> {
     fn cell(&self) -> Rc<OnceParser<'a, I, O, E, S>> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
@@ -48,7 +48,7 @@ impl<'a, I: ?Sized, O, E, S> Clone for Recursive<'a, I, O, E, S> {
 impl<'a, I, E, S, O> Parser<'a, I, E, S> for Recursive<'a, I, O, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
 {
     type Output = O;
@@ -69,7 +69,7 @@ where
 pub fn recursive<
     'a,
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S,
     A: Parser<'a, I, E, S> + 'a,
     F: FnOnce(Recursive<'a, I, A::Output, E, S>) -> A,

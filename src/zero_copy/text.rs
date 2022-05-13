@@ -72,7 +72,7 @@ pub struct Padded<A> {
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for Padded<A>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     I::Token: Char,
     A: Parser<'a, I, E, S>,

@@ -22,7 +22,7 @@ impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapSlice<A, F, E, S>
 where
     I: Input + SliceInput + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     I::Slice: 'a,
     A: Parser<'a, I, E, S>,
@@ -53,7 +53,7 @@ pub struct Map<A, F> {
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for Map<A, F>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     F: Fn(A::Output) -> O,
@@ -78,7 +78,7 @@ pub struct MapWithSpan<A, F> {
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithSpan<A, F>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     F: Fn(A::Output, I::Span) -> O,
@@ -107,7 +107,7 @@ pub struct TryMap<A, F> {
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMap<A, F>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     F: Fn(A::Output, I::Span) -> Result<O, E>,
@@ -148,7 +148,7 @@ impl<A: Clone, O: Clone, E, S> Clone for To<A, O, E, S> {
 impl<'a, I, E, S, A, O> Parser<'a, I, E, S> for To<A, O, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     O: Clone,
@@ -186,7 +186,7 @@ impl<A: Clone, B: Clone, E, S> Clone for Then<A, B, E, S> {
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for Then<A, B, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -222,7 +222,7 @@ impl<A: Clone, B: Clone, E, S> Clone for IgnoreThen<A, B, E, S> {
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for IgnoreThen<A, B, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -258,7 +258,7 @@ impl<A: Clone, B: Clone, E, S> Clone for ThenIgnore<A, B, E, S> {
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for ThenIgnore<A, B, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -294,7 +294,7 @@ impl<A: Clone, B, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, F, I, E, S
 impl<'a, I, E, S, A, B, F> Parser<'a, I, E, S> for ThenWith<A, B, F, I, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -337,7 +337,7 @@ pub struct DelimitedBy<A, B, C> {
 impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for DelimitedBy<A, B, C>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -364,7 +364,7 @@ pub struct PaddedBy<A, B> {
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for PaddedBy<A, B>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -390,7 +390,7 @@ pub struct Or<A, B> {
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for Or<A, B>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S, Output = A::Output>,
@@ -402,8 +402,45 @@ where
         match self.parser_a.go::<M>(inp) {
             Ok(out) => Ok(out),
             Err(_) => {
+                // TODO: prioritise errors
                 inp.rewind(before);
                 self.parser_b.go::<M>(inp)
+            }
+        }
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct RecoverWith<A, F> {
+    pub(crate) parser: A,
+    pub(crate) fallback: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for RecoverWith<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Parser<'a, I, E, S, Output = A::Output>,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(out) => Ok(out),
+            Err(e) => {
+                inp.rewind(before);
+                match self.fallback.go::<M>(inp) {
+                    Ok(out) => {
+                        inp.emit(e);
+                        Ok(out)
+                    },
+                    Err(_) => Err(e),
+                }
             }
         }
     }
@@ -488,7 +525,7 @@ impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
     }
 }
 
-impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a>
+impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a>
     Repeated<A, I, C, E, S>
 {
     pub fn at_least(self, at_least: usize) -> Self {
@@ -526,7 +563,7 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I::Token>, S: 'a
 impl<'a, I, E, S, A, C> Parser<'a, I, E, S> for Repeated<A, I, C, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     C: Container<A::Output>,
@@ -598,7 +635,7 @@ impl<
         B: Parser<'a, I, E, S>,
         I: Input + ?Sized,
         C,
-        E: Error<I::Token>,
+        E: Error<I>,
         S: 'a,
     > SeparatedBy<A, B, I, C, E, S>
 {
@@ -655,7 +692,7 @@ impl<
 impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for SeparatedBy<A, B, I, C, E, S>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -730,7 +767,7 @@ pub struct OrNot<A> {
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for OrNot<A>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
 {
@@ -789,7 +826,7 @@ pub struct RepeatedExactly<A, C, const N: usize> {
 }
 
 impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
-    pub fn collect<'a, I: Input, E: Error<I::Token>, S: 'a, D: ContainerExactly<A::Output, N>>(
+    pub fn collect<'a, I: Input, E: Error<I>, S: 'a, D: ContainerExactly<A::Output, N>>(
         self,
     ) -> RepeatedExactly<A, D, N>
     where
@@ -805,7 +842,7 @@ impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
 impl<'a, I, E, S, A, C, const N: usize> Parser<'a, I, E, S> for RepeatedExactly<A, C, N>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     C: ContainerExactly<A::Output, N>,
@@ -870,7 +907,7 @@ impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
         }
     }
 
-    pub fn collect<'a, I: Input, E: Error<I::Token>, S: 'a, D: ContainerExactly<A::Output, N>>(
+    pub fn collect<'a, I: Input, E: Error<I>, S: 'a, D: ContainerExactly<A::Output, N>>(
         self,
     ) -> SeparatedByExactly<A, B, D, N>
     where
@@ -889,7 +926,7 @@ impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
 impl<'a, I, E, S, A, B, C, const N: usize> Parser<'a, I, E, S> for SeparatedByExactly<A, B, C, N>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
@@ -973,7 +1010,7 @@ impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldr<P, F, A, B, E, S>
 where
     I: Input + ?Sized,
     P: Parser<'a, I, E, S, Output = (A, B)>,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: IntoIterator,
     A::IntoIter: DoubleEndedIterator,
@@ -1016,7 +1053,7 @@ impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldl<P, F, A, B, E, S>
 where
     I: Input + ?Sized,
     P: Parser<'a, I, E, S, Output = (A, B)>,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     B: IntoIterator,
     F: Fn(A, B::Item) -> A,
@@ -1045,7 +1082,7 @@ pub struct Rewind<A> {
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for Rewind<A>
 where
     I: Input + ?Sized,
-    E: Error<I::Token>,
+    E: Error<I>,
     S: 'a,
     A: Parser<'a, I, E, S>
 {
