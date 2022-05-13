@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait Input {
-    type Offset: Copy;
+    type Offset: Copy + Ord;
     type Token;
     type Span: Span;
 
@@ -128,17 +128,17 @@ impl<'a, Ctx: Clone, I: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx,
     }
 }
 
-impl<
-        'a,
-        Ctx: Clone,
-        C: Char,
-        I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>,
-    > StrInput<C> for WithContext<'a, Ctx, I>
+impl<'a, Ctx, C, I> StrInput<C> for WithContext<'a, Ctx, I>
+where
+    Ctx: Clone,
+    C: Char,
+    I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>,
 {
 }
 
 // Represents the progress of a parser through the input
 pub(crate) struct Marker<I: Input + ?Sized> {
+    pos: usize,
     offset: I::Offset,
     err_count: usize,
 }
@@ -162,6 +162,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         Self {
             input,
             marker: Marker {
+                pos: 0,
                 offset: input.start(),
                 err_count: 0,
             },
@@ -191,10 +192,15 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn next(&mut self) -> (I::Offset, Option<I::Token>) {
+    pub(crate) fn next(&mut self) -> (usize, Option<I::Token>) {
         let (offset, token) = self.input.next(self.marker.offset);
         self.marker.offset = offset;
-        (offset, token)
+        self.marker.pos += 1;
+        (self.marker.pos, token)
+    }
+
+    pub(crate) fn last_pos(&self) -> usize {
+        self.marker.pos
     }
 
     pub(crate) fn slice(&self, range: Range<Marker<I>>) -> &'a I::Slice
@@ -232,5 +238,9 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
 
     pub(crate) fn emit(&mut self, error: E) {
         self.errors.push(error);
+    }
+
+    pub(crate) fn into_errs(self) -> Vec<E> {
+        self.errors
     }
 }

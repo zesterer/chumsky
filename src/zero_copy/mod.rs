@@ -24,9 +24,9 @@ pub mod text;
 
 pub mod prelude {
     pub use super::{
-        error::Error as _,
+        error::{Error as _, Rich, Simple},
         primitive::{
-            any, choice, empty, end, filter, filter_map, just, none_of, one_of, take_until, todo
+            any, choice, empty, end, filter, filter_map, just, none_of, one_of, take_until, todo,
         },
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
@@ -45,7 +45,8 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    cmp::Eq,
+    cmp::{Eq, Ordering},
+    fmt,
     hash::Hash,
     lazy::OnceCell,
     marker::PhantomData,
@@ -57,12 +58,32 @@ use self::{
     combinator::*,
     error::Error,
     input::{Input, InputRef, SliceInput, StrInput, WithContext},
+    internal::*,
     span::Span,
     text::*,
-    internal::*,
 };
 
-pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, E>;
+pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
+
+#[doc(hidden)]
+pub struct Located<E> {
+    pos: usize,
+    err: E,
+}
+
+impl<E> Located<E> {
+    fn at(pos: usize, err: E) -> Self {
+        Self { pos, err }
+    }
+
+    fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
+        match self.pos.cmp(&other.pos) {
+            Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
+            Ordering::Greater => self,
+            Ordering::Less => other,
+        }
+    }
+}
 
 mod internal {
     use super::*;
@@ -137,27 +158,44 @@ mod internal {
 pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     type Output;
 
-    fn parse(&self, input: &'a I) -> Result<Self::Output, E>
+    fn parse(&self, input: &'a I) -> (Option<Self::Output>, Vec<E>)
     where
         Self: Sized,
         S: Default,
     {
-        self.go::<Emit>(&mut InputRef::new(input, &mut S::default()))
+        self.parse_with_state(input, &mut S::default())
     }
 
-    fn parse_with_state(&self, input: &'a I, state: &mut S) -> Result<Self::Output, E>
+    fn parse_with_state(&self, input: &'a I, state: &mut S) -> (Option<Self::Output>, Vec<E>)
     where
         Self: Sized,
     {
-        self.go::<Emit>(&mut InputRef::new(input, state))
+        let mut inp = InputRef::new(input, state);
+        let res = self.go::<Emit>(&mut inp);
+        let mut errs = inp.into_errs();
+        let out = match res {
+            Ok(out) => Some(out),
+            Err(e) => {
+                errs.push(e.err);
+                None
+            }
+        };
+        (out, errs)
     }
 
-    fn check(&self, input: &'a I) -> Result<(), E>
+    fn check(&self, input: &'a I) -> Vec<E>
     where
         Self: Sized,
         S: Default,
     {
-        self.go::<Check>(&mut InputRef::new(input, &mut S::default()))
+        let mut state = S::default();
+        let mut inp = InputRef::new(input, &mut state);
+        let res = self.go::<Check>(&mut inp);
+        let mut errs = inp.into_errs();
+        if let Err(e) = res {
+            errs.push(e.err);
+        };
+        errs
     }
 
     #[doc(hidden)]
@@ -268,7 +306,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_with<B: Parser<'a, I, E, S>, F: Fn(Self::Output) -> B>(self, then: F) -> ThenWith<Self, B, F, I, E, S>
+    fn then_with<B: Parser<'a, I, E, S>, F: Fn(Self::Output) -> B>(
+        self,
+        then: F,
+    ) -> ThenWith<Self, B, F, I, E, S>
     where
         Self: Sized,
     {
@@ -417,7 +458,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Padded { parser: self }
     }
 
-    fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(self, fallback: F) -> RecoverWith<Self, F>
+    fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(
+        self,
+        fallback: F,
+    ) -> RecoverWith<Self, F>
     where
         Self: Sized,
     {

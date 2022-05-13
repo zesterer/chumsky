@@ -74,7 +74,7 @@ mod chumsky_zero_copy {
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a>() -> impl Parser<'a, [u8], Output = JsonZero<'a>> {
+    pub fn json<'a>() -> impl Parser<'a, [u8], Simple<[u8]>, Output = JsonZero<'a>> {
         recursive(|value| {
             let digits = filter(|b: &u8| b.is_ascii_digit()).repeated();
 
@@ -128,10 +128,7 @@ mod chumsky_zero_copy {
                 .delimited_by(just(b'['), just(b']'))
                 .boxed();
 
-            let member = string
-                .clone()
-                .then_ignore(just(b':').padded())
-                .then(value);
+            let member = string.clone().then_ignore(just(b':').padded()).then(value);
             let object = member
                 .clone()
                 .separated_by(just(b',').padded())
