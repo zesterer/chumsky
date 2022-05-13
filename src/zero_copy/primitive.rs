@@ -6,8 +6,8 @@ pub fn end<I: Input + ?Sized>() -> End<I> {
     End(PhantomData)
 }
 
-impl<I> Copy for End<I> {}
-impl<I> Clone for End<I> {
+impl<I: ?Sized> Copy for End<I> {}
+impl<I: ?Sized> Clone for End<I> {
     fn clone(&self) -> Self {
         End(PhantomData)
     }
@@ -41,8 +41,8 @@ pub fn empty<I: Input + ?Sized>() -> Empty<I> {
     Empty(PhantomData)
 }
 
-impl<I> Copy for Empty<I> {}
-impl<I> Clone for Empty<I> {
+impl<I: ?Sized> Copy for Empty<I> {}
+impl<I: ?Sized> Clone for Empty<I> {
     fn clone(&self) -> Self {
         Empty(PhantomData)
     }
