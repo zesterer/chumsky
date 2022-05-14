@@ -569,14 +569,14 @@ fn zero_copy() {
 
     assert_eq!(
         parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#)),
-        Ok([
+        (Some([
             ((42, 0..5), Token::Ident("hello")),
             ((42, 6..13), Token::String("\"world\"")),
             ((42, 14..19), Token::Ident("these")),
             ((42, 20..23), Token::Ident("are")),
             ((42, 24..30), Token::String("\"test\"")),
             ((42, 31..37), Token::Ident("tokens")),
-        ]),
+        ]), Vec::new()),
     );
 }
 
@@ -599,20 +599,20 @@ fn zero_copy_repetition() {
 
     assert_eq!(
         parser().parse("[122 , 23,43,    4, ]"),
-        Ok(vec![122, 23, 43, 4])
+        (Some(vec![122, 23, 43, 4]), Vec::new())
     );
     assert_eq!(
         parser().parse("[0, 3, 6, 900,120]"),
-        Ok(vec![0, 3, 6, 900, 120])
+        (Some(vec![0, 3, 6, 900, 120]), Vec::new())
     );
     assert_eq!(
         parser().parse("[200,400,50  ,0,0, ]"),
-        Ok(vec![200, 400, 50, 0, 0])
+        (Some(vec![200, 400, 50, 0, 0]), Vec::new())
     );
 
-    assert!(parser().parse("[1234,123,12,1]").is_err());
-    assert!(parser().parse("[,0, 1, 456]").is_err());
-    assert!(parser().parse("[3, 4, 5, 67 89,]").is_err());
+    assert!(!parser().parse("[1234,123,12,1]").1.is_empty());
+    assert!(!parser().parse("[,0, 1, 456]").1.is_empty());
+    assert!(!parser().parse("[3, 4, 5, 67 89,]").1.is_empty());
 }
 
 #[cfg(feature = "regex")]
