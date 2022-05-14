@@ -241,6 +241,16 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
+    fn map_with_state<O, F: Fn(Self::Output, S) -> O>(self, f: F) -> MapWithState<Self, F>
+    where
+        Self: Sized,
+    {
+        MapWithState {
+            parser: self,
+            mapper: f,
+        }
+    }
+
     fn try_map<O, F: Fn(Self::Output, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
     where
         Self: Sized,

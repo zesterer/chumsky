@@ -404,6 +404,62 @@ where
     go_extra!();
 }
 
+pub struct FilterMapState<F, E> {
+    filter: F,
+    phantom: PhantomData<E>,
+}
+
+impl<F: Copy, E> Copy for FilterMapState<F, E> {}
+impl<F: Clone, E> Clone for FilterMapState<F, E> {
+    fn clone(&self) -> Self {
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+pub fn filter_map_state<F, I, O, E, S>(filter: F) -> FilterMapState<F, E>
+    where
+        I: Input + ?Sized,
+        E: Error<I>,
+        F: Fn(&mut S, &I::Token) -> Result<O, E>,
+{
+    FilterMapState {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, F, I, O, E, S> Parser<'a, I, E, S> for FilterMapState<F, E>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    F: Fn(&mut S, &I::Token) -> Result<O, E>,
+    S: 'a,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        match inp.next() {
+            (_, Some(tok)) => {
+                let state = inp.state();
+                match (self.filter)(state, &tok) {
+                    Ok(out) => Ok(M::bind(|| out)),
+                    Err(e) => Err(Located::at(inp.last_pos(), e)),
+                }
+            }
+            (at, None) => Err(Located::at(
+                at,
+                E::expected_found(None, None, inp.span_since(before)),
+            )),
+        }
+    }
+
+    go_extra!();
+}
+
 pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
     until: P,
     phantom: PhantomData<(C, E, S, I)>,
