@@ -23,6 +23,7 @@ where
     type Output = &'a C::Slice;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
                 let before = inp.save();
@@ -30,7 +31,8 @@ where
                 let after = inp.save();
                 M::bind(|| inp.slice(before..after))
             })
-            .ok_or_else(|| E::create())
+            // TODO: Make this error actually correct
+            .ok_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before))))
     }
 
     go_extra!();
