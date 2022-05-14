@@ -458,6 +458,15 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Padded { parser: self }
     }
 
+    fn flatten<T, Inner>(self) -> Map<Self, fn(Self::Output) -> Vec<T>>
+        where
+            Self: Sized,
+            Self::Output: IntoIterator<Item = Inner>,
+            Inner: IntoIterator<Item = T>,
+    {
+        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
+    }
+
     fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(
         self,
         fallback: F,
