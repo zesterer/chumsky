@@ -179,6 +179,10 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.marker = marker;
     }
 
+    pub(crate) fn state(&mut self) -> &mut S {
+        self.state
+    }
+
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let before = self.save();
