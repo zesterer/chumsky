@@ -26,7 +26,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Rich, Simple},
         primitive::{
-            any, choice, empty, end, filter, filter_map, just, none_of, one_of, take_until, todo,
+            any, choice, empty, end, filter, filter_map, filter_map_state, just, none_of, one_of, take_until, todo,
         },
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
