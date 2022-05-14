@@ -630,17 +630,17 @@ fn regex_parser() {
 
     assert_eq!(
         parser::<char>().parse("hello world this works"),
-        Ok(vec!["hello", "world", "this", "works",]),
+        (Some(vec!["hello", "world", "this", "works"]), Vec::new()),
     );
 
     assert_eq!(
         parser::<u8>().parse(b"hello world this works" as &[_]),
-        Ok(vec![
+        (Some(vec![
             b"hello" as &[_],
             b"world" as &[_],
             b"this" as &[_],
             b"works" as &[_],
-        ]),
+        ]), Vec::new()),
     );
 }
 
