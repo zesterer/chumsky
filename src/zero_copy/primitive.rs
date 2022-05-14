@@ -423,7 +423,7 @@ pub fn filter_map_state<F, I, O, E, S>(filter: F) -> FilterMapState<F, E>
     where
         I: Input + ?Sized,
         E: Error<I>,
-        F: Fn(&mut S, &I::Token) -> Result<O, E>,
+        F: Fn(&mut S, I::Span, &I::Token) -> Result<O, E>,
 {
     FilterMapState {
         filter,
@@ -435,7 +435,7 @@ impl<'a, F, I, O, E, S> Parser<'a, I, E, S> for FilterMapState<F, E>
 where
     I: Input + ?Sized,
     E: Error<I>,
-    F: Fn(&mut S, &I::Token) -> Result<O, E>,
+    F: Fn(&mut S, I::Span, &I::Token) -> Result<O, E>,
     S: 'a,
 {
     type Output = O;
@@ -444,8 +444,9 @@ where
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) => {
+                let span = inp.span_since(before);
                 let state = inp.state();
-                match (self.filter)(state, &tok) {
+                match (self.filter)(state, span, &tok) {
                     Ok(out) => Ok(M::bind(|| out)),
                     Err(e) => Err(Located::at(inp.last_pos(), e)),
                 }
