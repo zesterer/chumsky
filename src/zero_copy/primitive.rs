@@ -1,10 +1,16 @@
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct End<I: ?Sized>(PhantomData<I>);
 
 pub fn end<I: Input + ?Sized>() -> End<I> {
     End(PhantomData)
+}
+
+impl<I: ?Sized> Copy for End<I> {}
+impl<I: ?Sized> Clone for End<I> {
+    fn clone(&self) -> Self {
+        End(PhantomData)
+    }
 }
 
 impl<'a, I, E, S> Parser<'a, I, E, S> for End<I>
@@ -29,11 +35,17 @@ where
     go_extra!();
 }
 
-#[derive(Copy, Clone)]
 pub struct Empty<I: ?Sized>(PhantomData<I>);
 
 pub fn empty<I: Input + ?Sized>() -> Empty<I> {
     Empty(PhantomData)
+}
+
+impl<I: ?Sized> Copy for Empty<I> {}
+impl<I: ?Sized> Clone for Empty<I> {
+    fn clone(&self) -> Self {
+        Empty(PhantomData)
+    }
 }
 
 impl<'a, I, E, S> Parser<'a, I, E, S> for Empty<I>
@@ -59,60 +71,54 @@ pub trait Seq<T> {
 }
 
 impl<T: Clone> Seq<T> for T {
-    type Iter<'a>
+    type Iter<'a> = core::iter::Once<T>
     where
-        Self: 'a,
-    = core::iter::Once<T>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         core::iter::once(self.clone())
     }
 }
 
 impl<T: Clone, const N: usize> Seq<T> for [T; N] {
-    type Iter<'a>
+    type Iter<'a> = core::array::IntoIter<T, N>
     where
-        Self: 'a,
-    = core::array::IntoIter<T, N>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         core::array::IntoIter::new(self.clone())
     }
 }
 
 impl<'b, T: Clone, const N: usize> Seq<T> for &'b [T; N] {
-    type Iter<'a>
+    type Iter<'a> = core::array::IntoIter<T, N>
     where
-        Self: 'a,
-    = core::array::IntoIter<T, N>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         core::array::IntoIter::new((*self).clone())
     }
 }
 
 impl Seq<char> for str {
-    type Iter<'a>
+    type Iter<'a> = core::str::Chars<'a>
     where
-        Self: 'a,
-    = core::str::Chars<'a>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
 }
 
 impl<'b> Seq<char> for &'b str {
-    type Iter<'a>
+    type Iter<'a> = core::str::Chars<'a>
     where
-        Self: 'a,
-    = core::str::Chars<'a>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
 }
 
 impl Seq<char> for String {
-    type Iter<'a>
+    type Iter<'a> = core::str::Chars<'a>
     where
-        Self: 'a,
-    = core::str::Chars<'a>;
+        Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
