@@ -7,7 +7,6 @@
         generic_associated_types,
         maybe_uninit_uninit_array,
         maybe_uninit_array_assume_init,
-        maybe_uninit_extra,
         once_cell,
     )
 )]
@@ -27,6 +26,7 @@ pub mod recursive;
 pub mod span;
 pub mod stream;
 pub mod text;
+#[cfg(feature = "nightly")]
 pub mod zero_copy;
 
 pub use crate::{error::Error, span::Span};

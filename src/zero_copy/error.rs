@@ -8,15 +8,16 @@ pub trait Error<I: Input + ?Sized>: Sized {
     ) -> Self;
 
     fn merge(self, other: Self) -> Self {
+        #![allow(unused_variables)]
         self
     }
 }
 
 impl<I: Input + ?Sized> Error<I> for () {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
-        expected: E,
-        found: Option<I::Token>,
-        span: I::Span,
+        _: E,
+        _: Option<I::Token>,
+        _: I::Span,
     ) -> Self {
     }
 }

@@ -57,7 +57,7 @@ use hashbrown::HashMap;
 use self::{
     combinator::*,
     error::Error,
-    input::{Input, InputRef, SliceInput, StrInput, WithContext},
+    input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
     span::Span,
     text::*,
@@ -137,14 +137,14 @@ mod internal {
     impl Mode for Check {
         type Output<T> = ();
         fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {}
+        fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            x: Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
+            _: Self::Output<T>,
+            _: Self::Output<U>,
+            _: F,
         ) -> Self::Output<V> {
         }
-        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
+        fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
         fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
             parser: &P,
