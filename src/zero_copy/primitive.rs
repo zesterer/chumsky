@@ -56,7 +56,7 @@ where
 {
     type Output = ();
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         Ok(M::bind(|| ()))
     }
 
@@ -348,7 +348,7 @@ where
     S: 'a,
     P: Parser<'a, I, E, S>,
 {
-    fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, D> {
+    pub fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, D> {
         TakeUntil {
             until: self.until,
             phantom: PhantomData,

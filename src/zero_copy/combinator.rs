@@ -155,7 +155,6 @@ impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
     type Output = O;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let state = inp.state();
             match (self.mapper)(out, state) {
@@ -900,9 +899,9 @@ pub trait ContainerExactly<T, const N: usize> {
 impl<T, const N: usize> ContainerExactly<T, N> for () {
     type Uninit = ();
     fn uninit() -> Self::Uninit {}
-    fn write(uninit: &mut Self::Uninit, i: usize, item: T) {}
-    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {}
-    unsafe fn take(uninit: Self::Uninit) -> Self {}
+    fn write(_: &mut Self::Uninit, _: usize, _: T) {}
+    unsafe fn drop_before(_: &mut Self::Uninit, _: usize) {}
+    unsafe fn take(_: Self::Uninit) -> Self {}
 }
 
 impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
