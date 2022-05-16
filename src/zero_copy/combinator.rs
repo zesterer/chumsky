@@ -44,6 +44,46 @@ where
     go_extra!();
 }
 
+pub struct Filter<A, F> {
+    pub(crate) parser: A,
+    pub(crate) filter: F,
+}
+
+impl<A: Copy + ?Sized, F: Copy> Copy for Filter<A, F> {}
+impl<A: Clone, F: Clone> Clone for Filter<A, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            filter: self.filter.clone(),
+        }
+    }
+}
+
+impl<'a, A, I, E, S, F> Parser<'a, I, E, S> for Filter<A, F>
+    where
+        I: Input + ?Sized,
+        E: Error<I>,
+        S: 'a,
+        A: Parser<'a, I, E, S>,
+        F: Fn(&A::Output) -> bool,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).and_then(|out| {
+            if (self.filter)(&out) {
+                Ok(M::bind(|| out))
+            } else {
+                let span = inp.span_since(before);
+                Err(Located::at(inp.last_pos(), E::expected_found(None, None, span)))
+            }
+        })
+    }
+
+    go_extra!();
+}
+
 #[derive(Copy, Clone)]
 pub struct Map<A, F> {
     pub(crate) parser: A,
@@ -99,6 +139,36 @@ where
 }
 
 #[derive(Copy, Clone)]
+pub struct MapWithState<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
+    where
+        I: Input + ?Sized,
+        E: Error<I>,
+        S: 'a,
+        A: Parser<'a, I, E, S>,
+        F: Fn(A::Output, &mut S) -> Result<O, E>,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).and_then(|out| {
+            let state = inp.state();
+            match (self.mapper)(out, state) {
+                Ok(out) => Ok(M::bind(|| out)),
+                Err(e) => Err(Located::at(inp.last_pos(), e)),
+            }
+        })
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
 pub struct TryMap<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
@@ -119,6 +189,37 @@ where
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
             match (self.mapper)(out, span) {
+                Ok(out) => Ok(M::bind(|| out)),
+                Err(e) => Err(Located::at(inp.last_pos(), e)),
+            }
+        })
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct TryMapWithState<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMapWithState<A, F>
+    where
+        I: Input + ?Sized,
+        E: Error<I>,
+        S: 'a,
+        A: Parser<'a, I, E, S>,
+        F: Fn(A::Output, I::Span, &mut S) -> Result<O, E>,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).and_then(|out| {
+            let span = inp.span_since(before);
+            let state = inp.state();
+            match (self.mapper)(out, span, state) {
                 Ok(out) => Ok(M::bind(|| out)),
                 Err(e) => Err(Located::at(inp.last_pos(), e)),
             }

@@ -26,7 +26,7 @@ pub mod prelude {
     pub use super::{
         error::{Error as _, Rich, Simple},
         primitive::{
-            any, choice, empty, end, filter, filter_map, just, none_of, one_of, take_until, todo,
+            any, choice, empty, end, just, none_of, one_of, take_until, todo,
         },
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
@@ -221,6 +221,16 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
+    fn filter<F: Fn(&Self::Output) -> bool>(self, f: F) -> Filter<Self, F>
+    where
+        Self: Sized,
+    {
+        Filter {
+            parser: self,
+            filter: f,
+        }
+    }
+
     fn map<O, F: Fn(Self::Output) -> O>(self, f: F) -> Map<Self, F>
     where
         Self: Sized,
@@ -241,11 +251,32 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
+    fn map_with_state<O, F: Fn(Self::Output, S) -> O>(self, f: F) -> MapWithState<Self, F>
+    where
+        Self: Sized,
+    {
+        MapWithState {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    #[doc(alias = "filter_map")]
     fn try_map<O, F: Fn(Self::Output, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
     where
         Self: Sized,
     {
         TryMap {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, S) -> Result<O, E>>(self, f: F) -> TryMapWithState<Self, F>
+    where
+        Self: Sized,
+    {
+        TryMapWithState {
             parser: self,
             mapper: f,
         }
@@ -549,13 +580,14 @@ fn zero_copy() {
 
     fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, Output = [(Span, Token<'a>); 6]>
     {
-        let ident = filter(|c: &char| c.is_alphanumeric())
+        let ident = any()
+            .filter(|c: &char| c.is_alphanumeric())
             .repeated()
             .at_least(1)
             .map_slice(Token::Ident);
 
         let string = just('"')
-            .then(filter(|c: &char| *c != '"').repeated())
+            .then(any().filter(|c: &char| *c != '"').repeated())
             .then(just('"'))
             .map_slice(Token::String);
 
@@ -585,7 +617,8 @@ fn zero_copy_repetition() {
     use self::prelude::*;
 
     fn parser<'a>() -> impl Parser<'a, str, Output = Vec<u64>> {
-        filter(|c: &char| c.is_ascii_digit())
+        any()
+            .filter(|c: &char| c.is_ascii_digit())
             .repeated()
             .at_least(1)
             .at_most(3)

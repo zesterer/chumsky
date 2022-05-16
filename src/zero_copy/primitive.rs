@@ -295,43 +295,31 @@ where
     go_extra!();
 }
 
-pub struct Filter<F, I: ?Sized, E> {
-    filter: F,
-    phantom: PhantomData<(E, I)>,
+pub struct Any<I: ?Sized, E, S = ()> {
+    phantom: PhantomData<(E, S, I)>
 }
 
-impl<F: Copy, I: ?Sized, E> Copy for Filter<F, I, E> {}
-impl<F: Clone, I: ?Sized, E> Clone for Filter<F, I, E> {
+impl<I, E, S> Copy for Any<I, E, S> {}
+impl<I, E, S> Clone for Any<I, E, S> {
     fn clone(&self) -> Self {
         Self {
-            filter: self.filter.clone(),
             phantom: PhantomData,
         }
     }
 }
 
-pub fn filter<F: Fn(&I::Token) -> bool, I: Input + ?Sized, E: Error<I>>(
-    filter: F,
-) -> Filter<F, I, E> {
-    Filter {
-        filter,
-        phantom: PhantomData,
-    }
-}
-
-impl<'a, I, E, S, F> Parser<'a, I, E, S> for Filter<F, I, E>
+impl<'a, I, E, S> Parser<'a, I, E, S> for Any<I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    F: Fn(&I::Token) -> bool,
 {
     type Output = I::Token;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
         match inp.next() {
-            (_, Some(tok)) if (self.filter)(&tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
                 E::expected_found(None, found, inp.span_since(before)),
@@ -342,66 +330,10 @@ where
     go_extra!();
 }
 
-pub type Any<I, E> = Filter<fn(&<I as Input>::Token) -> bool, I, E>;
-
-pub fn any<I: Input + ?Sized, E: Error<I>>() -> Any<I, E> {
-    filter(|_| true)
-}
-
-pub struct FilterMap<F, E> {
-    filter: F,
-    phantom: PhantomData<E>,
-}
-
-impl<F: Copy, E> Copy for FilterMap<F, E> {}
-impl<F: Clone, E> Clone for FilterMap<F, E> {
-    fn clone(&self) -> Self {
-        Self {
-            filter: self.filter.clone(),
-            phantom: PhantomData,
-        }
-    }
-}
-
-pub fn filter_map<F, I, O, E>(filter: F) -> FilterMap<F, E>
-where
-    I: Input + ?Sized,
-    E: Error<I>,
-    F: Fn(I::Span, &I::Token) -> Result<O, E>,
-{
-    FilterMap {
-        filter,
+pub fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
+    Any {
         phantom: PhantomData,
     }
-}
-
-impl<'a, F, I, O, E, S> Parser<'a, I, E, S> for FilterMap<F, E>
-where
-    I: Input + ?Sized,
-    E: Error<I>,
-    F: Fn(I::Span, &I::Token) -> Result<O, E>,
-    S: 'a,
-{
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        let before = inp.save();
-        match inp.next() {
-            (_, Some(tok)) => {
-                let span = inp.span_since(before);
-                match (self.filter)(span, &tok) {
-                    Ok(out) => Ok(M::bind(|| out)),
-                    Err(e) => Err(Located::at(inp.last_pos(), e)),
-                }
-            }
-            (at, None) => Err(Located::at(
-                at,
-                E::expected_found(None, None, inp.span_since(before)),
-            )),
-        }
-    }
-
-    go_extra!();
 }
 
 pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
