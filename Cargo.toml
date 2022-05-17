@@ -24,6 +24,8 @@ std = []
 nightly = []
 # Allows deeper recursion by dynamically spilling stack state on to the heap
 spill-stack = ["stacker", "std"]
+# Enable Pratt parsing combinator.
+pratt = []
 
 [dependencies]
 # Used if `std` is disabled.

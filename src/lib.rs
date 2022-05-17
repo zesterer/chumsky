@@ -17,6 +17,9 @@ pub mod span;
 pub mod stream;
 pub mod text;
 
+#[cfg(feature = "pratt")]
+pub mod pratt;
+
 pub use crate::{error::Error, span::Span};
 
 pub use crate::stream::{BoxStream, Flat, Stream};
