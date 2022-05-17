@@ -272,7 +272,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, S) -> Result<O, E>>(self, f: F) -> TryMapWithState<Self, F>
+    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> Result<O, E>>(self, f: F) -> TryMapWithState<Self, F>
     where
         Self: Sized,
     {
@@ -551,6 +551,7 @@ where
 #[test]
 fn zero_copy() {
     use self::prelude::*;
+    use self::input::WithContext;
 
     // #[derive(Clone)]
     // enum TokenTest {
@@ -679,8 +680,6 @@ fn regex_parser() {
 
 #[test]
 fn unicode_str() {
-    use self::prelude::*;
-
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
     let mut input = InputRef::<_, (), _>::new(input, &mut state);
