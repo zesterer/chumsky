@@ -190,7 +190,7 @@ pub trait InfixOperator<Expr> {
 ///     type Strength = u8;
 /// 
 ///     fn precedence(&self) -> InfixPrecedence<Self::Strength> {
-///         // NOTE: Ususally, in Rust for example, all these operators
+///         // NOTE: Usually, in Rust for example, all these operators
 ///         // are left-associative. However, in this example we define
 ///         // then with different associativities for demonstration purposes.
 ///         // (Although it doesn't really matter here since these operations
