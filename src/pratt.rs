@@ -3,7 +3,7 @@
 //! Pratt parsing is an algorithm that allows efficient
 //! parsing of binary infix operators.
 //!
-//! The [`pratt()`] function creates a Pratt parser.
+//! The [`binary_infix_operator()`] function creates a Pratt parser.
 //! Its documentation contains an example of how it can be used.
 
 use super::*;
@@ -156,7 +156,7 @@ pub trait InfixOperator<Expr> {
 ///
 /// ```
 /// use chumsky::prelude::*;
-/// use chumsky::pratt::{pratt, InfixOperator, InfixPrecedence, Associativity};
+/// use chumsky::pratt::{binary_infix_operator, InfixOperator, InfixPrecedence, Associativity};
 ///
 /// #[derive(Clone, Copy, Debug)]
 /// enum Operator {
@@ -229,7 +229,7 @@ pub trait InfixOperator<Expr> {
 ///     just('/').to(Operator::Div),
 /// ));
 /// 
-/// let expr = pratt(atom, operator.padded_by(just(' ')));
+/// let expr = binary_infix_operator(atom, operator.padded_by(just(' ')));
 /// let expr_str = expr.map(|expr| expr.to_string()).then_ignore(end());
 /// assert_eq!(expr_str.parse("1 + 2"), Ok("(1 + 2)".to_string()));
 /// // `*` binds more strongly than `+`
@@ -240,28 +240,28 @@ pub trait InfixOperator<Expr> {
 /// // `*` is right-associative (in this example)
 /// assert_eq!(expr_str.parse("1 * 2 * 3"), Ok("(1 * (2 * 3))".to_string()));
 /// ```
-pub fn pratt<In, Op, Expr, AtomParser, OpParser, Error>(
+pub fn binary_infix_operator<In, Op, Expr, AtomParser, OpParser, Error>(
     atom_parser: AtomParser,
     operator_parser: OpParser,
-) -> Pratt<In, Op, Expr, AtomParser, OpParser, Error>
+) -> BinaryInfixOperator<In, Op, Expr, AtomParser, OpParser, Error>
 where
     In: Clone,
     AtomParser: Parser<In, Expr, Error=Error>,
     OpParser: Parser<In, Op, Error=Error>,
     Error: error::Error<In>,
 {
-    Pratt { atom_parser, operator_parser, phantom: PhantomData }
+    BinaryInfixOperator { atom_parser, operator_parser, phantom: PhantomData }
 }
 
-/// See [`pratt()`].
+/// See [`binary_infix_operator()`].
 #[derive(Copy, Clone)]
-pub struct Pratt<In, Op, Expr, AtomParser, OpParser, Error> {
+pub struct BinaryInfixOperator<In, Op, Expr, AtomParser, OpParser, Error> {
     atom_parser: AtomParser,
     operator_parser: OpParser,
     phantom: PhantomData<(In, Op, Expr, Error)>,
 }
 
-impl<In, Op, Expr, AtomParser, OpParser, Error> Pratt<In, Op, Expr, AtomParser, OpParser, Error>
+impl<In, Op, Expr, AtomParser, OpParser, Error> BinaryInfixOperator<In, Op, Expr, AtomParser, OpParser, Error>
 where
     In: Clone,
     Op: InfixOperator<Expr>,
@@ -320,7 +320,7 @@ where
 }
 
 impl<In, Op, Expr, AtomParser, OpParser, Error> Parser<In, Expr>
-for Pratt<In, Op, Expr, AtomParser, OpParser, Error>
+for BinaryInfixOperator<In, Op, Expr, AtomParser, OpParser, Error>
 where
     In: Clone,
     Op: InfixOperator<Expr>,
@@ -428,7 +428,7 @@ mod tests {
             just('*').to(Operator::Mul),
             just('/').to(Operator::Div),
         ));
-        pratt(atom, operator)
+        binary_infix_operator(atom, operator)
             .map(|expr| expr.to_string())
     }
 
