@@ -300,7 +300,7 @@ where
                     (operator, precedence)
                 }
                 (_, Err(_)) => {
-                    return (vec![], Ok((left_expr, alt)))
+                    return (Vec::new(), Ok((left_expr, alt)))
                 }
             };
 
