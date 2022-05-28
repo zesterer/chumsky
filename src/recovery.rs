@@ -341,3 +341,31 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, E: Error<I>>
         self.parse_inner(d, s)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::error::Cheap;
+    use crate::prelude::*;
+
+    #[test]
+    fn recover_with_skip_then_retry_until() {
+        let parser = just::<_, _, Cheap<_>>('a')
+            .recover_with(skip_then_retry_until([',']))
+            .separated_by(just(','));
+        {
+            let (result, errors) = parser.parse_recovery_verbose("a,a,2a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
+        {
+            let (result, errors) = parser.parse_recovery_verbose("a,a,2 a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
+        {
+            let (result, errors) = parser.parse_recovery_verbose("a,a,2  a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
+    }
+}
