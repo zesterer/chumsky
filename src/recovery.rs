@@ -353,17 +353,17 @@ mod tests {
             .recover_with(skip_then_retry_until([',']))
             .separated_by(just(','));
         {
-            let (result, errors) = parser.parse_recovery_verbose("a,a,2a,a");
+            let (result, errors) = parser.parse_recovery("a,a,2a,a");
             assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
             assert_eq!(errors.len(), 1)
         }
         {
-            let (result, errors) = parser.parse_recovery_verbose("a,a,2 a,a");
+            let (result, errors) = parser.parse_recovery("a,a,2 a,a");
             assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
             assert_eq!(errors.len(), 1)
         }
         {
-            let (result, errors) = parser.parse_recovery_verbose("a,a,2  a,a");
+            let (result, errors) = parser.parse_recovery("a,a,2  a,a");
             assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
             assert_eq!(errors.len(), 1)
         }
