@@ -54,6 +54,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
         debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
+        let _ = stream.next();
         if self.2 {
             let _ = stream.next();
         }
