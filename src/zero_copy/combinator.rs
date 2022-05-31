@@ -1202,3 +1202,168 @@ where
 
     go_extra!();
 }
+
+#[derive(Copy, Clone)]
+pub struct MapErr<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErr<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(E) -> E,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        self.parser.go::<M>(inp)
+            .map_err(|mut e| {
+                e.err = (self.mapper)(e.err);
+                e
+            })
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct MapErrWithSpan<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithSpan<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(E, I::Span) -> E,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        let start = inp.save();
+        self.parser.go::<M>(inp)
+            .map_err(|mut e| {
+                let span = inp.span_since(start);
+                e.err = (self.mapper)(e.err, span);
+                e
+            })
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct MapErrWithState<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithState<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(E, I::Span, &mut S) -> E,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        let start = inp.save();
+        self.parser.go::<M>(inp)
+            .map_err(|mut e| {
+                let span = inp.span_since(start);
+                e.err = (self.mapper)(e.err, span, inp.state());
+                e
+            })
+    }
+
+    go_extra!();
+}
+
+// TODO: Finish implementing this once full error recovery is implemented
+/*#[derive(Copy, Clone)]
+pub struct Validate<A, F> {
+    pub(crate) parser: A,
+    pub(crate) validator: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for Validate<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(E, I::Span, &mut dyn FnMut(E)) -> E,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).and_then(|out| {
+            let span = inp.span_since(before);
+            match (self.validator)(out, span, todo!()) {
+                Ok(out) => Ok(M::bind(|| out)),
+                Err(e) => Err(Located::at(inp.last_pos(), e)),
+            }
+        })
+    }
+
+    go_extra!();
+}*/
+
+#[derive(Copy, Clone)]
+pub struct OrElse<A, F> {
+    pub(crate) parser: A,
+    pub(crate) or_else: F,
+}
+
+impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for OrElse<A, F>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(E) -> Result<A::Output, E>,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    where
+        Self: Sized,
+    {
+        match self.parser.go::<M>(inp) {
+            Ok(o) => Ok(o),
+            Err(err) => {
+                match (self.or_else)(err.err) {
+                    Err(e) => Err(Located {
+                        pos: err.pos,
+                        err: e,
+                    }),
+                    Ok(out) => Ok(M::bind(|| out)),
+                }
+            }
+        }
+    }
+
+    go_extra!();
+}
