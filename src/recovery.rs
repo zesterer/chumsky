@@ -54,6 +54,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
         debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
+        let _ = stream.next();
         if self.2 {
             let _ = stream.next();
         }
@@ -62,7 +63,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
             if !stream.attempt(
                 |stream| match stream.next().2.map(|tok| self.0.contains(&tok)) {
                     Some(true) => (self.1, false),
-                    Some(false) => (true, true),
+                    Some(false) => (false, true),
                     None => (false, false),
                 },
             ) {
@@ -339,5 +340,33 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, E: Error<I>>
     fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::error::Cheap;
+    use crate::prelude::*;
+
+    #[test]
+    fn recover_with_skip_then_retry_until() {
+        let parser = just::<_, _, Cheap<_>>('a')
+            .recover_with(skip_then_retry_until([',']))
+            .separated_by(just(','));
+        {
+            let (result, errors) = parser.parse_recovery("a,a,2a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
+        {
+            let (result, errors) = parser.parse_recovery("a,a,2 a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
+        {
+            let (result, errors) = parser.parse_recovery("a,a,2  a,a");
+            assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
+            assert_eq!(errors.len(), 1)
+        }
     }
 }
