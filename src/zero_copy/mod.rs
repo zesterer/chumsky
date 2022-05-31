@@ -21,6 +21,7 @@ pub mod recursive;
 pub mod regex;
 pub mod span;
 pub mod text;
+pub mod chain;
 
 pub mod prelude {
     pub use super::{
@@ -51,6 +52,8 @@ use core::{
     lazy::OnceCell,
     marker::PhantomData,
     ops::{Range, RangeFrom},
+    str::FromStr,
+    iter::FromIterator,
 };
 use hashbrown::HashMap;
 
@@ -61,6 +64,7 @@ use self::{
     internal::*,
     span::Span,
     text::*,
+    chain::Chain,
 };
 
 pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
@@ -509,6 +513,103 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             fallback,
         }
+    }
+
+    fn map_err<F>(self, f: F) -> MapErr<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E) -> E,
+    {
+        MapErr {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E, I::Span) -> E,
+    {
+        MapErrWithSpan {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E, I::Span, &mut S) -> E,
+    {
+        MapErrWithState {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    // TODO: Finish implementing this once full error recovery is implemented
+    /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Output, I::Span, &mut dyn FnMut(E)) -> U
+    {
+        Validate {
+            parser: self,
+            validator: f,
+        }
+    }*/
+
+    fn collect<C>(self) -> Map<Self, fn(Self::Output) -> C>
+    where
+        Self: Sized,
+        Self::Output: IntoIterator,
+        C: FromIterator<<Self::Output as IntoIterator>::Item>,
+    {
+        self.map(|items| C::from_iter(items.into_iter()))
+    }
+
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, fn((Self::Output, U)) -> Vec<T>>
+    where
+        Self: Sized,
+        Self::Output: Chain<T>,
+        U: Chain<T>,
+        P: Parser<'a, I, E, S, Output = U>,
+    {
+        self.then(other).map(|(a, b)| {
+            let mut v = Vec::with_capacity(a.len() + b.len());
+            a.append_to(&mut v);
+            b.append_to(&mut v);
+            v
+        })
+    }
+
+    fn or_else<F>(self, f: F) -> OrElse<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E) -> Result<Self::Output, E>
+    {
+        OrElse {
+            parser: self,
+            or_else: f,
+        }
+    }
+
+    fn from_str<U>(self) -> Map<Self, fn(Self::Output) -> Result<U, U::Err>>
+    where
+        Self: Sized,
+        U: FromStr,
+        Self::Output: AsRef<str>,
+    {
+        self.map(|o| o.as_ref().parse())
+    }
+
+    fn unwrapped<U, E1>(self) -> Map<Self, fn(Result<U, E1>) -> U>
+    where
+        Self: Sized + Parser<'a, I, E, S, Output = Result<U, E1>>,
+        E1: fmt::Debug,
+    {
+        self.map(|o| o.unwrap())
     }
 
     fn boxed(self) -> Boxed<'a, I, Self::Output, E, S>
