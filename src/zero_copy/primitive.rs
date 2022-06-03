@@ -296,11 +296,11 @@ where
 }
 
 pub struct Any<I: ?Sized, E, S = ()> {
-    phantom: PhantomData<(E, S, I)>
+    phantom: PhantomData<(E, S, I)>,
 }
 
-impl<I, E, S> Copy for Any<I, E, S> {}
-impl<I, E, S> Clone for Any<I, E, S> {
+impl<I: ?Sized, E, S> Copy for Any<I, E, S> {}
+impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
