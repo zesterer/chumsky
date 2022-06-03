@@ -887,6 +887,51 @@ impl<T: Clone, E> Clone for Choice<T, E> {
     }
 }
 
+impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O> for Choice<[A; N], E> {
+    type Error = E;
+
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        let Choice(parsers, _) = self;
+        let mut alt = None;
+
+        for parser in parsers {
+            match stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                debugger.invoke(parser, stream)
+            }) {
+                (errors, Ok(out)) => return (errors, Ok(out)),
+                (_, Err(a_alt)) => {
+                    alt = merge_alts(alt.take(), Some(a_alt));
+                },
+            };
+        }
+
+        (Vec::new(), Err(alt.unwrap()))
+    }
+
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 macro_rules! impl_for_tuple {
     () => {};
     ($head:ident $($X:ident)*) => {
@@ -941,7 +986,7 @@ macro_rules! impl_for_tuple {
 
 impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-/// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
+/// Parse using a tuple or array of many parsers, producing the output of the first to successfully parse.
 ///
 /// This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
 ///
@@ -983,6 +1028,36 @@ impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W
 /// assert_eq!(
 ///     tokens.parse("if 56 for foo while 42 fn bar"),
 ///     Ok(vec![If, Int(56), For, Ident("foo".to_string()), While, Int(42), Fn, Ident("bar".to_string())]),
+/// );
+/// ```
+///
+/// If you have more than 26 choices, the array-form of choice will work for any length. The downside
+/// being that the contained parsers must all be of the same type.
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     If,
+///     For,
+///     While,
+///     Fn,
+///     Def,
+/// }
+///
+/// let tokens = choice::<_, Simple<char>>([
+///     text::keyword("if").to(Token::If),
+///     text::keyword("for").to(Token::For),
+///     text::keyword("while").to(Token::While),
+///     text::keyword("fn").to(Token::Fn),
+///     text::keyword("def").to(Token::Def),
+/// ])
+///     .padded()
+///     .repeated();
+///
+/// use Token::*;
+/// assert_eq!(
+///     tokens.parse("def fn while if for"),
+///     Ok(vec![Def, Fn, While, If, For]),
 /// );
 /// ```
 pub fn choice<T, E>(parsers: T) -> Choice<T, E> {
