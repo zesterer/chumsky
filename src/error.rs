@@ -312,7 +312,7 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
         let found = if let Some(found) = &self.found {
             format!("{}", found)
         } else {
-            format!("found end of input")
+            format!("end of input")
         };
 
         match self.expected.len() {
@@ -328,7 +328,7 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
             _ => {
                 write!(
                     f,
-                    r"found {:?}, but one of {:?} was expected",
+                    "found {:?}, but one of {:?} was expected",
                     found,
                     self.expected
                         .iter()
