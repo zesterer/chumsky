@@ -932,6 +932,51 @@ impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parse
     }
 }
 
+impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>> Parser<I, O> for Choice<Vec<A>, E> {
+    type Error = E;
+
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        let Choice(parsers, _) = self;
+        let mut alt = None;
+
+        for parser in parsers {
+            match stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                debugger.invoke(parser, stream)
+            }) {
+                (errors, Ok(out)) => return (errors, Ok(out)),
+                (_, Err(a_alt)) => {
+                    alt = merge_alts(alt.take(), Some(a_alt));
+                },
+            };
+        }
+
+        (Vec::new(), Err(alt.unwrap()))
+    }
+
+    fn parse_inner_verbose(
+        &self,
+        d: &mut Verbose,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+
+    fn parse_inner_silent(
+        &self,
+        d: &mut Silent,
+        s: &mut StreamOf<I, Self::Error>,
+    ) -> PResult<I, O, Self::Error> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 macro_rules! impl_for_tuple {
     () => {};
     ($head:ident $($X:ident)*) => {
