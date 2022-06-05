@@ -309,32 +309,31 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Take `self.reason` into account
 
-        let found = if let Some(found) = &self.found {
-            format!("{}", found)
+        if let Some(found) = &self.found {
+            write!(f, "found {:?}", found.to_string())?;
         } else {
-            format!("end of input")
+            write!(f, "found end of input")?;
         };
 
         match self.expected.len() {
             0 => {} //write!(f, " but end of input was expected")?,
             1 => write!(
                 f,
-                " but {} was expected",
+                " but expected {}",
                 match self.expected.iter().next().unwrap() {
-                    Some(x) => format!("'{}'", x),
-                    None => format!("end of input"),
+                    Some(x) => format!("{:?}", x.to_string()),
+                    None => "end of input".to_string(),
                 },
             )?,
             _ => {
                 write!(
                     f,
-                    "found {:?}, but one of {:?} was expected",
-                    found,
+                    " but expected one of {}",
                     self.expected
                         .iter()
                         .map(|expected| match expected {
-                            Some(x) => format!("{}", x),
-                            None => found.to_string(),
+                            Some(x) => format!("{:?}", x.to_string()),
+                            None => "end of input".to_string(),
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
