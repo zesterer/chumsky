@@ -310,33 +310,35 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
         // TODO: Take `self.reason` into account
 
         if let Some(found) = &self.found {
-            write!(f, "found '{}'", found)?;
+            write!(f, "found {:?}", found.to_string())?;
         } else {
             write!(f, "found end of input")?;
-        }
+        };
 
         match self.expected.len() {
             0 => {} //write!(f, " but end of input was expected")?,
             1 => write!(
                 f,
-                " but {} was expected",
+                " but expected {}",
                 match self.expected.iter().next().unwrap() {
-                    Some(x) => format!("'{}'", x),
-                    None => format!("end of input"),
+                    Some(x) => format!("{:?}", x.to_string()),
+                    None => "end of input".to_string(),
                 },
             )?,
-            _ => write!(
-                f,
-                " but one of {} was expected",
-                self.expected
-                    .iter()
-                    .map(|expected| match expected {
-                        Some(x) => format!("'{}'", x),
-                        None => format!("end of input"),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )?,
+            _ => {
+                write!(
+                    f,
+                    " but expected one of {}",
+                    self.expected
+                        .iter()
+                        .map(|expected| match expected {
+                            Some(x) => format!("{:?}", x.to_string()),
+                            None => "end of input".to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
+            }
         }
 
         Ok(())
