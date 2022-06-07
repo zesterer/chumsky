@@ -156,8 +156,8 @@ impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
-        self.parser.go::<M>(inp).map(|out| {
-            M::map(out, |out| {
+        self.parser.go::<Emit>(inp).map(|out| {
+            M::bind(|| {
                 let span = inp.span_since(before);
                 let state = inp.state();
                 (self.mapper)(out, span, state)
