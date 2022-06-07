@@ -157,9 +157,9 @@ mod private {
     impl<T> Sealed<T> for hashbrown::HashSet<T> {}
 }
 
-/// A utility trait to abstract over linear container-like things.
+/// A utility trait to abstract over container-like things.
 ///
-/// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
+/// This trait is sealed and an implementation detail - its internals should not be relied on by users.
 pub trait Container<T>: private::Sealed<T> {
     /// An iterator over the items within this container, by value.
     type Iter: Iterator<Item = T>;
@@ -260,17 +260,33 @@ impl<T: Clone> Container<T> for alloc::collections::BinaryHeap<T> {
     }
 }
 
-/// See [`just`].
-pub struct Just<I, C: Container<I>, E>(C, PhantomData<(I, E)>);
+/// A utility trait to abstract over linear and ordered container-like things, excluding things such
+/// as sets and heaps.
+///
+/// This trait is sealed and an implementation detail - its internals should not be relied on by users.
+pub trait OrderedContainer<T>: Container<T> {}
 
-impl<I, C: Copy + Container<I>, E> Copy for Just<I, C, E> {}
-impl<I, C: Clone + Container<I>, E> Clone for Just<I, C, E> {
+impl<T: Clone> OrderedContainer<T> for T {}
+impl OrderedContainer<char> for String {}
+impl<'a> OrderedContainer<char> for &'a str {}
+impl<'a, T: Clone> OrderedContainer<T> for &'a [T] {}
+impl<'a, T: Clone, const N: usize> OrderedContainer<T> for &'a [T; N] {}
+impl<T: Clone, const N: usize> OrderedContainer<T> for [T; N] {}
+impl<T: Clone> OrderedContainer<T> for Vec<T> {}
+impl<T: Clone> OrderedContainer<T> for alloc::collections::LinkedList<T> {}
+impl<T: Clone> OrderedContainer<T> for alloc::collections::VecDeque<T> {}
+
+/// See [`just`].
+pub struct Just<I, C: OrderedContainer<I>, E>(C, PhantomData<(I, E)>);
+
+impl<I, C: Copy + OrderedContainer<I>, E> Copy for Just<I, C, E> {}
+impl<I, C: Clone + OrderedContainer<I>, E> Clone for Just<I, C, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
+impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -323,7 +339,7 @@ impl<I: Clone + PartialEq, C: Container<I> + Clone, E: Error<I>> Parser<I, C> fo
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").is_err());
 /// ```
-pub fn just<I, C: Container<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> {
+pub fn just<I, C: OrderedContainer<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> {
     Just(inputs, PhantomData)
 }
 
