@@ -52,7 +52,7 @@ impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> P
 /// A parser primitive that allows you to define your own custom parsers.
 ///
 /// In theory you shouldn't need to use this unless you have particularly bizarre requirements, but it's a cleaner and
-//// more sustainable alternative to implementing [`Parser`] by hand.
+/// more sustainable alternative to implementing [`Parser`] by hand.
 ///
 /// The output type of this parser is determined by the parse result of the function.
 pub fn custom<F, E>(f: F) -> Custom<F, E> {
