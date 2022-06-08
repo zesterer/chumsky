@@ -150,17 +150,18 @@ impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
         E: Error<I>,
         S: 'a,
         A: Parser<'a, I, E, S>,
-        F: Fn(A::Output, &mut S) -> Result<O, E>,
+        F: Fn(A::Output, I::Span, &mut S) -> O,
 {
     type Output = O;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        self.parser.go::<Emit>(inp).and_then(|out| {
-            let state = inp.state();
-            match (self.mapper)(out, state) {
-                Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.last_pos(), e)),
-            }
+        let before = inp.save();
+        self.parser.go::<Emit>(inp).map(|out| {
+            M::bind(|| {
+                let span = inp.span_since(before);
+                let state = inp.state();
+                (self.mapper)(out, span, state)
+            })
         })
     }
 
