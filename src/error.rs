@@ -166,6 +166,20 @@ pub enum SimpleReason<I, S> {
     Custom(String),
 }
 
+impl<I, S> SimpleReason<I, S> {
+    const DEFAULT_DISPLAY_UNEXPECTED: &'static str = "unexpected value";
+}
+
+impl<I: fmt::Display, S: fmt::Display> fmt::Display for SimpleReason<I, S> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Unexpected => write!(f, "{}", Self::DEFAULT_DISPLAY_UNEXPECTED),
+            Self::Unclosed {span, delimiter} => write!(f, "unclosed delimiter ({}) in {}", span, delimiter),
+            Self::Custom(string) => write!(f, "error {}", string),
+        }
+    }
+}
+
 /// A simple default error type that tracks error spans, expected inputs, and the actual input found at an error site.
 ///
 /// Please note that it uses a [`HashSet`] to remember expected symbols. If you find this to be too slow, you can
