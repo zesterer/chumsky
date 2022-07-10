@@ -81,10 +81,10 @@ pub trait Error<I>: Sized {
     /// The type of spans to be used in the error.
     type Span: Span; // TODO: Default to = Range<usize>;
 
-    /// The label used to describe a syntatic structure currently being parsed.
+    /// The label used to describe a syntactic structure currently being parsed.
     ///
     /// This can be used to generate errors that tell the user what syntactic structure was currently being parsed when
-    /// the error occured.
+    /// the error occurred.
     type Label; // TODO: Default to = &'static str;
 
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
@@ -117,7 +117,7 @@ pub trait Error<I>: Sized {
         Self::expected_input_found(span, Some(Some(expected)), found)
     }
 
-    /// Indicate that the error occured while parsing a particular syntactic structure.
+    /// Indicate that the error occurred while parsing a particular syntactic structure.
     ///
     /// How the error handles this information is up to it. It can append it to a list of structures to get a sort of
     /// 'parse backtrace', or it can just keep only the most recent label. If the latter, this method should have no
@@ -203,7 +203,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
         }
     }
 
-    /// Returns the span that the error occured at.
+    /// Returns the span that the error occurred at.
     pub fn span(&self) -> S {
         self.span.clone()
     }
@@ -373,7 +373,7 @@ pub struct Cheap<I, S = Range<usize>> {
 }
 
 impl<I, S: Clone> Cheap<I, S> {
-    /// Returns the span that the error occured at.
+    /// Returns the span that the error occurred at.
     pub fn span(&self) -> S {
         self.span.clone()
     }

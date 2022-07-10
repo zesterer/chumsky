@@ -826,7 +826,7 @@ pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
 
 /// A parser that can be used wherever you need to implement a parser later.
 ///
-/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros, but will produce a panic when used to
+/// This parser is analogous to the [`todo!`] and [`unimplemented!`] macros, but will produce a panic when used to
 /// parse input, not immediately when invoked.
 ///
 /// This function is useful when developing your parser, allowing you to prototype and run parts of your parser without
@@ -846,7 +846,7 @@ pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
 /// assert_eq!(int.parse("12"), Ok("12".to_string()));
 /// // Binary numbers are parsed
 /// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
-/// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
+/// // Parsing hexadecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
 #[track_caller]
