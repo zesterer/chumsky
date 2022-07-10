@@ -1,5 +1,15 @@
-#![cfg_attr(feature = "nightly", feature(rustc_attrs))]
-#![cfg_attr(not(any(doc, feature = "std")), no_std)]
+#![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
+#![cfg_attr(
+    feature = "nightly",
+    feature(
+        rustc_attrs,
+        bench_black_box,
+        generic_associated_types,
+        maybe_uninit_uninit_array,
+        maybe_uninit_array_assume_init,
+        once_cell,
+    )
+)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
@@ -16,6 +26,8 @@ pub mod recursive;
 pub mod span;
 pub mod stream;
 pub mod text;
+#[cfg(feature = "nightly")]
+pub mod zero_copy;
 
 pub use crate::{error::Error, span::Span};
 
@@ -1092,7 +1104,7 @@ pub trait Parser<I: Clone, O> {
     ///
     /// Boxing a parser might be useful for:
     ///
-    /// - Dynamically building up parsers at runtime
+    /// - Dynamically building up parsers at run-time
     ///
     /// - Improving compilation times (Rust can struggle to compile code containing very long types)
     ///

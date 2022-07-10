@@ -1368,6 +1368,7 @@ where
 {
     type Error = E;
 
+    #[inline]
     fn parse_inner<D: Debugger>(
         &self,
         debugger: &mut D,

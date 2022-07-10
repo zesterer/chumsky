@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use test::{black_box, Bencher};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -14,20 +14,138 @@ pub enum Json {
     Object(Vec<(String, Json)>),
 }
 
-static JSON: &'static [u8] = include_bytes!("sample.json");
-
-#[bench]
-fn chumsky(b: &mut Bencher) {
-    use ::chumsky::prelude::*;
-
-    let json = chumsky::json();
-    b.iter(|| black_box(json.parse(JSON).unwrap()));
+#[derive(Debug, Clone, PartialEq)]
+pub enum JsonZero<'a> {
+    Null,
+    Bool(bool),
+    Str(&'a [u8]),
+    Num(f64),
+    Array(Vec<JsonZero<'a>>),
+    Object(Vec<(&'a [u8], JsonZero<'a>)>),
 }
 
-#[bench]
-fn pom(b: &mut Bencher) {
-    let json = pom::json();
-    b.iter(|| black_box(json.parse(JSON).unwrap()));
+static JSON: &'static [u8] = include_bytes!("sample.json");
+
+fn bench_json(c: &mut Criterion) {
+    c.bench_function("nom", {
+        move |b| b.iter(|| black_box(nom::json(JSON).unwrap()))
+    });
+
+    c.bench_function("pom", {
+        let json = pom::json();
+        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
+    });
+
+    c.bench_function("serde_json", {
+        use serde_json::{from_slice, Value};
+        move |b| b.iter(|| black_box(from_slice::<Value>(JSON).unwrap()))
+    });
+
+    c.bench_function("chumsky", {
+        use ::chumsky::prelude::*;
+        let json = chumsky::json();
+        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
+    });
+
+    c.bench_function("chumsky_zero_copy", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| b.iter(|| black_box(json.parse(JSON).0.unwrap()))
+    });
+
+    c.bench_function("chumsky_zero_copy_check", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| b.iter(|| assert!(black_box(json.check(JSON)).is_empty()))
+    });
+}
+
+criterion_group!(benches, bench_json);
+criterion_main!(benches);
+
+mod chumsky_zero_copy {
+    use chumsky::zero_copy::prelude::*;
+
+    use super::JsonZero;
+    use std::str;
+
+    pub fn json<'a>() -> impl Parser<'a, [u8], Simple<[u8]>, Output = JsonZero<'a>> {
+        recursive(|value| {
+            let digits = any().filter(|b: &u8| b.is_ascii_digit()).repeated();
+
+            let int = any().filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
+                .then(any().filter(|b: &u8| b.is_ascii_digit()).repeated())
+                .ignored()
+                .or(just(b'0').ignored());
+
+            let frac = just(b'.').then(digits.clone());
+
+            let exp = just(b'e')
+                .or(just(b'E'))
+                .then(just(b'+').or(just(b'-')).or_not())
+                .then(digits.clone());
+
+            let number = just(b'-')
+                .or_not()
+                .then(int)
+                .then(frac.or_not())
+                .then(exp.or_not())
+                .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
+                .boxed();
+
+            let escape = just(b'\\')
+                .then(choice((
+                    just(b'\\'),
+                    just(b'/'),
+                    just(b'"'),
+                    just(b'b').to(b'\x08'),
+                    just(b'f').to(b'\x0C'),
+                    just(b'n').to(b'\n'),
+                    just(b'r').to(b'\r'),
+                    just(b't').to(b'\t'),
+                )))
+                .ignored()
+                .boxed();
+
+            let string = any().filter(|c| *c != b'\\' && *c != b'"')
+                .ignored()
+                .or(escape)
+                .repeated()
+                .map_slice(|bytes| bytes)
+                .delimited_by(just(b'"'), just(b'"'))
+                .boxed();
+
+            let array = value
+                .clone()
+                .separated_by(just(b',').padded())
+                .collect()
+                .padded()
+                .delimited_by(just(b'['), just(b']'))
+                .boxed();
+
+            let member = string.clone().then_ignore(just(b':').padded()).then(value);
+            let object = member
+                .clone()
+                .separated_by(just(b',').padded())
+                .collect()
+                .padded()
+                .delimited_by(just(b'{'), just(b'}'))
+                .boxed();
+
+            choice((
+                just(b"null").to(JsonZero::Null),
+                just(b"true").to(JsonZero::Bool(true)),
+                just(b"false").to(JsonZero::Bool(false)),
+                number.map(JsonZero::Num),
+                string.map(JsonZero::Str),
+                array.map(JsonZero::Array),
+                object.map(JsonZero::Object),
+            ))
+            .padded()
+        })
+        .then(end())
+        .map(|(json, _)| json)
+    }
 }
 
 mod chumsky {
@@ -158,5 +276,105 @@ mod pom {
 
     pub fn json() -> Parser<u8, Json> {
         space() * value() - end()
+    }
+}
+
+mod nom {
+    use nom::{
+        branch::alt,
+        bytes::complete::{escaped, tag, take_while},
+        character::complete::{char, digit0, digit1, none_of, one_of},
+        combinator::{cut, map, opt, recognize, value as to},
+        error::ParseError,
+        multi::separated_list0,
+        sequence::{preceded, separated_pair, terminated, tuple},
+        IResult,
+    };
+
+    use super::JsonZero;
+    use std::str;
+
+    fn space<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+        take_while(|c| b" \t\r\n".contains(&c))(i)
+    }
+
+    fn number<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
+        map(
+            recognize(tuple((
+                opt(char('-')),
+                alt((
+                    to((), tuple((one_of("123456789"), digit0))),
+                    to((), char('0')),
+                )),
+                opt(tuple((char('.'), digit1))),
+                opt(tuple((one_of("eE"), opt(one_of("+-")), cut(digit1)))),
+            ))),
+            |bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap(),
+        )(i)
+    }
+
+    fn string<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+        preceded(
+            char('"'),
+            cut(terminated(
+                escaped(none_of("\\\""), '\\', one_of("\\/\"bfnrt")),
+                char('"'),
+            )),
+        )(i)
+    }
+
+    fn array<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], Vec<JsonZero>, E> {
+        preceded(
+            char('['),
+            cut(terminated(
+                separated_list0(preceded(space, char(',')), value),
+                preceded(space, char(']')),
+            )),
+        )(i)
+    }
+
+    fn member<'a, E: ParseError<&'a [u8]>>(
+        i: &'a [u8],
+    ) -> IResult<&'a [u8], (&'a [u8], JsonZero), E> {
+        separated_pair(
+            preceded(space, string),
+            cut(preceded(space, char(':'))),
+            value,
+        )(i)
+    }
+
+    fn object<'a, E: ParseError<&'a [u8]>>(
+        i: &'a [u8],
+    ) -> IResult<&'a [u8], Vec<(&'a [u8], JsonZero)>, E> {
+        preceded(
+            char('{'),
+            cut(terminated(
+                separated_list0(preceded(space, char(',')), member),
+                preceded(space, char('}')),
+            )),
+        )(i)
+    }
+
+    fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+        preceded(
+            space,
+            alt((
+                to(JsonZero::Null, tag("null")),
+                to(JsonZero::Bool(true), tag("true")),
+                to(JsonZero::Bool(false), tag("false")),
+                map(number, JsonZero::Num),
+                map(string, JsonZero::Str),
+                map(array, JsonZero::Array),
+                map(object, JsonZero::Object),
+            )),
+        )(i)
+    }
+
+    fn root<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+        terminated(value, space)(i)
+    }
+
+    pub fn json<'a>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, (&'a [u8], nom::error::ErrorKind)> {
+        root(i)
     }
 }
