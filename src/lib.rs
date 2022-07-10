@@ -598,7 +598,7 @@ pub trait Parser<I: Clone, O> {
     /// Collect the output of this parser into a type implementing [`FromIterator`].
     ///
     /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
-    /// [`HashMap`] and is analagous to [`Iterator::collect`].
+    /// [`HashMap`] and is analogous to [`Iterator::collect`].
     ///
     /// The output type of this parser is `C`, the type being collected into.
     ///
@@ -998,7 +998,7 @@ pub trait Parser<I: Clone, O> {
 
     /// Parse a pattern any number of times (including zero times).
     ///
-    /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
+    /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
     ///
     /// The output type of this parser is `Vec<O>`.
