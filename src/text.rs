@@ -425,7 +425,7 @@ where
             if let Some(tail) = collapse(nesting.split_off(i), &make_group) {
                 nesting.last_mut().unwrap().1.push(tail);
             }
-            if indent.len() > 0 {
+            if !indent.is_empty() {
                 nesting.push((indent.to_vec(), line));
             } else {
                 nesting.last_mut().unwrap().1.append(&mut line);

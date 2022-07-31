@@ -168,7 +168,7 @@ pub enum SimpleReason<I, S> {
 
 impl<I: fmt::Display, S: fmt::Display> fmt::Display for SimpleReason<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const DEFAULT_DISPLAY_UNEXPECTED: &'static str = "unexpected input";
+        const DEFAULT_DISPLAY_UNEXPECTED: &str = "unexpected input";
 
         match self {
             Self::Unexpected => write!(f, "{}", DEFAULT_DISPLAY_UNEXPECTED),
