@@ -17,6 +17,7 @@ pub type IgnoreThen<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
 pub type ThenIgnore<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 
 /// See [`Parser::or`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 
@@ -168,6 +169,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
 }
 
 /// See [`Parser::or_not`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct OrNot<A>(pub(crate) A);
 
@@ -210,6 +212,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
 }
 
 /// See [`Parser::then`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 
@@ -262,6 +265,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 }
 
 /// See [`Parser::then_with`]
+#[must_use]
 pub struct ThenWith<I, O1, O2, A, B, F>(
     pub(crate) A,
     pub(crate) F,
@@ -337,6 +341,7 @@ impl<
 }
 
 /// See [`Parser::delimited_by`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, L, R, U, V> {
     pub(crate) item: A,
@@ -390,6 +395,7 @@ impl<
 }
 
 /// See [`Parser::repeated`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Repeated<A>(pub(crate) A, pub(crate) usize, pub(crate) Option<usize>);
 
@@ -531,6 +537,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Vec<O>> for
 }
 
 /// See [`Parser::separated_by`].
+#[must_use]
 pub struct SeparatedBy<A, B, U> {
     pub(crate) item: A,
     pub(crate) delimiter: B,
@@ -821,6 +828,7 @@ impl<I: Clone, O, U, A: Parser<I, O, Error = E>, B: Parser<I, U, Error = E>, E: 
 }
 
 /// See [`Parser::debug`].
+#[must_use]
 pub struct Debug<A>(
     pub(crate) A,
     pub(crate) Rc<dyn fmt::Display>,
@@ -866,6 +874,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, O> for Debu
 }
 
 /// See [`Parser::map`].
+#[must_use]
 pub struct Map<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
 
 impl<A: Copy, F: Copy, O> Copy for Map<A, F, O> {}
@@ -905,6 +914,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Par
 }
 
 /// See [`Parser::map_with_span`].
+#[must_use]
 pub struct MapWithSpan<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
 
 impl<A: Copy, F: Copy, O> Copy for MapWithSpan<A, F, O> {}
@@ -948,6 +958,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O, E::Span) -> U, E: Erro
 }
 
 /// See [`Parser::validate`].
+#[must_use]
 pub struct Validate<A, U, F>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<U>);
 
 impl<A: Copy, U, F: Copy> Copy for Validate<A, U, F> {}
@@ -1004,6 +1015,7 @@ impl<
 }
 
 /// See [`Parser::foldl`].
+#[must_use]
 pub struct Foldl<A, F, O, U>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(O, U)>);
 
 impl<A: Copy, F: Copy, O, U> Copy for Foldl<A, F, O, U> {}
@@ -1050,6 +1062,7 @@ impl<
 }
 
 /// See [`Parser::foldr`].
+#[must_use]
 pub struct Foldr<A, F, O, U>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<(O, U)>);
 
 impl<A: Copy, F: Copy, O, U> Copy for Foldr<A, F, O, U> {}
@@ -1098,6 +1111,7 @@ where
 }
 
 /// See [`Parser::map_err`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct MapErr<A, F>(pub(crate) A, pub(crate) F);
 
@@ -1135,6 +1149,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> E, E: Error<I>> Parser
 }
 
 /// See [`Parser::map_err_with_span`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct MapErrWithSpan<A, F>(pub(crate) A, pub(crate) F);
 
@@ -1178,6 +1193,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E, E::Span) -> E, E: Error<I
 }
 
 /// See [`Parser::try_map`].
+#[must_use]
 pub struct TryMap<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
 
 impl<A: Copy, F: Copy, O> Copy for TryMap<A, F, O> {}
@@ -1230,6 +1246,7 @@ impl<
 }
 
 /// See [`Parser::or_else`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct OrElse<A, F>(pub(crate) A, pub(crate) F);
 
@@ -1275,6 +1292,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error
 }
 
 /// See [`Parser::labelled`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Label<A, L>(pub(crate) A, pub(crate) L);
 
@@ -1324,6 +1342,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
 }
 
 /// See [`Parser::to`].
+#[must_use]
 pub struct To<A, O, U>(pub(crate) A, pub(crate) U, pub(crate) PhantomData<O>);
 
 impl<A: Copy, U: Copy, O> Copy for To<A, O, U> {}
@@ -1359,6 +1378,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U: Clone, E: Error<I>> Parser<I, U
 }
 
 /// See [`Parser::rewind`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Rewind<A>(pub(crate) A);
 
@@ -1409,6 +1429,7 @@ where
 }
 
 /// See [`Parser::unwrapped`]
+#[must_use]
 pub struct Unwrapped<A, U, E>(pub(crate) &'static Location<'static>, pub(crate) A, pub(crate) PhantomData<(U, E)>);
 
 impl<A: Clone, U, E> Clone for Unwrapped<A, U, E> {

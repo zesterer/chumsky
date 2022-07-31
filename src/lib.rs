@@ -1301,6 +1301,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
+#[must_use]
 #[repr(transparent)]
 pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
 

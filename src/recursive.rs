@@ -46,6 +46,7 @@ type OnceParser<'a, I, O, E> = OnceCell<Box<dyn Parser<I, O, Error = E> + 'a>>;
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
+#[must_use]
 pub struct Recursive<'a, I, O, E: Error<I>>(RecursiveInner<OnceParser<'a, I, O, E>>);
 
 impl<'a, I: Clone, O, E: Error<I>> Recursive<'a, I, O, E> {

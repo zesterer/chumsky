@@ -25,6 +25,7 @@ pub type Padding<I, E> = Custom<fn(&mut StreamOf<I, E>) -> PResult<I, (), E>, E>
 // >;
 
 /// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Padded<A>(A);
 
@@ -228,6 +229,7 @@ pub fn whitespace<'a, C: Character + 'a, E: Error<C> + 'a>(
 /// assert_eq!(newline.parse("\u{2028}"), Ok(()));
 /// assert_eq!(newline.parse("\u{2029}"), Ok(()));
 /// ```
+#[must_use]
 pub fn newline<'a, C: Character + 'a, E: Error<C> + 'a>(
 ) -> impl Parser<C, (), Error = E> + Copy + Clone + 'a {
     just(C::from_ascii(b'\r'))
@@ -268,6 +270,7 @@ pub fn newline<'a, C: Character + 'a, E: Error<C> + 'a>(
 /// assert_eq!(digits.parse("0000"), Ok("0000".to_string()));
 /// assert!(digits.parse("").is_err());
 /// ```
+#[must_use]
 pub fn digits<C: Character, E: Error<C>>(
     radix: u32,
 ) -> impl Parser<C, C::Collection, Error = E> + Copy + Clone {
@@ -308,6 +311,7 @@ pub fn digits<C: Character, E: Error<C>>(
 /// assert_eq!(hex.parse("b4"), Ok("b4".to_string()));
 /// assert!(hex.parse("0B").is_err());
 /// ```
+#[must_use]
 pub fn int<C: Character, E: Error<C>>(
     radix: u32,
 ) -> impl Parser<C, C::Collection, Error = E> + Copy + Clone {
@@ -325,6 +329,7 @@ pub fn int<C: Character, E: Error<C>>(
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
+#[must_use]
 pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, C::Collection, Error = E> + Copy + Clone
 {
     filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
@@ -352,6 +357,7 @@ pub fn ident<C: Character, E: Error<C>>() -> impl Parser<C, C::Collection, Error
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").is_err());
 /// ```
+#[must_use]
 pub fn keyword<'a, C: Character + 'a, S: AsRef<C::Str> + 'a + Clone, E: Error<C> + 'a>(
     keyword: S,
 ) -> impl Parser<C, (), Error = E> + Clone + 'a {
@@ -368,6 +374,7 @@ pub fn keyword<'a, C: Character + 'a, S: AsRef<C::Str> + 'a + Clone, E: Error<C>
 /// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
+#[must_use]
 pub fn semantic_indentation<'a, C, Tok, T, F, E: Error<C> + 'a>(
     token: T,
     make_group: F,
