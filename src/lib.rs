@@ -30,7 +30,7 @@ use crate::{
     recovery::*,
 };
 
-use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec::Vec, vec};
+use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     cmp::Ordering,
     // TODO: Enable when stable
@@ -38,8 +38,8 @@ use core::{
     fmt,
     marker::PhantomData,
     ops::Range,
-    str::FromStr,
     panic::Location,
+    str::FromStr,
 };
 
 #[cfg(doc)]

@@ -194,7 +194,7 @@ impl<I: Character, O, P: Parser<I, O>> TextParser<I, O> for P {}
 /// assert_eq!(whitespace.parse(""), Ok(vec![]));
 /// ```
 pub fn whitespace<'a, C: Character + 'a, E: Error<C> + 'a>(
-) -> Repeated<impl Parser<C, (), Error=E>+Copy+Clone + 'a>{
+) -> Repeated<impl Parser<C, (), Error = E> + Copy + Clone + 'a> {
     filter(|c: &C| c.is_whitespace()).ignored().repeated()
 }
 

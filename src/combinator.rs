@@ -1430,7 +1430,11 @@ where
 
 /// See [`Parser::unwrapped`]
 #[must_use]
-pub struct Unwrapped<A, U, E>(pub(crate) &'static Location<'static>, pub(crate) A, pub(crate) PhantomData<(U, E)>);
+pub struct Unwrapped<A, U, E>(
+    pub(crate) &'static Location<'static>,
+    pub(crate) A,
+    pub(crate) PhantomData<(U, E)>,
+);
 
 impl<A: Clone, U, E> Clone for Unwrapped<A, U, E> {
     fn clone(&self) -> Self {
@@ -1440,7 +1444,7 @@ impl<A: Clone, U, E> Clone for Unwrapped<A, U, E> {
 impl<A: Copy, U, E> Copy for Unwrapped<A, U, E> {}
 
 impl<I: Clone, O, A: Parser<I, Result<O, U>, Error = E>, U: fmt::Debug, E: Error<I>> Parser<I, O>
-for Unwrapped<A, U, E>
+    for Unwrapped<A, U, E>
 {
     type Error = E;
 
@@ -1455,7 +1459,17 @@ for Unwrapped<A, U, E>
 
         (
             errors,
-            res.map(|(out, alt)| (out.unwrap_or_else(|err| panic!("Parser defined at {} failed to unwrap. Error: {:?}", self.0, err)), alt))
+            res.map(|(out, alt)| {
+                (
+                    out.unwrap_or_else(|err| {
+                        panic!(
+                            "Parser defined at {} failed to unwrap. Error: {:?}",
+                            self.0, err
+                        )
+                    }),
+                    alt,
+                )
+            }),
         )
     }
 

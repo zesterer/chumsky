@@ -172,7 +172,9 @@ impl<I: fmt::Display, S: fmt::Display> fmt::Display for SimpleReason<I, S> {
 
         match self {
             Self::Unexpected => write!(f, "{}", DEFAULT_DISPLAY_UNEXPECTED),
-            Self::Unclosed {span, delimiter} => write!(f, "unclosed delimiter ({}) in {}", span, delimiter),
+            Self::Unclosed { span, delimiter } => {
+                write!(f, "unclosed delimiter ({}) in {}", span, delimiter)
+            }
             Self::Custom(string) => write!(f, "error {}", string),
         }
     }

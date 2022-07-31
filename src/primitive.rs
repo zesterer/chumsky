@@ -289,7 +289,9 @@ impl<I, C: Clone + OrderedContainer<I>, E> Clone for Just<I, C, E> {
     }
 }
 
-impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
+impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C>
+    for Just<I, C, E>
+{
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -915,7 +917,9 @@ impl<T: Clone, E> Clone for Choice<T, E> {
     }
 }
 
-impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O> for Choice<[A; N], E> {
+impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O>
+    for Choice<[A; N], E>
+{
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -934,7 +938,7 @@ impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parse
                 (errors, Ok(out)) => return (errors, Ok(out)),
                 (_, Err(a_alt)) => {
                     alt = merge_alts(alt.take(), Some(a_alt));
-                },
+                }
             };
         }
 
@@ -979,7 +983,7 @@ impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>> Parser<I, O> for Choi
                 (errors, Ok(out)) => return (errors, Ok(out)),
                 (_, Err(a_alt)) => {
                     alt = merge_alts(alt.take(), Some(a_alt));
-                },
+                }
             };
         }
 
