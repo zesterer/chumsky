@@ -18,6 +18,7 @@ pub trait Strategy<I: Clone, O, E: Error<I>> {
 }
 
 /// See [`skip_then_retry_until`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct SkipThenRetryUntil<I, const N: usize>(
     pub(crate) [I; N],
@@ -91,6 +92,7 @@ pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryU
 }
 
 /// See [`skip_until`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct SkipUntil<I, F, const N: usize>(
     pub(crate) [I; N],
@@ -172,6 +174,7 @@ pub fn skip_until<I, F, const N: usize>(until: [I; N], fallback: F) -> SkipUntil
 }
 
 /// See [`nested_delimiters`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct NestedDelimiters<I, F, const N: usize>(
     pub(crate) I,
@@ -311,6 +314,7 @@ pub fn nested_delimiters<I: PartialEq, F, const N: usize>(
 }
 
 /// A parser that includes a fallback recovery strategy should parsing result in an error.
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct Recovery<A, S>(pub(crate) A, pub(crate) S);
 

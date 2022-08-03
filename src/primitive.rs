@@ -17,6 +17,7 @@ use super::*;
 use core::panic::Location;
 
 /// See [`custom`].
+#[must_use]
 pub struct Custom<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for Custom<F, E> {}
@@ -60,6 +61,7 @@ pub fn custom<F, E>(f: F) -> Custom<F, E> {
 }
 
 /// See [`end`].
+#[must_use]
 pub struct End<E>(PhantomData<E>);
 
 impl<E> Clone for End<E> {
@@ -277,6 +279,7 @@ impl<T: Clone> OrderedContainer<T> for alloc::collections::LinkedList<T> {}
 impl<T: Clone> OrderedContainer<T> for alloc::collections::VecDeque<T> {}
 
 /// See [`just`].
+#[must_use]
 pub struct Just<I, C: OrderedContainer<I>, E>(C, PhantomData<(I, E)>);
 
 impl<I, C: Copy + OrderedContainer<I>, E> Copy for Just<I, C, E> {}
@@ -286,7 +289,9 @@ impl<I, C: Clone + OrderedContainer<I>, E> Clone for Just<I, C, E> {
     }
 }
 
-impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C> for Just<I, C, E> {
+impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C>
+    for Just<I, C, E>
+{
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -344,6 +349,7 @@ pub fn just<I, C: OrderedContainer<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> 
 }
 
 /// See [`seq`].
+#[must_use]
 pub struct Seq<I, E>(Vec<I>, PhantomData<E>);
 
 impl<I: Clone, E> Clone for Seq<I, E> {
@@ -417,6 +423,7 @@ pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> S
 }
 
 /// See [`one_of`].
+#[must_use]
 pub struct OneOf<I, C, E>(C, PhantomData<(I, E)>);
 
 impl<I, C: Clone, E> Clone for OneOf<I, C, E> {
@@ -478,6 +485,7 @@ pub fn one_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> OneOf<I, C, E> {
 }
 
 /// See [`empty`].
+#[must_use]
 pub struct Empty<E>(PhantomData<E>);
 
 impl<E> Clone for Empty<E> {
@@ -515,6 +523,7 @@ pub fn empty<E>() -> Empty<E> {
 }
 
 /// See [`none_of`].
+#[must_use]
 pub struct NoneOf<I, C, E>(C, PhantomData<(I, E)>);
 
 impl<I, C: Clone, E> Clone for NoneOf<I, C, E> {
@@ -578,6 +587,7 @@ pub fn none_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> NoneOf<I, C, E> {
 }
 
 /// See [`take_until`].
+#[must_use]
 #[derive(Copy, Clone)]
 pub struct TakeUntil<A>(A);
 
@@ -673,6 +683,7 @@ pub fn take_until<A>(until: A) -> TakeUntil<A> {
 }
 
 /// See [`filter`].
+#[must_use]
 pub struct Filter<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for Filter<F, E> {}
@@ -733,6 +744,7 @@ pub fn filter<I, F: Fn(&I) -> bool, E>(f: F) -> Filter<F, E> {
 }
 
 /// See [`filter_map`].
+#[must_use]
 pub struct FilterMap<F, E>(F, PhantomData<E>);
 
 impl<F: Copy, E> Copy for FilterMap<F, E> {}
@@ -822,6 +834,7 @@ pub fn any<I, E>() -> Any<I, E> {
 }
 
 /// See [`fn@todo`].
+#[must_use]
 pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
 
 /// A parser that can be used wherever you need to implement a parser later.
@@ -894,6 +907,7 @@ impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
 }
 
 /// See [`choice`].
+#[must_use]
 pub struct Choice<T, E>(pub(crate) T, pub(crate) PhantomData<E>);
 
 impl<T: Copy, E> Copy for Choice<T, E> {}
@@ -903,7 +917,9 @@ impl<T: Clone, E> Clone for Choice<T, E> {
     }
 }
 
-impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O> for Choice<[A; N], E> {
+impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O>
+    for Choice<[A; N], E>
+{
     type Error = E;
 
     fn parse_inner<D: Debugger>(
@@ -922,7 +938,7 @@ impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parse
                 (errors, Ok(out)) => return (errors, Ok(out)),
                 (_, Err(a_alt)) => {
                     alt = merge_alts(alt.take(), Some(a_alt));
-                },
+                }
             };
         }
 
@@ -967,7 +983,7 @@ impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>> Parser<I, O> for Choi
                 (errors, Ok(out)) => return (errors, Ok(out)),
                 (_, Err(a_alt)) => {
                     alt = merge_alts(alt.take(), Some(a_alt));
-                },
+                }
             };
         }
 
