@@ -383,7 +383,7 @@ where
     C: Character + 'a,
     Tok: 'a,
     T: Parser<C, Tok, Error = E> + Clone + 'a,
-    F: Fn(Vec<Tok>) -> Tok + Clone + 'a,
+    F: Fn(Vec<Tok>, E::Span) -> Tok + Clone + 'a,
 {
     let line_ws = filter(|c: &C| c.is_inline_whitespace());
 
@@ -391,17 +391,17 @@ where
 
     let lines = line_ws
         .repeated()
-        .then(line)
+        .then(line.map_with_span(|line, span| (line, span)))
         .separated_by(newline())
         .padded();
 
     lines.map(move |lines| {
-        fn collapse<C, Tok, F>(mut tree: Vec<(Vec<C>, Vec<Tok>)>, make_group: &F) -> Option<Tok>
+        fn collapse<C, Tok, F, S>(mut tree: Vec<(Vec<C>, Vec<Tok>, Option<S>)>, make_group: &F) -> Option<Tok>
         where
-            F: Fn(Vec<Tok>) -> Tok,
+            F: Fn(Vec<Tok>, S) -> Tok,
         {
-            while let Some((_, tts)) = tree.pop() {
-                let tt = make_group(tts);
+            while let Some((_, tts, line_span)) = tree.pop() {
+                let tt = make_group(tts, line_span?);
                 if let Some(last) = tree.last_mut() {
                     last.1.push(tt);
                 } else {
@@ -411,13 +411,13 @@ where
             None
         }
 
-        let mut nesting = vec![(Vec::new(), Vec::new())];
-        for (indent, mut line) in lines {
+        let mut nesting = vec![(Vec::new(), Vec::new(), None)];
+        for (indent, (mut line, line_span)) in lines {
             let mut indent = indent.as_slice();
             let mut i = 0;
             while let Some(tail) = nesting
                 .get(i)
-                .and_then(|(n, _)| indent.strip_prefix(n.as_slice()))
+                .and_then(|(n, _, _)| indent.strip_prefix(n.as_slice()))
             {
                 indent = tail;
                 i += 1;
@@ -426,7 +426,7 @@ where
                 nesting.last_mut().unwrap().1.push(tail);
             }
             if !indent.is_empty() {
-                nesting.push((indent.to_vec(), line));
+                nesting.push((indent.to_vec(), line, Some(line_span)));
             } else {
                 nesting.last_mut().unwrap().1.append(&mut line);
             }
