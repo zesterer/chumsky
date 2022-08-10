@@ -341,14 +341,15 @@ The `foldr` function repeatedly applies the function to 'fold' the elements into
 
 ```rust
 (['-',   '-',   '-'],   Num(42.0))
-  |      |      |          |
-  |      |       \        /
-  |      |     Neg(Num(42.0))
-  |      |         |
-  |       \       /
-  |  Neg(Neg(Num(42.0)))
-  |          |
-   \        /
+  ---    ---    ---     ---------
+   |      |      |           |
+   |      |       \         /
+   |      |      Neg(Num(42.0))
+   |      |            |
+   |       \          /
+   |    Neg(Neg(Num(42.0)))
+   |            |
+    \          /
 Neg(Neg(Neg(Num(42.0))))
 ```
 
@@ -441,16 +442,17 @@ operators into a single expression tree. For example, the input `2 + 3 - 7 + 5` 
 This then gets folded together by `foldl` like so:
 
 ```rust
-(Num(2.0), [(Add, Num(3.0)), (Sub, Num(7.0)), (Add, Num(5.0))])
-    |             |                |                |
-     \            /                |                |
- Add(Num(2.0), Num(3.0))           |                |
-           |                       |                |
-            \                     /                 |
-      Sub(Add(Num(2.0), Num(3.0)), Num(7.0))        |
-                      |                             |
-                       \                           /
-             Add(Sub(Add(Num(2.0), Num(3.0)), Num(7.0)), Num(5.0))
+(Num(2.0),   [(Add, Num(3.0)),   (Sub, Num(7.0)),   (Add, Num(5.0))])
+ --------     ---------------     --------------    ---------------
+    |                |                 |                  |
+     \              /                  |                  |
+ Add(Num(2.0), Num(3.0))               |                  |
+            |                          |                  |
+             \                        /                   |
+      Sub(Add(Num(2.0), Num(3.0)), Num(7.0))              |
+                       |                                  |
+                        \                                /
+               Add(Sub(Add(Num(2.0), Num(3.0)), Num(7.0)), Num(5.0))
 ```
 
 Give the interpreter a try. You should find that it can correctly handle both unary and binary operations combined in
