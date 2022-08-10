@@ -49,7 +49,7 @@ use core::{
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
-    lazy::OnceCell,
+    cell::OnceCell,
     marker::PhantomData,
     ops::{Range, RangeFrom},
     str::FromStr,
