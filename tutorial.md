@@ -16,6 +16,8 @@ fn add x y = x + y;
 add(2, 3) * -seven
 ```
 
+By the end of this tutorial, you'll have an interpreter that will let you run code like this.
+
 You can find the source code for the full interpreter in `examples/foo.rs` in the main repository.
 
 ## Setting up
@@ -74,6 +76,21 @@ enum Expr {
 This is Foo's [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST). It represents
 all possible Foo programs and is defined recursively in terms of itself (`Box` is used to avoid the type being
 infinitely large). Each expression may itself contain sub-expressions.
+
+As an example, the expression `let x = 5; x * 3` is encoded as follows using the `Expr` type:
+
+```rs
+Expr::Let {
+    name: "x",
+    rhs: Expr::Num(5.0),
+    then: Expr::Mul(
+        Expr::Var("x"),
+        Expr::Num(3.0),
+    ),
+}
+```
+
+The purpose of our parser will be to perform this conversion, from source code to AST.
 
 We're also going to create a function that creates Foo's parser. Our parser takes in a `char` stream and
 produces an `Expr`, so we'll use those types for the `I` (input) and `O` (output) type parameters.
