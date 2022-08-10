@@ -16,9 +16,39 @@ fn add x y = x + y;
 add(2, 3) * -seven
 ```
 
-By the end of this tutorial, you'll have an interpreter that will let you run code like this.
+By the end of this tutorial, you'll have an interpreter that will let you run this code, and more.
 
-You can find the source code for the full interpreter in `examples/foo.rs` in the main repository.
+This tutorial should take somewhere between 30 and 100 minutes to complete, depending on factors such as knowledge of Rust and compiler theory.
+
+*You can find the source code for the full interpreter in [`examples/foo.rs`](https://github.com/zesterer/chumsky/blob/master/examples/foo.rs) in the main repository.*
+
+## Assumptions
+
+This tutorial is here to show you how to use Chumsky: it's not a general-purpose introduction to language development as a whole. For that reason, we make a few assumptions about things you should know before jumping in:
+
+- You should be happy reading and writing Rust. Particularly obscure syntax will be explained, but you should already be reasonably confident with concepts like functions, types, pattern matching, and error handling (`Result`, `?`, etc.).
+- You should be familiar with data structures like trees and vectors.
+- You should have some awareness of basic compiler theory concepts like [Abstract Syntax Trees (ASTs)](https://en.wikipedia.org/wiki/Abstract_syntax_tree), the difference between parsing and evaluation, [Backus Naur Form (BNF)](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form), etc.
+
+## Documentation
+
+As we go, we'll be encountering many functions and concepts from Chumsky. I strongly recommend you keep [Chumsky's documentation](https://docs.rs/chumsky/) open in another browser tab and use it to cross-reference your understanding or gain more insight into specific things that you'd like more clarification on. In particular, most of the functions we'll be using come from the [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) trait. Chumsky's docs include extensive doc examples for almost every function, so be sure to make use of them!
+
+Chumsky also has [several longer examples](https://github.com/zesterer/chumsky/tree/master/examples) in the main repository: looking at these may help improve your understanding if you get stuck.
+
+## A note on imperative vs declarative parsers
+
+If you've tried hand-writing a parser before, you're probably expecting lots of flow control: splitting text by whitespace, matching/switching/branching on things, making a decision about whether to recurse into a function or expect another token, etc. This is an [*imperative*](https://en.wikipedia.org/wiki/Imperative_programming) approach to parser development and can be very time-consuming to write, maintain, and test.
+
+In contrast, Chumsky parsers are [*declarative*](https://en.wikipedia.org/wiki/Declarative_programming): they still perform intricate flow control internally, but it's all hidden away so you don't need to think of it. Instead of describing *how* to parse a particular grammar, Chumsky parsers simply *describe* a grammar: and it is then Chumsky's job to figure out how to efficiency parse it.
+
+If you've ever seen [Backus Naur Form (BNF)](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form) used to describe a language's syntax, you'll have a good sense of what this means: if you squint, you'll find that a lot of parsers written in Chumsky look pretty close to the BNF definition.
+
+Another consequence of creating parsers in a declarative style is that *defining* a parser and *using* a parser are two different things: once created, parsers won't do anything on their own unless you give them an input to parse.
+
+## Similarities between `Parser` and `Iterator`
+
+The most important API in Chumsky is the [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) trait, implemented by all parsers. Because parsers don't do anything by themselves, writing Chumsky parsers often feels very similar to writing iterators in Rust using the [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait. If you've enjoyed writing iterators in Rust before, you'll hopefully find the same satisfaction writing parsers with Chumsky. They even [share](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.map) [several](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.flatten) [functions](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.collect) with each other!
 
 ## Setting up
 
@@ -301,7 +331,7 @@ Here, we meet a few new combinators:
   the given function to each element of the `Vec<T>`
 
 This last combinator is worth a little more consideration. We're trying to parse *any number* of negation operators,
-followed by a single atom (for now, just a number). This might give us an output like this:
+followed by a single atom (for now, just a number). For example, the input `---42` would generate the following input to `foldr`:
 
 ```rust
 (['-', '-', '-'], Num(42.0))
@@ -309,8 +339,8 @@ followed by a single atom (for now, just a number). This might give us an output
 
 The `foldr` function repeatedly applies the function to 'fold' the elements into a single element, like so:
 
-```
-['-',   '-',   '-'],   Num(42.0)
+```rust
+(['-',   '-',   '-'],   Num(42.0))
   |      |      |          |
   |      |       \        /
   |      |     Neg(Num(42.0))
@@ -400,8 +430,31 @@ Another three combinators are introduced here:
 - `foldl` is very similar to `foldr` in the last section but, instead of operating on a `(Vec<_>, _)`, it operates
   upon a `(_, Vec<_>)`, going backwards to combine values together with the function
 
-Give the interpreter a try. You should find that the interpreter can correctly handle both unary and binary operations
-combined in arbitrary configurations, correctly handling precedence. You can use it as a calculator!
+In a similar manner to `foldr` in the previous section on unary expressions, `foldl` is used to fold chains of binary
+operators into a single expression tree. For example, the input `2 + 3 - 7 + 5` would generate the following input to
+`foldl`:
+
+```rust
+(Num(2.0), [(Expr::Add, Num(3.0)), (Expr::Sub, Num(7.0)), (Add, Num(5.0))])
+```
+
+This then gets folded together by `foldl` like so:
+
+```rust
+(Num(2.0), [(Add, Num(3.0)), (Sub, Num(7.0)), (Add, Num(5.0))])
+    |             |                |                |
+     \            /                |                |
+ Add(Num(2.0), Num(3.0))           |                |
+           |                       |                |
+            \                     /                 |
+      Sub(Add(Num(2.0), Num(3.0)), Num(7.0))        |
+                      |                             |
+                       \                           /
+             Add(Sub(Add(Num(2.0), Num(3.0)), Num(7.0)), Num(5.0))
+```
+
+Give the interpreter a try. You should find that it can correctly handle both unary and binary operations combined in
+arbitrary configurations, correctly handling precedence. You can use it as a pocket calculator!
 
 ## Parsing parentheses
 
