@@ -73,7 +73,8 @@ mod chumsky_zero_copy {
         recursive(|value| {
             let digits = any().filter(|b: &u8| b.is_ascii_digit()).repeated();
 
-            let int = any().filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
+            let int = any()
+                .filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
                 .then(any().filter(|b: &u8| b.is_ascii_digit()).repeated())
                 .ignored()
                 .or(just(b'0').ignored());
@@ -107,7 +108,8 @@ mod chumsky_zero_copy {
                 .ignored()
                 .boxed();
 
-            let string = any().filter(|c| *c != b'\\' && *c != b'"')
+            let string = any()
+                .filter(|c| *c != b'\\' && *c != b'"')
                 .ignored()
                 .or(escape)
                 .repeated()
