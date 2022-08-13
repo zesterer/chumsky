@@ -181,12 +181,9 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let before = self.save();
-            match self.next() {
-                (_, Some(c)) if f(&c) => {}
-                (_, Some(_) | None) => {
-                    self.rewind(before);
-                    break;
-                }
+            if self.next().1.filter(&mut f).is_none() {
+                self.rewind(before);
+                break;
             }
         }
     }
