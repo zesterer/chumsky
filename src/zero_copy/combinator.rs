@@ -1123,7 +1123,7 @@ where
     {
         self.parser.go::<M>(inp).map(|out| {
             M::map(out, |(init, end)| {
-                init.into_iter().rev().fold(end, |b, a| (self.folder)(a, b))
+                init.into_iter().rfold(end, |b, a| (self.folder)(a, b))
             })
         })
     }
