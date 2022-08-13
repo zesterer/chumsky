@@ -211,6 +211,72 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, Option<O>> 
     }
 }
 
+/// See [`Parser::not`].
+#[must_use]
+pub struct Not<A, O>(pub(crate) A, pub(crate) PhantomData<O>);
+
+impl<A: Copy, O> Copy for Not<A, O> {}
+impl<A: Clone, O> Clone for Not<A, O> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<I: Clone, O, A: Parser<I, O, Error = E>, E: Error<I>> Parser<I, I> for Not<A, O> {
+    type Error = E;
+
+    #[inline]
+    fn parse_inner<D: Debugger>(
+        &self,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, E>,
+    ) -> PResult<I, I, E> {
+        let before = stream.save();
+        match stream.try_parse(|stream| {
+            #[allow(deprecated)]
+            debugger.invoke(&self.0, stream)
+        }) {
+            (_, Ok(_)) => {
+                stream.revert(before);
+                let (at, span, found) = stream.next();
+                (
+                    Vec::new(),
+                    Err(Located::at(
+                        at,
+                        E::expected_input_found(span, Vec::new(), found),
+                    )),
+                )
+            }
+            (_, Err(_)) => {
+                stream.revert(before);
+                let (at, span, found) = stream.next();
+                (
+                    Vec::new(),
+                    if let Some(found) = found {
+                        Ok((found, None))
+                    } else {
+                        Err(Located::at(
+                            at,
+                            E::expected_input_found(span, Vec::new(), None),
+                        ))
+                    },
+                )
+            }
+        }
+    }
+
+    #[inline]
+    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+    #[inline]
+    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
+        #[allow(deprecated)]
+        self.parse_inner(d, s)
+    }
+}
+
 /// See [`Parser::then`].
 #[must_use]
 #[derive(Copy, Clone)]

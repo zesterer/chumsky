@@ -396,7 +396,10 @@ where
         .padded();
 
     lines.map(move |lines| {
-        fn collapse<C, Tok, F, S>(mut tree: Vec<(Vec<C>, Vec<Tok>, Option<S>)>, make_group: &F) -> Option<Tok>
+        fn collapse<C, Tok, F, S>(
+            mut tree: Vec<(Vec<C>, Vec<Tok>, Option<S>)>,
+            make_group: &F,
+        ) -> Option<Tok>
         where
             F: Fn(Vec<Tok>, S) -> Tok,
         {

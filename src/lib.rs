@@ -996,6 +996,64 @@ pub trait Parser<I: Clone, O> {
         OrNot(self)
     }
 
+    /// Parses a single token if, and only if, the pattern fails to parse.
+    ///
+    /// The output type of this parser is `I`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    ///
+    /// #[derive(Debug, PartialEq)]
+    /// enum Tree {
+    ///     Text(String),
+    ///     Group(Vec<Self>),
+    /// }
+    ///
+    /// // Arbitrary text, nested in a tree with { ... } delimiters
+    /// let tree = recursive::<_, _, _, _, Cheap<char>>(|tree| {
+    ///     let text = one_of("{}")
+    ///         .not()
+    ///         .repeated()
+    ///         .at_least(1)
+    ///         .collect()
+    ///         .map(Tree::Text);
+    ///
+    ///     let group = tree
+    ///         .repeated()
+    ///         .delimited_by(just('{'), just('}'))
+    ///         .map(Tree::Group);
+    ///
+    ///     text.or(group)
+    /// });
+    ///
+    /// assert_eq!(
+    ///     tree.parse("{abcd{efg{hijk}lmn{opq}rs}tuvwxyz}"),
+    ///     Ok(Tree::Group(vec![
+    ///         Tree::Text("abcd".to_string()),
+    ///         Tree::Group(vec![
+    ///             Tree::Text("efg".to_string()),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("hijk".to_string()),
+    ///             ]),
+    ///             Tree::Text("lmn".to_string()),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("opq".to_string()),
+    ///             ]),
+    ///             Tree::Text("rs".to_string()),
+    ///         ]),
+    ///         Tree::Text("tuvwxyz".to_string()),
+    ///     ])),
+    /// );
+    /// ```
+    fn not(self) -> Not<Self, O>
+    where
+        Self: Sized,
+    {
+        Not(self, PhantomData)
+    }
+
     /// Parse a pattern any number of times (including zero times).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using

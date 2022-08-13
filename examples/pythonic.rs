@@ -1,4 +1,4 @@
-use chumsky::{prelude::*, Flat, BoxStream};
+use chumsky::{prelude::*, BoxStream, Flat};
 use std::ops::Range;
 
 // Represents the different kinds of delimiters we care about
@@ -41,10 +41,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<TokenTree>>, Error = Simple<char>> {
             .collect()
             .map(Token::Op);
 
-        let single_token = int
-            .or(op)
-            .or(ident)
-            .map(TokenTree::Token);
+        let single_token = int.or(op).or(ident).map(TokenTree::Token);
 
         // Tokens surrounded by parentheses get turned into parenthesised token trees
         let token_tree = tt
@@ -53,7 +50,8 @@ fn lexer() -> impl Parser<char, Vec<Spanned<TokenTree>>, Error = Simple<char>> {
             .delimited_by(just('('), just(')'))
             .map(|tts| TokenTree::Tree(Delim::Paren, tts));
 
-        single_token.or(token_tree)
+        single_token
+            .or(token_tree)
             .map_with_span(|tt, span| (tt, span))
     });
 
@@ -63,7 +61,10 @@ fn lexer() -> impl Parser<char, Vec<Spanned<TokenTree>>, Error = Simple<char>> {
 }
 
 /// Flatten a series of token trees into a single token stream, ready for feeding into the main parser
-fn tts_to_stream(eoi: Span, token_trees: Vec<Spanned<TokenTree>>) -> BoxStream<'static, Token, Span> {
+fn tts_to_stream(
+    eoi: Span,
+    token_trees: Vec<Spanned<TokenTree>>,
+) -> BoxStream<'static, Token, Span> {
     use std::iter::once;
 
     BoxStream::from_nested(eoi, token_trees.into_iter(), |(tt, span)| match tt {
@@ -93,9 +94,7 @@ fn main() {
     // At this point, we have a token stream that can be fed into the main parser! Because this is just an example,
     // we're instead going to just collect the token stream into a vector and print it.
 
-    let flattened_trees = token_stream
-        .fetch_tokens()
-        .collect::<Vec<_>>();
+    let flattened_trees = token_stream.fetch_tokens().collect::<Vec<_>>();
 
     println!("--- Flattened Token Trees ---\n{:?}", flattened_trees);
 }
