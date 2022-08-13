@@ -32,7 +32,12 @@ where
                 M::bind(|| inp.slice(before..after))
             })
             // TODO: Make this error actually correct
-            .ok_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before))))
+            .ok_or_else(|| {
+                Located::at(
+                    inp.last_pos(),
+                    E::expected_found(None, None, inp.span_since(before)),
+                )
+            })
     }
 
     go_extra!();
