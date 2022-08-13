@@ -35,13 +35,8 @@ impl Input for str {
     }
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        if offset < self.len() {
-            // TODO: Can we `unwrap_unchecked` here?
-            let c = unsafe { self.get_unchecked(offset..).chars().next().unwrap() };
-            (offset + c.len_utf8(), Some(c))
-        } else {
-            (offset, None)
-        }
+        let chr = self.chars().skip(offset).next();
+        (offset + chr.map_or(0, char::len_utf8), chr)
     }
 
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
