@@ -35,7 +35,7 @@ impl Input for str {
     }
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let chr = self.chars().skip(offset).next();
+        let chr = unsafe { self.get_unchecked(offset..).chars().next() };
         (offset + chr.map_or(0, char::len_utf8), chr)
     }
 
