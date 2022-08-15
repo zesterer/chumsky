@@ -35,13 +35,8 @@ impl Input for str {
     }
 
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        if offset < self.len() {
-            // TODO: Can we `unwrap_unchecked` here?
-            let c = unsafe { self.get_unchecked(offset..).chars().next().unwrap() };
-            (offset + c.len_utf8(), Some(c))
-        } else {
-            (offset, None)
-        }
+        let chr = unsafe { self.get_unchecked(offset..).chars().next() };
+        (offset + chr.map_or(0, char::len_utf8), chr)
     }
 
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
@@ -186,12 +181,9 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let before = self.save();
-            match self.next() {
-                (_, Some(c)) if f(&c) => {}
-                (_, Some(_) | None) => {
-                    self.rewind(before);
-                    break;
-                }
+            if self.next().1.filter(&mut f).is_none() {
+                self.rewind(before);
+                break;
             }
         }
     }

@@ -32,13 +32,10 @@ where
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
-        match self.parser.go::<Check>(inp) {
-            Ok(_) => {
-                let after = inp.save();
-                Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
-            }
-            Err(e) => Err(e),
-        }
+        self.parser.go::<Check>(inp)?;
+        let after = inp.save();
+
+        Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
 
     go_extra!();
@@ -60,12 +57,12 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
 }
 
 impl<'a, A, I, E, S, F> Parser<'a, I, E, S> for Filter<A, F>
-    where
-        I: Input + ?Sized,
-        E: Error<I>,
-        S: 'a,
-        A: Parser<'a, I, E, S>,
-        F: Fn(&A::Output) -> bool,
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(&A::Output) -> bool,
 {
     type Output = A::Output;
 
@@ -76,7 +73,10 @@ impl<'a, A, I, E, S, F> Parser<'a, I, E, S> for Filter<A, F>
                 Ok(M::bind(|| out))
             } else {
                 let span = inp.span_since(before);
-                Err(Located::at(inp.last_pos(), E::expected_found(None, None, span)))
+                Err(Located::at(
+                    inp.last_pos(),
+                    E::expected_found(None, None, span),
+                ))
             }
         })
     }
@@ -145,12 +145,12 @@ pub struct MapWithState<A, F> {
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
-    where
-        I: Input + ?Sized,
-        E: Error<I>,
-        S: 'a,
-        A: Parser<'a, I, E, S>,
-        F: Fn(A::Output, I::Span, &mut S) -> O,
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(A::Output, I::Span, &mut S) -> O,
 {
     type Output = O;
 
@@ -205,12 +205,12 @@ pub struct TryMapWithState<A, F> {
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMapWithState<A, F>
-    where
-        I: Input + ?Sized,
-        E: Error<I>,
-        S: 'a,
-        A: Parser<'a, I, E, S>,
-        F: Fn(A::Output, I::Span, &mut S) -> Result<O, E>,
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    F: Fn(A::Output, I::Span, &mut S) -> Result<O, E>,
 {
     type Output = O;
 
@@ -1126,7 +1126,7 @@ where
     {
         self.parser.go::<M>(inp).map(|out| {
             M::map(out, |(init, end)| {
-                init.into_iter().rev().fold(end, |b, a| (self.folder)(a, b))
+                init.into_iter().rfold(end, |b, a| (self.folder)(a, b))
             })
         })
     }
@@ -1224,11 +1224,10 @@ where
     where
         Self: Sized,
     {
-        self.parser.go::<M>(inp)
-            .map_err(|mut e| {
-                e.err = (self.mapper)(e.err);
-                e
-            })
+        self.parser.go::<M>(inp).map_err(|mut e| {
+            e.err = (self.mapper)(e.err);
+            e
+        })
     }
 
     go_extra!();
@@ -1255,12 +1254,11 @@ where
         Self: Sized,
     {
         let start = inp.save();
-        self.parser.go::<M>(inp)
-            .map_err(|mut e| {
-                let span = inp.span_since(start);
-                e.err = (self.mapper)(e.err, span);
-                e
-            })
+        self.parser.go::<M>(inp).map_err(|mut e| {
+            let span = inp.span_since(start);
+            e.err = (self.mapper)(e.err, span);
+            e
+        })
     }
 
     go_extra!();
@@ -1287,12 +1285,11 @@ where
         Self: Sized,
     {
         let start = inp.save();
-        self.parser.go::<M>(inp)
-            .map_err(|mut e| {
-                let span = inp.span_since(start);
-                e.err = (self.mapper)(e.err, span, inp.state());
-                e
-            })
+        self.parser.go::<M>(inp).map_err(|mut e| {
+            let span = inp.span_since(start);
+            e.err = (self.mapper)(e.err, span, inp.state());
+            e
+        })
     }
 
     go_extra!();
@@ -1354,15 +1351,13 @@ where
     {
         match self.parser.go::<M>(inp) {
             Ok(o) => Ok(o),
-            Err(err) => {
-                match (self.or_else)(err.err) {
-                    Err(e) => Err(Located {
-                        pos: err.pos,
-                        err: e,
-                    }),
-                    Ok(out) => Ok(M::bind(|| out)),
-                }
-            }
+            Err(err) => match (self.or_else)(err.err) {
+                Err(e) => Err(Located {
+                    pos: err.pos,
+                    err: e,
+                }),
+                Ok(out) => Ok(M::bind(|| out)),
+            },
         }
     }
 

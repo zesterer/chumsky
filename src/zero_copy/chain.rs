@@ -40,9 +40,7 @@ impl<T> Chain<T> for Option<T> {
         self.is_some() as usize
     }
     fn append_to(self, v: &mut Vec<T>) {
-        if let Some(x) = self {
-            v.push(x);
-        }
+        v.extend(self);
     }
 }
 
