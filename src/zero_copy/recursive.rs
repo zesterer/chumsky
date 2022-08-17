@@ -1,18 +1,41 @@
 use super::*;
 
-enum RecursiveInner<T> {
+enum RecursiveInner<T: ?Sized> {
     Owned(Rc<T>),
     Unowned(Weak<T>),
 }
 
 type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, E, S, Output = O> + 'a>>;
 
-pub struct Recursive<'a, I: ?Sized, O, E, S = ()> {
-    inner: RecursiveInner<OnceParser<'a, I, O, E, S>>,
+pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, E, S, Output = O> + 'a;
+
+pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
+    inner: OnceCell<Box<dyn Parser<'a, I, E, S, Output = O> + 'a>>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<'a, I, O, E, S> {
-    fn cell(&self) -> Rc<OnceParser<'a, I, O, E, S>> {
+pub struct Recursive<P: ?Sized> {
+    inner: RecursiveInner<P>,
+}
+
+impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S>> {
+    pub fn declare() -> Self {
+        Recursive {
+            inner: RecursiveInner::Owned(Rc::new(Indirect {
+                inner: OnceCell::new(),
+            })),
+        }
+    }
+
+    pub fn define<P: Parser<'a, I, E, S, Output = O> + 'a>(&mut self, parser: P) {
+        self.parser()
+            .inner
+            .set(Box::new(parser))
+            .unwrap_or_else(|_| panic!("recursive parser already declared"));
+    }
+}
+
+impl<P: ?Sized> Recursive<P> {
+    fn parser(&self) -> Rc<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -20,21 +43,9 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<'a, I, O, E, S> {
                 .expect("Recursive parser used before being defined"),
         }
     }
-
-    pub fn declare() -> Self {
-        Recursive {
-            inner: RecursiveInner::Owned(Rc::new(OnceCell::new())),
-        }
-    }
-
-    pub fn define<P: Parser<'a, I, E, S, Output = O> + 'a>(&mut self, parser: P) {
-        self.cell()
-            .set(Box::new(parser))
-            .unwrap_or_else(|_| panic!("recursive parser already declared"));
-    }
 }
 
-impl<'a, I: ?Sized, O, E, S> Clone for Recursive<'a, I, O, E, S> {
+impl<P: ?Sized> Clone for Recursive<P> {
     fn clone(&self) -> Self {
         Self {
             inner: match &self.inner {
@@ -45,7 +56,7 @@ impl<'a, I: ?Sized, O, E, S> Clone for Recursive<'a, I, O, E, S> {
     }
 }
 
-impl<'a, I, E, S, O> Parser<'a, I, E, S> for Recursive<'a, I, O, E, S>
+impl<'a, I, E, S, O> Parser<'a, I, E, S> for Recursive<Indirect<'a, I, O, E, S>>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -55,12 +66,28 @@ where
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         M::invoke(
-            self.cell()
+            self.parser()
+                .inner
                 .get()
                 .expect("Recursive parser used before being defined")
                 .as_ref(),
             inp,
         )
+    }
+
+    go_extra!();
+}
+
+impl<'a, I, E, S, O> Parser<'a, I, E, S> for Recursive<Direct<'a, I, O, E, S>>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+{
+    type Output = O;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        M::invoke(&*self.parser(), inp)
     }
 
     go_extra!();
@@ -72,16 +99,20 @@ pub fn recursive<
     E: Error<I>,
     S,
     A: Parser<'a, I, E, S> + 'a,
-    F: FnOnce(Recursive<'a, I, A::Output, E, S>) -> A,
+    F: FnOnce(Recursive<Direct<'a, I, A::Output, E, S>>) -> A,
 >(
     f: F,
-) -> Recursive<'a, I, A::Output, E, S> {
-    let mut recursive = Recursive::declare();
-    recursive.define(f(Recursive {
-        inner: match &recursive.inner {
-            RecursiveInner::Owned(x) => RecursiveInner::Unowned(Rc::downgrade(x)),
-            RecursiveInner::Unowned(_) => unreachable!(),
-        },
-    }));
-    recursive
+) -> Recursive<Direct<'a, I, A::Output, E, S>> {
+    let rc = Rc::new_cyclic(|rc| {
+        let rc: Weak<dyn Parser<'a, I, E, S, Output = A::Output>> = rc.clone() as _;
+        let parser = Recursive {
+            inner: RecursiveInner::Unowned(rc.clone()),
+        };
+
+        f(parser)
+    });
+
+    Recursive {
+        inner: RecursiveInner::Owned(rc),
+    }
 }
