@@ -52,6 +52,7 @@ use core::{
     marker::PhantomData,
     ops::{Range, RangeFrom},
     str::FromStr,
+    panic::Location,
 };
 use hashbrown::HashMap;
 
@@ -210,6 +211,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, Self::Output, E>;
 
+    #[track_caller]
     fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F, E, S>
     where
         Self: Sized,
@@ -220,9 +222,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             mapper: f,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn filter<F: Fn(&Self::Output) -> bool>(self, f: F) -> Filter<Self, F>
     where
         Self: Sized,
@@ -230,9 +234,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Filter {
             parser: self,
             filter: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map<O, F: Fn(Self::Output) -> O>(self, f: F) -> Map<Self, F>
     where
         Self: Sized,
@@ -240,9 +246,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Map {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map_with_span<O, F: Fn(Self::Output, I::Span) -> O>(self, f: F) -> MapWithSpan<Self, F>
     where
         Self: Sized,
@@ -250,9 +258,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         MapWithSpan {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> O>(
         self,
         f: F,
@@ -263,9 +273,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         MapWithState {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     #[doc(alias = "filter_map")]
     fn try_map<O, F: Fn(Self::Output, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
     where
@@ -274,9 +286,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         TryMap {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn try_map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> Result<O, E>>(
         self,
         f: F,
@@ -287,9 +301,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         TryMapWithState {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn ignored(self) -> Ignored<Self, E, S>
     where
         Self: Sized,
@@ -298,9 +314,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             to: (),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn to<O: Clone>(self, to: O) -> To<Self, O, E, S>
     where
         Self: Sized,
@@ -309,9 +327,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             to,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn then<B: Parser<'a, I, E, S>>(self, other: B) -> Then<Self, B, E, S>
     where
         Self: Sized,
@@ -320,9 +340,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser_a: self,
             parser_b: other,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn ignore_then<B: Parser<'a, I, E, S>>(self, other: B) -> IgnoreThen<Self, B, E, S>
     where
         Self: Sized,
@@ -331,9 +353,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser_a: self,
             parser_b: other,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn then_ignore<B: Parser<'a, I, E, S>>(self, other: B) -> ThenIgnore<Self, B, E, S>
     where
         Self: Sized,
@@ -342,9 +366,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser_a: self,
             parser_b: other,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn then_with<B: Parser<'a, I, E, S>, F: Fn(Self::Output) -> B>(
         self,
         then: F,
@@ -356,9 +382,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             then,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn delimited_by<B: Parser<'a, I, E, S>, C: Parser<'a, I, E, S>>(
         self,
         start: B,
@@ -371,9 +399,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             start,
             end,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn padded_by<B: Parser<'a, I, E, S>>(self, padding: B) -> PaddedBy<Self, B>
     where
         Self: Sized,
@@ -381,9 +411,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         PaddedBy {
             parser: self,
             padding,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn or<B: Parser<'a, I, E, S, Output = Self::Output>>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
@@ -391,16 +423,22 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Or {
             parser_a: self,
             parser_b: other,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn or_not(self) -> OrNot<Self>
     where
         Self: Sized,
     {
-        OrNot { parser: self }
+        OrNot {
+            parser: self,
+            #[cfg(debug_assertions)] location: *Location::caller(),
+        }
     }
 
+    #[track_caller]
     fn repeated(self) -> Repeated<Self, I, (), E, S>
     where
         Self: Sized,
@@ -410,9 +448,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             at_least: 0,
             at_most: None,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, (), N>
     where
         Self: Sized,
@@ -420,9 +460,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         RepeatedExactly {
             parser: self,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn separated_by<B: Parser<'a, I, E, S>>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
     where
         Self: Sized,
@@ -435,9 +477,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn separated_by_exactly<B: Parser<'a, I, E, S>, const N: usize>(
         self,
         separator: B,
@@ -451,9 +495,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
     where
         Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
@@ -465,9 +511,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             folder: f,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
     where
         Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
@@ -478,25 +526,35 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             folder: f,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn rewind(self) -> Rewind<Self>
     where
         Self: Sized,
     {
-        Rewind { parser: self }
+        Rewind {
+            parser: self,
+            #[cfg(debug_assertions)] location: *Location::caller(),
+        }
     }
 
+    #[track_caller]
     fn padded(self) -> Padded<Self>
     where
         Self: Sized,
         I: Input,
         I::Token: Char,
     {
-        Padded { parser: self }
+        Padded {
+            parser: self,
+            #[cfg(debug_assertions)] location: *Location::caller(),
+        }
     }
 
+    #[track_caller]
     fn flatten<T, Inner>(self) -> Map<Self, fn(Self::Output) -> Vec<T>>
     where
         Self: Sized,
@@ -506,6 +564,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
+    #[track_caller]
     fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(
         self,
         fallback: F,
@@ -516,9 +575,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         RecoverWith {
             parser: self,
             fallback,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map_err<F>(self, f: F) -> MapErr<Self, F>
     where
         Self: Sized,
@@ -527,9 +588,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         MapErr {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
     where
         Self: Sized,
@@ -538,9 +601,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         MapErrWithSpan {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
     where
         Self: Sized,
@@ -549,11 +614,14 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         MapErrWithState {
             parser: self,
             mapper: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
     // TODO: Finish implementing this once full error recovery is implemented
-    /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
+    /*
+    #[track_caller]
+    fn validate<U, F>(self, f: F) -> Validate<Self, F>
     where
         Self: Sized,
         F: Fn(Self::Output, I::Span, &mut dyn FnMut(E)) -> U
@@ -561,9 +629,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Validate {
             parser: self,
             validator: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }*/
 
+    #[track_caller]
     fn collect<C>(self) -> Map<Self, fn(Self::Output) -> C>
     where
         Self: Sized,
@@ -573,6 +643,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.map(|items| C::from_iter(items.into_iter()))
     }
 
+    #[track_caller]
     fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, fn((Self::Output, U)) -> Vec<T>>
     where
         Self: Sized,
@@ -588,6 +659,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         })
     }
 
+    #[track_caller]
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
     where
         Self: Sized,
@@ -596,9 +668,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         OrElse {
             parser: self,
             or_else: f,
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
+    #[track_caller]
     fn from_str<U>(self) -> Map<Self, fn(Self::Output) -> Result<U, U::Err>>
     where
         Self: Sized,
@@ -608,6 +682,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.map(|o| o.as_ref().parse())
     }
 
+    #[track_caller]
     fn unwrapped<U, E1>(self) -> Map<Self, fn(Result<U, E1>) -> U>
     where
         Self: Sized + Parser<'a, I, E, S, Output = Result<U, E1>>,
@@ -616,6 +691,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.map(|o| o.unwrap())
     }
 
+    #[track_caller]
     fn boxed(self) -> Boxed<'a, I, Self::Output, E, S>
     where
         Self: Sized + 'a,
@@ -623,6 +699,20 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Boxed {
             inner: Rc::new(self),
         }
+    }
+
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location);
+
+    // Returns the minimum and maximum number of inputs consumed by this parser
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>>;
+
+    #[cfg(debug_assertions)]
+    fn find_problems(&self) {
+        self.fp();
     }
 }
 
@@ -649,6 +739,12 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         M::invoke(&*self.inner, inp)
     }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { (&*self).details() }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { (&*self).fp() }
 
     go_extra!();
 }
@@ -787,6 +883,11 @@ fn regex_parser() {
             Vec::new()
         ),
     );
+}
+
+#[cfg(debug_assertions)]
+pub fn warning(s: String) {
+    eprintln!("[WARNING]\n\n{}", s);
 }
 
 #[test]

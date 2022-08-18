@@ -8,6 +8,7 @@
         maybe_uninit_uninit_array,
         maybe_uninit_array_assume_init,
         once_cell,
+        option_zip,
     )
 )]
 #![doc = include_str!("../README.md")]

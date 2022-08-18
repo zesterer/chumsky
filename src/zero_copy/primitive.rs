@@ -1,15 +1,16 @@
 use super::*;
 
-pub struct End<I: ?Sized>(PhantomData<I>);
+pub struct End<I: ?Sized>(PhantomData<I>, #[cfg(debug_assertions)] Location<'static>);
 
+#[track_caller]
 pub fn end<I: Input + ?Sized>() -> End<I> {
-    End(PhantomData)
+    End(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
 impl<I: ?Sized> Copy for End<I> {}
 impl<I: ?Sized> Clone for End<I> {
     fn clone(&self) -> Self {
-        End(PhantomData)
+        End(PhantomData, #[cfg(debug_assertions)] self.1)
     }
 }
 
@@ -32,19 +33,26 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("end", self.1) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(0).. Some(0) }
+
     go_extra!();
 }
 
-pub struct Empty<I: ?Sized>(PhantomData<I>);
+pub struct Empty<I: ?Sized>(PhantomData<I>, #[cfg(debug_assertions)] Location<'static>);
 
+#[track_caller]
 pub fn empty<I: Input + ?Sized>() -> Empty<I> {
-    Empty(PhantomData)
+    Empty(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
 impl<I: ?Sized> Copy for Empty<I> {}
 impl<I: ?Sized> Clone for Empty<I> {
     fn clone(&self) -> Self {
-        Empty(PhantomData)
+        Empty(PhantomData, #[cfg(debug_assertions)] self.1)
     }
 }
 
@@ -59,6 +67,12 @@ where
     fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         Ok(M::bind(|| ()))
     }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("empty", self.1) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(0).. Some(0) }
 
     go_extra!();
 }
@@ -132,6 +146,7 @@ impl Seq<char> for String {
 pub struct Just<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
 impl<T: Copy, I: ?Sized, E, S> Copy for Just<T, I, E, S> {}
@@ -140,10 +155,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
         Self {
             seq: self.seq.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
 
+#[track_caller]
 pub fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -154,6 +171,7 @@ where
     Just {
         seq,
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
@@ -188,12 +206,22 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("just", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let seq_len = self.seq.iter().count();
+        Some(seq_len)..Some(seq_len)
+    }
+
     go_extra!();
 }
 
 pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
 impl<T: Copy, I: ?Sized, E, S> Copy for OneOf<T, I, E, S> {}
@@ -202,10 +230,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
         Self {
             seq: self.seq.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
 
+#[track_caller]
 pub fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -216,6 +246,7 @@ where
     OneOf {
         seq,
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
@@ -240,12 +271,19 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("one_of", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(1).. Some(1) }
+
     go_extra!();
 }
 
 pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
 impl<T: Copy, I: ?Sized, E, S> Copy for NoneOf<T, I, E, S> {}
@@ -254,10 +292,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
         Self {
             seq: self.seq.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
 
+#[track_caller]
 pub fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -268,6 +308,7 @@ where
     NoneOf {
         seq,
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
@@ -292,11 +333,18 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("none_of", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(1).. Some(1) }
+
     go_extra!();
 }
 
 pub struct Any<I: ?Sized, E, S = ()> {
     phantom: PhantomData<(E, S, I)>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
 impl<I: ?Sized, E, S> Copy for Any<I, E, S> {}
@@ -304,6 +352,7 @@ impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -327,18 +376,27 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("any", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(1).. Some(1) }
+
     go_extra!();
 }
 
+#[track_caller]
 pub fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     Any {
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
 pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
     until: P,
     phantom: PhantomData<(C, E, S, I)>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
 impl<'a, I, E, S, P, C> TakeUntil<P, I, C, E, S>
@@ -352,6 +410,7 @@ where
         TakeUntil {
             until: self.until,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -362,10 +421,12 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
         TakeUntil {
             until: self.until.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
 
+#[track_caller]
 pub fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
@@ -376,6 +437,7 @@ where
     TakeUntil {
         until,
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
@@ -413,10 +475,22 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("take_until", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let until_start = self.until.fp().start;
+        if until_start == Some(0) {
+            eprintln!("[parser problem]\n");
+        }
+        until_start..None
+    }
+
     go_extra!();
 }
 
-pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
+pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>, #[cfg(debug_assertions)] Location<'static>);
 
 impl<I: ?Sized, E> Copy for Todo<I, E> {}
 impl<I: ?Sized, E> Clone for Todo<I, E> {
@@ -425,8 +499,9 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
     }
 }
 
+#[track_caller]
 pub fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
-    Todo(PhantomData)
+    Todo(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
 impl<'a, I, E, S> Parser<'a, I, E, S> for Todo<I, E>
@@ -441,6 +516,12 @@ where
         todo!("Attempted to use an unimplemented parser")
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("todo", self.1) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { None..None }
+
     go_extra!();
 }
 
@@ -448,12 +529,15 @@ where
 pub struct Choice<T, O> {
     parsers: T,
     phantom: PhantomData<O>,
+    #[cfg(debug_assertions)] location: Location<'static>,
 }
 
+#[track_caller]
 pub fn choice<T, O>(parsers: T) -> Choice<T, O> {
     Choice {
         parsers,
         phantom: PhantomData,
+        #[cfg(debug_assertions)] location: *Location::caller(),
     }
 }
 
@@ -495,6 +579,15 @@ macro_rules! impl_choice_for_tuple {
                 )*
 
                 Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
+            }
+
+            #[cfg(debug_assertions)]
+            fn details(&self) -> (&str, Location) { ("choice", self.location) }
+
+            #[cfg(debug_assertions)]
+            fn fp(&self) -> Range<Option<usize>> {
+                todo!();
+                None..None
             }
 
             go_extra!();

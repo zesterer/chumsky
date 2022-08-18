@@ -67,6 +67,7 @@ impl Char for u8 {
 #[derive(Clone)]
 pub struct Padded<A> {
     pub(crate) parser: A,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for Padded<A>
@@ -84,6 +85,14 @@ where
         let out = self.parser.go::<M>(inp)?;
         inp.skip_while(|c| c.is_whitespace());
         Ok(out)
+    }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("padded", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        todo!()
     }
 
     go_extra!();

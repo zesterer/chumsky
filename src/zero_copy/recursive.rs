@@ -10,19 +10,22 @@ type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, E, S, Output = 
 pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, E, S, Output = O> + 'a;
 
 pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
-    inner: OnceCell<Box<dyn Parser<'a, I, E, S, Output = O> + 'a>>,
+    inner: OnceParser<'a, I, O, E, S>,
 }
 
 pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S>> {
+    #[track_caller]
     pub fn declare() -> Self {
         Recursive {
             inner: RecursiveInner::Owned(Rc::new(Indirect {
                 inner: OnceCell::new(),
             })),
+            #[cfg(debug_assertions)] location: *Location::caller(),
         }
     }
 
@@ -52,6 +55,7 @@ impl<P: ?Sized> Clone for Recursive<P> {
                 RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
                 RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
             },
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -75,6 +79,12 @@ where
         )
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("recursive", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { None..None }
+
     go_extra!();
 }
 
@@ -90,9 +100,16 @@ where
         M::invoke(&*self.parser(), inp)
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("recursive", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { None..None }
+
     go_extra!();
 }
 
+#[track_caller]
 pub fn recursive<
     'a,
     I: Input + ?Sized,
@@ -103,10 +120,14 @@ pub fn recursive<
 >(
     f: F,
 ) -> Recursive<Direct<'a, I, A::Output, E, S>> {
+    #[cfg(debug_assertions)]
+    let location = *Location::caller();
+
     let rc = Rc::new_cyclic(|rc| {
         let rc: Weak<dyn Parser<'a, I, E, S, Output = A::Output>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
+            #[cfg(debug_assertions)] location,
         };
 
         f(parser)
@@ -114,5 +135,6 @@ pub fn recursive<
 
     Recursive {
         inner: RecursiveInner::Owned(rc),
+        #[cfg(debug_assertions)] location,
     }
 }

@@ -16,5 +16,11 @@ where
         (*self).go::<M>(inp)
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { (*self).details() }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { (*self).fp() }
+
     go_extra!();
 }

@@ -6,6 +6,7 @@ pub struct MapSlice<A, F, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<(E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, F: Copy, E, S> Copy for MapSlice<A, F, E, S> {}
@@ -15,6 +16,7 @@ impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -38,12 +40,19 @@ where
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_slice", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
 pub struct Filter<A, F> {
     pub(crate) parser: A,
     pub(crate) filter: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy + ?Sized, F: Copy> Copy for Filter<A, F> {}
@@ -52,6 +61,7 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
         Self {
             parser: self.parser.clone(),
             filter: self.filter.clone(),
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -81,6 +91,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("filter", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -88,6 +104,7 @@ where
 pub struct Map<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for Map<A, F>
@@ -106,6 +123,12 @@ where
             .map(|out| M::map(out, &self.mapper))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -113,6 +136,7 @@ where
 pub struct MapWithSpan<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithSpan<A, F>
@@ -135,6 +159,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_with_span", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -142,6 +172,7 @@ where
 pub struct MapWithState<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
@@ -165,6 +196,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_with_state", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -172,6 +209,7 @@ where
 pub struct TryMap<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMap<A, F>
@@ -195,6 +233,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("try_map", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -202,6 +246,7 @@ where
 pub struct TryMapWithState<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMapWithState<A, F>
@@ -226,6 +271,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("try_map_with_state", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -233,6 +284,7 @@ pub struct To<A, O, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) to: O,
     pub(crate) phantom: PhantomData<(E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, O: Copy, E, S> Copy for To<A, O, E, S> {}
@@ -242,6 +294,7 @@ impl<A: Clone, O: Clone, E, S> Clone for To<A, O, E, S> {
             parser: self.parser.clone(),
             to: self.to.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -262,6 +315,12 @@ where
             .map(|_| M::bind(|| self.to.clone()))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_slice", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -271,6 +330,7 @@ pub struct Then<A, B, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, B: Copy, E, S> Copy for Then<A, B, E, S> {}
@@ -280,6 +340,7 @@ impl<A: Clone, B: Clone, E, S> Clone for Then<A, B, E, S> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -300,6 +361,16 @@ where
         Ok(M::combine(a, b, |a: A::Output, b: B::Output| (a, b)))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("then", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let range_a = self.parser_a.fp();
+        let range_b = self.parser_b.fp();
+        range_a.start.zip_with(range_b.start, |a, b| a + b)..range_a.end.zip_with(range_b.end, |a, b| a + b)
+    }
+
     go_extra!();
 }
 
@@ -307,6 +378,7 @@ pub struct IgnoreThen<A, B, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, B: Copy, E, S> Copy for IgnoreThen<A, B, E, S> {}
@@ -316,6 +388,7 @@ impl<A: Clone, B: Clone, E, S> Clone for IgnoreThen<A, B, E, S> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -336,6 +409,16 @@ where
         Ok(M::map(b, |b: B::Output| b))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("ignore_then", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let range_a = self.parser_a.fp();
+        let range_b = self.parser_b.fp();
+        range_a.start.zip_with(range_b.start, |a, b| a + b)..range_a.end.zip_with(range_b.end, |a, b| a + b)
+    }
+
     go_extra!();
 }
 
@@ -343,6 +426,7 @@ pub struct ThenIgnore<A, B, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, B: Copy, E, S> Copy for ThenIgnore<A, B, E, S> {}
@@ -352,6 +436,7 @@ impl<A: Clone, B: Clone, E, S> Clone for ThenIgnore<A, B, E, S> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -372,6 +457,16 @@ where
         Ok(M::map(a, |a: A::Output| a))
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("then_ignore", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let range_a = self.parser_a.fp();
+        let range_b = self.parser_b.fp();
+        range_a.start.zip_with(range_b.start, |a, b| a + b)..range_a.end.zip_with(range_b.end, |a, b| a + b)
+    }
+
     go_extra!();
 }
 
@@ -379,6 +474,7 @@ pub struct ThenWith<A, B, F, I: ?Sized, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
     pub(crate) phantom: PhantomData<(B, E, S, I)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, B, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, F, I, E, S> {}
@@ -388,6 +484,7 @@ impl<A: Clone, B, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, F, I, E, S
             parser: self.parser.clone(),
             then: self.then.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -425,6 +522,14 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("then_with", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        todo!()
+    }
+
     go_extra!();
 }
 
@@ -433,6 +538,7 @@ pub struct DelimitedBy<A, B, C> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for DelimitedBy<A, B, C>
@@ -453,6 +559,12 @@ where
         Ok(b)
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("delimited_by", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { todo!() }
+
     go_extra!();
 }
 
@@ -460,6 +572,7 @@ where
 pub struct PaddedBy<A, B> {
     pub(crate) parser: A,
     pub(crate) padding: B,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for PaddedBy<A, B>
@@ -479,6 +592,12 @@ where
         Ok(b)
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("padded_by", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { todo!() }
+
     go_extra!();
 }
 
@@ -486,6 +605,7 @@ where
 pub struct Or<A, B> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for Or<A, B>
@@ -513,6 +633,16 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("or", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        let range_a = self.parser_a.fp();
+        let range_b = self.parser_b.fp();
+        range_a.start.zip_with(range_b.start, |a, b| a.min(b))..range_a.end.zip_with(range_b.end, |a, b| a.max(b))
+    }
+
     go_extra!();
 }
 
@@ -520,6 +650,7 @@ where
 pub struct RecoverWith<A, F> {
     pub(crate) parser: A,
     pub(crate) fallback: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for RecoverWith<A, F>
@@ -547,6 +678,14 @@ where
                 }
             }
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("recover_with", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        todo!()
     }
 
     go_extra!();
@@ -615,6 +754,7 @@ pub struct Repeated<A, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
     pub(crate) phantom: PhantomData<(C, E, S, I)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, I: ?Sized, C, E, S> Copy for Repeated<A, I, C, E, S> {}
@@ -625,6 +765,7 @@ impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
             at_least: self.at_least,
             at_most: self.at_most,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -658,6 +799,7 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a> Repea
             at_least: self.at_least,
             at_most: self.at_most,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -703,6 +845,17 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("repeated", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        if self.parser.fp().start == Some(0) {
+            warning(format!("`repeated` parser defined at {} has an inner pattern that can itself consume no tokens. This is very likely a bug.", self.location))
+        }
+        Some(0)..None
+    }
+
     go_extra!();
 }
 
@@ -714,6 +867,7 @@ pub struct SeparatedBy<A, B, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
     pub(crate) phantom: PhantomData<(C, E, S, I)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A: Copy, B: Copy, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, I, C, E, S> {}
@@ -727,6 +881,7 @@ impl<A: Clone, B: Clone, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, I, C, E
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -787,6 +942,7 @@ impl<
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -858,12 +1014,19 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("separated_by", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(0)..None }
+
     go_extra!();
 }
 
 #[derive(Copy, Clone)]
 pub struct OrNot<A> {
     pub(crate) parser: A,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for OrNot<A>
@@ -885,6 +1048,12 @@ where
             }
         })
     }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("or_not", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(0)..self.parser.fp().end }
 
     go_extra!();
 }
@@ -925,6 +1094,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 pub struct RepeatedExactly<A, C, const N: usize> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<C>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
@@ -937,6 +1107,7 @@ impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
         RepeatedExactly {
             parser: self.parser,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -982,6 +1153,14 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("repeated_exactly", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        self.parser.fp().start.map(|n| n * N)..self.parser.fp().end.map(|n| n * N)
+    }
+
     go_extra!();
 }
 
@@ -992,6 +1171,7 @@ pub struct SeparatedByExactly<A, B, C, const N: usize> {
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
     pub(crate) phantom: PhantomData<C>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
@@ -1021,6 +1201,7 @@ impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -1088,6 +1269,14 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("separated_by_exactly", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> {
+        todo!()
+    }
+
     go_extra!();
 }
 
@@ -1095,6 +1284,7 @@ pub struct Foldr<P, F, A, B, E = (), S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldr<P, F, A, B, E, S> {}
@@ -1104,6 +1294,7 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldr<P, F, A, B, E, S> {
             parser: self.parser.clone(),
             folder: self.folder.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -1131,6 +1322,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("foldr", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -1138,6 +1335,7 @@ pub struct Foldl<P, F, A, B, E = (), S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldl<P, F, A, B, E, S> {}
@@ -1147,6 +1345,7 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldl<P, F, A, B, E, S> {
             parser: self.parser.clone(),
             folder: self.folder.clone(),
             phantom: PhantomData,
+            #[cfg(debug_assertions)] location: self.location,
         }
     }
 }
@@ -1173,12 +1372,19 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("foldl", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
 #[derive(Copy, Clone)]
 pub struct Rewind<A> {
     pub(crate) parser: A,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A> Parser<'a, I, E, S> for Rewind<A>
@@ -1201,6 +1407,12 @@ where
         }
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("rewind", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { Some(0)..Some(0) }
+
     go_extra!();
 }
 
@@ -1208,6 +1420,7 @@ where
 pub struct MapErr<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErr<A, F>
@@ -1230,6 +1443,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_err", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -1237,6 +1456,7 @@ where
 pub struct MapErrWithSpan<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithSpan<A, F>
@@ -1261,6 +1481,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_err_with_span", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -1268,6 +1494,7 @@ where
 pub struct MapErrWithState<A, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithState<A, F>
@@ -1292,6 +1519,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("map_err_with_state", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }
 
@@ -1300,6 +1533,7 @@ where
 pub struct Validate<A, F> {
     pub(crate) parser: A,
     pub(crate) validator: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for Validate<A, F>
@@ -1326,6 +1560,12 @@ where
         })
     }
 
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("validate", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
+
     go_extra!();
 }*/
 
@@ -1333,6 +1573,7 @@ where
 pub struct OrElse<A, F> {
     pub(crate) parser: A,
     pub(crate) or_else: F,
+    #[cfg(debug_assertions)] pub(crate) location: Location<'static>,
 }
 
 impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for OrElse<A, F>
@@ -1360,6 +1601,12 @@ where
             },
         }
     }
+
+    #[cfg(debug_assertions)]
+    fn details(&self) -> (&str, Location) { ("or_else", self.location) }
+
+    #[cfg(debug_assertions)]
+    fn fp(&self) -> Range<Option<usize>> { self.parser.fp() }
 
     go_extra!();
 }
