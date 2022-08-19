@@ -20,6 +20,7 @@ pub mod primitive;
 pub mod recursive;
 #[cfg(feature = "regex")]
 pub mod regex;
+pub mod sliced;
 pub mod span;
 pub mod text;
 
@@ -61,6 +62,7 @@ use self::{
     error::Error,
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
+    sliced::RepeatedSlice,
     span::Span,
     text::*,
 };
@@ -420,6 +422,18 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         RepeatedExactly {
             parser: self,
             phantom: PhantomData,
+        }
+    }
+
+    fn repeated_slice(self) -> RepeatedSlice<Self, I, E, S>
+    where
+        Self: Sized,
+    {
+        RepeatedSlice {
+            parser: self,
+            at_least: 0,
+            at_most: None,
+            phantom: PhantomData::<(E, S, I)>,
         }
     }
 
