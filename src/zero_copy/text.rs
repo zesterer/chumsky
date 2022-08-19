@@ -251,6 +251,26 @@ where
         )
 }
 
+/// A parser that accepts a C-style identifier.
+#[must_use]
+fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()>
+where
+    I: SliceInput + ?Sized,
+    I::Token: Char,
+    <I as SliceInput>::Slice: 'a + PartialEq,
+    E: Error<I>,
+    S: 'a,
+    K: AsRef<<I as SliceInput>::Slice>,
+{
+    ident().try_map(move |s: &<I as SliceInput>::Slice, span| {
+        if s == word.as_ref() {
+            Ok(())
+        } else {
+            Err(E::expected_found(None, None, span))
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -448,6 +468,29 @@ mod tests {
             assert_eq!(res, (Some("_0valid_ident"), Vec::new()));
 
             let res = ident.parse("0invalid_ident");
+            assert_eq!(res, (None, vec![()]));
+        }
+
+        #[test]
+        fn parses_keywords() {
+            let keyword = |word| keyword::<_, (), (), _>(word);
+
+            let res = keyword("true").parse("true");
+            assert_eq!(res, (Some(()), Vec::new()));
+
+            let res = keyword("false").parse("false");
+            assert_eq!(res, (Some(()), Vec::new()));
+
+            let res = keyword("false").parse("falsey");
+            assert_eq!(res, (None, vec![()]));
+
+            let res = keyword("def").parse("def");
+            assert_eq!(res, (Some(()), Vec::new()));
+
+            let res = keyword("def").parse("def(foo, bar)");
+            assert_eq!(res, (Some(()), Vec::new()));
+
+            let res = keyword("def").parse("define");
             assert_eq!(res, (None, vec![()]));
         }
     }
