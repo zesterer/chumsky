@@ -154,6 +154,7 @@ where
 /// has length one.
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
+#[must_use]
 pub fn int<'a, I, E, S, C>(radix: u32) -> impl Parser<'a, I, E, S, Output = C>
 where
     I: SliceInput + ?Sized,
