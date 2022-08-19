@@ -12,6 +12,7 @@ macro_rules! go_extra {
 }
 
 mod blanket;
+pub mod chain;
 pub mod combinator;
 pub mod error;
 pub mod input;
@@ -21,14 +22,11 @@ pub mod recursive;
 pub mod regex;
 pub mod span;
 pub mod text;
-pub mod chain;
 
 pub mod prelude {
     pub use super::{
         error::{Error as _, Rich, Simple},
-        primitive::{
-            any, choice, empty, end, just, none_of, one_of, take_until, todo,
-        },
+        primitive::{any, choice, empty, end, just, none_of, one_of, take_until, todo},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -46,25 +44,25 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    cell::OnceCell,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
-    cell::OnceCell,
+    iter::FromIterator,
     marker::PhantomData,
     ops::{Range, RangeFrom},
     str::FromStr,
-    iter::FromIterator,
 };
 use hashbrown::HashMap;
 
 use self::{
+    chain::Chain,
     combinator::*,
     error::Error,
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
     span::Span,
     text::*,
-    chain::Chain,
 };
 
 pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
@@ -255,7 +253,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> O>(self, f: F) -> MapWithState<Self, F>
+    fn map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> O>(
+        self,
+        f: F,
+    ) -> MapWithState<Self, F>
     where
         Self: Sized,
     {
@@ -276,7 +277,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> Result<O, E>>(self, f: F) -> TryMapWithState<Self, F>
+    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> Result<O, E>>(
+        self,
+        f: F,
+    ) -> TryMapWithState<Self, F>
     where
         Self: Sized,
     {
@@ -494,10 +498,10 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     }
 
     fn flatten<T, Inner>(self) -> Map<Self, fn(Self::Output) -> Vec<T>>
-        where
-            Self: Sized,
-            Self::Output: IntoIterator<Item = Inner>,
-            Inner: IntoIterator<Item = T>,
+    where
+        Self: Sized,
+        Self::Output: IntoIterator<Item = Inner>,
+        Inner: IntoIterator<Item = T>,
     {
         self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
@@ -587,7 +591,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
     where
         Self: Sized,
-        F: Fn(E) -> Result<Self::Output, E>
+        F: Fn(E) -> Result<Self::Output, E>,
     {
         OrElse {
             parser: self,
@@ -651,8 +655,8 @@ where
 
 #[test]
 fn zero_copy() {
-    use self::prelude::*;
     use self::input::WithContext;
+    use self::prelude::*;
 
     // #[derive(Clone)]
     // enum TokenTest {
@@ -703,14 +707,17 @@ fn zero_copy() {
 
     assert_eq!(
         parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#)),
-        (Some([
-            ((42, 0..5), Token::Ident("hello")),
-            ((42, 6..13), Token::String("\"world\"")),
-            ((42, 14..19), Token::Ident("these")),
-            ((42, 20..23), Token::Ident("are")),
-            ((42, 24..30), Token::String("\"test\"")),
-            ((42, 31..37), Token::Ident("tokens")),
-        ]), Vec::new()),
+        (
+            Some([
+                ((42, 0..5), Token::Ident("hello")),
+                ((42, 6..13), Token::String("\"world\"")),
+                ((42, 14..19), Token::Ident("these")),
+                ((42, 20..23), Token::Ident("are")),
+                ((42, 24..30), Token::String("\"test\"")),
+                ((42, 31..37), Token::Ident("tokens")),
+            ]),
+            Vec::new()
+        ),
     );
 }
 
@@ -770,12 +777,15 @@ fn regex_parser() {
 
     assert_eq!(
         parser::<u8>().parse(b"hello world this works" as &[_]),
-        (Some(vec![
-            b"hello" as &[_],
-            b"world" as &[_],
-            b"this" as &[_],
-            b"works" as &[_],
-        ]), Vec::new()),
+        (
+            Some(vec![
+                b"hello" as &[_],
+                b"world" as &[_],
+                b"this" as &[_],
+                b"works" as &[_],
+            ]),
+            Vec::new()
+        ),
     );
 }
 
