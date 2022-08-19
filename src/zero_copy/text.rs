@@ -109,6 +109,9 @@ where
     go_extra!();
 }
 
+/// A parser that accepts (and ignores) any number of whitespace characters.
+///
+/// The output type of this parser is `()`.
 #[must_use]
 pub fn whitespace<I, E, S>() -> impl for<'a> Parser<'a, I, E, S, Output = ()>
 where
