@@ -110,18 +110,17 @@ where
 }
 
 #[must_use]
-pub fn whitespace<I, E, S>() -> impl for<'a> Parser<'a, I, E, S, Output = Vec<()>>
+pub fn whitespace<I, E, S>() -> impl for<'a> Parser<'a, I, E, S, Output = ()>
 where
-    I: Input + ?Sized,
+    I: SliceInput + ?Sized,
     I::Token: Char,
     E: Error<I>,
     for<'a> S: 'a,
 {
     primitive::any()
         .filter(|x: &I::Token| x.is_whitespace())
-        .ignored()
         .repeated()
-        .collect()
+        .ignored()
 }
 
 /// A parser that accepts one or more ASCII digits.
@@ -185,13 +184,13 @@ mod tests {
         #[test]
         fn parses_whitespace() {
             let res = whitespace::<_, (), ()>().parse(" \x09\x0A\x0B\x0C\x0D");
-            assert_eq!(res, (Some(vec![(), (), (), (), (), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
 
         #[test]
         fn parses_whitespace_stops_on_non() {
             let res = whitespace::<_, (), ()>().parse("\x09\x0A f \x0B\x0C\x0D");
-            assert_eq!(res, (Some(vec![(), (), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
 
         #[test]
@@ -201,7 +200,7 @@ mod tests {
                 whitespace::<_, (), ()>().parse(&*a)
             };
 
-            assert_eq!(res, (Some(vec![(), (), (), (), (), (), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
 
         #[test]
@@ -209,24 +208,24 @@ mod tests {
             // '\x0B' is classified as unicode whitespace, but not ascii-whitespace,
             // so it is NOT counted as whitespace for this test
             let res = whitespace::<_, (), ()>().parse(" \x09\x0A\x0B\x0C\x0D".as_bytes());
-            assert_eq!(res, (Some(vec![(), (), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
 
             let res = whitespace::<_, (), ()>().parse("\x0C\x0D".as_bytes());
-            assert_eq!(res, (Some(vec![(), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
 
         #[test]
         fn parses_whitespace_bytes_stops_at_non() {
             let res = whitespace::<_, (), ()>().parse(b"\x09\x0Af\x0B\x0C\x0D".as_slice());
-            assert_eq!(res, (Some(vec![(), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
 
             // '\x0B' is classified as unicode whitespace, but not ascii-whitespace,
             // so it is NOT counted as whitespace for this test
             let res = whitespace::<_, (), ()>().parse(b"\x0B\x0C\x0D".as_slice());
-            assert_eq!(res, (Some(vec![]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
 
             let res = whitespace::<_, (), ()>().parse(b"\x0C\x0D".as_slice());
-            assert_eq!(res, (Some(vec![(), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
 
         #[test]
@@ -236,7 +235,7 @@ mod tests {
                 whitespace::<_, (), ()>().parse(a.as_bytes())
             };
 
-            assert_eq!(res, (Some(vec![(), (), (), (), (), (), ()]), Vec::new()));
+            assert_eq!(res, (Some(()), Vec::new()));
         }
     }
 
