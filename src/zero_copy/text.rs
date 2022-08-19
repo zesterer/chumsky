@@ -135,7 +135,7 @@ pub fn digits<'a, I, E, S, C>(
     fn(&'a <I as SliceInput>::Slice) -> C,
 >
 where
-    I: Input + ?Sized + SliceInput,
+    I: SliceInput + ?Sized,
     I::Token: Char,
     <I as SliceInput>::Slice: 'a,
     E: Error<I>,
@@ -157,7 +157,7 @@ where
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 pub fn int<'a, I, E, S, C>(radix: u32) -> impl Parser<'a, I, E, S, Output = C>
 where
-    I: Input + ?Sized + SliceInput,
+    I: SliceInput + ?Sized,
     I::Token: Char,
     <I as SliceInput>::Slice: 'a,
     E: Error<I>,

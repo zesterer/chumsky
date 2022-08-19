@@ -59,13 +59,13 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, E: Error<I>, S: 'a> Repeated
     }
 }
 
-impl<'a, I, E, S, A> Parser<'a, I, E, S> for RepeatedSlice<A, I, E, S>
+impl<'a, A, I, E, S> Parser<'a, I, E, S> for RepeatedSlice<A, I, E, S>
 where
-    I: Input + ?Sized + SliceInput,
+    A: Parser<'a, I, E, S>,
+    I: SliceInput + ?Sized,
     <I as SliceInput>::Slice: 'a,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
 {
     type Output = &'a <I as SliceInput>::Slice;
 
