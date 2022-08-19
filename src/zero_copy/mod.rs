@@ -62,7 +62,7 @@ use self::{
     error::Error,
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
-    sliced::RepeatedSlice,
+    sliced::{RepeatedSlice, ThenSlice},
     span::Span,
     text::*,
 };
@@ -319,6 +319,18 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Self: Sized,
     {
         Then {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
+    }
+
+    fn then_slice<B>(self, other: B) -> ThenSlice<Self, B, E, S>
+    where
+        Self: Sized,
+        B: Parser<'a, I, E, S>,
+    {
+        ThenSlice {
             parser_a: self,
             parser_b: other,
             phantom: PhantomData,

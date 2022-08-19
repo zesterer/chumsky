@@ -99,3 +99,43 @@ where
 
     go_extra!();
 }
+
+pub struct ThenSlice<A, B, E = (), S = ()> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+    pub(crate) phantom: PhantomData<(E, S)>,
+}
+
+impl<A: Copy, B: Copy, E, S> Copy for ThenSlice<A, B, E, S> {}
+impl<A: Clone, B: Clone, E, S> Clone for ThenSlice<A, B, E, S> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for ThenSlice<A, B, E, S>
+where
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+    I: SliceInput + ?Sized,
+    <I as SliceInput>::Slice: 'a,
+    E: Error<I>,
+    S: 'a,
+{
+    type Output = &'a <I as SliceInput>::Slice;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let now = inp.save();
+        let _a = self.parser_a.go::<M>(inp)?;
+        let _b = self.parser_b.go::<M>(inp)?;
+        let after = inp.save();
+
+        Ok(M::bind(|| inp.slice(now..after)))
+    }
+
+    go_extra!();
+}

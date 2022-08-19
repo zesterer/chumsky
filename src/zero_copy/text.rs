@@ -15,6 +15,10 @@ pub trait Char: Sized {
     #[doc(hidden)]
     fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize>;
 
+    fn is_valid_ident_start(&self) -> bool;
+
+    fn is_valid_ident_continue(&self) -> bool;
+
     fn is_whitespace(&self) -> bool;
 
     fn is_digit(&self, radix: u32) -> bool;
@@ -39,6 +43,14 @@ impl Char for char {
             .find(trailing)
             .filter(|m| m.start() == 0)
             .map(|m| m.end())
+    }
+
+    fn is_valid_ident_start(&self) -> bool {
+        self.is_ascii_alphabetic() || *self == '_'
+    }
+
+    fn is_valid_ident_continue(&self) -> bool {
+        self.is_ascii_alphanumeric() || *self == '_'
     }
 
     fn is_whitespace(&self) -> bool {
@@ -71,6 +83,14 @@ impl Char for u8 {
             .find(trailing)
             .filter(|m| m.start() == 0)
             .map(|m| m.end())
+    }
+
+    fn is_valid_ident_start(&self) -> bool {
+        self.is_ascii_alphabetic() || *self == b'_'
+    }
+
+    fn is_valid_ident_continue(&self) -> bool {
+        self.is_ascii_alphanumeric() || *self == b'_'
     }
 
     fn is_whitespace(&self) -> bool {
@@ -210,6 +230,25 @@ where
             .repeated_slice()
             .at_least(1))
         .map(C::from)
+}
+
+/// A parser that accepts a C-style identifier.
+#[must_use]
+fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a <I as SliceInput>::Slice>
+where
+    I: SliceInput + ?Sized,
+    I::Token: Char,
+    <I as SliceInput>::Slice: 'a,
+    E: Error<I>,
+    S: 'a,
+{
+    primitive::any()
+        .filter(move |x: &I::Token| x.is_valid_ident_start())
+        .then_slice(
+            primitive::any()
+                .filter(move |x: &I::Token| x.is_valid_ident_continue())
+                .repeated_slice(),
+        )
 }
 
 #[cfg(test)]
@@ -383,6 +422,33 @@ mod tests {
                 .parse(input);
 
             assert_eq!(res, (Some(vec![0, 123_i32, 456, 789, 0, 0, 0]), Vec::new()));
+        }
+    }
+
+    mod words {
+        use super::*;
+
+        #[test]
+        fn parses_idents() {
+            let ident = ident::<_, (), ()>().then_ignore(prelude::end());
+
+            let res = ident.parse("valid_ident");
+            assert_eq!(res, (Some("valid_ident"), Vec::new()));
+
+            let res = ident.parse("Valid_ident");
+            assert_eq!(res, (Some("Valid_ident"), Vec::new()));
+
+            let res = ident.parse("_valid_ident");
+            assert_eq!(res, (Some("_valid_ident"), Vec::new()));
+
+            let res = ident.parse("_");
+            assert_eq!(res, (Some("_"), Vec::new()));
+
+            let res = ident.parse("_0valid_ident");
+            assert_eq!(res, (Some("_0valid_ident"), Vec::new()));
+
+            let res = ident.parse("0invalid_ident");
+            assert_eq!(res, (None, vec![()]));
         }
     }
 }
