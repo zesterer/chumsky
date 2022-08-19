@@ -1,3 +1,5 @@
+use primitive::just;
+
 use super::*;
 
 pub trait Char: Sized {
@@ -123,6 +125,38 @@ where
     primitive::any()
         .filter(|x: &I::Token| x.is_whitespace())
         .repeated()
+        .ignored()
+}
+
+/// A parser that accepts (and ignores) any newline characters or character sequences.
+///
+/// The output type of this parser is `()`.
+///
+/// This parser is quite extensive, recognising:
+///
+/// - Line feed (`\n`)
+/// - Carriage return (`\r`)
+/// - Carriage return + line feed (`\r\n`)
+/// - Vertical tab (`\x0B`)
+/// - Form feed (`\x0C`)
+/// - Next line (`\u{0085}`)
+/// - Line separator (`\u{2028}`)
+/// - Paragraph separator (`\u{2029}`)
+#[must_use]
+pub fn newline<S, E>() -> impl for<'a> Parser<'a, str, E, S, Output = ()>
+where
+    E: Error<str>,
+    for<'a> S: 'a,
+{
+    just('\r')
+        .or_not()
+        .ignore_then(just('\n'))
+        .or(just('\r')) // Carriage return
+        .or(just('\x0B')) // Vertical tab
+        .or(just('\x0C')) // Form feed
+        .or(just('\u{0085}')) // Next line
+        .or(just('\u{2028}')) // Line separator
+        .or(just('\u{2029}')) // Paragraph separator
         .ignored()
 }
 
