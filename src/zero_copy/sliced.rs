@@ -63,11 +63,11 @@ impl<'a, A, I, E, S> Parser<'a, I, E, S> for RepeatedSlice<A, I, E, S>
 where
     A: Parser<'a, I, E, S>,
     I: SliceInput + ?Sized,
-    <I as SliceInput>::Slice: 'a,
+    I::Slice: 'a,
     E: Error<I>,
     S: 'a,
 {
-    type Output = &'a <I as SliceInput>::Slice;
+    type Output = &'a I::Slice;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let mut count = 0;
@@ -122,11 +122,11 @@ where
     A: Parser<'a, I, E, S>,
     B: Parser<'a, I, E, S>,
     I: SliceInput + ?Sized,
-    <I as SliceInput>::Slice: 'a,
+    I::Slice: 'a,
     E: Error<I>,
     S: 'a,
 {
-    type Output = &'a <I as SliceInput>::Slice;
+    type Output = &'a I::Slice;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let now = inp.save();

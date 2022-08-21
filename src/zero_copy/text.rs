@@ -186,17 +186,14 @@ where
 #[must_use]
 pub fn digits<'a, I, E, S, C>(
     radix: u32,
-) -> Map<
-    RepeatedSlice<impl Parser<'a, I, E, S, Output = I::Token>, I, E, S>,
-    fn(&'a <I as SliceInput>::Slice) -> C,
->
+) -> Map<RepeatedSlice<impl Parser<'a, I, E, S, Output = I::Token>, I, E, S>, fn(&'a I::Slice) -> C>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
-    <I as SliceInput>::Slice: 'a,
+    I::Slice: 'a,
     E: Error<I>,
     S: 'a,
-    C: From<&'a <I as SliceInput>::Slice>,
+    C: From<&'a I::Slice>,
 {
     primitive::any()
         .filter(move |x: &I::Token| x.is_digit(radix))
@@ -216,10 +213,10 @@ pub fn int<'a, I, E, S, C>(radix: u32) -> impl Parser<'a, I, E, S, Output = C>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
-    <I as SliceInput>::Slice: 'a,
+    I::Slice: 'a,
     E: Error<I>,
     S: 'a,
-    C: From<&'a <I as SliceInput>::Slice>,
+    C: From<&'a I::Slice>,
 {
     primitive::any()
         .filter(move |x: &I::Token| x.is_zero())
@@ -234,11 +231,11 @@ where
 
 /// A parser that accepts a C-style identifier.
 #[must_use]
-fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a <I as SliceInput>::Slice>
+fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a I::Slice>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
-    <I as SliceInput>::Slice: 'a,
+    I::Slice: 'a,
     E: Error<I>,
     S: 'a,
 {
@@ -257,12 +254,12 @@ fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
-    <I as SliceInput>::Slice: 'a + PartialEq,
+    I::Slice: 'a + PartialEq,
     E: Error<I>,
     S: 'a,
-    K: AsRef<<I as SliceInput>::Slice>,
+    K: AsRef<I::Slice>,
 {
-    ident().try_map(move |s: &<I as SliceInput>::Slice, span| {
+    ident().try_map(move |s: &I::Slice, span| {
         if s == word.as_ref() {
             Ok(())
         } else {
