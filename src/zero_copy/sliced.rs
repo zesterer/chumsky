@@ -129,12 +129,12 @@ where
     type Output = &'a I::Slice;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-        let now = inp.save();
+        let before = inp.save();
         let _a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<M>(inp)?;
         let after = inp.save();
 
-        Ok(M::bind(|| inp.slice(now..after)))
+        Ok(M::bind(|| inp.slice(before..after)))
     }
 
     go_extra!();
