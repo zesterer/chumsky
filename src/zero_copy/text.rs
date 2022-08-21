@@ -139,12 +139,13 @@ pub fn whitespace<I, E, S>() -> impl for<'a> Parser<'a, I, E, S, Output = ()>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
+    for<'a> I::Slice: 'a,
     E: Error<I>,
     for<'a> S: 'a,
 {
     primitive::any()
         .filter(|x: &I::Token| x.is_whitespace())
-        .repeated()
+        .repeated_slice()
         .ignored()
 }
 
