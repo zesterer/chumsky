@@ -3,7 +3,7 @@ use super::*;
 pub struct End<I: ?Sized>(PhantomData<I>, #[cfg(debug_assertions)] Location<'static>);
 
 #[track_caller]
-pub fn end<I: Input + ?Sized>() -> End<I> {
+pub const fn end<I: Input + ?Sized>() -> End<I> {
     End(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
@@ -45,7 +45,7 @@ where
 pub struct Empty<I: ?Sized>(PhantomData<I>, #[cfg(debug_assertions)] Location<'static>);
 
 #[track_caller]
-pub fn empty<I: Input + ?Sized>() -> Empty<I> {
+pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
     Empty(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
@@ -161,7 +161,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 }
 
 #[track_caller]
-pub fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
+pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -236,7 +236,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 }
 
 #[track_caller]
-pub fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
+pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -298,7 +298,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 }
 
 #[track_caller]
-pub fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
+pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -386,7 +386,7 @@ where
 }
 
 #[track_caller]
-pub fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
+pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     Any {
         phantom: PhantomData,
         #[cfg(debug_assertions)] location: *Location::caller(),
@@ -427,7 +427,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 }
 
 #[track_caller]
-pub fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
+pub const fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -500,7 +500,7 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
 }
 
 #[track_caller]
-pub fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
+pub const fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
     Todo(PhantomData, #[cfg(debug_assertions)] *Location::caller())
 }
 
@@ -533,7 +533,7 @@ pub struct Choice<T, O> {
 }
 
 #[track_caller]
-pub fn choice<T, O>(parsers: T) -> Choice<T, O> {
+pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {
     Choice {
         parsers,
         phantom: PhantomData,

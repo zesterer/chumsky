@@ -640,6 +640,11 @@ where
     fn fp(&self) -> Range<Option<usize>> {
         let range_a = self.parser_a.fp();
         let range_b = self.parser_b.fp();
+
+        if range_a.start == Some(0) {
+            warning(format!("The first parser of the `or` parser defined at {} can potentially consume no input, meaning that it cannot fail.\nThis is probably a bug, because it means the second parser is never reachable.", self.location))
+        }
+
         range_a.start.zip_with(range_b.start, |a, b| a.min(b))..range_a.end.zip_with(range_b.end, |a, b| a.max(b))
     }
 
@@ -850,10 +855,11 @@ where
 
     #[cfg(debug_assertions)]
     fn fp(&self) -> Range<Option<usize>> {
-        if self.parser.fp().start == Some(0) {
-            warning(format!("`repeated` parser defined at {} has an inner pattern that can itself consume no tokens. This is very likely a bug.", self.location))
+        let range = self.parser.fp();
+        if range.start == Some(0) {
+            warning(format!("`repeated` parser defined at {} has an inner parser that can potentially consume no input, meaning that it cannot fail.\nThis is probably a bug, because it could lead to an infinite loop.\nConsider using `.at_least(1)` to force the inner parser to consume some input.", self.location))
         }
-        Some(0)..None
+        range.start.map(|n| n * self.at_least)..range.end.zip_with(self.at_most, |n, m| n * m)
     }
 
     go_extra!();
@@ -1018,7 +1024,18 @@ where
     fn details(&self) -> (&str, Location) { ("separated_by", self.location) }
 
     #[cfg(debug_assertions)]
-    fn fp(&self) -> Range<Option<usize>> { Some(0)..None }
+    fn fp(&self) -> Range<Option<usize>> {
+        let range = self.parser.fp();
+        let range_sep = self.separator.fp();
+        if range.start == Some(0) {
+            warning(format!("`separated_by` parser defined at {} has an inner parser that can potentially consume no input, meaning that it cannot fail.\nThis is probably a bug, because it could lead to an infinite loop.\nConsider using `.at_least(1)` to force the inner parser to consume some input.", self.location))
+        }
+        if range_sep.start == Some(0) {
+            warning(format!("`separated_by` parser defined at {} has a separator parser that can potentially consume no input, meaning that it cannot fail.\nWhile this is valid, it is almost certainly not intentional.\nConsider using `.at_least(1)` to force the separator parser to consume some input.", self.location))
+        }
+        // TODO: This isn't right because it doesn't account for separators
+        range.start.map(|n| n * self.at_least)..range.end.zip_with(self.at_most, |n, m| n * m)
+    }
 
     go_extra!();
 }
@@ -1053,7 +1070,13 @@ where
     fn details(&self) -> (&str, Location) { ("or_not", self.location) }
 
     #[cfg(debug_assertions)]
-    fn fp(&self) -> Range<Option<usize>> { Some(0)..self.parser.fp().end }
+    fn fp(&self) -> Range<Option<usize>> {
+        let range = self.parser.fp();
+        if range.start == Some(0) {
+            warning(format!("`or_not` parser defined at {} has an inner parser that can potentially consume no input, meaning that it cannot fail.\nWhile this is valid, it is almost certainly not intentional because there is never any time at which the 'or not' fallback behaviour would be invoked.\nConsider using `.at_least(1)` to force the inner parser to consume some input.", self.location))
+        }
+        Some(0)..range.end
+    }
 
     go_extra!();
 }

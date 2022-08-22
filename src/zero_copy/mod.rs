@@ -712,7 +712,18 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
 
     #[cfg(debug_assertions)]
     fn find_problems(&self) {
-        self.fp();
+        if self.fp().start == Some(0) {
+            warning(format!("The top-level `{}` parser at {} can potentially consume no input, meaning that it cannot fail.\nThis is probably a bug.\nConsider adding `.then_ignore(end())` to the parser.", self.details().0, self.details().1))
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+pub fn warning(s: String) {
+    if cfg!(unix) {
+        eprintln!("\x1b[1;33m[WARNING]\x1b[0m\n\n{}\n", s);
+    } else {
+        eprintln!("[WARNING]\n\n{}\n", s);
     }
 }
 
@@ -741,10 +752,10 @@ where
     }
 
     #[cfg(debug_assertions)]
-    fn details(&self) -> (&str, Location) { (&*self).details() }
+    fn details(&self) -> (&str, Location) { self.inner.details() }
 
     #[cfg(debug_assertions)]
-    fn fp(&self) -> Range<Option<usize>> { (&*self).fp() }
+    fn fp(&self) -> Range<Option<usize>> { self.inner.fp() }
 
     go_extra!();
 }
@@ -883,11 +894,6 @@ fn regex_parser() {
             Vec::new()
         ),
     );
-}
-
-#[cfg(debug_assertions)]
-pub fn warning(s: String) {
-    eprintln!("[WARNING]\n\n{}", s);
 }
 
 #[test]
