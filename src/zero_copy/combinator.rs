@@ -1363,3 +1363,77 @@ where
 
     go_extra!();
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::zero_copy::prelude::*;
+
+    #[test]
+    fn separated_by_at_least() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse("-,-,-"), (Some(vec!['-', '-', '-']), vec![]));
+    }
+
+    #[test]
+    fn separated_by_at_least_without_leading() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect::<Vec<_>>();
+
+        // Is empty means no errors
+        assert!(!parser.parse(",-,-,-").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_without_trailing() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect::<Vec<_>>()
+            .then(end());
+
+        // Is empty means no errors
+        assert!(!parser.parse("-,-,-,").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_leading() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .allow_leading()
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse(",-,-,-"), (Some(vec!['-', '-', '-']), vec![]));
+        assert!(!parser.parse(",-,-").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_trailing() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .allow_trailing()
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse("-,-,-,"), (Some(vec!['-', '-', '-']), vec![]));
+        assert!(!parser.parse("-,-,").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_leaves_last_separator() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .collect::<Vec<_>>()
+            .chain(just(','));
+        assert_eq!(
+            parser.parse("-,-,-,"),
+            (Some(vec!['-', '-', '-', ',']), vec![])
+        )
+    }
+}
