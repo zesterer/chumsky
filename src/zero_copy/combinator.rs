@@ -803,6 +803,40 @@ where
     type Output = C;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        // STEPS:
+        // 1. If allow_leading -> Consume separator if there
+        //    if Ok  -> continue
+        //    if Err -> rewind and continue
+        //
+        // 2. Consume item
+        //    if Ok -> add to output and continue
+        //    if Err && count >= self.at_least -> rewind and return output
+        //    if Err && count < self.at_least -> rewind and return Err
+        //
+        // 3. Consume separator
+        //    if Ok => continue
+        //    if Err && count >= self.at_least => rewind and break
+        //    if Err && count < self.at_least => rewind and return Err
+        //
+        // 4. Consume item
+        //    if Ok && count >= self.at_most -> add to output and break
+        //    if Ok && count < self.at_most -> add to output and continue
+        //    if Err && count >= self.at_least => rewind and break
+        //    if Err && count < self.at_least => rewind and return Err
+        //
+        // 5. Goto 3 until 'break'
+        //
+        // 6. If allow_trailing -> Consume separator
+        //    if Ok -> continue
+        //    if Err -> rewind and continue
+        //
+        // 7. Return output
+
+        // Setup
+        let mut count = 0;
+        let mut output = M::bind::<C, _>(|| C::default());
+
+        // Step 1
         if self.allow_leading {
             let before_separator = inp.save();
             if let Err(_) = self.separator.go::<Check>(inp) {
@@ -810,52 +844,88 @@ where
             }
         }
 
-        let mut count = 0;
-        let mut output = M::bind::<C, _>(|| C::default());
+        // Step 2
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(item) => {
+                output = M::map(output, |mut output: C| {
+                    M::map(item, |item| output.push(item));
+                    output
+                });
+                count += 1;
+            }
+            Err(..) if self.at_least == 0 => {
+                inp.rewind(before);
+                return Ok(output);
+            }
+            Err(err) => {
+                inp.rewind(before);
+                return Err(err);
+            }
+        }
+
         loop {
-            let before = inp.save();
+            // Step 3
+            let before_separator = inp.save();
+            match self.separator.go::<Check>(inp) {
+                Ok(..) => {
+                    // Do nothing
+                }
+                Err(err) if count < self.at_least => {
+                    inp.rewind(before_separator);
+                    return Err(err);
+                }
+                Err(..) => {
+                    inp.rewind(before_separator);
+                    break;
+                }
+            }
+
+            // Step 4
             match self.parser.go::<M>(inp) {
-                Ok(out) => {
+                Ok(item) => {
                     output = M::map(output, |mut output: C| {
-                        M::map(out, |out| output.push(out));
+                        M::map(item, |item| output.push(item));
                         output
                     });
                     count += 1;
 
-                    let before_separator = inp.save();
-                    if let Err(e) = self.separator.go::<Check>(inp) {
-                        inp.rewind(before_separator);
-                        break if count >= self.at_least {
-                            Ok(output)
-                        } else {
-                            Err(e)
-                        };
-                    }
-
-                    if let Some(at_most) = self.at_most {
-                        if count >= at_most {
-                            break Ok(output);
-                        }
+                    if self.at_most.map_or(false, |max| count >= max) {
+                        break;
+                    } else {
+                        continue;
                     }
                 }
-                Err(e) => {
-                    inp.rewind(before);
-
-                    if self.allow_trailing {
-                        let before_separator = inp.save();
-                        if let Err(_) = self.separator.go::<Check>(inp) {
-                            inp.rewind(before_separator);
-                        }
-                    }
-
-                    break if count >= self.at_least {
-                        Ok(output)
-                    } else {
-                        Err(e)
-                    };
+                Err(err) if count < self.at_least => {
+                    // We have errored before we have reached the count,
+                    // and therefore should return this error, as we are
+                    // still expecting items
+                    inp.rewind(before_separator);
+                    return Err(err);
+                }
+                Err(..) => {
+                    // We are not expecting any more items, so it is okay
+                    // for it to fail, though if it does, we shouldn't have
+                    // consumed the separator, so we need to rewind to it.
+                    inp.rewind(before_separator);
+                    break;
                 }
             }
+
+            // Step 5
+            // continue
         }
+
+        // Step 6
+        if self.allow_trailing {
+            let before_separator = inp.save();
+            if let Err(_) = self.separator.go::<Check>(inp) {
+                inp.rewind(before_separator);
+            }
+        }
+
+        // Step 7
+        Ok(output)
     }
 
     go_extra!();
@@ -1362,4 +1432,78 @@ where
     }
 
     go_extra!();
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::zero_copy::prelude::*;
+
+    #[test]
+    fn separated_by_at_least() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse("-,-,-"), (Some(vec!['-', '-', '-']), vec![]));
+    }
+
+    #[test]
+    fn separated_by_at_least_without_leading() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect::<Vec<_>>();
+
+        // Is empty means no errors
+        assert!(!parser.parse(",-,-,-").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_without_trailing() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .at_least(3)
+            .collect::<Vec<_>>()
+            .then(end());
+
+        // Is empty means no errors
+        assert!(!parser.parse("-,-,-,").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_leading() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .allow_leading()
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse(",-,-,-"), (Some(vec!['-', '-', '-']), vec![]));
+        assert!(!parser.parse(",-,-").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_at_least_with_trailing() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .allow_trailing()
+            .at_least(3)
+            .collect();
+
+        assert_eq!(parser.parse("-,-,-,"), (Some(vec!['-', '-', '-']), vec![]));
+        assert!(!parser.parse("-,-,").1.is_empty());
+    }
+
+    #[test]
+    fn separated_by_leaves_last_separator() {
+        let parser = just::<_, _, (), ()>('-')
+            .separated_by(just(','))
+            .collect::<Vec<_>>()
+            .chain(just(','));
+        assert_eq!(
+            parser.parse("-,-,-,"),
+            (Some(vec!['-', '-', '-', ',']), vec![])
+        )
+    }
 }
