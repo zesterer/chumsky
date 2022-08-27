@@ -232,7 +232,7 @@ where
 
 /// A parser that accepts a C-style identifier.
 #[must_use]
-fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a I::Slice>
+pub fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a I::Slice>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
@@ -251,7 +251,7 @@ where
 
 /// A parser that accepts a C-style identifier.
 #[must_use]
-fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()>
+pub fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
