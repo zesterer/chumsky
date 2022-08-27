@@ -379,7 +379,7 @@ where
     }
 }
 
-impl<'a, P, I, E, S, C> Parser<'a, I, E, S> for TakeUntil<P, C>
+impl<'a, P, I, E, S, C> Parser<'a, I, E, S> for TakeUntil<P, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
