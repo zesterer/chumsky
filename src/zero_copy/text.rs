@@ -187,7 +187,10 @@ where
 #[must_use]
 pub fn digits<'a, I, E, S, C>(
     radix: u32,
-) -> Map<RepeatedSlice<impl Parser<'a, I, E, S, Output = I::Token>, I, E, S>, fn(&'a I::Slice) -> C>
+) -> Map<
+    RepeatedSlice<impl Parser<'a, I, E, S, Output = I::Token> + Copy + Clone, I, E, S>,
+    fn(&'a I::Slice) -> C,
+>
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
@@ -232,7 +235,7 @@ where
 
 /// A parser that accepts a C-style identifier.
 #[must_use]
-pub fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a I::Slice>
+pub fn ident<'a, I, E, S>() -> impl Parser<'a, I, E, S, Output = &'a I::Slice> + Clone
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
@@ -251,14 +254,14 @@ where
 
 /// A parser that accepts a C-style identifier.
 #[must_use]
-pub fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()>
+pub fn keyword<'a, I, E, S, K>(word: K) -> impl Parser<'a, I, E, S, Output = ()> + Clone
 where
     I: SliceInput + ?Sized,
     I::Token: Char,
     I::Slice: 'a + PartialEq,
     E: Error<I>,
     S: 'a,
-    K: AsRef<I::Slice>,
+    K: AsRef<I::Slice> + Clone,
 {
     ident().try_map(move |s: &I::Slice, span| {
         if s == word.as_ref() {
