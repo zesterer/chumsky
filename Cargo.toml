@@ -2,7 +2,7 @@
 name = "chumsky"
 version = "0.8.0"
 description = "A parser library for humans with powerful error recovery"
-authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>"]
+authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>", "Elijah Hartvigsen <elijah.reed@hartvigsen.xyz"]
 repository = "https://github.com/zesterer/chumsky"
 license = "MIT"
 keywords = ["parser", "combinator", "token", "language", "syntax"]
