@@ -1271,7 +1271,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, T>(self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1300,7 +1300,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, T>(self, stream)
     }
 
     fn parse_inner_verbose(
@@ -1329,7 +1329,7 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
         debugger: &mut D,
         stream: &mut StreamOf<I, Self::Error>,
     ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        debugger.invoke::<_, _, T>(self, stream)
     }
 
     fn parse_inner_verbose(

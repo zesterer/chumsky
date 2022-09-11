@@ -964,7 +964,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, U, F: Fn(O) -> U, E: Error<I>> Par
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
 
-        (errors, res.map(|(out, alt)| ((&self.1)(out), alt)))
+        (errors, res.map(|(out, alt)| ((self.1)(out), alt)))
     }
 
     #[inline]
@@ -1060,7 +1060,7 @@ impl<
 
         let res = res.map(|(out, alt)| {
             (
-                (&self.1)(out, span, &mut |e| errors.push(Located::at(pos, e))),
+                self.1(out, span, &mut |e| errors.push(Located::at(pos, e))),
                 alt,
             )
         });
@@ -1159,7 +1159,7 @@ where
     ) -> PResult<I, U, E> {
         #[allow(deprecated)]
         debugger.invoke(
-            &(&self.0).map(|(init, end)| init.into_iter().rev().fold(end, |b, a| (&self.1)(a, b))),
+            &(&self.0).map(|(init, end)| init.into_iter().rev().fold(end, |b, a| self.1(a, b))),
             stream,
         )
     }
@@ -1290,7 +1290,7 @@ impl<
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
 
-        let res = match res.map(|(out, alt)| ((&self.1)(out, stream.span_since(start)), alt)) {
+        let res = match res.map(|(out, alt)| (self.1(out, stream.span_since(start)), alt)) {
             Ok((Ok(out), alt)) => Ok((out, alt)),
             Ok((Err(a_err), _)) => Err(Located::at(stream.save(), a_err)),
             Err(err) => Err(err),
@@ -1332,7 +1332,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error
 
         let res = match res {
             Ok(out) => Ok(out),
-            Err(err) => match (&self.1)(err.error) {
+            Err(err) => match self.1(err.error) {
                 Err(e) => Err(Located {
                     at: err.at,
                     error: e,
