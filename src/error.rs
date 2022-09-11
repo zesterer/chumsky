@@ -329,36 +329,40 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
             write!(f, "found end of input")?;
         };
 
+        // Describe expected tokens consistently in each case:
+        fn describe_expected<I>(exp: &Option<I>) -> String
+        where
+            I: fmt::Display,
+        {
+            match exp {
+                Some(x) => format!("{:?}", x.to_string()),
+                None => "end of input".to_string(),
+            }
+        }
+
         match self.expected.len() {
             0 => {} //write!(f, " but end of input was expected")?,
             1 => write!(
                 f,
                 " but expected {}",
-                match self.expected.iter().next().unwrap() {
-                    Some(x) => format!("{:?}", x.to_string()),
-                    None => "end of input".to_string(),
-                },
+                describe_expected(self.expected.iter().next().unwrap()),
             )?,
-            _ => {
-                write!(
-                    f,
-                    " but expected one of {}",
-                    {
-                        // Sort `expected` for stable error messages:
-                        let mut v: Vec<_> = self
-                            .expected
-                            .iter()
-                            .map(|expected| match expected {
-                                Some(x) => format!("{:?}", x.to_string()),
-                                None => "end of input".to_string(),
-                            })
-                            .collect();
+            len => {
+                // Sort entries for stable, testable error message UI:
+                let mut v: Vec<_> = self.expected.iter().map(describe_expected).collect();
+                v.sort();
 
-                        v.sort();
-                        v
-                    }
-                    .join(", ")
-                )?;
+                if len == 2 {
+                    write!(f, " but expected either {} or {}", &v[0], &v[1])?;
+                } else {
+                    assert!(len > 2);
+                    write!(
+                        f,
+                        " but expected one of {}, or {}",
+                        v[0..len - 1].join(", "),
+                        &v[len - 1]
+                    )?;
+                }
             }
         }
 
