@@ -182,6 +182,10 @@ impl<I: fmt::Display, S: fmt::Display> fmt::Display for SimpleReason<I, S> {
 
 /// A simple default error type that tracks error spans, expected inputs, and the actual input found at an error site.
 ///
+/// The [std::fmt::Display] implementation presents expected tokens in a sorted fashion to provide
+/// stable error message strings to avoid user confusion and facilitate deterministic testing of
+/// parse error messages.
+///
 /// Please note that it uses a [`HashSet`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Cheap`] instead.
 #[derive(Clone, Debug)]
