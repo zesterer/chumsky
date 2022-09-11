@@ -34,4 +34,6 @@ stacker = { version = "0.1", optional = true }
 
 [dev-dependencies]
 ariadne = "0.1.2"
+indoc = "1.0.7"
 pom = "3.0"
+test-case = "2.2.1"

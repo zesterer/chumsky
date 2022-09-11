@@ -473,3 +473,6 @@ pub(crate) fn merge_alts<I, E: Error<I>, T: IntoIterator<Item = Located<I, E>>>(
     }
     error
 }
+
+#[cfg(test)]
+mod tests;
