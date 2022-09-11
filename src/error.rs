@@ -343,14 +343,21 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
                 write!(
                     f,
                     " but expected one of {}",
-                    self.expected
-                        .iter()
-                        .map(|expected| match expected {
-                            Some(x) => format!("{:?}", x.to_string()),
-                            None => "end of input".to_string(),
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    {
+                        // Sort `expected` for stable error messages:
+                        let mut v: Vec<_> = self
+                            .expected
+                            .iter()
+                            .map(|expected| match expected {
+                                Some(x) => format!("{:?}", x.to_string()),
+                                None => "end of input".to_string(),
+                            })
+                            .collect();
+
+                        v.sort();
+                        v
+                    }
+                    .join(", ")
                 )?;
             }
         }
