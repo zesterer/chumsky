@@ -20,9 +20,34 @@ jobs:
         with:
             toolchain: stable
             override: true
-            components: rustfmt, clippy
       - name: Run cargo check
         run: cargo check --verbose --no-default-features
+  clippy:
+    name: Check Format of Chumsky
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+            components: rustfmt
+      - name: Run cargo fmt
+        run: cargo fmt -- --check
+  clippy:
+    name: Lint Chumsky with Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+            components: clippy
+      - name: Run cargo clippy
+        run: cargo clippy
   test:
     name: Test Chumsky
     runs-on: ubuntu-latest
@@ -33,6 +58,5 @@ jobs:
         with:
             toolchain: nightly
             override: true
-            components: rustfmt, clippy
-      - name: Run cargo check
+      - name: Run cargo test
         run: cargo test --verbose --all-features
