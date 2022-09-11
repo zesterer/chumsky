@@ -323,12 +323,6 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Take `self.reason` into account
 
-        if let Some(found) = &self.found {
-            write!(f, "found {:?}", found.to_string())?;
-        } else {
-            write!(f, "found end of input")?;
-        };
-
         // Describe expected tokens consistently in each case:
         fn describe_expected<I>(exp: &Option<I>) -> String
         where
@@ -339,6 +333,8 @@ impl<I: fmt::Display + Hash + Eq, S: Span> fmt::Display for Simple<I, S> {
                 None => "end of input".to_string(),
             }
         }
+
+        write!(f, "found {}", describe_expected(&self.found))?;
 
         match self.expected.len() {
             0 => {} //write!(f, " but end of input was expected")?,
