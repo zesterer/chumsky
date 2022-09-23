@@ -443,6 +443,7 @@ where
 
     go_extra!();
 }
+
 pub struct Choice<T, O> {
     parsers: T,
     phantom: PhantomData<O>,
