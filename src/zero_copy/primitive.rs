@@ -511,3 +511,81 @@ macro_rules! impl_choice_for_tuple {
 }
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+
+#[derive(Copy, Clone)]
+pub struct Group<T> {
+    parsers: T,
+}
+
+pub const fn group<T>(parsers: T) -> Group<T> {
+    Group { parsers }
+}
+
+// recursively combine to flatten a tuple
+macro_rules! recursive_combine {
+    (<$M:ident> $head:ident) => {
+        $M::map(
+            $head,
+            |$head| ($head,),
+        )
+    };
+    (<$M:ident> $head1:ident $head2:ident) => {
+        $M::combine(
+            $head1,
+            $head2,
+            |$head1, $head2| ($head1, $head2),
+        )
+    };
+    (<$M:ident> $head:ident $($X:ident)+) => {
+        $M::combine(
+            $head,
+            recursive_combine!(
+                <$M>
+                $($X)+
+            ),
+            |$head, ($($X),+)| ($head, $($X),+),
+        )
+    };
+}
+
+macro_rules! impl_group_for_tuple {
+    () => {};
+    ($head:ident $($X:ident)*) => {
+        impl_group_for_tuple!($($X)*);
+        impl_group_for_tuple!(~ $head $($X)*);
+    };
+    (~ $($X:ident)*) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'a, I, E, S, $($X),*> Parser<'a, I, E, S> for Group<($($X,)*)>
+        where
+            I: Input + ?Sized,
+            E: Error<I>,
+            S: 'a,
+            $($X: Parser<'a, I, E, S>),*
+        {
+            type Output = ($($X::Output,)*);
+
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+                let before = inp.save();
+
+                let Group { parsers: ($($X,)*) } = self;
+
+                $(
+                    let $X = match $X.go::<M>(inp) {
+                        Ok(out) => out,
+                        Err(e) => {
+                            inp.rewind(before);
+                            return Err(e);
+                        }
+                    };
+                )*
+
+                Ok(recursive_combine!(<M> $($X)*))
+            }
+
+            go_extra!();
+        }
+    };
+}
+
+impl_group_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
