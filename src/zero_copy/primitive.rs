@@ -522,14 +522,15 @@ pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }
 
-// recursively combine to flatten a tuple
-macro_rules! recursive_combine {
+macro_rules! flatten_map {
+    // map a single element into a 1-tuple
     (<$M:ident> $head:ident) => {
         $M::map(
             $head,
             |$head| ($head,),
         )
     };
+    // combine two elements into a 2-tuple
     (<$M:ident> $head1:ident $head2:ident) => {
         $M::combine(
             $head1,
@@ -537,10 +538,11 @@ macro_rules! recursive_combine {
             |$head1, $head2| ($head1, $head2),
         )
     };
+    // combine and flatten n-tuples from recursion
     (<$M:ident> $head:ident $($X:ident)+) => {
         $M::combine(
             $head,
-            recursive_combine!(
+            flatten_map!(
                 <$M>
                 $($X)+
             ),
@@ -581,7 +583,7 @@ macro_rules! impl_group_for_tuple {
                     };
                 )*
 
-                Ok(recursive_combine!(<M> $($X)*))
+                Ok(flatten_map!(<M> $($X)*))
             }
 
             go_extra!();
