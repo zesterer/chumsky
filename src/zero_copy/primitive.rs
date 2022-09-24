@@ -569,18 +569,10 @@ macro_rules! impl_group_for_tuple {
             type Output = ($($X::Output,)*);
 
             fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
-                let before = inp.save();
-
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
-                    let $X = match $X.go::<M>(inp) {
-                        Ok(out) => out,
-                        Err(e) => {
-                            inp.rewind(before);
-                            return Err(e);
-                        }
-                    };
+                    let $X = $X.go::<M>(inp)?;
                 )*
 
                 Ok(flatten_map!(<M> $($X)*))
