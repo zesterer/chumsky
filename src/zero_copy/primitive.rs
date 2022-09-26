@@ -2,7 +2,7 @@ use super::*;
 
 pub struct End<I: ?Sized>(PhantomData<I>);
 
-pub fn end<I: Input + ?Sized>() -> End<I> {
+pub const fn end<I: Input + ?Sized>() -> End<I> {
     End(PhantomData)
 }
 
@@ -37,7 +37,7 @@ where
 
 pub struct Empty<I: ?Sized>(PhantomData<I>);
 
-pub fn empty<I: Input + ?Sized>() -> Empty<I> {
+pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
     Empty(PhantomData)
 }
 
@@ -144,7 +144,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
     }
 }
 
-pub fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
+pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -206,7 +206,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
     }
 }
 
-pub fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
+pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -258,7 +258,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
     }
 }
 
-pub fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
+pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -330,7 +330,7 @@ where
     go_extra!();
 }
 
-pub fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
+pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     Any {
         phantom: PhantomData,
     }
@@ -366,7 +366,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
     }
 }
 
-pub fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
+pub const fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -425,7 +425,7 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
     }
 }
 
-pub fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
+pub const fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
     Todo(PhantomData)
 }
 
@@ -444,13 +444,22 @@ where
     go_extra!();
 }
 
-#[derive(Copy, Clone)]
 pub struct Choice<T, O> {
     parsers: T,
     phantom: PhantomData<O>,
 }
 
-pub fn choice<T, O>(parsers: T) -> Choice<T, O> {
+impl<T: Copy, O> Copy for Choice<T, O> {}
+impl<T: Clone, O> Clone for Choice<T, O> {
+    fn clone(&self) -> Self {
+        Self {
+            parsers: self.parsers.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {
     Choice {
         parsers,
         phantom: PhantomData,
@@ -503,3 +512,75 @@ macro_rules! impl_choice_for_tuple {
 }
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+
+#[derive(Copy, Clone)]
+pub struct Group<T> {
+    parsers: T,
+}
+
+pub const fn group<T>(parsers: T) -> Group<T> {
+    Group { parsers }
+}
+
+macro_rules! flatten_map {
+    // map a single element into a 1-tuple
+    (<$M:ident> $head:ident) => {
+        $M::map(
+            $head,
+            |$head| ($head,),
+        )
+    };
+    // combine two elements into a 2-tuple
+    (<$M:ident> $head1:ident $head2:ident) => {
+        $M::combine(
+            $head1,
+            $head2,
+            |$head1, $head2| ($head1, $head2),
+        )
+    };
+    // combine and flatten n-tuples from recursion
+    (<$M:ident> $head:ident $($X:ident)+) => {
+        $M::combine(
+            $head,
+            flatten_map!(
+                <$M>
+                $($X)+
+            ),
+            |$head, ($($X),+)| ($head, $($X),+),
+        )
+    };
+}
+
+macro_rules! impl_group_for_tuple {
+    () => {};
+    ($head:ident $($X:ident)*) => {
+        impl_group_for_tuple!($($X)*);
+        impl_group_for_tuple!(~ $head $($X)*);
+    };
+    (~ $($X:ident)*) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'a, I, E, S, $($X),*> Parser<'a, I, E, S> for Group<($($X,)*)>
+        where
+            I: Input + ?Sized,
+            E: Error<I>,
+            S: 'a,
+            $($X: Parser<'a, I, E, S>),*
+        {
+            type Output = ($($X::Output,)*);
+
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+                let Group { parsers: ($($X,)*) } = self;
+
+                $(
+                    let $X = $X.go::<M>(inp)?;
+                )*
+
+                Ok(flatten_map!(<M> $($X)*))
+            }
+
+            go_extra!();
+        }
+    };
+}
+
+impl_group_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);

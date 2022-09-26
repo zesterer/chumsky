@@ -23,17 +23,17 @@ nightly = []
 spill-stack = ["stacker", "std"]
 
 [dependencies]
-hashbrown = "0.11"
+hashbrown = "0.12"
 stacker = { version = "0.1", optional = true }
 # Enables regex combinators
-regex = { version = "1.5", optional = true }
+regex = { version = "1.6", optional = true }
 
 [dev-dependencies]
 ariadne = "0.1.2"
-pom = "3.0"
+pom = "3.2"
 nom = "7.1"
 serde_json = { version = "1.0", features = ["preserve_order"] }
-criterion = "0.3.5"
+criterion = "0.4.0"
 
 [[bench]]
 name = "json"

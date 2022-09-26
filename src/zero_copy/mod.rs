@@ -26,7 +26,7 @@ pub mod text;
 pub mod prelude {
     pub use super::{
         error::{Error as _, Rich, Simple},
-        primitive::{any, choice, empty, end, just, none_of, one_of, take_until, todo},
+        primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -755,6 +755,46 @@ fn zero_copy_repetition() {
     assert!(!parser().parse("[1234,123,12,1]").1.is_empty());
     assert!(!parser().parse("[,0, 1, 456]").1.is_empty());
     assert!(!parser().parse("[3, 4, 5, 67 89,]").1.is_empty());
+}
+
+#[test]
+fn zero_copy_group() {
+    use self::prelude::*;
+
+    fn parser<'a>() -> impl Parser<'a, str, Output = (&'a str, u64, char)> {
+        group((
+            any()
+                .filter(|c: &char| c.is_ascii_alphabetic())
+                .repeated()
+                .at_least(1)
+                .map_slice(|s: &str| s)
+                .padded(),
+            any()
+                .filter(|c: &char| c.is_ascii_digit())
+                .repeated()
+                .at_least(1)
+                .map_slice(|s: &str| s.parse::<u64>().unwrap())
+                .padded(),
+            any().filter(|c: &char| !c.is_whitespace()).padded(),
+        ))
+    }
+
+    assert_eq!(
+        parser().parse("abc 123 ["),
+        (Some(("abc", 123, '[')), Vec::new())
+    );
+    assert_eq!(
+        parser().parse("among3d"),
+        (Some(("among", 3, 'd')), Vec::new())
+    );
+    assert_eq!(
+        parser().parse("cba321,"),
+        (Some(("cba", 321, ',')), Vec::new())
+    );
+
+    assert!(!parser().parse("abc 123  ").1.is_empty());
+    assert!(!parser().parse("123abc ]").1.is_empty());
+    assert!(!parser().parse("and one &").1.is_empty());
 }
 
 #[cfg(feature = "regex")]

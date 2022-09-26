@@ -4,7 +4,6 @@
     feature(
         rustc_attrs,
         bench_black_box,
-        generic_associated_types,
         maybe_uninit_uninit_array,
         maybe_uninit_array_assume_init,
         once_cell,
