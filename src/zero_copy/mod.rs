@@ -359,6 +359,42 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    ///
+    /// // Lua-style multiline string literal
+    /// let string = just::<_, _, Simple<str>, ()>('=')
+    ///     .repeated()
+    ///     .map_slice(str::len)
+    ///     .padded_by(just('['))
+    ///     .then_with(|n| {
+    ///         let close = just('=').repeated().exactly(n).padded_by(just(']'));
+    ///         any()
+    ///             .and_is(close.not())
+    ///             .repeated()
+    ///             .map_slice(|s| s)
+    ///             .then_ignore(close)
+    ///     });
+    ///
+    /// assert_eq!(
+    ///     string.parse("[[wxyz]]").0,
+    ///     Some("wxyz"),
+    /// );
+    /// assert_eq!(
+    ///     string.parse("[==[abcd]=]efgh]===]ijkl]==]").0,
+    ///     Some("abcd]=]efgh]===]ijkl"),
+    /// );
+    /// ```
+    fn and_is<B: Parser<'a, I, E, S>>(self, other: B) -> AndIs<Self, B>
+    where
+        Self: Sized,
+    {
+        AndIs {
+            parser_a: self,
+            parser_b: other,
+        }
+    }
+
     fn delimited_by<B: Parser<'a, I, E, S>, C: Parser<'a, I, E, S>>(
         self,
         start: B,
@@ -399,6 +435,58 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Self: Sized,
     {
         OrNot { parser: self }
+    }
+
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    ///
+    /// #[derive(Debug, PartialEq)]
+    /// enum Tree<'a> {
+    ///     Text(&'a str),
+    ///     Group(Vec<Self>),
+    /// }
+    ///
+    /// // Arbitrary text, nested in a tree with { ... } delimiters
+    /// let tree = recursive::<_, Simple<str>, (), _, _>(|tree| {
+    ///     let text = one_of("{}")
+    ///         .not()
+    ///         .repeated()
+    ///         .at_least(1)
+    ///         .map_slice(Tree::Text);
+    ///
+    ///     let group = tree
+    ///         .repeated()
+    ///         .collect()
+    ///         .delimited_by(just('{'), just('}'))
+    ///         .map(Tree::Group);
+    ///
+    ///     text.or(group)
+    /// });
+    ///
+    /// assert_eq!(
+    ///     tree.parse("{abcd{efg{hijk}lmn{opq}rs}tuvwxyz}").0,
+    ///     Some(Tree::Group(vec![
+    ///         Tree::Text("abcd"),
+    ///         Tree::Group(vec![
+    ///             Tree::Text("efg"),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("hijk"),
+    ///             ]),
+    ///             Tree::Text("lmn"),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("opq"),
+    ///             ]),
+    ///             Tree::Text("rs"),
+    ///         ]),
+    ///         Tree::Text("tuvwxyz"),
+    ///     ])),
+    /// );
+    /// ```
+    fn not(self) -> Not<Self>
+    where
+        Self: Sized,
+    {
+        Not { parser: self }
     }
 
     fn repeated(self) -> Repeated<Self, I, (), E, S>
