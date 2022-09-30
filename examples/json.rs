@@ -24,12 +24,12 @@ fn parser() -> impl Parser<char, Json, Error = Simple<char>> {
         let exp = just('e')
             .or(just('E'))
             .chain(just('+').or(just('-')).or_not())
-            .chain(text::digits(10));
+            .chain::<char, _, _>(text::digits(10));
 
         let number = just('-')
             .or_not()
-            .chain(text::int(10))
-            .chain(frac.or_not().flatten())
+            .chain::<char, _, _>(text::int(10))
+            .chain::<char, _, _>(frac.or_not().flatten())
             .chain::<char, _, _>(exp.or_not().flatten())
             .collect::<String>()
             .from_str()

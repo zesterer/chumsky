@@ -9,13 +9,18 @@
 use alloc::{string::String, vec::Vec};
 
 mod private {
+    use super::*;
+
     pub trait Sealed<T> {}
 
     impl<T> Sealed<T> for T {}
     impl<T, A: Sealed<T>> Sealed<T> for (A, T) {}
     impl<T> Sealed<T> for Option<T> {}
-    impl<T> Sealed<T> for alloc::vec::Vec<T> {}
-    impl Sealed<char> for alloc::string::String {}
+    impl<T> Sealed<T> for Vec<T> {}
+    impl<T> Sealed<T> for Option<Vec<T>> {}
+    impl<T> Sealed<T> for Vec<Option<T>> {}
+    impl Sealed<char> for String {}
+    impl Sealed<char> for Option<String> {}
 }
 
 /// A utility trait that facilitates chaining parser outputs together into [`Vec`]s.
@@ -75,5 +80,38 @@ impl Chain<char> for String {
     }
     fn append_to(self, v: &mut Vec<char>) {
         v.extend(self.chars());
+    }
+}
+
+impl<T> Chain<T> for Option<Vec<T>> {
+    fn len(&self) -> usize {
+        self.as_ref().map_or(0, Chain::<T>::len)
+    }
+    fn append_to(self, v: &mut Vec<T>) {
+        if let Some(x) = self {
+            x.append_to(v);
+        }
+    }
+}
+
+impl Chain<char> for Option<String> {
+    fn len(&self) -> usize {
+        self.as_ref().map_or(0, Chain::<char>::len)
+    }
+    fn append_to(self, v: &mut Vec<char>) {
+        if let Some(x) = self {
+            x.append_to(v);
+        }
+    }
+}
+
+impl<T> Chain<T> for Vec<Option<T>> {
+    fn len(&self) -> usize {
+        self.iter().map(Chain::<T>::len).sum()
+    }
+    fn append_to(self, v: &mut Vec<T>) {
+        self
+            .into_iter()
+            .for_each(|x| x.append_to(v));
     }
 }
