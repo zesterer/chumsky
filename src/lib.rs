@@ -792,6 +792,54 @@ pub trait Parser<I: Clone, O> {
         Map(Then(self, other), |(o, _)| o, PhantomData)
     }
 
+    /// Parse one thing only if it is not followed by another thing, yielding
+    /// the output of the former. This will also parse if the former is located at
+    /// the end of the output.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Cheap};
+    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>();
+    ///
+    /// // Note that pattern with parse even if there are more than 2 '!'.
+    /// // It will just stop parsing after reaching the 2nd.
+    /// let forbidden = just('!').repeated().exactly(2);
+    ///
+    /// // To make it not parse if there are more than 2, we can use `then_not`
+    /// // to ensure those 2 are not followed by another one. This new pattern
+    /// // thus only matches if there are exactly 2 and none afterward.
+    /// let forbidden = forbidden.then_not(just('!'));
+    ///
+    /// // We want to parse the word followed by any number of bangs except 2.
+    /// let no_2_bangs = word
+    ///     // It will not parse if the forbidden pattern does.
+    ///     .then_not(forbidden)
+    ///     // `then_not` don't move the parser forward, so we can now parse those
+    ///     // bangs.
+    ///     .then(just('!').repeated());
+    ///
+    /// assert_eq!(no_2_bangs.parse("hello"), Ok(("hello".into(), vec![])));
+    /// assert_eq!(no_2_bangs.parse("hello!"), Ok(("hello".into(), vec!['!'])));
+    /// assert!(no_2_bangs.parse("hello!!").is_err());
+    /// assert_eq!(
+    ///     no_2_bangs.parse("hello!!!"),
+    ///     Ok(("hello".into(), vec!['!', '!', '!']))
+    /// );
+    /// ```
+    fn then_not<U, P>(self, other: P) -> ThenNot<Self, P, I, O, U, Self::Error>
+    where
+        Self: Sized,
+        P: Parser<I, U, Error = Self::Error>,
+    {
+        self.then_ignore(other.not().map(core::mem::drop as fn(I)).or(end()).rewind())
+    }
+
     /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
     ///
     /// The output type of this parser is `O`, the same as the original parser.

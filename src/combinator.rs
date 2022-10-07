@@ -16,6 +16,10 @@ pub type IgnoreThen<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> U, (O, U)>;
 /// See [`Parser::then_ignore`].
 pub type ThenIgnore<A, B, O, U> = Map<Then<A, B>, fn((O, U)) -> O, (O, U)>;
 
+/// See [`Parser::then_not`].
+pub type ThenNot<A, B, I, O, U, E> =
+    ThenIgnore<A, Rewind<Or<Map<Not<B, U>, fn(I), I>, End<E>>>, O, ()>;
+
 /// See [`Parser::or`].
 #[must_use]
 #[derive(Copy, Clone)]
@@ -1343,7 +1347,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, F: Fn(E) -> Result<O, E>, E: Error
                 Ok(out) => {
                     stream.revert(start);
                     Ok((out, None))
-                },
+                }
             },
         };
 
