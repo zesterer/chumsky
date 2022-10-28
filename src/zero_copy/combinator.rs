@@ -959,6 +959,89 @@ where
     go_extra!();
 }
 
+#[derive(Copy, Clone)]
+pub struct Not<A> {
+    pub(crate) parser: A,
+}
+
+impl<'a, I, E, S, A> Parser<'a, I, E, S> for Not<A>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+{
+    type Output = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+
+        let result = self.parser.go::<Check>(inp);
+        inp.rewind(before);
+
+        match result {
+            Ok(_) => {
+                let (at, tok) = inp.next();
+                Err(Located::at(
+                    at,
+                    E::expected_found(None, tok, inp.span_since(before)),
+                ))
+            }
+            Err(_) => Ok(M::bind(|| ())),
+        }
+    }
+
+    go_extra!();
+}
+
+#[derive(Copy, Clone)]
+pub struct AndIs<A, B> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+}
+
+impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for AndIs<A, B>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, E, S>,
+    B: Parser<'a, I, E, S>,
+{
+    type Output = A::Output;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+        let before = inp.save();
+        match self.parser_a.go::<M>(inp) {
+            Ok(out) => {
+                // A succeeded -- go back to the beginning and try B
+                let after = inp.save();
+                inp.rewind(before);
+
+                match self.parser_b.go::<Check>(inp) {
+                    Ok(_) => {
+                        // B succeeded -- go to the end of A and return its output
+                        inp.rewind(after);
+                        Ok(out)
+                    }
+                    Err(e) => {
+                        // B failed -- go back to the beginning and fail
+                        inp.rewind(before);
+                        Err(e)
+                    }
+                }
+            }
+            Err(e) => {
+                // A failed -- go back to the beginning and fail
+                inp.rewind(before);
+                Err(e)
+            }
+        }
+    }
+
+    go_extra!();
+}
+
 pub trait ContainerExactly<T, const N: usize> {
     type Uninit;
     fn uninit() -> Self::Uninit;
