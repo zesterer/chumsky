@@ -971,7 +971,7 @@ where
     S: 'a,
     A: Parser<'a, I, E, S>,
 {
-    type Output = I::Token;
+    type Output = ();
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         let before = inp.save();
@@ -979,22 +979,15 @@ where
         let result = self.parser.go::<Check>(inp);
         inp.rewind(before);
 
-        let (at, tok) = inp.next();
         match result {
-            Ok(_) => Err(Located::at(
-                at,
-                E::expected_found(None, tok, inp.span_since(before)),
-            )),
-            Err(_) => {
-                if let Some(tok) = tok {
-                    Ok(M::bind(|| tok))
-                } else {
-                    Err(Located::at(
-                        at,
-                        E::expected_found(None, None, inp.span_since(before)),
-                    ))
-                }
+            Ok(_) => {
+                let (at, tok) = inp.next();
+                Err(Located::at(
+                    at,
+                    E::expected_found(None, tok, inp.span_since(before)),
+                ))
             }
+            Err(_) => Ok(M::bind(|| ())),
         }
     }
 
