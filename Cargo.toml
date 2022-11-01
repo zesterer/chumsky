@@ -29,7 +29,7 @@ spill-stack = ["stacker", "std"]
 # Used if `std` is disabled.
 # Provides `ahash` for the corresponding feature as it uses it by default.
 # Due to https://github.com/rust-lang/cargo/issues/1839, this can't be optional
-hashbrown = "0.11"
+hashbrown = "0.12.3"
 stacker = { version = "0.1", optional = true }
 
 [dev-dependencies]
