@@ -13,6 +13,8 @@
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this
 
+#![feature(associated_type_defaults)] // TODO: remove when removing 'type Output = O'
+
 extern crate alloc;
 
 pub mod chain;
