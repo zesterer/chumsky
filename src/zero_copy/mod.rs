@@ -101,6 +101,7 @@ mod internal {
         ) -> Self::Output<V>;
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
+        // TODO: add 'O' type param!
         fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
@@ -157,10 +158,10 @@ mod internal {
     }
 }
 
-pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
-    type Output;
+pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
+    type Output = O; // TODO: remove!
 
-    fn parse(&self, input: &'a I) -> (Option<Self::Output>, Vec<E>)
+    fn parse(&self, input: &'a I) -> (Option<O>, Vec<E>)
     where
         Self: Sized,
         S: Default,
@@ -168,7 +169,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.parse_with_state(input, &mut S::default())
     }
 
-    fn parse_with_state(&self, input: &'a I, state: &mut S) -> (Option<Self::Output>, Vec<E>)
+    fn parse_with_state(&self, input: &'a I, state: &mut S) -> (Option<O>, Vec<E>)
     where
         Self: Sized,
     {
@@ -201,14 +202,14 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     }
 
     #[doc(hidden)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, Self::Output, E>;
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, O, E>;
     #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, Self::Output, E>;
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
 
     fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F, E, S>
     where
@@ -223,7 +224,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn filter<F: Fn(&Self::Output) -> bool>(self, f: F) -> Filter<Self, F>
+    fn filter<F: Fn(&O) -> bool>(self, f: F) -> Filter<Self, F>
     where
         Self: Sized,
     {
@@ -233,7 +234,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map<O, F: Fn(Self::Output) -> O>(self, f: F) -> Map<Self, F>
+    fn map<O, F: Fn(O) -> O>(self, f: F) -> Map<Self, F>
     where
         Self: Sized,
     {
@@ -243,7 +244,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_span<O, F: Fn(Self::Output, I::Span) -> O>(self, f: F) -> MapWithSpan<Self, F>
+    fn map_with_span<O, F: Fn(O, I::Span) -> O>(self, f: F) -> MapWithSpan<Self, F>
     where
         Self: Sized,
     {
@@ -253,7 +254,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> O>(
+    fn map_with_state<O, F: Fn(O, I::Span, &mut S) -> O>(
         self,
         f: F,
     ) -> MapWithState<Self, F>
@@ -267,7 +268,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     }
 
     #[doc(alias = "filter_map")]
-    fn try_map<O, F: Fn(Self::Output, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
+    fn try_map<O, F: Fn(O, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
     where
         Self: Sized,
     {
@@ -277,7 +278,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn try_map_with_state<O, F: Fn(Self::Output, I::Span, &mut S) -> Result<O, E>>(
+    fn try_map_with_state<O, F: Fn(O, I::Span, &mut S) -> Result<O, E>>(
         self,
         f: F,
     ) -> TryMapWithState<Self, F>
@@ -345,7 +346,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_with<B: Parser<'a, I, E, S>, F: Fn(Self::Output) -> B>(
+    fn then_with<B: Parser<'a, I, E, S>, F: Fn(O) -> B>(
         self,
         then: F,
     ) -> ThenWith<Self, B, F, I, E, S>
@@ -420,7 +421,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn or<B: Parser<'a, I, E, S, Output = Self::Output>>(self, other: B) -> Or<Self, B>
+    fn or<B: Parser<'a, I, E, S, Output = O>>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
     {
@@ -585,16 +586,16 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         Padded { parser: self }
     }
 
-    fn flatten<T, Inner>(self) -> Map<Self, fn(Self::Output) -> Vec<T>>
+    fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>>
     where
         Self: Sized,
-        Self::Output: IntoIterator<Item = Inner>,
+        O: IntoIterator<Item = Inner>,
         Inner: IntoIterator<Item = T>,
     {
         self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
-    fn recover_with<F: Parser<'a, I, E, S, Output = Self::Output>>(
+    fn recover_with<F: Parser<'a, I, E, S, Output = O>>(
         self,
         fallback: F,
     ) -> RecoverWith<Self, F>
@@ -644,7 +645,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
     where
         Self: Sized,
-        F: Fn(Self::Output, I::Span, &mut dyn FnMut(E)) -> U
+        F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
     {
         Validate {
             parser: self,
@@ -652,19 +653,19 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }*/
 
-    fn collect<C>(self) -> Map<Self, fn(Self::Output) -> C>
+    fn collect<C>(self) -> Map<Self, fn(O) -> C>
     where
         Self: Sized,
-        Self::Output: IntoIterator,
-        C: FromIterator<<Self::Output as IntoIterator>::Item>,
+        O: IntoIterator,
+        C: FromIterator<<O as IntoIterator>::Item>,
     {
         self.map(|items| C::from_iter(items.into_iter()))
     }
 
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, fn((Self::Output, U)) -> Vec<T>>
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, fn((O, U)) -> Vec<T>>
     where
         Self: Sized,
-        Self::Output: Chain<T>,
+        O: Chain<T>,
         U: Chain<T>,
         P: Parser<'a, I, E, S, Output = U>,
     {
@@ -679,7 +680,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
     where
         Self: Sized,
-        F: Fn(E) -> Result<Self::Output, E>,
+        F: Fn(E) -> Result<O, E>,
     {
         OrElse {
             parser: self,
@@ -687,11 +688,11 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn from_str<U>(self) -> Map<Self, fn(Self::Output) -> Result<U, U::Err>>
+    fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>>
     where
         Self: Sized,
         U: FromStr,
-        Self::Output: AsRef<str>,
+        O: AsRef<str>,
     {
         self.map(|o| o.as_ref().parse())
     }
@@ -704,7 +705,7 @@ pub trait Parser<'a, I: Input + ?Sized, E: Error<I> = (), S: 'a = ()> {
         self.map(|o| o.unwrap())
     }
 
-    fn boxed(self) -> Boxed<'a, I, Self::Output, E, S>
+    fn boxed(self) -> Boxed<'a, I, O, E, S>
     where
         Self: Sized + 'a,
     {
