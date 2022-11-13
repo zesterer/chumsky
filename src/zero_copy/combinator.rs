@@ -479,14 +479,12 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct Or<A, B, O> {
+pub struct Or<A, B> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove O? See comment in Map declaration
-    pub(crate) phantom: PhantomData<O>,
 }
 
-impl<'a, I, O, E, S, A, B> Parser<'a, I, O, E, S> for Or<A, B, O>
+impl<'a, I, O, E, S, A, B> Parser<'a, I, O, E, S> for Or<A, B>
 where
     I: Input + ?Sized,
     E: Error<I>,
