@@ -73,7 +73,7 @@ where
         )
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Recursive<Direct<'a, I, O, E, S>>
@@ -86,7 +86,7 @@ where
         M::invoke(&*self.parser(), inp)
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 pub fn recursive<'a, I, O, E, S, A, F>(f: F) -> Recursive<Direct<'a, I, O, E, S>>

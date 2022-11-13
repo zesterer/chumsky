@@ -7,12 +7,12 @@ where
     E: Error<I>,
     S: 'a,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
         (*self).go::<M>(inp)
     }
 
-    go_extra!();
+    go_extra!(O);
 }
