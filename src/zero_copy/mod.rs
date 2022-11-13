@@ -175,8 +175,6 @@ mod internal {
 }
 
 pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
-    type Output = O; // TODO: remove!
-
     fn parse(&self, input: &'a I) -> (Option<O>, Vec<E>)
     where
         Self: Sized,
@@ -510,7 +508,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     where
         Self: Sized,
     {
-        Not { parser: self }
+        Not {
+            parser: self,
+            phantom: PhantomData,
+        }
     }
 
     fn repeated(self) -> Repeated<Self, O, I, (), E, S>
@@ -684,7 +685,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|items| C::from_iter(items.into_iter()))
     }
 
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, (O, U), fn((O, U)) -> Vec<T>>
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, O, U, E, S>, (O, U), fn((O, U)) -> Vec<T>>
     where
         Self: Sized,
         O: Chain<T>,
@@ -719,7 +720,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|o| o.as_ref().parse())
     }
 
-    fn unwrapped<U, E1>(self) -> Map<Self, O, fn(Result<U, E1>) -> U>
+    fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where
         Self: Sized + Parser<'a, I, Result<U, E1>, E, S>,
         E1: fmt::Debug,
@@ -738,7 +739,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 }
 
 pub struct Boxed<'a, I: ?Sized, O, E, S = ()> {
-    inner: Rc<dyn Parser<'a, I, O, E, S, Output = O> + 'a>,
+    inner: Rc<dyn Parser<'a, I, O, E, S> + 'a>,
 }
 
 impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
