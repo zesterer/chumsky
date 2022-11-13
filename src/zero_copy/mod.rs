@@ -234,60 +234,65 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F>
+    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, O, F>
     where
         Self: Sized,
     {
         Map {
             parser: self,
             mapper: f,
+            phantom: PhantomData,
         }
     }
 
-    fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, F>
+    fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
     where
         Self: Sized,
     {
         MapWithSpan {
             parser: self,
             mapper: f,
+            phantom: PhantomData,
         }
     }
 
     fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(
         self,
         f: F,
-    ) -> MapWithState<Self, F>
+    ) -> MapWithState<Self, O, F>
     where
         Self: Sized,
     {
         MapWithState {
             parser: self,
             mapper: f,
+            phantom: PhantomData,
         }
     }
 
     #[doc(alias = "filter_map")]
-    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E>>(self, f: F) -> TryMap<Self, F>
+    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E>>(self, f: F) -> TryMap<Self, O, F>
     where
         Self: Sized,
     {
         TryMap {
             parser: self,
             mapper: f,
+            phantom: PhantomData,
         }
     }
 
     fn try_map_with_state<U, F: Fn(O, I::Span, &mut S) -> Result<U, E>>(
         self,
         f: F,
-    ) -> TryMapWithState<Self, F>
+    ) -> TryMapWithState<Self, O, F>
     where
         Self: Sized,
     {
         TryMapWithState {
             parser: self,
             mapper: f,
+            phantom: PhantomData,
         }
     }
 
@@ -592,7 +597,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         Padded { parser: self }
     }
 
-    fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>>
+    fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
     where
         Self: Sized,
         O: IntoIterator<Item = Inner>,
@@ -659,7 +664,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
       }
       }*/
 
-    fn collect<C>(self) -> Map<Self, fn(O) -> C>
+    fn collect<C>(self) -> Map<Self, O, fn(O) -> C>
     where
         Self: Sized,
         O: IntoIterator,
@@ -668,7 +673,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|items| C::from_iter(items.into_iter()))
     }
 
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, fn((O, U)) -> Vec<T>>
+    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, E, S>, (O, U), fn((O, U)) -> Vec<T>>
     where
         Self: Sized,
         O: Chain<T>,
@@ -694,7 +699,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
             }
         }
 
-    fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>>
+    fn from_str<U>(self) -> Map<Self, O, fn(O) -> Result<U, U::Err>>
     where
         Self: Sized,
         U: FromStr,
@@ -703,7 +708,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|o| o.as_ref().parse())
     }
 
-    fn unwrapped<U, E1>(self) -> Map<Self, fn(Result<U, E1>) -> U>
+    fn unwrapped<U, E1>(self) -> Map<Self, O, fn(Result<U, E1>) -> U>
     where
         Self: Sized + Parser<'a, I, Result<U, E1>, E, S>,
         E1: fmt::Debug,

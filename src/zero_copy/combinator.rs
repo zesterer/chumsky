@@ -81,22 +81,27 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct Map<A, F> {
+pub struct Map<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    // FIXME: try remote 'OA' type parameter?
+    // This phantom seems necessary to have OA as part of impl<.., OA>.
+    // Otherwise it looks like: impl<.., OA> Parser<..> for Map<A, F>
+    // and I get the error [E0207]:
+    // `the type parameter `OA` is not constrained by the impl trait, self type, or predicates`
+    // For some reason it doesn't see that OA is used for 'A', which is mentioned for Map<..>.
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for Map<A, F>
+impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for Map<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(A::Output) -> O,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA) -> O,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         self.parser
             .go::<M>(inp)
             .map(|out| M::map(out, &self.mapper))
@@ -106,22 +111,22 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct MapWithSpan<A, F> {
+pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithSpan<A, F>
+impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithSpan<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(A::Output, I::Span) -> O,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span) -> O,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<M>(inp).map(|out| {
             M::map(out, |out| {
@@ -135,22 +140,22 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct MapWithState<A, F> {
+pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapWithState<A, F>
+impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithState<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(A::Output, I::Span, &mut S) -> O,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span, &mut S) -> O,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).map(|out| {
             M::bind(|| {
@@ -165,22 +170,22 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct TryMap<A, F> {
+pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMap<A, F>
+impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMap<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(A::Output, I::Span) -> Result<O, E>,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span) -> Result<O, E>,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
@@ -195,22 +200,22 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct TryMapWithState<A, F> {
+pub struct TryMapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for TryMapWithState<A, F>
+impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMapWithState<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(A::Output, I::Span, &mut S) -> Result<O, E>,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span, &mut S) -> Result<O, E>,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
