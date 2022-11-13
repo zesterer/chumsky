@@ -1257,19 +1257,17 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldr<P, F, A, B, E, S> {
     }
 }
 
-impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldr<P, F, A, B, E, S>
+impl<'a, I, P, F, A, B, E, S> Parser<'a, I, B, E, S> for Foldr<P, F, A, B, E, S>
 where
     I: Input + ?Sized,
-    P: Parser<'a, I, E, S, Output = (A, B)>,
+    P: Parser<'a, I, (A, B), E, S>,
     E: Error<I>,
     S: 'a,
     A: IntoIterator,
     A::IntoIter: DoubleEndedIterator,
     F: Fn(A::Item, B) -> B,
 {
-    type Output = B;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, B, E>
     where
         Self: Sized,
     {
@@ -1300,10 +1298,10 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldl<P, F, A, B, E, S> {
     }
 }
 
-impl<'a, I, P, F, A, B, E, S> Parser<'a, I, E, S> for Foldl<P, F, A, B, E, S>
+impl<'a, I, P, F, A, B, E, S> Parser<'a, I, A, E, S> for Foldl<P, F, A, B, E, S>
 where
     I: Input + ?Sized,
-    P: Parser<'a, I, E, S, Output = (A, B)>,
+    P: Parser<'a, I, (A, B), E, S>,
     E: Error<I>,
     S: 'a,
     B: IntoIterator,
@@ -1330,16 +1328,14 @@ pub struct Rewind<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, E, S, A> Parser<'a, I, E, S> for Rewind<A>
+impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for Rewind<A>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(o) => {
@@ -1359,17 +1355,15 @@ pub struct MapErr<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErr<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErr<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
     F: Fn(E) -> E,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
@@ -1388,17 +1382,15 @@ pub struct MapErrWithSpan<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithSpan<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErrWithSpan<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
     F: Fn(E, I::Span) -> E,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
@@ -1419,17 +1411,15 @@ pub struct MapErrWithState<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for MapErrWithState<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErrWithState<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
     F: Fn(E, I::Span, &mut S) -> E,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
@@ -1484,17 +1474,15 @@ pub struct OrElse<A, F> {
     pub(crate) or_else: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for OrElse<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for OrElse<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(E) -> Result<A::Output, E>,
+    A: Parser<'a, I, O, E, S>,
+    F: Fn(E) -> Result<O, E>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
