@@ -307,7 +307,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn to<U: Clone>(self, to: U) -> To<Self, U, E, S>
+    fn to<U: Clone>(self, to: U) -> To<Self, O, U, E, S>
     where
         Self: Sized,
     {
@@ -318,7 +318,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> Then<Self, B, E, S>
+    fn then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> Then<Self, B, O, U, E, S>
     where
         Self: Sized,
     {
@@ -329,7 +329,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, E, S>
+    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, O, U, E, S>
     where
         Self: Sized,
     {
@@ -340,7 +340,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, E, S>
+    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, O, U, E, S>
     where
         Self: Sized,
     {
@@ -354,7 +354,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     fn then_with<U, B: Parser<'a, I, U, E, S>, F: Fn(O) -> B>(
         self,
         then: F,
-    ) -> ThenWith<Self, B, F, I, E, S>
+    ) -> ThenWith<Self, B, O, U, F, I, E, S>
     where
         Self: Sized,
     {
@@ -391,7 +391,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     Some("abcd]=]efgh]===]ijkl"),
     /// );
     /// ```
-    fn and_is<U, B>(self, other: B) -> AndIs<Self, B>
+    fn and_is<U, B>(self, other: B) -> AndIs<Self, B, U>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -406,7 +406,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self,
         start: B,
         end: C,
-    ) -> DelimitedBy<Self, B, C>
+    ) -> DelimitedBy<Self, B, C, O, U, V>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -419,7 +419,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B>
+    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, O, U>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -430,9 +430,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn or<B>(self, other: B) -> Or<Self, B>
+    fn or<B>(self, other: B) -> Or<Self, B, O>
     where
-        Self: Sized, B: Parser<'a, I, O, E, S, Output = O>
+        Self: Sized,
+        B: Parser<'a, I, O, E, S>,
     {
         Or {
             parser_a: self,
@@ -499,7 +500,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         Not { parser: self }
     }
 
-    fn repeated(self) -> Repeated<Self, I, (), E, S>
+    fn repeated(self) -> Repeated<Self, I, O, (), E, S>
     where
         Self: Sized,
     {
@@ -511,7 +512,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, (), N>
+    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
     where
         Self: Sized,
     {
@@ -521,7 +522,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, (), E, S>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -540,7 +541,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     fn separated_by_exactly<U, B, const N: usize>(
         self,
         separator: B,
-    ) -> SeparatedByExactly<Self, B, (), N>
+    ) -> SeparatedByExactly<Self, B, U, (), N>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
