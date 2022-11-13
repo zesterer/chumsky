@@ -1,12 +1,12 @@
 #![allow(missing_docs)]
 
 macro_rules! go_extra {
-    () => {
-        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, Self::Output, E> {
-            Parser::<I, E, S>::go::<Emit>(self, inp)
+    ( $O :ty ) => {
+        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, $O, E> {
+            Parser::<I, $O, E, S>::go::<Emit>(self, inp)
         }
-        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, Self::Output, E> {
-            Parser::<I, E, S>::go::<Check>(self, inp)
+        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, $O, E> {
+            Parser::<I, $O, E, S>::go::<Check>(self, inp)
         }
     };
 }
@@ -101,11 +101,15 @@ mod internal {
         ) -> Self::Output<V>;
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-        // TODO: add 'O' type param!
-        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, P::Output, E>;
+        ) -> PResult<Self, O, E>
+        where
+            I: Input + ?Sized,
+            E: Error<I>,
+            S: 'a,
+            P: Parser<'a, I, O, E, S> + ?Sized;
     }
 
     pub struct Emit;
@@ -128,10 +132,16 @@ mod internal {
             x
         }
 
-        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, P::Output, E> {
+        ) -> PResult<Self, O, E>
+        where
+            I: Input + ?Sized,
+            E: Error<I>,
+            S: 'a,
+            P: Parser<'a, I, O, E, S> + ?Sized,
+        {
             parser.go_emit(inp)
         }
     }
@@ -149,10 +159,16 @@ mod internal {
         }
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-        fn invoke<'a, I: Input + ?Sized, E: Error<I>, S: 'a, P: Parser<'a, I, E, S> + ?Sized>(
+        fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, P::Output, E> {
+        ) -> PResult<Self, O, E>
+        where
+            I: Input + ?Sized,
+            E: Error<I>,
+            S: 'a,
+            P: Parser<'a, I, O, E, S> + ?Sized,
+        {
             parser.go_check(inp)
         }
     }
@@ -256,10 +272,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(
-        self,
-        f: F,
-    ) -> MapWithState<Self, O, F>
+    fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(self, f: F) -> MapWithState<Self, O, F>
     where
         Self: Sized,
     {
@@ -329,7 +342,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, O, U, E, S>
+    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, O, E, S>
     where
         Self: Sized,
     {
@@ -340,7 +353,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, O, U, E, S>
+    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, U, E, S>
     where
         Self: Sized,
     {
@@ -354,7 +367,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     fn then_with<U, B: Parser<'a, I, U, E, S>, F: Fn(O) -> B>(
         self,
         then: F,
-    ) -> ThenWith<Self, B, O, U, F, I, E, S>
+    ) -> ThenWith<Self, B, O, F, I, E, S>
     where
         Self: Sized,
     {
@@ -399,14 +412,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         AndIs {
             parser_a: self,
             parser_b: other,
+            phantom: PhantomData,
         }
     }
 
-    fn delimited_by<U, V, B, C>(
-        self,
-        start: B,
-        end: C,
-    ) -> DelimitedBy<Self, B, C, O, U, V>
+    fn delimited_by<U, V, B, C>(self, start: B, end: C) -> DelimitedBy<Self, B, C, U, V>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -416,10 +426,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
             parser: self,
             start,
             end,
+            phantom: PhantomData,
         }
     }
 
-    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, O, U>
+    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, U>
     where
         Self: Sized,
         B: Parser<'a, I, U, E, S>,
@@ -427,6 +438,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         PaddedBy {
             parser: self,
             padding,
+            phantom: PhantomData,
         }
     }
 
@@ -438,6 +450,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         Or {
             parser_a: self,
             parser_b: other,
+            phantom: PhantomData,
         }
     }
 
@@ -493,14 +506,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     ])),
     /// );
     /// ```
-    fn not(self) -> Not<Self>
+    fn not(self) -> Not<Self, O>
     where
         Self: Sized,
     {
         Not { parser: self }
     }
 
-    fn repeated(self) -> Repeated<Self, I, O, (), E, S>
+    fn repeated(self) -> Repeated<Self, O, I, (), E, S>
     where
         Self: Sized,
     {
@@ -561,26 +574,26 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
         F: Fn(A::Item, B) -> B,
-        {
-            Foldr {
-                parser: self,
-                folder: f,
-                phantom: PhantomData,
-            }
+    {
+        Foldr {
+            parser: self,
+            folder: f,
+            phantom: PhantomData,
         }
+    }
 
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
     where
         Self: Parser<'a, I, (A, B), E, S> + Sized,
         B: IntoIterator,
         F: Fn(A, B::Item) -> A,
-        {
-            Foldl {
-                parser: self,
-                folder: f,
-                phantom: PhantomData,
-            }
+    {
+        Foldl {
+            parser: self,
+            folder: f,
+            phantom: PhantomData,
         }
+    }
 
     fn rewind(self) -> Rewind<Self>
     where
@@ -607,10 +620,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
-    fn recover_with<F: Parser<'a, I, O, E, S>>(
-        self,
-        fallback: F,
-    ) -> RecoverWith<Self, F>
+    fn recover_with<F: Parser<'a, I, O, E, S>>(self, fallback: F) -> RecoverWith<Self, F>
     where
         Self: Sized,
     {
@@ -624,46 +634,46 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     where
         Self: Sized,
         F: Fn(E) -> E,
-        {
-            MapErr {
-                parser: self,
-                mapper: f,
-            }
+    {
+        MapErr {
+            parser: self,
+            mapper: f,
         }
+    }
 
     fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
     where
         Self: Sized,
         F: Fn(E, I::Span) -> E,
-        {
-            MapErrWithSpan {
-                parser: self,
-                mapper: f,
-            }
+    {
+        MapErrWithSpan {
+            parser: self,
+            mapper: f,
         }
+    }
 
     fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
     where
         Self: Sized,
         F: Fn(E, I::Span, &mut S) -> E,
-        {
-            MapErrWithState {
-                parser: self,
-                mapper: f,
-            }
+    {
+        MapErrWithState {
+            parser: self,
+            mapper: f,
         }
+    }
 
     // TODO: Finish implementing this once full error recovery is implemented
     /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
-      where
-      Self: Sized,
-      F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
-      {
-      Validate {
-      parser: self,
-      validator: f,
-      }
-      }*/
+    where
+    Self: Sized,
+    F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
+    {
+    Validate {
+    parser: self,
+    validator: f,
+    }
+    }*/
 
     fn collect<C>(self) -> Map<Self, O, fn(O) -> C>
     where
@@ -693,12 +703,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     where
         Self: Sized,
         F: Fn(E) -> Result<O, E>,
-        {
-            OrElse {
-                parser: self,
-                or_else: f,
-            }
+    {
+        OrElse {
+            parser: self,
+            or_else: f,
         }
+    }
 
     fn from_str<U>(self) -> Map<Self, O, fn(O) -> Result<U, U::Err>>
     where
@@ -739,17 +749,17 @@ impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
     }
 }
 
-impl<'a, I, E, S, O> Parser<'a, I, O, E, S> for Boxed<'a, I, O, E, S>
+impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Boxed<'a, I, O, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         M::invoke(&*self.inner, inp)
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[test]
@@ -862,19 +872,19 @@ fn zero_copy_group() {
 
     fn parser<'a>() -> impl Parser<'a, str, Output = (&'a str, u64, char)> {
         group((
-                any()
+            any()
                 .filter(|c: &char| c.is_ascii_alphabetic())
                 .repeated()
                 .at_least(1)
                 .map_slice(|s: &str| s)
                 .padded(),
-                any()
+            any()
                 .filter(|c: &char| c.is_ascii_digit())
                 .repeated()
                 .at_least(1)
                 .map_slice(|s: &str| s.parse::<u64>().unwrap())
                 .padded(),
-                any().filter(|c: &char| !c.is_whitespace()).padded(),
+            any().filter(|c: &char| !c.is_whitespace()).padded(),
         ))
     }
 

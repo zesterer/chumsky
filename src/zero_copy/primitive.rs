@@ -30,7 +30,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub struct Empty<I: ?Sized>(PhantomData<I>);
@@ -56,7 +56,7 @@ where
         Ok(M::bind(|| ()))
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub trait Seq<T> {
@@ -182,7 +182,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(T);
 }
 
 pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
@@ -232,7 +232,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
@@ -282,7 +282,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub struct Any<I: ?Sized, E, S = ()> {
@@ -315,7 +315,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
@@ -400,7 +400,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!((C, OP));
 }
 
 pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
@@ -426,7 +426,7 @@ where
         todo!("Attempted to use an unimplemented parser")
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub struct Choice<T, O> {
@@ -489,7 +489,7 @@ macro_rules! impl_choice_for_tuple {
                 Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
             }
 
-            go_extra!();
+            go_extra!(O);
         }
     };
 }
@@ -559,7 +559,7 @@ macro_rules! impl_group_for_tuple {
                 Ok(flatten_map!(<M> $($X)*))
             }
 
-            go_extra!();
+            go_extra!(($(O$X),*));
         }
     };
 }

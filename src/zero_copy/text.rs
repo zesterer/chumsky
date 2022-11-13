@@ -84,5 +84,5 @@ where
         Ok(out)
     }
 
-    go_extra!();
+    go_extra!(O);
 }

@@ -36,7 +36,7 @@ where
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 pub struct Filter<A, F> {
@@ -77,7 +77,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -107,7 +107,7 @@ where
             .map(|out| M::map(out, &self.mapper))
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -136,7 +136,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -166,7 +166,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -196,7 +196,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -227,7 +227,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 pub struct To<A, OA, O, E = (), S = ()> {
@@ -262,7 +262,7 @@ where
             .map(|_| M::bind(|| self.to.clone()))
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 pub type Ignored<A, OA, E = (), S = ()> = To<A, OA, (), E, S>;
@@ -285,7 +285,7 @@ impl<A: Clone, B: Clone, OA, OB, E, S> Clone for Then<A, B, OA, OB, E, S> {
     }
 }
 
-impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for Then<A, B, OA, OB, E, S>
+impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, (OA, OB), E, S> for Then<A, B, OA, OB, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -299,18 +299,18 @@ where
         Ok(M::combine(a, b, |a: OA, b: OB| (a, b)))
     }
 
-    go_extra!();
+    go_extra!((OA, OB));
 }
 
-pub struct IgnoreThen<A, B, OA, OB, E = (), S = ()> {
+pub struct IgnoreThen<A, B, OA, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OA, OB? See comment in Map declaration
-    pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, E, S> Copy for IgnoreThen<A, B, OA, OB, E, S> {}
-impl<A: Clone, B: Clone, OA, OB, E, S> Clone for IgnoreThen<A, B, OA, OB, E, S> {
+impl<A: Copy, B: Copy, OA, E, S> Copy for IgnoreThen<A, B, OA, E, S> {}
+impl<A: Clone, B: Clone, OA, E, S> Clone for IgnoreThen<A, B, OA, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -320,7 +320,7 @@ impl<A: Clone, B: Clone, OA, OB, E, S> Clone for IgnoreThen<A, B, OA, OB, E, S> 
     }
 }
 
-impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for IgnoreThen<A, B, OA, OB, E, S>
+impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OB, E, S> for IgnoreThen<A, B, OA, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -334,18 +334,18 @@ where
         Ok(M::map(b, |b: OB| b))
     }
 
-    go_extra!();
+    go_extra!(OB);
 }
 
-pub struct ThenIgnore<A, B, OA, OB, E = (), S = ()> {
+pub struct ThenIgnore<A, B, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OA, OB? See comment in Map declaration
-    pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
+    // FIXME try remove OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, E, S> Copy for ThenIgnore<A, B, OA, OB, E, S> {}
-impl<A: Clone, B: Clone, OA, OB, E, S> Clone for ThenIgnore<A, B, OA, OB, E, S> {
+impl<A: Copy, B: Copy, OB, E, S> Copy for ThenIgnore<A, B, OB, E, S> {}
+impl<A: Clone, B: Clone, OB, E, S> Clone for ThenIgnore<A, B, OB, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -355,7 +355,7 @@ impl<A: Clone, B: Clone, OA, OB, E, S> Clone for ThenIgnore<A, B, OA, OB, E, S> 
     }
 }
 
-impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for ThenIgnore<A, B, OA, OB, E, S>
+impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for ThenIgnore<A, B, OB, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -369,17 +369,18 @@ where
         Ok(M::map(a, |a: OA| a))
     }
 
-    go_extra!();
+    go_extra!(OA);
 }
 
-pub struct ThenWith<A, B, OA, OB, F, I: ?Sized, E = (), S = ()> {
+pub struct ThenWith<A, B, OA, F, I: ?Sized, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
-    pub(crate) phantom: PhantomData<(B, OA, OB, E, S, I)>,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(B, OA, E, S, I)>,
 }
 
-impl<A: Copy, B, OA, OB, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, OA, OB, F, I, E, S> {}
-impl<A: Clone, B, OA, OB, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, OA, OB, F, I, E, S> {
+impl<A: Copy, B, OA, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, OA, F, I, E, S> {}
+impl<A: Clone, B, OA, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, OA, F, I, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -389,7 +390,7 @@ impl<A: Clone, B, OA, OB, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, OA
     }
 }
 
-impl<'a, I, O, E, S, A, B, OA, OB, F> Parser<'a, I, O, E, S> for ThenWith<A, B, OA, OB, F, I, E, S>
+impl<'a, I, E, S, A, B, OA, OB, F> Parser<'a, I, OB, E, S> for ThenWith<A, B, OA, F, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -420,19 +421,19 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(OB);
 }
 
 #[derive(Copy, Clone)]
-pub struct DelimitedBy<A, B, C, OA, OB, OC> {
+pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
-    // FIXME try remove OA, OB, OC? See comment in Map declaration
-    pub(crate) phantom: PhantomData<(OA, OB, OC)>,
+    // FIXME try remove OB, OC? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OB, OC)>,
 }
 
-impl<'a, I, O, E, S, A, B, C, OA, OB, OC> Parser<'a, I, O, E, S> for DelimitedBy<A, B, C, OA, OB, OC>
+impl<'a, I, E, S, A, B, C, OA, OB, OC> Parser<'a, I, OA, E, S> for DelimitedBy<A, B, C, OB, OC>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -448,18 +449,18 @@ where
         Ok(a)
     }
 
-    go_extra!();
+    go_extra!(OA);
 }
 
 #[derive(Copy, Clone)]
-pub struct PaddedBy<A, B, OA, OB> {
+pub struct PaddedBy<A, B, OB> {
     pub(crate) parser: A,
     pub(crate) padding: B,
-    // FIXME try remove OA, OB? See comment in Map declaration
-    pub(crate) phantom: PhantomData<(OA, OB)>,
+    // FIXME try remove OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OB>,
 }
 
-impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for PaddedBy<A, B, OA, OB>
+impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for PaddedBy<A, B, OB>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -474,7 +475,7 @@ where
         Ok(a)
     }
 
-    go_extra!();
+    go_extra!(OA);
 }
 
 #[derive(Copy, Clone)]
@@ -508,7 +509,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -542,7 +543,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 pub trait Container<T>: Default {
@@ -604,16 +605,16 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
 }
 
 // FIXME: why C, E, S have default values?
-pub struct Repeated<A, I: ?Sized, O, C = (), E = (), S = ()> {
+pub struct Repeated<A, OA, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    // FIXME try remove O? See comment in Map declaration
-    pub(crate) phantom: PhantomData<(O, C, E, S, I)>,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, C, E, S, I)>,
 }
 
-impl<A: Copy, I: ?Sized, O, C, E, S> Copy for Repeated<A, I, O, C, E, S> {}
-impl<A: Clone, I: ?Sized, O, C, E, S> Clone for Repeated<A, I, O, C, E, S> {
+impl<A: Copy, OA, I: ?Sized, C, E, S> Copy for Repeated<A, OA, I, C, E, S> {}
+impl<A: Clone, OA, I: ?Sized, C, E, S> Clone for Repeated<A, OA, I, C, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -624,9 +625,9 @@ impl<A: Clone, I: ?Sized, O, C, E, S> Clone for Repeated<A, I, O, C, E, S> {
     }
 }
 
-impl<'a, A, I, O, C, E, S> Repeated<A, I, O, C, E, S>
+impl<'a, A, OA, I, C, E, S> Repeated<A, OA, I, C, E, S>
 where
-    A: Parser<'a, I, O, E, S>,
+    A: Parser<'a, I, OA, E, S>,
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
@@ -650,9 +651,9 @@ where
         }
     }
 
-    pub fn collect<D: Container<A::Output>>(self) -> Repeated<A, I, O, D, E, S>
+    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, I, D, E, S>
     where
-        A: Parser<'a, I, O, E, S>,
+        A: Parser<'a, I, OA, E, S>,
     {
         Repeated {
             parser: self.parser,
@@ -663,13 +664,13 @@ where
     }
 }
 
-impl<'a, I, O, E, S, A, C> Parser<'a, I, O, E, S> for Repeated<A, I, O, C, E, S>
+impl<'a, I, E, S, A, OA, C> Parser<'a, I, C, E, S> for Repeated<A, OA, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    C: Container<O>,
+    A: Parser<'a, I, OA, E, S>,
+    C: Container<OA>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
         let mut count = 0;
@@ -702,7 +703,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(C);
 }
 
 pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
@@ -789,7 +790,7 @@ where
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB, C> Parser<'a, I, OA, E, S> for SeparatedBy<A, B, OA, OB, I, C, E, S>
+impl<'a, I, E, S, A, B, OA, OB, C> Parser<'a, I, C, E, S> for SeparatedBy<A, B, OA, OB, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -924,7 +925,7 @@ where
         Ok(output)
     }
 
-    go_extra!();
+    go_extra!(C);
 }
 
 #[derive(Copy, Clone)]
@@ -932,7 +933,7 @@ pub struct OrNot<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for OrNot<A>
+impl<'a, I, O, E, S, A> Parser<'a, I, Option<O>, E, S> for OrNot<A>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -942,28 +943,30 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Option<O>, E> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
-            Ok(o) => M::map::<A::Output, _, _>(o, Some),
+            Ok(o) => M::map::<O, _, _>(o, Some),
             Err(_) => {
                 inp.rewind(before);
-                M::bind::<Option<A::Output>, _>(|| None)
+                M::bind::<Option<O>, _>(|| None)
             }
         })
     }
 
-    go_extra!();
+    go_extra!(Option<O>);
 }
 
 #[derive(Copy, Clone)]
-pub struct Not<A> {
+pub struct Not<A, OA> {
     pub(crate) parser: A,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for Not<A>
+impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Not<A, OA>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, O, E, S>,
+    A: Parser<'a, I, OA, E, S>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
         let before = inp.save();
@@ -983,7 +986,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 #[derive(Copy, Clone)]
@@ -1031,7 +1034,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(OA);
 }
 
 pub trait ContainerExactly<T, const N: usize> {
@@ -1128,7 +1131,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(C);
 }
 
 #[derive(Copy, Clone)]
@@ -1237,7 +1240,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!([OA; N]);
 }
 
 pub struct Foldr<P, F, A, B, E = (), S = ()> {
@@ -1278,7 +1281,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(B);
 }
 
 pub struct Foldl<P, F, A, B, E = (), S = ()> {
@@ -1307,9 +1310,7 @@ where
     B: IntoIterator,
     F: Fn(A, B::Item) -> A,
 {
-    type Output = A;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, A, E>
     where
         Self: Sized,
     {
@@ -1320,7 +1321,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(A);
 }
 
 #[derive(Copy, Clone)]
@@ -1346,7 +1347,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -1373,7 +1374,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -1402,7 +1403,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[derive(Copy, Clone)]
@@ -1431,7 +1432,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 // TODO: Finish implementing this once full error recovery is implemented
@@ -1441,17 +1442,15 @@ pub struct Validate<A, F> {
     pub(crate) validator: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for Validate<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for Validate<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
     F: Fn(E, I::Span, &mut dyn FnMut(E)) -> E,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
@@ -1465,7 +1464,7 @@ where
         })
     }
 
-    go_extra!();
+    go_extra!(O);
 }*/
 
 #[derive(Copy, Clone)]
@@ -1498,7 +1497,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(O);
 }
 
 #[cfg(test)]
