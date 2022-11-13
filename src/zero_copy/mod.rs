@@ -211,7 +211,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
 
-    fn map_slice<O, F: Fn(&'a I::Slice) -> O>(self, f: F) -> MapSlice<Self, F, E, S>
+    fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<Self, F, E, S>
     where
         Self: Sized,
         I: SliceInput,
@@ -234,7 +234,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map<O, F: Fn(O) -> O>(self, f: F) -> Map<Self, F>
+    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, F>
     where
         Self: Sized,
     {
@@ -244,7 +244,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_span<O, F: Fn(O, I::Span) -> O>(self, f: F) -> MapWithSpan<Self, F>
+    fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, F>
     where
         Self: Sized,
     {
@@ -254,7 +254,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn map_with_state<O, F: Fn(O, I::Span, &mut S) -> O>(
+    fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(
         self,
         f: F,
     ) -> MapWithState<Self, F>
@@ -268,7 +268,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     }
 
     #[doc(alias = "filter_map")]
-    fn try_map<O, F: Fn(O, I::Span) -> Result<O, E>>(self, f: F) -> TryMap<Self, F>
+    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E>>(self, f: F) -> TryMap<Self, F>
     where
         Self: Sized,
     {
@@ -278,7 +278,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn try_map_with_state<O, F: Fn(O, I::Span, &mut S) -> Result<O, E>>(
+    fn try_map_with_state<U, F: Fn(O, I::Span, &mut S) -> Result<U, E>>(
         self,
         f: F,
     ) -> TryMapWithState<Self, F>
@@ -302,7 +302,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn to<O: Clone>(self, to: O) -> To<Self, O, E, S>
+    fn to<U: Clone>(self, to: U) -> To<Self, U, E, S>
     where
         Self: Sized,
     {
@@ -313,7 +313,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then<B: Parser<'a, I, E, S>>(self, other: B) -> Then<Self, B, E, S>
+    fn then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> Then<Self, B, E, S>
     where
         Self: Sized,
     {
