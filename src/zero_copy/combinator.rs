@@ -84,7 +84,7 @@ where
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME: try remote 'OA' type parameter?
+    // FIXME: try remove 'OA' type parameter?
     // This phantom seems necessary to have OA as part of impl<.., OA>.
     // Otherwise it looks like: impl<.., OA> Parser<..> for Map<A, F>
     // and I get the error [E0207]:
@@ -230,14 +230,15 @@ where
     go_extra!();
 }
 
-pub struct To<A, O, E = (), S = ()> {
+pub struct To<A, OA, O, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) to: O,
-    pub(crate) phantom: PhantomData<(E, S)>,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
-impl<A: Copy, O: Copy, E, S> Copy for To<A, O, E, S> {}
-impl<A: Clone, O: Clone, E, S> Clone for To<A, O, E, S> {
+impl<A: Copy, OA, O: Copy, E, S> Copy for To<A, OA, O, E, S> {}
+impl<A: Clone, OA, O: Clone, E, S> Clone for To<A, OA, O, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -247,17 +248,15 @@ impl<A: Clone, O: Clone, E, S> Clone for To<A, O, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, O> Parser<'a, I, E, S> for To<A, O, E, S>
+impl<'a, I, O, E, S, A, OA> Parser<'a, I, O, E, S> for To<A, OA, O, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
     O: Clone,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         self.parser
             .go::<Check>(inp)
             .map(|_| M::bind(|| self.to.clone()))
@@ -266,16 +265,17 @@ where
     go_extra!();
 }
 
-pub type Ignored<A, E = (), S = ()> = To<A, (), E, S>;
+pub type Ignored<A, OA, E = (), S = ()> = To<A, OA, (), E, S>;
 
-pub struct Then<A, B, E = (), S = ()> {
+pub struct Then<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(E, S)>,
+    // FIXME try remove OA, OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, E, S> Copy for Then<A, B, E, S> {}
-impl<A: Clone, B: Clone, E, S> Clone for Then<A, B, E, S> {
+impl<A: Copy, B: Copy, OA, OB, E, S> Copy for Then<A, B, OA, OB, E, S> {}
+impl<A: Clone, B: Clone, OA, OB, E, S> Clone for Then<A, B, OA, OB, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -285,33 +285,32 @@ impl<A: Clone, B: Clone, E, S> Clone for Then<A, B, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for Then<A, B, E, S>
+impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for Then<A, B, OA, OB, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
 {
-    type Output = (A::Output, B::Output);
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (OA, OB), E> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
-        Ok(M::combine(a, b, |a: A::Output, b: B::Output| (a, b)))
+        Ok(M::combine(a, b, |a: OA, b: OB| (a, b)))
     }
 
     go_extra!();
 }
 
-pub struct IgnoreThen<A, B, E = (), S = ()> {
+pub struct IgnoreThen<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(E, S)>,
+    // FIXME try remove OA, OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, E, S> Copy for IgnoreThen<A, B, E, S> {}
-impl<A: Clone, B: Clone, E, S> Clone for IgnoreThen<A, B, E, S> {
+impl<A: Copy, B: Copy, OA, OB, E, S> Copy for IgnoreThen<A, B, OA, OB, E, S> {}
+impl<A: Clone, B: Clone, OA, OB, E, S> Clone for IgnoreThen<A, B, OA, OB, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -321,33 +320,32 @@ impl<A: Clone, B: Clone, E, S> Clone for IgnoreThen<A, B, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for IgnoreThen<A, B, E, S>
+impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for IgnoreThen<A, B, OA, OB, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
 {
-    type Output = B::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OB, E> {
         let _a = self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
-        Ok(M::map(b, |b: B::Output| b))
+        Ok(M::map(b, |b: OB| b))
     }
 
     go_extra!();
 }
 
-pub struct ThenIgnore<A, B, E = (), S = ()> {
+pub struct ThenIgnore<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(E, S)>,
+    // FIXME try remove OA, OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, E, S> Copy for ThenIgnore<A, B, E, S> {}
-impl<A: Clone, B: Clone, E, S> Clone for ThenIgnore<A, B, E, S> {
+impl<A: Copy, B: Copy, OA, OB, E, S> Copy for ThenIgnore<A, B, OA, OB, E, S> {}
+impl<A: Clone, B: Clone, OA, OB, E, S> Clone for ThenIgnore<A, B, OA, OB, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -357,33 +355,31 @@ impl<A: Clone, B: Clone, E, S> Clone for ThenIgnore<A, B, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for ThenIgnore<A, B, E, S>
+impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for ThenIgnore<A, B, OA, OB, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
         let a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<Check>(inp)?;
-        Ok(M::map(a, |a: A::Output| a))
+        Ok(M::map(a, |a: OA| a))
     }
 
     go_extra!();
 }
 
-pub struct ThenWith<A, B, F, I: ?Sized, E = (), S = ()> {
+pub struct ThenWith<A, B, OA, OB, F, I: ?Sized, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
-    pub(crate) phantom: PhantomData<(B, E, S, I)>,
+    pub(crate) phantom: PhantomData<(B, OA, OB, E, S, I)>,
 }
 
-impl<A: Copy, B, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, F, I, E, S> {}
-impl<A: Clone, B, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, F, I, E, S> {
+impl<A: Copy, B, OA, OB, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, OA, OB, F, I, E, S> {}
+impl<A: Clone, B, OA, OB, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, OA, OB, F, I, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -393,18 +389,16 @@ impl<A: Clone, B, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, F, I, E, S
     }
 }
 
-impl<'a, I, E, S, A, B, F> Parser<'a, I, E, S> for ThenWith<A, B, F, I, E, S>
+impl<'a, I, O, E, S, A, B, OA, OB, F> Parser<'a, I, O, E, S> for ThenWith<A, B, OA, OB, F, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
-    F: Fn(A::Output) -> B,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
+    F: Fn(OA) -> B,
 {
-    type Output = B::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OB, E> {
         let before = inp.save();
         match self.parser.go::<Emit>(inp) {
             Ok(output) => {
@@ -430,76 +424,76 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct DelimitedBy<A, B, C> {
+pub struct DelimitedBy<A, B, C, OA, OB, OC> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
+    // FIXME try remove OA, OB, OC? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB, OC)>,
 }
 
-impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for DelimitedBy<A, B, C>
+impl<'a, I, O, E, S, A, B, C, OA, OB, OC> Parser<'a, I, O, E, S> for DelimitedBy<A, B, C, OA, OB, OC>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
-    C: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
+    C: Parser<'a, I, OC, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
         let _ = self.start.go::<Check>(inp)?;
-        let b = self.parser.go::<M>(inp)?;
+        let a = self.parser.go::<M>(inp)?;
         let _ = self.end.go::<Check>(inp)?;
-        Ok(b)
+        Ok(a)
     }
 
     go_extra!();
 }
 
 #[derive(Copy, Clone)]
-pub struct PaddedBy<A, B> {
+pub struct PaddedBy<A, B, OA, OB> {
     pub(crate) parser: A,
     pub(crate) padding: B,
+    // FIXME try remove OA, OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB)>,
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for PaddedBy<A, B>
+impl<'a, I, O, E, S, A, B, OA, OB> Parser<'a, I, O, E, S> for PaddedBy<A, B, OA, OB>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
         let _ = self.padding.go::<Check>(inp)?;
-        let b = self.parser.go::<M>(inp)?;
+        let a = self.parser.go::<M>(inp)?;
         let _ = self.padding.go::<Check>(inp)?;
-        Ok(b)
+        Ok(a)
     }
 
     go_extra!();
 }
 
 #[derive(Copy, Clone)]
-pub struct Or<A, B> {
+pub struct Or<A, B, O> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
+    // FIXME try remove O? See comment in Map declaration
+    pub(crate) phantom: PhantomData<O>,
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for Or<A, B>
+impl<'a, I, O, E, S, A, B> Parser<'a, I, O, E, S> for Or<A, B, O>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S, Output = A::Output>,
+    A: Parser<'a, I, O, E, S>,
+    B: Parser<'a, I, O, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => Ok(out),
@@ -523,17 +517,15 @@ pub struct RecoverWith<A, F> {
     pub(crate) fallback: F,
 }
 
-impl<'a, I, E, S, A, F> Parser<'a, I, E, S> for RecoverWith<A, F>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for RecoverWith<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Parser<'a, I, E, S, Output = A::Output>,
+    A: Parser<'a, I, O, E, S>,
+    F: Parser<'a, I, O, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(out) => Ok(out),
@@ -611,15 +603,17 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
     }
 }
 
-pub struct Repeated<A, I: ?Sized, C = (), E = (), S = ()> {
+// FIXME: why C, E, S have default values?
+pub struct Repeated<A, I: ?Sized, O, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    pub(crate) phantom: PhantomData<(C, E, S, I)>,
+    // FIXME try remove O? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(O, C, E, S, I)>,
 }
 
-impl<A: Copy, I: ?Sized, C, E, S> Copy for Repeated<A, I, C, E, S> {}
-impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
+impl<A: Copy, I: ?Sized, O, C, E, S> Copy for Repeated<A, I, O, C, E, S> {}
+impl<A: Clone, I: ?Sized, O, C, E, S> Clone for Repeated<A, I, O, C, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -630,7 +624,13 @@ impl<A: Clone, I: ?Sized, C, E, S> Clone for Repeated<A, I, C, E, S> {
     }
 }
 
-impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a> Repeated<A, I, C, E, S> {
+impl<'a, A, I, O, C, E, S> Repeated<A, I, O, C, E, S>
+where
+    A: Parser<'a, I, O, E, S>,
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+{
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
     }
@@ -650,9 +650,9 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a> Repea
         }
     }
 
-    pub fn collect<D: Container<A::Output>>(self) -> Repeated<A, I, D, E, S>
+    pub fn collect<D: Container<A::Output>>(self) -> Repeated<A, I, O, D, E, S>
     where
-        A: Parser<'a, I, E, S>,
+        A: Parser<'a, I, O, E, S>,
     {
         Repeated {
             parser: self.parser,
@@ -663,17 +663,15 @@ impl<'a, A: Parser<'a, I, E, S>, I: Input + ?Sized, C, E: Error<I>, S: 'a> Repea
     }
 }
 
-impl<'a, I, E, S, A, C> Parser<'a, I, E, S> for Repeated<A, I, C, E, S>
+impl<'a, I, O, E, S, A, C> Parser<'a, I, O, E, S> for Repeated<A, I, O, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    C: Container<A::Output>,
+    A: Parser<'a, I, O, E, S>,
+    C: Container<O>,
 {
-    type Output = C;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
         let mut count = 0;
         let mut output = M::bind::<C, _>(|| C::default());
         loop {
@@ -707,18 +705,19 @@ where
     go_extra!();
 }
 
-pub struct SeparatedBy<A, B, I: ?Sized, C = (), E = (), S = ()> {
+pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(C, E, S, I)>,
+    // FIXME try remove OA, OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, OB, C, E, S, I)>,
 }
 
-impl<A: Copy, B: Copy, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, I, C, E, S> {}
-impl<A: Clone, B: Clone, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, I, C, E, S> {
+impl<A: Copy, B: Copy, OA, OB, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, OA, OB, I, C, E, S> {}
+impl<A: Clone, B: Clone, OA, OB, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, OA, OB, I, C, E, S> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -732,15 +731,13 @@ impl<A: Clone, B: Clone, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, I, C, E
     }
 }
 
-impl<
-        'a,
-        A: Parser<'a, I, E, S>,
-        B: Parser<'a, I, E, S>,
-        I: Input + ?Sized,
-        C,
-        E: Error<I>,
-        S: 'a,
-    > SeparatedBy<A, B, I, C, E, S>
+impl<'a, A, B, OA, OB, I, C, E, S> SeparatedBy<A, B, OA, OB, I, C, E, S>
+where
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
 {
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
@@ -775,10 +772,10 @@ impl<
         }
     }
 
-    pub fn collect<D: Container<A::Output>>(self) -> SeparatedBy<A, B, I, D, E, S>
+    pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, I, D, E, S>
     where
-        A: Parser<'a, I, E, S>,
-        B: Parser<'a, I, E, S>,
+        A: Parser<'a, I, OA, E, S>,
+        B: Parser<'a, I, OB, E, S>,
     {
         SeparatedBy {
             parser: self.parser,
@@ -792,18 +789,16 @@ impl<
     }
 }
 
-impl<'a, I, E, S, A, B, C> Parser<'a, I, E, S> for SeparatedBy<A, B, I, C, E, S>
+impl<'a, I, E, S, A, B, OA, OB, C> Parser<'a, I, OA, E, S> for SeparatedBy<A, B, OA, OB, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
-    C: Container<A::Output>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
+    C: Container<OA>,
 {
-    type Output = C;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
         // STEPS:
         // 1. If allow_leading -> Consume separator if there
         //    if Ok  -> continue
@@ -937,16 +932,14 @@ pub struct OrNot<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, E, S, A> Parser<'a, I, E, S> for OrNot<A>
+impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for OrNot<A>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
 {
-    type Output = Option<A::Output>;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Option<O>, E> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
             Ok(o) => M::map::<A::Output, _, _>(o, Some),
@@ -965,16 +958,14 @@ pub struct Not<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, E, S, A> Parser<'a, I, E, S> for Not<A>
+impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for Not<A>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
 {
-    type Output = ();
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
         let before = inp.save();
 
         let result = self.parser.go::<Check>(inp);
@@ -996,22 +987,22 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct AndIs<A, B> {
+pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
+    // FIXME try remove OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<OB>,
 }
 
-impl<'a, I, E, S, A, B> Parser<'a, I, E, S> for AndIs<A, B>
+impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for AndIs<A, B, OB>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => {
@@ -1076,17 +1067,20 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 }
 
 #[derive(Copy, Clone)]
-pub struct RepeatedExactly<A, C, const N: usize> {
+pub struct RepeatedExactly<A, OA, C, const N: usize> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<C>,
+    // FIXME try remove OA? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OA, C)>,
 }
 
-impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
-    pub fn collect<'a, I: Input, E: Error<I>, S: 'a, D: ContainerExactly<A::Output, N>>(
-        self,
-    ) -> RepeatedExactly<A, D, N>
+impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
+    pub fn collect<'a, I, E, S, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
-        A: Parser<'a, I, E, S>,
+        A: Parser<'a, I, OA, E, S>,
+        I: Input,
+        E: Error<I>,
+        S: 'a,
+        D: ContainerExactly<OA, N>,
     {
         RepeatedExactly {
             parser: self.parser,
@@ -1095,17 +1089,15 @@ impl<A, C, const N: usize> RepeatedExactly<A, C, N> {
     }
 }
 
-impl<'a, I, E, S, A, C, const N: usize> Parser<'a, I, E, S> for RepeatedExactly<A, C, N>
+impl<'a, I, E, S, A, OA, C, const N: usize> Parser<'a, I, C, E, S> for RepeatedExactly<A, OA, C, N>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    C: ContainerExactly<A::Output, N>,
+    A: Parser<'a, I, OA, E, S>,
+    C: ContainerExactly<OA, N>,
 {
-    type Output = C;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
         let mut i = 0;
         let mut output = M::bind(|| C::uninit());
         loop {
@@ -1140,15 +1132,16 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct SeparatedByExactly<A, B, C, const N: usize> {
+pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<C>,
+    // FIXME try remove OB? See comment in Map declaration
+    pub(crate) phantom: PhantomData<(OB, C)>,
 }
 
-impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
+impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     pub fn allow_leading(self) -> Self {
         Self {
             allow_leading: true,
@@ -1163,11 +1156,13 @@ impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
         }
     }
 
-    pub fn collect<'a, I: Input, E: Error<I>, S: 'a, D: ContainerExactly<A::Output, N>>(
-        self,
-    ) -> SeparatedByExactly<A, B, D, N>
+    pub fn collect<'a, I, OA, E, S, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
     where
-        A: Parser<'a, I, E, S>,
+        A: Parser<'a, I, OA, E, S>,
+        I: Input,
+        E: Error<I>,
+        S: 'a,
+        D: ContainerExactly<OA, N>,
     {
         SeparatedByExactly {
             parser: self.parser,
@@ -1179,18 +1174,18 @@ impl<A, B, C, const N: usize> SeparatedByExactly<A, B, C, N> {
     }
 }
 
-impl<'a, I, E, S, A, B, C, const N: usize> Parser<'a, I, E, S> for SeparatedByExactly<A, B, C, N>
+// FIXME: why parser output is not C ?
+impl<'a, I, E, S, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E, S> for SeparatedByExactly<A, B, OB, C, N>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    B: Parser<'a, I, E, S>,
-    C: ContainerExactly<A::Output, N>,
+    A: Parser<'a, I, OA, E, S>,
+    B: Parser<'a, I, OB, E, S>,
+    C: ContainerExactly<OA, N>,
 {
-    type Output = [A::Output; N];
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    // FIXME: why parse result output is not C ?
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, [OA; N], E> {
         if self.allow_leading {
             let before_separator = inp.save();
             if let Err(_) = self.separator.go::<Check>(inp) {
