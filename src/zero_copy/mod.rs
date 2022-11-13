@@ -440,7 +440,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn or<B>(self, other: B) -> Or<Self, B, O>
+    fn or<B>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
         B: Parser<'a, I, O, E, S>,
@@ -448,7 +448,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         Or {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
         }
     }
 
