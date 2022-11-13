@@ -19,18 +19,16 @@ impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, F, O> Parser<'a, I, E, S> for MapSlice<A, F, E, S>
+impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapSlice<A, F, E, S>
 where
     I: Input + SliceInput + ?Sized,
     E: Error<I>,
     S: 'a,
     I::Slice: 'a,
-    A: Parser<'a, I, E, S>,
+    A: Parser<'a, I, O, E, S>,
     F: Fn(&'a I::Slice) -> O,
 {
-    type Output = O;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<Check>(inp)?;
         let after = inp.save();
@@ -56,17 +54,15 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
     }
 }
 
-impl<'a, A, I, E, S, F> Parser<'a, I, E, S> for Filter<A, F>
+impl<'a, A, I, O, E, S, F> Parser<'a, I, O, E, S> for Filter<A, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, E, S>,
-    F: Fn(&A::Output) -> bool,
+    A: Parser<'a, I, O, E, S>,
+    F: Fn(&O) -> bool,
 {
-    type Output = A::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             if (self.filter)(&out) {
