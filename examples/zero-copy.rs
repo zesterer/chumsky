@@ -1,6 +1,6 @@
 use chumsky::zero_copy::prelude::*;
 
-fn parser() -> impl for<'a> Parser<'a, str, Rich<str>, Output = char> {
+fn parser() -> impl for<'a> Parser<'a, str, char, Rich<str>> {
     just('a').or(just('b'))
 }
 

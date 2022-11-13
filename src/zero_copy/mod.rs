@@ -773,7 +773,7 @@ fn zero_copy() {
     //     Branch(Box<Self>),
     // }
 
-    // fn parser2() -> impl Parser<'static, str, Output = TokenTest> {
+    // fn parser2() -> impl Parser<'static, str, TokenTest> {
     //     recursive(|token| {
     //         token
     //             .delimited_by(just('c'), just('c'))
@@ -793,7 +793,7 @@ fn zero_copy() {
 
     type Span = (FileId, Range<usize>);
 
-    fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, Output = [(Span, Token<'a>); 6]>
+    fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, [(Span, Token<'a>); 6]>
     {
         let ident = any()
             .filter(|c: &char| c.is_alphanumeric())
@@ -834,7 +834,7 @@ fn zero_copy() {
 fn zero_copy_repetition() {
     use self::prelude::*;
 
-    fn parser<'a>() -> impl Parser<'a, str, Output = Vec<u64>> {
+    fn parser<'a>() -> impl Parser<'a, str, Vec<u64>> {
         any()
             .filter(|c: &char| c.is_ascii_digit())
             .repeated()
@@ -870,7 +870,7 @@ fn zero_copy_repetition() {
 fn zero_copy_group() {
     use self::prelude::*;
 
-    fn parser<'a>() -> impl Parser<'a, str, Output = (&'a str, u64, char)> {
+    fn parser<'a>() -> impl Parser<'a, str, (&'a str, u64, char)> {
         group((
             any()
                 .filter(|c: &char| c.is_ascii_alphabetic())
@@ -912,7 +912,7 @@ fn regex_parser() {
     use self::prelude::*;
     use self::regex::*;
 
-    fn parser<'a, C: Char>() -> impl Parser<'a, C::Slice, Output = Vec<&'a C::Slice>> {
+    fn parser<'a, C: Char>() -> impl Parser<'a, C::Slice, Vec<&'a C::Slice>> {
         regex("[a-zA-Z_][a-zA-Z0-9_]*")
             .padded()
             .repeated()
