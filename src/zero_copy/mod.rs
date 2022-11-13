@@ -324,7 +324,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn ignore_then<B: Parser<'a, I, E, S>>(self, other: B) -> IgnoreThen<Self, B, E, S>
+    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, E, S>
     where
         Self: Sized,
     {
@@ -335,7 +335,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_ignore<B: Parser<'a, I, E, S>>(self, other: B) -> ThenIgnore<Self, B, E, S>
+    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, E, S>
     where
         Self: Sized,
     {
@@ -346,7 +346,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn then_with<B: Parser<'a, I, E, S>, F: Fn(O) -> B>(
+    fn then_with<U, B: Parser<'a, I, U, E, S>, F: Fn(O) -> B>(
         self,
         then: F,
     ) -> ThenWith<Self, B, F, I, E, S>
@@ -386,9 +386,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     Some("abcd]=]efgh]===]ijkl"),
     /// );
     /// ```
-    fn and_is<B: Parser<'a, I, E, S>>(self, other: B) -> AndIs<Self, B>
+    fn and_is<U, B>(self, other: B) -> AndIs<Self, B>
     where
         Self: Sized,
+        B: Parser<'a, I, U, E, S>,
     {
         AndIs {
             parser_a: self,
@@ -396,13 +397,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn delimited_by<B: Parser<'a, I, E, S>, C: Parser<'a, I, E, S>>(
+    fn delimited_by<U, V, B, C>(
         self,
         start: B,
         end: C,
     ) -> DelimitedBy<Self, B, C>
     where
         Self: Sized,
+        B: Parser<'a, I, U, E, S>,
+        C: Parser<'a, I, V, E, S>,
     {
         DelimitedBy {
             parser: self,
@@ -411,9 +414,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn padded_by<B: Parser<'a, I, E, S>>(self, padding: B) -> PaddedBy<Self, B>
+    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B>
     where
         Self: Sized,
+        B: Parser<'a, I, U, E, S>,
     {
         PaddedBy {
             parser: self,
@@ -421,9 +425,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn or<B: Parser<'a, I, E, S, Output = O>>(self, other: B) -> Or<Self, B>
+    fn or<B>(self, other: B) -> Or<Self, B>
     where
-        Self: Sized,
+        Self: Sized, B: Parser<'a, I, O, E, S, Output = O>
     {
         Or {
             parser_a: self,
@@ -512,9 +516,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn separated_by<B: Parser<'a, I, E, S>>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, I, (), E, S>
     where
         Self: Sized,
+        B: Parser<'a, I, U, E, S>,
     {
         SeparatedBy {
             parser: self,
@@ -527,12 +532,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn separated_by_exactly<B: Parser<'a, I, E, S>, const N: usize>(
+    fn separated_by_exactly<U, B, const N: usize>(
         self,
         separator: B,
     ) -> SeparatedByExactly<Self, B, (), N>
     where
         Self: Sized,
+        B: Parser<'a, I, U, E, S>,
     {
         SeparatedByExactly {
             parser: self,
@@ -545,30 +551,30 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 
     fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
     where
-        Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
+        Self: Parser<'a, I, (A, B), E, S> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
         F: Fn(A::Item, B) -> B,
-    {
-        Foldr {
-            parser: self,
-            folder: f,
-            phantom: PhantomData,
+        {
+            Foldr {
+                parser: self,
+                folder: f,
+                phantom: PhantomData,
+            }
         }
-    }
 
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
     where
-        Self: Parser<'a, I, E, S, Output = (A, B)> + Sized,
+        Self: Parser<'a, I, (A, B), E, S> + Sized,
         B: IntoIterator,
         F: Fn(A, B::Item) -> A,
-    {
-        Foldl {
-            parser: self,
-            folder: f,
-            phantom: PhantomData,
+        {
+            Foldl {
+                parser: self,
+                folder: f,
+                phantom: PhantomData,
+            }
         }
-    }
 
     fn rewind(self) -> Rewind<Self>
     where
@@ -595,7 +601,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
-    fn recover_with<F: Parser<'a, I, E, S, Output = O>>(
+    fn recover_with<F: Parser<'a, I, O, E, S>>(
         self,
         fallback: F,
     ) -> RecoverWith<Self, F>
@@ -612,46 +618,46 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     where
         Self: Sized,
         F: Fn(E) -> E,
-    {
-        MapErr {
-            parser: self,
-            mapper: f,
+        {
+            MapErr {
+                parser: self,
+                mapper: f,
+            }
         }
-    }
 
     fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
     where
         Self: Sized,
         F: Fn(E, I::Span) -> E,
-    {
-        MapErrWithSpan {
-            parser: self,
-            mapper: f,
+        {
+            MapErrWithSpan {
+                parser: self,
+                mapper: f,
+            }
         }
-    }
 
     fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
     where
         Self: Sized,
         F: Fn(E, I::Span, &mut S) -> E,
-    {
-        MapErrWithState {
-            parser: self,
-            mapper: f,
+        {
+            MapErrWithState {
+                parser: self,
+                mapper: f,
+            }
         }
-    }
 
     // TODO: Finish implementing this once full error recovery is implemented
     /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
-    where
-        Self: Sized,
-        F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
-    {
-        Validate {
-            parser: self,
-            validator: f,
-        }
-    }*/
+      where
+      Self: Sized,
+      F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
+      {
+      Validate {
+      parser: self,
+      validator: f,
+      }
+      }*/
 
     fn collect<C>(self) -> Map<Self, fn(O) -> C>
     where
@@ -667,7 +673,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         Self: Sized,
         O: Chain<T>,
         U: Chain<T>,
-        P: Parser<'a, I, E, S, Output = U>,
+        P: Parser<'a, I, U, E, S>,
     {
         self.then(other).map(|(a, b)| {
             let mut v = Vec::with_capacity(a.len() + b.len());
@@ -681,12 +687,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     where
         Self: Sized,
         F: Fn(E) -> Result<O, E>,
-    {
-        OrElse {
-            parser: self,
-            or_else: f,
+        {
+            OrElse {
+                parser: self,
+                or_else: f,
+            }
         }
-    }
 
     fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>>
     where
@@ -699,7 +705,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 
     fn unwrapped<U, E1>(self) -> Map<Self, fn(Result<U, E1>) -> U>
     where
-        Self: Sized + Parser<'a, I, E, S, Output = Result<U, E1>>,
+        Self: Sized + Parser<'a, I, Result<U, E1>, E, S>,
         E1: fmt::Debug,
     {
         self.map(|o| o.unwrap())
@@ -716,7 +722,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 }
 
 pub struct Boxed<'a, I: ?Sized, O, E, S = ()> {
-    inner: Rc<dyn Parser<'a, I, E, S, Output = O> + 'a>,
+    inner: Rc<dyn Parser<'a, I, O, E, S, Output = O> + 'a>,
 }
 
 impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
@@ -727,14 +733,12 @@ impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
     }
 }
 
-impl<'a, I, E, S, O> Parser<'a, I, E, S> for Boxed<'a, I, O, E, S>
+impl<'a, I, E, S, O> Parser<'a, I, O, E, S> for Boxed<'a, I, O, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = O;
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
         M::invoke(&*self.inner, inp)
     }
@@ -852,19 +856,19 @@ fn zero_copy_group() {
 
     fn parser<'a>() -> impl Parser<'a, str, Output = (&'a str, u64, char)> {
         group((
-            any()
+                any()
                 .filter(|c: &char| c.is_ascii_alphabetic())
                 .repeated()
                 .at_least(1)
                 .map_slice(|s: &str| s)
                 .padded(),
-            any()
+                any()
                 .filter(|c: &char| c.is_ascii_digit())
                 .repeated()
                 .at_least(1)
                 .map_slice(|s: &str| s.parse::<u64>().unwrap())
                 .padded(),
-            any().filter(|c: &char| !c.is_whitespace()).padded(),
+                any().filter(|c: &char| !c.is_whitespace()).padded(),
         ))
     }
 
