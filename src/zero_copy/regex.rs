@@ -12,7 +12,7 @@ pub fn regex<C: Char, I: ?Sized, E, S>(pattern: &str) -> Regex<C, I, E, S> {
     }
 }
 
-impl<'a, C, I, E, S> Parser<'a, I, E, S> for Regex<C, I, E, S>
+impl<'a, C, I, E, S> Parser<'a, I, &'a C::Slice, E, S> for Regex<C, I, E, S>
 where
     C: Char,
     C::Slice: 'a,
@@ -20,9 +20,7 @@ where
     E: Error<I>,
     S: 'a,
 {
-    type Output = &'a C::Slice;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, &'a C::Slice, E> {
         let before = inp.save();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
@@ -40,5 +38,5 @@ where
             })
     }
 
-    go_extra!();
+    go_extra!(&'a C::Slice);
 }
