@@ -5,12 +5,12 @@ enum RecursiveInner<T: ?Sized> {
     Unowned(Weak<T>),
 }
 
-type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, O, E, S, Output = O> + 'a>>;
+type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>;
 
-pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, O, E, S, Output = O> + 'a;
+pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, O, E, S> + 'a;
 
 pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
-    inner: OnceCell<Box<dyn Parser<'a, I, O, E, S, Output = O> + 'a>>,
+    inner: OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>,
 }
 
 pub struct Recursive<P: ?Sized> {

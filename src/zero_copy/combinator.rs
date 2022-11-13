@@ -1213,7 +1213,7 @@ where
                         }
 
                         // SAFETY: All entries with an index < i are filled
-                        break Ok(M::array::<A::Output, N>(unsafe {
+                        break Ok(M::array::<OA, N>(unsafe {
                             MaybeUninit::array_assume_init(output)
                         }));
                     } else {

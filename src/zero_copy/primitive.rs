@@ -337,7 +337,7 @@ where
     S: 'a,
     P: Parser<'a, I, OP, E, S>,
 {
-    pub fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, OP, D> {
+    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, OP, D> {
         TakeUntil {
             until: self.until,
             phantom: PhantomData,
