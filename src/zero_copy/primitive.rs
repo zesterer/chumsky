@@ -536,20 +536,20 @@ macro_rules! flatten_map {
 
 macro_rules! impl_group_for_tuple {
     () => {};
-    ($head:ident $($X:ident)*) => {
-        impl_group_for_tuple!($($X)*);
-        impl_group_for_tuple!(~ $head $($X)*);
+    ($head:ident $ohead:ident $($X:ident $O:ident)*) => {
+        impl_group_for_tuple!($($X $O)*);
+        impl_group_for_tuple!(~ $head $ohead $($X $O)*);
     };
-    (~ $($X:ident)*) => {
+    (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X,)* $(O$X),*> Parser<'a, I, ($(O$X),*), E, S> for Group<($($X,)*)>
+        impl<'a, I, E, S, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E, S> for Group<($($X,)*)>
         where
             I: Input + ?Sized,
             E: Error<I>,
             S: 'a,
-            $($X: Parser<'a, I, O$X, E, S>),*
+            $($X: Parser<'a, I, $O, E, S>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, ($(O$X),*), E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, ($($O,)*), E> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
@@ -559,10 +559,36 @@ macro_rules! impl_group_for_tuple {
                 Ok(flatten_map!(<M> $($X)*))
             }
 
-            go_extra!(($(O$X),*));
+            go_extra!(($($O,)*));
         }
     };
 }
 
-// FIXME: uncomment and fix trait bounds!! I(bew) don't know how to write advanced macros like this
-//impl_group_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_group_for_tuple! {
+    A_ OA
+    B_ OB
+    C_ OC
+    D_ OD
+    E_ OE
+    F_ OF
+    G_ OG
+    H_ OH
+    I_ OI
+    J_ OJ
+    K_ OK
+    L_ OL
+    M_ OM
+    N_ ON
+    O_ OO
+    P_ OP
+    Q_ OQ
+    R_ OR
+    S_ OS
+    T_ OT
+    U_ OU
+    V_ OV
+    W_ OW
+    X_ OX
+    Y_ OY
+    Z_ OZ
+}
