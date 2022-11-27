@@ -1397,6 +1397,14 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
         #[allow(deprecated)]
         self.parse_inner(d, s)
     }
+
+    fn boxed<'b>(self) -> BoxedParser<'b, I, O, Self::Error>
+    where
+        Self: Sized + 'b,
+    {
+        // Avoid boxing twice.
+        self
+    }
 }
 
 /// Create a parser that selects one or more input patterns and map them to an output value.
