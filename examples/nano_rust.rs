@@ -354,6 +354,8 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .or(raw_expr.clone())
             .then(just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| {
+                // This allows creating a span that covers the entire Then expression.
+                // b_end is the end of b if it exists, otherwise it is the end of a.
                 let a_start = a.1.start;
                 let b_end = b.as_ref().map(|b| b.1.end).unwrap_or(a.1.end);
                 (
@@ -361,6 +363,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                         Box::new(a),
                         Box::new(match b {
                             Some(b) => b,
+                            // Since there is no b expression then its span is empty.
                             None => (Expr::Value(Value::Null), b_end..b_end),
                         }),
                     ),
