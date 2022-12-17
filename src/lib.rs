@@ -60,7 +60,7 @@ pub mod prelude {
             any, choice, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until,
             todo,
         },
-        recovery::{nested_delimiters, skip_then_retry_until, skip_until},
+        recovery::{nested_delimiters, skip_parser, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         select,
         span::Span as _,

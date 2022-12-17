@@ -313,6 +313,66 @@ pub fn nested_delimiters<I: PartialEq, F, const N: usize>(
     NestedDelimiters(start, end, others, fallback)
 }
 
+/// See [`skip_parser`].
+#[derive(Copy, Clone)]
+pub struct SkipParser<R>(pub(crate) R);
+
+impl<I: Clone + PartialEq, O, R: Parser<I, O, Error = E>, E: Error<I>> Strategy<I, O, E>
+    for SkipParser<R>
+{
+    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
+        &self,
+        mut a_errors: Vec<Located<I, P::Error>>,
+        a_err: Located<I, P::Error>,
+        _parser: P,
+        debugger: &mut D,
+        stream: &mut StreamOf<I, P::Error>,
+    ) -> PResult<I, O, P::Error> {
+        a_errors.push(a_err);
+
+        let (mut errors, res) = self.0.parse_inner(debugger, stream);
+        a_errors.append(&mut errors);
+        (a_errors, res)
+    }
+}
+
+/// A recovery mode that applies the provided recovery parser to determine the content to skip.
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// enum Token {
+///     GoodKeyword,
+///     BadKeyword,
+///     Newline,
+/// }
+///
+/// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// enum AST {
+///     GoodLine,
+///     Error,
+/// }
+///
+/// // The happy path...
+/// let goodline = just::<Token, _, Simple<_>>(Token::GoodKeyword)
+///     .ignore_then(none_of(Token::Newline).repeated().to(AST::GoodLine))
+///     .then_ignore(just(Token::Newline));
+///
+/// // If it fails, swallow everything up to a newline, but only if the line
+/// // didn't contain BadKeyword which marks an alternative parse route that
+/// // we want to accept instead.
+/// let goodline_with_recovery = goodline.recover_with(skip_parser(
+///     none_of([Token::Newline, Token::BadKeyword])
+///         .repeated()
+///         .then_ignore(just(Token::Newline))
+///         .to(AST::Error),
+/// ));
+/// ```
+
+pub fn skip_parser<R>(recovery_parser: R) -> SkipParser<R> {
+    SkipParser(recovery_parser)
+}
+
 /// A parser that includes a fallback recovery strategy should parsing result in an error.
 #[must_use]
 #[derive(Copy, Clone)]
