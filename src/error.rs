@@ -180,6 +180,36 @@ impl<I: fmt::Display, S: fmt::Display> fmt::Display for SimpleReason<I, S> {
     }
 }
 
+/// A type representing zero, one, or many labels applied to an error
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SimpleLabel {
+    Some(&'static str),
+    None,
+    Multi,
+}
+
+impl SimpleLabel {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (SimpleLabel::Some(a), SimpleLabel::Some(b)) if a == b => SimpleLabel::Some(a),
+            (SimpleLabel::Some(_), SimpleLabel::Some(_)) => SimpleLabel::Multi,
+            (SimpleLabel::Multi, _) => SimpleLabel::Multi,
+            (_, SimpleLabel::Multi) => SimpleLabel::Multi,
+            (SimpleLabel::None, x) => x,
+            (x, SimpleLabel::None) => x,
+        }
+    }
+}
+
+impl From<SimpleLabel> for Option<&'static str> {
+    fn from(label: SimpleLabel) -> Self {
+        match label {
+            SimpleLabel::Some(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 /// A simple default error type that tracks error spans, expected inputs, and the actual input found at an error site.
 ///
 /// Please note that it uses a [`HashSet`] to remember expected symbols. If you find this to be too slow, you can
@@ -190,7 +220,7 @@ pub struct Simple<I: Hash + Eq, S = Range<usize>> {
     reason: SimpleReason<I, S>,
     expected: HashSet<Option<I>, RandomState>,
     found: Option<I>,
-    label: Option<&'static str>,
+    label: SimpleLabel,
 }
 
 impl<I: Hash + Eq, S: Clone> Simple<I, S> {
@@ -201,7 +231,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
             reason: SimpleReason::Custom(msg.to_string()),
             expected: HashSet::default(),
             found: None,
-            label: None,
+            label: SimpleLabel::None,
         }
     }
 
@@ -227,7 +257,7 @@ impl<I: Hash + Eq, S: Clone> Simple<I, S> {
 
     /// Returns the error's label, if any.
     pub fn label(&self) -> Option<&'static str> {
-        self.label
+        self.label.into()
     }
 
     /// Map the error's inputs using the given function.
@@ -266,7 +296,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
             reason: SimpleReason::Unexpected,
             expected: expected.into_iter().collect(),
             found,
-            label: None,
+            label: SimpleLabel::None,
         }
     }
 
@@ -285,12 +315,17 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
             },
             expected: core::iter::once(Some(expected)).collect(),
             found,
-            label: None,
+            label: SimpleLabel::None,
         }
     }
 
     fn with_label(mut self, label: Self::Label) -> Self {
-        self.label.get_or_insert(label);
+        match self.label {
+            SimpleLabel::Some(_) => {}
+            _ => {
+                self.label = SimpleLabel::Some(label);
+            }
+        }
         self
     }
 
@@ -301,6 +336,7 @@ impl<I: Hash + Eq, S: Span + Clone + fmt::Debug> Error<I> for Simple<I, S> {
             (_, SimpleReason::Unclosed { .. }) => other.reason,
             _ => self.reason,
         };
+        self.label = self.label.merge(other.label);
         for expected in other.expected {
             self.expected.insert(expected);
         }
