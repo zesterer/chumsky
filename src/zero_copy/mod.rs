@@ -468,7 +468,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// }
     ///
     /// // Arbitrary text, nested in a tree with { ... } delimiters
-    /// let tree = recursive::<_, Simple<str>, (), _, _>(|tree| {
+    /// let tree = recursive::<_, _, Simple<str>, (), _, _>(|tree| {
     ///     let text = any()
     ///         .and_is(one_of("{}").not())
     ///         .repeated()
