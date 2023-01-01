@@ -2,14 +2,39 @@ use super::*;
 use core::mem::MaybeUninit;
 use hashbrown::HashSet;
 
-pub struct MapSlice<A, F, E = (), S = ()> {
+pub struct MapSlice<'a, A, I, O, E, S, F, U>
+where
+    I: Input + SliceInput + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    I::Slice: 'a,
+    A: Parser<'a, I, O, E, S>,
+    F: Fn(&'a I::Slice) -> U,
+{
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<(E, S)>,
+    pub(crate) phantom: PhantomData<(&'a I::Slice, O, E, S)>,
 }
 
-impl<A: Copy, F: Copy, E, S> Copy for MapSlice<A, F, E, S> {}
-impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
+impl<'a, A: Copy, I, O, E, S, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, S, F, U>
+where
+    I: Input + SliceInput + Sized,
+    E: Error<I>,
+    S: 'a,
+    I::Slice: 'a,
+    A: Parser<'a, I, O, E, S>,
+    F: Fn(&'a I::Slice) -> U,
+{
+}
+impl<'a, A: Clone, I, O, E, S, F: Clone, U> Clone for MapSlice<'a, A, I, O, E, S, F, U>
+where
+    I: Input + SliceInput + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    I::Slice: 'a,
+    A: Parser<'a, I, O, E, S>,
+    F: Fn(&'a I::Slice) -> U,
+{
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -19,16 +44,16 @@ impl<A: Clone, F: Clone, E, S> Clone for MapSlice<A, F, E, S> {
     }
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapSlice<A, F, E, S>
+impl<'a, I, O, E, S, A, F, U> Parser<'a, I, U, E, S> for MapSlice<'a, A, I, O, E, S, F, U>
 where
     I: Input + SliceInput + ?Sized,
     E: Error<I>,
     S: 'a,
     I::Slice: 'a,
     A: Parser<'a, I, O, E, S>,
-    F: Fn(&'a I::Slice) -> O,
+    F: Fn(&'a I::Slice) -> U,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E> {
         let before = inp.save();
         self.parser.go::<Check>(inp)?;
         let after = inp.save();
@@ -36,7 +61,7 @@ where
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
 
-    go_extra!(O);
+    go_extra!(U);
 }
 
 pub struct Filter<A, F> {
@@ -716,7 +741,9 @@ pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
 }
 
 impl<A: Copy, B: Copy, OA, OB, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, OA, OB, I, C, E, S> {}
-impl<A: Clone, B: Clone, OA, OB, I: ?Sized, C, E, S> Clone for SeparatedBy<A, B, OA, OB, I, C, E, S> {
+impl<A: Clone, B: Clone, OA, OB, I: ?Sized, C, E, S> Clone
+    for SeparatedBy<A, B, OA, OB, I, C, E, S>
+{
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1176,7 +1203,8 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
 }
 
 // FIXME: why parser output is not C ?
-impl<'a, I, E, S, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E, S> for SeparatedByExactly<A, B, OB, C, N>
+impl<'a, I, E, S, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E, S>
+    for SeparatedByExactly<A, B, OB, C, N>
 where
     I: Input + ?Sized,
     E: Error<I>,
