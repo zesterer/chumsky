@@ -225,7 +225,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
 
-    fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<Self, F, E, S>
+    fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, S, F, U>
     where
         Self: Sized,
         I: SliceInput,
@@ -684,7 +684,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         self.map(|items| C::from_iter(items.into_iter()))
     }
 
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, O, U, E, S>, (O, U), fn((O, U)) -> Vec<T>>
+    fn chain<T, U, P>(
+        self,
+        other: P,
+    ) -> Map<Then<Self, P, O, U, E, S>, (O, U), fn((O, U)) -> Vec<T>>
     where
         Self: Sized,
         O: Chain<T>,
@@ -793,8 +796,7 @@ fn zero_copy() {
 
     type Span = (FileId, Range<usize>);
 
-    fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, [(Span, Token<'a>); 6]>
-    {
+    fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, [(Span, Token<'a>); 6]> {
         let ident = any()
             .filter(|c: &char| c.is_alphanumeric())
             .repeated()
@@ -829,6 +831,8 @@ fn zero_copy() {
         ),
     );
 }
+
+use combinator::MapSlice;
 
 #[test]
 fn zero_copy_repetition() {
