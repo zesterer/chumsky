@@ -110,8 +110,6 @@ impl<T> Chain<T> for Vec<Option<T>> {
         self.iter().map(Chain::<T>::len).sum()
     }
     fn append_to(self, v: &mut Vec<T>) {
-        self
-            .into_iter()
-            .for_each(|x| x.append_to(v));
+        self.into_iter().for_each(|x| x.append_to(v));
     }
 }

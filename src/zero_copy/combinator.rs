@@ -292,7 +292,7 @@ where
 
 pub struct Ignored<A, OA> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<OA>
+    pub(crate) phantom: PhantomData<OA>,
 }
 
 impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Ignored<A, OA>
@@ -303,9 +303,7 @@ where
     A: Parser<'a, I, OA, E, S>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
-        self.parser
-            .go::<Check>(inp)
-            .map(|_| M::bind(|| ()))
+        self.parser.go::<Check>(inp).map(|_| M::bind(|| ()))
     }
 
     go_extra!(());
