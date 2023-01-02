@@ -142,7 +142,7 @@ where
 ///
 /// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
 ///
-/// The output type of this parser is `Vec<()>`.
+/// The output type of this parser is `()`.
 ///
 /// # Examples
 ///
@@ -151,20 +151,21 @@ where
 /// let whitespace = text::whitespace::<_, _, Simple<str>>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse("\t \n  \r k").0, Some("\t \n  \r "));
+/// assert_eq!(whitespace.parse("\t \n  \r ").0, Some(()));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse("").0, Some(""));
+/// assert_eq!(whitespace.parse("").0, Some(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>>(
-) -> impl Parser<'a, I, &'a I::Slice, E>
+) -> Repeated<impl Parser<'a, I, (), E, ()>, (), I, (), E, ()>
 where
     I::Token: Char,
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
+        .ignored()
         .repeated()
-        .map_slice(|s| s)
 }
+
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
 ///
@@ -221,8 +222,8 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
-/// when `C` is [`u8`]).
+/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -259,8 +260,8 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
-/// when `C` is [`u8`]).
+/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
