@@ -1381,16 +1381,23 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, L: Into<E::Label> + Clone, E: Erro
         // let pre_state = stream.save();
         #[allow(deprecated)]
         let (errors, res) = debugger.invoke(&self.0, stream);
-        let res = res.map_err(|e| {
-            /* TODO: Not this? */
-            /*if e.at > pre_state
-            {*/
-            // Only add the label if we committed to this pattern somewhat
-            e.map(|e| e.with_label(self.1.clone().into()))
-            /*} else {
-                e
-            }*/
-        });
+        let res = res
+            .map(|(o, alt)| {
+                (
+                    o,
+                    alt.map(|l| l.map(|e| e.with_label(self.1.clone().into()))),
+                )
+            })
+            .map_err(|e| {
+                /* TODO: Not this? */
+                /*if e.at > pre_state
+                {*/
+                // Only add the label if we committed to this pattern somewhat
+                e.map(|e| e.with_label(self.1.clone().into()))
+                /*} else {
+                    e
+                }*/
+            });
         (
             errors
                 .into_iter()
