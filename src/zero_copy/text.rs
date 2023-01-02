@@ -1,6 +1,9 @@
 use crate::zero_copy::prelude::*;
 
-use super::{primitive::{Any, Seq}, *};
+use super::{
+    primitive::{Any, Seq},
+    *,
+};
 
 pub trait Char: Sized + Copy + PartialEq {
     type Slice: ?Sized + StrInput<Self> + 'static;
@@ -153,13 +156,12 @@ where
 /// assert_eq!(whitespace.parse(""), Ok(vec![]));
 /// ```
 pub fn whitespace<'a, I: Input, E: Error<I>>(
-) -> Repeated<Filter<Any<I, E>, impl Fn(&I::Token) -> bool>, I::Token, I, (), E> 
+) -> Repeated<Filter<Any<I, E>, impl Fn(&I::Token) -> bool>, I::Token, I, (), E>
 where
     I::Token: Char,
 {
     any().filter(|c: &I::Token| c.is_whitespace()).repeated()
 }
-
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
 ///
@@ -193,10 +195,9 @@ where
 /// assert_eq!(newline.parse("\u{2029}"), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: Error<I> + 'a>(
-) -> impl Parser<'a, I, (), E> 
+pub fn newline<'a, I: Input + ?Sized, E: Error<I> + 'a>() -> impl Parser<'a, I, (), E>
 where
-    I::Token: Char
+    I::Token: Char,
 {
     just(I::Token::from_ascii(b'\r'))
         .or_not()
@@ -239,9 +240,9 @@ where
 #[must_use]
 pub fn digits<'a, I: StrInput<C>, C: Char, E: Error<I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone 
-{
-    any().filter(move |c: &C| c.is_digit(radix))
+) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone {
+    any()
+        .filter(move |c: &C| c.is_digit(radix))
         .repeated()
         .at_least(1)
         .map_slice(|x| x)
@@ -281,9 +282,9 @@ pub fn digits<'a, I: StrInput<C>, C: Char, E: Error<I>>(
 #[must_use]
 pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E>
-{
-    any().filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
+) -> impl Parser<'a, I, &'a C::Slice, E> {
+    any()
+        .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
         .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
         .ignored()
@@ -299,11 +300,14 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>() -> impl Parser<'a, I, &'a C::Slice, E>
-{
-    any().filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
+pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
+) -> impl Parser<'a, I, &'a C::Slice, E> {
+    any()
+        .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
-            any().filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_').repeated()
+            any()
+                .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                .repeated(),
         )
         .map_slice(|x| x)
 }
@@ -329,11 +333,11 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>() -> impl Parser
 pub fn keyword<'a, K: Seq<C> + 'a, I: StrInput<C>, C: Char, E: Error<I> + 'a>(
     keyword: &'a K,
 ) -> impl Parser<'a, I, (), E>
-where &'a K: Seq<C>
+where
+    &'a K: Seq<C>,
 {
     ident().ignored().and_is(just(keyword)).ignored()
 }
-
 
 /// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
 ///
@@ -388,10 +392,7 @@ where
         let mut nesting = vec![("", Vec::new(), None)];
         for (mut indent, (mut line, line_span)) in lines {
             let mut i = 0;
-            while let Some(tail) = nesting
-                .get(i)
-                .and_then(|(n, _, _)| indent.strip_prefix(n))
-            {
+            while let Some(tail) = nesting.get(i).and_then(|(n, _, _)| indent.strip_prefix(n)) {
                 indent = tail;
                 i += 1;
             }
