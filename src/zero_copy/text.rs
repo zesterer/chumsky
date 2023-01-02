@@ -166,6 +166,35 @@ where
         .repeated()
 }
 
+/// A parser that accepts (and ignores) any number of inline whitespace characters.
+///
+/// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
+///
+/// The output type of this parser is `()`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>>();
+///
+/// // Any amount of inline whitespace is parsed...
+/// assert_eq!(inline_whitespace.parse("\t  ").0, Some(()));
+/// // ...including none at all!
+/// assert_eq!(inline_whitespace.parse("").0, Some(()));
+/// // ... but not newlines
+/// assert_eq!(inline_whitespace.at_least(1).parse("\n\r").0, None);
+/// ```
+pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>>(
+) -> Repeated<impl Parser<'a, I, (), E, ()>, (), I, (), E, ()>
+where
+    I::Token: Char,
+{
+    any()
+        .filter(|c: &I::Token| c.is_inline_whitespace())
+        .ignored()
+        .repeated()
+}
 
 /// A parser that accepts (and ignores) any newline characters or character sequences.
 ///
