@@ -75,6 +75,15 @@ impl<T: Clone> Seq<T> for T {
     }
 }
 
+impl<'b, T: Clone> Seq<T> for &'b [T] {
+    type Iter<'a> = core::iter::Cloned<core::slice::Iter<'a, T>>
+    where
+        Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        (self as &[T]).iter().cloned()
+    }
+}
+
 impl<T: Clone, const N: usize> Seq<T> for [T; N] {
     type Iter<'a> = core::array::IntoIter<T, N>
     where
