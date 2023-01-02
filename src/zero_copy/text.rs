@@ -1,6 +1,9 @@
-use crate::{text::newline, zero_copy::prelude::*};
+use crate::zero_copy::prelude::*;
 
-use super::{primitive::Any, *};
+use super::{
+    primitive::{Any, Seq},
+    *,
+};
 
 pub trait Char: Sized + Copy + PartialEq {
     type Slice: ?Sized + StrInput<Self> + 'static;
@@ -144,36 +147,65 @@ where
 /// # Examples
 ///
 /// ```
-/// # use chumsky::prelude::*;
-/// let whitespace = text::whitespace::<_, Simple<char>>();
+/// # use chumsky::zero_copy::prelude::*;
+/// let whitespace = text::whitespace::<_, _, Simple<str>>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse("\t \n  \r "), Ok(vec![(), (), (), (), (), (), ()]));
+/// assert_eq!(whitespace.parse("\t \n  \r k").0, Some("\t \n  \r "));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse(""), Ok(vec![]));
+/// assert_eq!(whitespace.parse("").0, Some(""));
 /// ```
-pub fn whitespace<'a, C: Char>(
-) -> Repeated<Filter<Any<C::Slice, (), ()>, impl Fn(&C) -> bool>, C, C::Slice> {
-    any().filter(|c: &C| c.is_whitespace()).repeated()
+pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>>(
+) -> impl Parser<'a, I, &'a I::Slice, E>
+where
+    I::Token: Char,
+{
+    any()
+        .filter(|c: &I::Token| c.is_whitespace())
+        .repeated()
+        .map_slice(|s| s)
 }
 
-/// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
+/// A parser that accepts (and ignores) any newline characters or character sequences.
 ///
-/// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
+/// The output type of this parser is `()`.
+///
+/// This parser is quite extensive, recognising:
+///
+/// - Line feed (`\n`)
+/// - Carriage return (`\r`)
+/// - Carriage return + line feed (`\r\n`)
+/// - Vertical tab (`\x0B`)
+/// - Form feed (`\x0C`)
+/// - Next line (`\u{0085}`)
+/// - Line separator (`\u{2028}`)
+/// - Paragraph separator (`\u{2029}`)
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let newline = text::newline::<str, Simple<str>>()
+///     .then_ignore(end());
+///
+/// assert_eq!(newline.parse("\n").0, Some(()));
+/// assert_eq!(newline.parse("\r").0, Some(()));
+/// assert_eq!(newline.parse("\r\n").0, Some(()));
+/// assert_eq!(newline.parse("\x0B").0, Some(()));
+/// assert_eq!(newline.parse("\x0C").0, Some(()));
+/// assert_eq!(newline.parse("\u{0085}").0, Some(()));
+/// assert_eq!(newline.parse("\u{2028}").0, Some(()));
+/// assert_eq!(newline.parse("\u{2029}").0, Some(()));
+/// ```
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: Error<str> + 'a>(
-    token: T,
-    make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, E> + Clone + 'a
+pub fn newline<'a, I: Input + ?Sized, E: Error<I> + 'a>() -> impl Parser<'a, I, (), E>
 where
-    Tok: Clone + 'a,
-    T: Parser<'a, str, Tok, E> + Clone + 'a,
-    F: Fn(Vec<Tok>, Range<usize>) -> Tok + Clone + 'a,
+    I::Token: Char,
 {
-    let newline = just(char::from_ascii(b'\r'))
+    just(I::Token::from_ascii(b'\r'))
         .or_not()
-        .ignore_then(just(char::from_ascii(b'\n')))
-        .or(any().filter(|c: &char| {
+        .ignore_then(just(I::Token::from_ascii(b'\n')))
+        .or(any().filter(|c: &I::Token| {
             [
                 '\r',       // Carriage return
                 '\x0B',     // Vertical tab
@@ -183,30 +215,144 @@ where
                 '\u{2029}', // Paragraph separator
             ]
             .contains(&c.to_char())
-        }));
+        }))
+        .ignored()
+}
 
+/// A parser that accepts one or more ASCII digits.
+///
+/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
+/// when `C` is [`u8`]).
+///
+/// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let digits = text::digits::<'_, _, _, Simple<str>>(10);
+///
+/// assert_eq!(digits.parse("0").0, Some("0"));
+/// assert_eq!(digits.parse("1").0, Some("1"));
+/// assert_eq!(digits.parse("01234").0, Some("01234"));
+/// assert_eq!(digits.parse("98345").0, Some("98345"));
+/// // A string of zeroes is still valid. Use `int` if this is not desirable.
+/// assert_eq!(digits.parse("0000").0, Some("0000"));
+/// assert!(digits.parse("").0.is_none());
+/// ```
+#[must_use]
+pub fn digits<'a, C, I, E>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E>
+where
+    C: Char,
+    I: StrInput<C> + ?Sized,
+    E: Error<I>,
+{
+    any()
+        .filter(move |c: &C| c.is_digit(radix))
+        .repeated()
+        .at_least(1)
+        .map_slice(|x| x)
+}
+
+/// A parser that accepts a non-negative integer.
+///
+/// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
+/// has length one.
+///
+/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
+/// when `C` is [`u8`]).
+///
+/// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let dec = text::int::<_, _, Simple<str>>(10)
+///     .then_ignore(end());
+///
+/// assert_eq!(dec.parse("0").0, Some("0"));
+/// assert_eq!(dec.parse("1").0, Some("1"));
+/// assert_eq!(dec.parse("1452").0, Some("1452"));
+/// // No leading zeroes are permitted!
+/// assert!(dec.parse("04").0.is_none());
+///
+/// let hex = text::int::<_, _, Simple<str>>(16)
+///     .then_ignore(end());
+///
+/// assert_eq!(hex.parse("2A").0, Some("2A"));
+/// assert_eq!(hex.parse("d").0, Some("d"));
+/// assert_eq!(hex.parse("b4").0, Some("b4"));
+/// assert!(hex.parse("0B").0.is_none());
+/// ```
+///
+#[must_use]
+pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
+    radix: u32,
+) -> impl Parser<'a, I, &'a C::Slice, E> {
+    any()
+        .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
+        .map(Some)
+        .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
+        .ignored()
+        .or(just(C::digit_zero()).ignored())
+        .map_slice(|x| x)
+}
+
+/// A parser that accepts a C-style identifier.
+///
+/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
+/// when `C` is [`u8`]).
+///
+/// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
+/// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
+#[must_use]
+pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
+) -> impl Parser<'a, I, &'a C::Slice, E> {
+    any()
+        .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
+        .then(
+            any()
+                .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                .repeated(),
+        )
+        .map_slice(|x| x)
+}
+
+/// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
+///
+/// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
+#[must_use]
+pub fn semantic_indentation<'a, Tok, T, F, E: Error<str> + 'a>(
+    token: T,
+    make_group: F,
+) -> impl Parser<'a, str, Vec<Tok>, E> + 'a
+where
+    Tok: Clone + 'a,
+    T: Parser<'a, str, Tok, E> + Clone + 'a,
+    F: Fn(Vec<Tok>, Range<usize>) -> Tok + Clone + 'a,
+{
     let line_ws = any::<str, E, _>().filter(|c: &char| c.is_inline_whitespace());
 
     let line = token
         .padded_by(line_ws.repeated())
         .repeated()
-        .collect::<Vec<_>>()
-        .padded()
         .collect::<Vec<_>>();
 
     let lines = line_ws
         .repeated()
-        .collect::<String>()
+        .map_slice(|x| x)
         .then(
             line.collect::<Vec<_>>()
                 .map_with_span(|line, span| (line, span)),
         )
-        .separated_by(newline.padded())
-        .collect::<Vec<_>>();
+        .then_ignore(line_ws.repeated())
+        .separated_by(newline())
+        .collect();
 
-    lines.map(move |lines| {
-        fn collapse<Tok, F>(
-            mut tree: Vec<(String, Vec<Tok>, Option<Range<usize>>)>,
+    lines.map(move |lines: Vec<(&str, (Vec<Tok>, Range<usize>))>| {
+        fn collapse<'b, Tok, F>(
+            mut tree: Vec<(&'b str, Vec<Tok>, Option<Range<usize>>)>,
             make_group: &F,
         ) -> Option<Tok>
         where
@@ -223,14 +369,10 @@ where
             None
         }
 
-        let mut nesting = vec![(String::new(), Vec::new(), None)];
+        let mut nesting = vec![("", Vec::new(), None)];
         for (mut indent, (mut line, line_span)) in lines {
-            let mut indent = indent.as_str();
             let mut i = 0;
-            while let Some(tail) = nesting
-                .get(i)
-                .and_then(|(n, _, _)| indent.strip_prefix(n.as_str()))
-            {
+            while let Some(tail) = nesting.get(i).and_then(|(n, _, _)| indent.strip_prefix(n)) {
                 indent = tail;
                 i += 1;
             }
@@ -238,7 +380,7 @@ where
                 nesting.last_mut().unwrap().1.push(tail);
             }
             if !indent.is_empty() {
-                nesting.push((indent.to_string(), line, Some(line_span)));
+                nesting.push((indent, line, Some(line_span)));
             } else {
                 nesting.last_mut().unwrap().1.append(&mut line);
             }
