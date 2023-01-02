@@ -1,4 +1,4 @@
-use chumsky::{prelude::*, BoxStream, Flat};
+use chumsky::{zero_copy::prelude::*, BoxStream, Flat};
 use std::ops::Range;
 
 // Represents the different kinds of delimiters we care about
@@ -19,7 +19,7 @@ enum Token {
 }
 
 // The output of the lexer: a recursive tree of nested tokens
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum TokenTree {
     Token(Token),
     Tree(Delim, Vec<Spanned<TokenTree>>),
@@ -30,23 +30,27 @@ type Span = Range<usize>;
 type Spanned<T> = (T, Span);
 
 // A parser that turns pythonic code with semantic whitespace into a token tree
-fn lexer() -> impl Parser<char, Vec<Spanned<TokenTree>>, Error = Simple<char>> {
-    let tt = recursive(|tt| {
+fn lexer<'a>() -> impl Parser<'a, str, Vec<Spanned<TokenTree>>> {
+    let tt = recursive::<'a, str, _, _, _, _, _>(|tt| {
         // Define some atomic tokens
-        let int = text::int(10).from_str().unwrapped().map(Token::Int);
-        let ident = text::ident().map(Token::Ident);
+        let int = text::int::<'a, str, _, _>(10)
+            .from_str()
+            .unwrapped()
+            .map(Token::Int);
+        let ident = text::ident::<'a, str, _, _>().map(|s| Token::Ident(s.to_string()));
         let op = one_of("=.:%,")
             .repeated()
             .at_least(1)
             .collect()
             .map(Token::Op);
 
-        let single_token = int.or(op).or(ident).map(TokenTree::Token);
+        let single_token = int.or(op).or(ident).map(|t| TokenTree::Token(t.clone()));
 
         // Tokens surrounded by parentheses get turned into parenthesised token trees
         let token_tree = tt
             .padded()
             .repeated()
+            .collect()
             .delimited_by(just('('), just(')'))
             .map(|tts| TokenTree::Tree(Delim::Paren, tts));
 
@@ -83,7 +87,7 @@ fn main() {
     let code = include_str!("sample.py");
 
     // First, lex the code into some nested token trees
-    let tts = lexer().parse(code).unwrap();
+    let tts = lexer().parse(code).0.unwrap();
 
     println!("--- Token Trees ---\n{:#?}", tts);
 
