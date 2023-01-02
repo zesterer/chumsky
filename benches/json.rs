@@ -69,15 +69,19 @@ mod chumsky_zero_copy {
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a>() -> impl Parser<'a, [u8], Simple<[u8]>, Output = JsonZero<'a>> {
+    pub fn json<'a>() -> impl Parser<'a, [u8], JsonZero<'a>> {
         recursive(|value| {
-            let digits = any().filter(|b: &u8| b.is_ascii_digit()).repeated();
+            let digits = any()
+                .filter(|b: &u8| b.is_ascii_digit())
+                .repeated()
+                .map_slice(|x| x);
 
             let int = any()
                 .filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
+                .repeated()
                 .then(any().filter(|b: &u8| b.is_ascii_digit()).repeated())
-                .ignored()
-                .or(just(b'0').ignored());
+                .or(just(b'0').map(|_| ((), ())))
+                .ignored();
 
             let frac = just(b'.').then(digits.clone());
 
@@ -94,9 +98,9 @@ mod chumsky_zero_copy {
                 .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
                 .boxed();
 
-            let escape = just(b'\\')
+            let escape: Boxed<[u8], _, _> = just::<u8, _, (), _>(b'\\')
                 .then(choice((
-                    just(b'\\'),
+                    just::<u8, _, _, _>(b'\\'),
                     just(b'/'),
                     just(b'"'),
                     just(b'b').to(b'\x08'),
@@ -162,12 +166,12 @@ mod chumsky {
 
             let exp = one_of(b"eE")
                 .ignore_then(just(b'+').or(just(b'-')).or_not())
-                .chain(text::digits(10));
+                .chain::<u8, _, _>(text::digits(10));
 
             let number = just(b'-')
                 .or_not()
-                .chain(text::int(10))
-                .chain(frac.or_not().flatten())
+                .chain::<u8, _, _>(text::int(10))
+                .chain::<u8, _, _>(frac.or_not().flatten())
                 .chain::<u8, _, _>(exp.or_not().flatten())
                 .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
 
