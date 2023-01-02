@@ -109,12 +109,6 @@ where
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME: try remove 'OA' type parameter?
-    // This phantom seems necessary to have OA as part of impl<.., OA>.
-    // Otherwise it looks like: impl<.., OA> Parser<..> for Map<A, F>
-    // and I get the error [E0207]:
-    // `the type parameter `OA` is not constrained by the impl trait, self type, or predicates`
-    // For some reason it doesn't see that OA is used for 'A', which is mentioned for Map<..>.
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -139,7 +133,6 @@ where
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -168,7 +161,6 @@ where
 pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -198,7 +190,6 @@ where
 pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -228,7 +219,6 @@ where
 pub struct TryMapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -258,7 +248,6 @@ where
 pub struct To<A, OA, O, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) to: O,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
@@ -312,7 +301,6 @@ where
 pub struct Then<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OA, OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
 }
 
@@ -347,7 +335,6 @@ where
 pub struct IgnoreThen<A, B, OA, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
@@ -382,7 +369,6 @@ where
 pub struct ThenIgnore<A, B, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OB, E, S)>,
 }
 
@@ -417,7 +403,6 @@ where
 pub struct ThenWith<A, B, OA, F, I: ?Sized, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<(B, OA, E, S, I)>,
 }
 
@@ -471,7 +456,6 @@ pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
-    // FIXME try remove OB, OC? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OB, OC)>,
 }
 
@@ -498,7 +482,6 @@ where
 pub struct PaddedBy<A, B, OB> {
     pub(crate) parser: A,
     pub(crate) padding: B,
-    // FIXME try remove OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<OB>,
 }
 
@@ -649,7 +632,6 @@ pub struct Repeated<A, OA, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, C, E, S, I)>,
 }
 
@@ -753,7 +735,6 @@ pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    // FIXME try remove OA, OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, OB, C, E, S, I)>,
 }
 
@@ -999,7 +980,6 @@ where
 #[derive(Copy, Clone)]
 pub struct Not<A, OA> {
     pub(crate) parser: A,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<OA>,
 }
 
@@ -1035,7 +1015,6 @@ where
 pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    // FIXME try remove OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<OB>,
 }
 
@@ -1114,7 +1093,6 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 #[derive(Copy, Clone)]
 pub struct RepeatedExactly<A, OA, C, const N: usize> {
     pub(crate) parser: A,
-    // FIXME try remove OA? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OA, C)>,
 }
 
@@ -1182,7 +1160,6 @@ pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
     pub(crate) separator: B,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    // FIXME try remove OB? See comment in Map declaration
     pub(crate) phantom: PhantomData<(OB, C)>,
 }
 
