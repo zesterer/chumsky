@@ -290,7 +290,26 @@ where
     go_extra!(O);
 }
 
-pub type Ignored<A, OA, E = (), S = ()> = To<A, OA, (), E, S>;
+pub struct Ignored<A, OA> {
+    pub(crate) parser: A,
+    pub(crate) phantom: PhantomData<OA>
+}
+
+impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Ignored<A, OA>
+where
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+    A: Parser<'a, I, OA, E, S>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+        self.parser
+            .go::<Check>(inp)
+            .map(|_| M::bind(|| ()))
+    }
+
+    go_extra!(());
+}
 
 pub struct Then<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,

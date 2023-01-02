@@ -307,14 +307,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    fn ignored(self) -> Ignored<Self, E, S>
+    fn ignored(self) -> Ignored<Self, O>
     where
         Self: Sized,
     {
         Ignored {
             parser: self,
-            to: (),
-            phantom: PhantomData,
+            phantom: PhantomData
         }
     }
 
