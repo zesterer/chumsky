@@ -1,7 +1,9 @@
+use core::ops::AddAssign;
+
 use super::*;
 
 pub trait Input {
-    type Offset: Copy + Ord;
+    type Offset: Copy + Ord + AddAssign;
     type Token;
     type Span: Span;
 
@@ -18,6 +20,12 @@ pub trait SliceInput: Input {
     fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice;
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice;
 }
+
+// Implemented by inputs that also implement SliceInput but where the slice has the same type as the underlying struct
+pub trait Slice: SliceInput<Slice = Self>
+{
+}
+
 
 // Implemented by inputs that reference a string slice and use byte indices as their offset.
 pub trait StrInput<C: Char>:
@@ -66,6 +74,8 @@ impl SliceInput for str {
     }
 }
 
+impl Slice for str {}
+
 impl<T: Clone> Input for [T] {
     type Offset = usize;
     type Token = T;
@@ -100,6 +110,8 @@ impl<T: Clone> SliceInput for [T] {
         &self[from]
     }
 }
+
+impl<T: Clone> Slice for [T] {}
 
 pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
 
@@ -159,6 +171,32 @@ pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> {
     marker: Marker<I>,
     state: &'parse mut S,
     errors: Vec<E>,
+}
+
+impl<'a, 'parse, I: Slice + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S> {
+    // used for parser combinators that want to temporarily shrink the input
+    pub(crate) fn with_subslice<T, F>(&mut self, range: Range<Marker<I>>, f: F) -> T where
+        F: Fn(&mut Self) -> T
+    {
+        let mut input = self.slice(range);
+        let mut marker = Marker {
+            pos: 0,
+            offset: input.start(),
+            err_count: self.marker.err_count,
+        };
+
+        std::mem::swap(&mut input, &mut self.input);
+        std::mem::swap(&mut marker, &mut self.marker);
+
+        let res = f(self);
+
+        std::mem::swap(&mut input, &mut self.input);
+        self.marker.pos += marker.pos;
+        self.marker.offset += marker.offset;
+        self.marker.err_count = marker.err_count;
+
+        res
+    }
 }
 
 impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S> {
