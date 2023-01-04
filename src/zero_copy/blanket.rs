@@ -1,20 +1,18 @@
 use super::*;
 
-impl<'a, T, I, E, S> Parser<'a, I, E, S> for &'a T
+impl<'a, T, I, O, E, S> Parser<'a, I, O, E, S> for &'a T
 where
-    T: Parser<'a, I, E, S>,
+    T: Parser<'a, I, O, E, S>,
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = T::Output;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized,
     {
         (*self).go::<M>(inp)
     }
 
-    go_extra!();
+    go_extra!(O);
 }

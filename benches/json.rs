@@ -69,15 +69,21 @@ mod chumsky_zero_copy {
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a>() -> impl Parser<'a, [u8], Simple<[u8]>, Output = JsonZero<'a>> {
+    pub fn json<'a>() -> impl Parser<'a, [u8], JsonZero<'a>> {
         recursive(|value| {
-            let digits = any().filter(|b: &u8| b.is_ascii_digit()).repeated();
+            let digits = any()
+                .filter(|b: &u8| b.is_ascii_digit())
+                .repeated()
+                .map_slice(|x| x);
 
             let int = any()
                 .filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
+                .repeated()
+                .at_least(1)
                 .then(any().filter(|b: &u8| b.is_ascii_digit()).repeated())
                 .ignored()
-                .or(just(b'0').ignored());
+                .or(just(b'0').ignored())
+                .ignored();
 
             let frac = just(b'.').then(digits.clone());
 

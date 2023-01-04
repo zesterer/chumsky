@@ -13,15 +13,13 @@ impl<I: ?Sized> Clone for End<I> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, E, S> for End<I>
+impl<'a, I, E, S> Parser<'a, I, (), E, S> for End<I>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = ();
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
         let before = inp.save();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
@@ -32,7 +30,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub struct Empty<I: ?Sized>(PhantomData<I>);
@@ -48,19 +46,17 @@ impl<I: ?Sized> Clone for Empty<I> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, E, S> for Empty<I>
+impl<'a, I, E, S> Parser<'a, I, (), E, S> for Empty<I>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = ();
-
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
         Ok(M::bind(|| ()))
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub trait Seq<T> {
@@ -76,6 +72,15 @@ impl<T: Clone> Seq<T> for T {
         Self: 'a;
     fn iter(&self) -> Self::Iter<'_> {
         core::iter::once(self.clone())
+    }
+}
+
+impl<'b, T: Clone> Seq<T> for &'b [T] {
+    type Iter<'a> = core::iter::Cloned<core::slice::Iter<'a, T>>
+    where
+        Self: 'a;
+    fn iter(&self) -> Self::Iter<'_> {
+        (self as &[T]).iter().cloned()
     }
 }
 
@@ -157,7 +162,7 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, E, S> for Just<T, I, E, S>
+impl<'a, I, E, S, T> Parser<'a, I, T, E, S> for Just<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -165,9 +170,7 @@ where
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
-    type Output = T;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, T, E> {
         let mut items = self.seq.iter();
         loop {
             match items.next() {
@@ -188,7 +191,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(T);
 }
 
 pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
@@ -219,7 +222,7 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, E, S> for OneOf<T, I, E, S>
+impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -227,9 +230,7 @@ where
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
-    type Output = I::Token;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().any(|not| not == tok) => Ok(M::bind(|| tok)),
@@ -240,7 +241,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
@@ -271,7 +272,7 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, E, S> for NoneOf<T, I, E, S>
+impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -279,9 +280,7 @@ where
     I::Token: PartialEq,
     T: Seq<I::Token> + Clone,
 {
-    type Output = I::Token;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => Ok(M::bind(|| tok)),
@@ -292,7 +291,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub struct Any<I: ?Sized, E, S = ()> {
@@ -308,15 +307,13 @@ impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, E, S> for Any<I, E, S>
+impl<'a, I, E, S> Parser<'a, I, I::Token, E, S> for Any<I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = I::Token;
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
@@ -327,7 +324,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!(I::Token);
 }
 
 pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
@@ -336,19 +333,20 @@ pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     }
 }
 
-pub struct TakeUntil<P, I: ?Sized, C = (), E = (), S = ()> {
+pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = (), S = ()> {
     until: P,
-    phantom: PhantomData<(C, E, S, I)>,
+    // FIXME try remove OP? See comment in Map declaration
+    phantom: PhantomData<(OP, C, E, S, I)>,
 }
 
-impl<'a, I, E, S, P, C> TakeUntil<P, I, C, E, S>
+impl<'a, I, E, S, P, OP, C> TakeUntil<P, OP, I, C, E, S>
 where
-    I: Input + ?Sized,
+    I: Input,
     E: Error<I>,
     S: 'a,
-    P: Parser<'a, I, E, S>,
+    P: Parser<'a, I, OP, E, S>,
 {
-    pub fn collect<D: Container<P::Output>>(self) -> TakeUntil<P, D> {
+    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, OP, D> {
         TakeUntil {
             until: self.until,
             phantom: PhantomData,
@@ -366,12 +364,12 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
     }
 }
 
-pub const fn take_until<'a, P, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
+pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    P: Parser<'a, I, E, S>,
+    P: Parser<'a, I, OP, E, S>,
 {
     TakeUntil {
         until,
@@ -379,17 +377,15 @@ where
     }
 }
 
-impl<'a, P, I, E, S, C> Parser<'a, I, E, S> for TakeUntil<P, I, C, E, S>
+impl<'a, P, OP, I, E, S, C> Parser<'a, I, (C, OP), E, S> for TakeUntil<P, I, C, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    P: Parser<'a, I, E, S>,
+    P: Parser<'a, I, OP, E, S>,
     C: Container<I::Token>,
 {
-    type Output = (C, P::Output);
-
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (C, OP), E> {
         let mut output = M::bind(|| C::default());
 
         loop {
@@ -413,7 +409,7 @@ where
         }
     }
 
-    go_extra!();
+    go_extra!((C, OP));
 }
 
 pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
@@ -429,19 +425,17 @@ pub const fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
     Todo(PhantomData)
 }
 
-impl<'a, I, E, S> Parser<'a, I, E, S> for Todo<I, E>
+impl<'a, I, E, S> Parser<'a, I, (), E, S> for Todo<I, E>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    type Output = ();
-
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
         todo!("Attempted to use an unimplemented parser")
     }
 
-    go_extra!();
+    go_extra!(());
 }
 
 pub struct Choice<T, O> {
@@ -474,16 +468,14 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $($X:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*, O> Parser<'a, I, E, S> for Choice<($($X,)*), O>
+        impl<'a, I, E, S, $($X),*, O> Parser<'a, I, O, E, S> for Choice<($($X,)*), O>
         where
             I: Input + ?Sized,
             E: Error<I>,
             S: 'a,
-            $($X: Parser<'a, I, E, S, Output = O>),*
+            $($X: Parser<'a, I, O, E, S>),*
         {
-            type Output = O;
-
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
                 let before = inp.save();
 
                 let Choice { parsers: ($($X,)*), .. } = self;
@@ -506,7 +498,7 @@ macro_rules! impl_choice_for_tuple {
                 Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
             }
 
-            go_extra!();
+            go_extra!(O);
         }
     };
 }
@@ -553,22 +545,20 @@ macro_rules! flatten_map {
 
 macro_rules! impl_group_for_tuple {
     () => {};
-    ($head:ident $($X:ident)*) => {
-        impl_group_for_tuple!($($X)*);
-        impl_group_for_tuple!(~ $head $($X)*);
+    ($head:ident $ohead:ident $($X:ident $O:ident)*) => {
+        impl_group_for_tuple!($($X $O)*);
+        impl_group_for_tuple!(~ $head $ohead $($X $O)*);
     };
-    (~ $($X:ident)*) => {
+    (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*> Parser<'a, I, E, S> for Group<($($X,)*)>
+        impl<'a, I, E, S, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E, S> for Group<($($X,)*)>
         where
             I: Input + ?Sized,
             E: Error<I>,
             S: 'a,
-            $($X: Parser<'a, I, E, S>),*
+            $($X: Parser<'a, I, $O, E, S>),*
         {
-            type Output = ($($X::Output,)*);
-
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Self::Output, E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, ($($O,)*), E> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
@@ -578,9 +568,36 @@ macro_rules! impl_group_for_tuple {
                 Ok(flatten_map!(<M> $($X)*))
             }
 
-            go_extra!();
+            go_extra!(($($O,)*));
         }
     };
 }
 
-impl_group_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_group_for_tuple! {
+    A_ OA
+    B_ OB
+    C_ OC
+    D_ OD
+    E_ OE
+    F_ OF
+    G_ OG
+    H_ OH
+    I_ OI
+    J_ OJ
+    K_ OK
+    L_ OL
+    M_ OM
+    N_ ON
+    O_ OO
+    P_ OP
+    Q_ OQ
+    R_ OR
+    S_ OS
+    T_ OT
+    U_ OU
+    V_ OV
+    W_ OW
+    X_ OX
+    Y_ OY
+    Z_ OZ
+}
