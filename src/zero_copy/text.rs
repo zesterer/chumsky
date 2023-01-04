@@ -228,7 +228,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").0, Some(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: Error<I> + 'a>() -> impl Parser<'a, I, (), E>
+pub fn newline<'a, I: Input + ?Sized, E: Error<I>>() -> impl Parser<'a, I, (), E>
 where
     I::Token: Char,
 {
@@ -353,14 +353,14 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: Error<str> + 'a>(
+pub fn semantic_indentation<'a, Tok, T, F, E: Error<str>>(
     token: T,
     make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, E> + 'a
+) -> impl Parser<'a, str, Vec<Tok>, E>
 where
-    Tok: Clone + 'a,
-    T: Parser<'a, str, Tok, E> + Clone + 'a,
-    F: Fn(Vec<Tok>, Range<usize>) -> Tok + Clone + 'a,
+    Tok: Clone,
+    T: Parser<'a, str, Tok, E> + Clone,
+    F: Fn(Vec<Tok>, Range<usize>) -> Tok + Clone,
 {
     let line_ws = any::<str, E, _>().filter(|c: &char| c.is_inline_whitespace());
 
