@@ -33,11 +33,11 @@ type Spanned<T> = (T, Span);
 fn lexer<'a>() -> impl Parser<'a, str, Vec<Spanned<TokenTree>>> {
     let tt = recursive::<'a, str, _, _, _, _, _>(|tt| {
         // Define some atomic tokens
-        let int = text::int::<'a, str, _, _>(10)
+        let int = text::int::<'a, str, _, _, _>(10)
             .from_str()
             .unwrapped()
             .map(Token::Int);
-        let ident = text::ident::<'a, str, _, _>().map(|s| Token::Ident(s.to_string()));
+        let ident = text::ident::<'a, str, _, _, _>().map(|s| Token::Ident(s.to_string()));
         let op = one_of("=.:%,")
             .repeated()
             .at_least(1)
