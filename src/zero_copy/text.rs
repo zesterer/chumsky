@@ -1,9 +1,6 @@
 use crate::zero_copy::prelude::*;
 
-use super::{
-    primitive::{Any, Seq},
-    *,
-};
+use super::*;
 
 pub trait Char: Sized + Copy + PartialEq {
     type Slice: ?Sized + StrInput<Self> + 'static;
@@ -148,15 +145,15 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let whitespace = text::whitespace::<_, _, Simple<str>>();
+/// let whitespace = text::whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of whitespace is parsed...
 /// assert_eq!(whitespace.parse("\t \n  \r ").0, Some(()));
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").0, Some(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>>(
-) -> Repeated<impl Parser<'a, I, (), E, ()>, (), I, (), E, ()>
+pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
+) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
 where
     I::Token: Char,
 {
@@ -176,7 +173,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>>();
+/// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  ").0, Some(()));
@@ -185,8 +182,8 @@ where
 /// // ... but not newlines
 /// assert_eq!(inline_whitespace.at_least(1).parse("\n\r").0, None);
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>>(
-) -> Repeated<impl Parser<'a, I, (), E, ()>, (), I, (), E, ()>
+pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
+) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
 where
     I::Token: Char,
 {
@@ -215,7 +212,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let newline = text::newline::<str, Simple<str>>()
+/// let newline = text::newline::<str, Simple<str>, ()>()
 ///     .then_ignore(end());
 ///
 /// assert_eq!(newline.parse("\n").0, Some(()));
@@ -228,7 +225,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").0, Some(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: Error<I>>() -> impl Parser<'a, I, (), E>
+pub fn newline<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> impl Parser<'a, I, (), E, S>
 where
     I::Token: Char,
 {
@@ -260,7 +257,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<'_, _, _, Simple<str>>(10);
+/// let digits = text::digits::<'_, _, _, Simple<str>, ()>(10);
 ///
 /// assert_eq!(digits.parse("0").0, Some("0"));
 /// assert_eq!(digits.parse("1").0, Some("1"));
@@ -271,7 +268,7 @@ where
 /// assert!(digits.parse("").0.is_none());
 /// ```
 #[must_use]
-pub fn digits<'a, C, I, E>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E>
+pub fn digits<'a, C, I, E, S: 'a>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E, S>
 where
     C: Char,
     I: StrInput<C> + ?Sized,
@@ -298,7 +295,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let dec = text::int::<_, _, Simple<str>>(10)
+/// let dec = text::int::<_, _, Simple<str>, ()>(10)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(dec.parse("0").0, Some("0"));
@@ -307,7 +304,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").0.is_none());
 ///
-/// let hex = text::int::<_, _, Simple<str>>(16)
+/// let hex = text::int::<_, _, Simple<str>, ()>(16)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(hex.parse("2A").0, Some("2A"));
@@ -317,9 +314,9 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
+pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E> {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -337,8 +334,8 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
-) -> impl Parser<'a, I, &'a C::Slice, E> {
+pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
+) -> impl Parser<'a, I, &'a C::Slice, E, S> {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -353,14 +350,13 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>>(
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: Error<str>>(
+pub fn semantic_indentation<'a, Tok, T, F, E: Error<str>, S: 'a>(
     token: T,
     make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, E>
+) -> impl Parser<'a, str, Vec<Tok>, E, S>
 where
-    Tok: Clone,
-    T: Parser<'a, str, Tok, E> + Clone,
-    F: Fn(Vec<Tok>, Range<usize>) -> Tok + Clone,
+    T: Parser<'a, str, Tok, E, S>,
+    F: Fn(Vec<Tok>, Range<usize>) -> Tok,
 {
     let line_ws = any::<str, E, _>().filter(|c: &char| c.is_inline_whitespace());
 
