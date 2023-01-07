@@ -1,3 +1,13 @@
+//! Recursive parsers (parser that include themselves within their patterns).
+//!
+//! *“It's unpleasantly like being drunk."
+//! "What's so unpleasant about being drunk?"
+//! "You ask a glass of water.”*
+//!
+//! The [`recursive()`] function covers most cases, but sometimes it's necessary to manually control the declaration and
+//! definition of parsers more corefully, particularly for mutually-recursive parsers. In such cases, the functions on
+//! [`Recursive`] allow for this.
+
 use super::*;
 
 enum RecursiveInner<T: ?Sized> {
@@ -13,11 +23,53 @@ pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
     inner: OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>,
 }
 
+/// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
+/// [definition](Recursive::define).
+///
+/// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
 pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
 impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S>> {
+    /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
+    /// being fulled defined.
+    ///
+    /// Declaring a parser before defining it is required for a parser to reference itself.
+    ///
+    /// This should be followed by **exactly one** call to the [`Recursive::define`] method prior to using the parser
+    /// for parsing (i.e: via the [`Parser::parse`] method or similar).
+    ///
+    /// Prefer to use [`recursive()`], which is a convenient wrapper around this method and [`Recursive::define`], if
+    /// possible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// #[derive(Debug, PartialEq)]
+    /// enum Chain {
+    ///     End,
+    ///     Link(char, Box<Chain>),
+    /// }
+    ///
+    /// // Declare the existence of the parser before defining it so that it can reference itself
+    /// let mut chain = Recursive::<_, _, Simple<char>>::declare();
+    ///
+    /// // Define the parser in terms of itself.
+    /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
+    /// chain.define(just('+')
+    ///     .then(chain.clone())
+    ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
+    ///     .or_not()
+    ///     .map(|chain| chain.unwrap_or(Chain::End)));
+    ///
+    /// assert_eq!(chain.parse(""), Ok(Chain::End));
+    /// assert_eq!(
+    ///     chain.parse("++"),
+    ///     Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
+    /// );
+    /// ```
     pub fn declare() -> Self {
         Recursive {
             inner: RecursiveInner::Owned(Rc::new(Indirect {
@@ -26,6 +78,7 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S
         }
     }
 
+    /// Defines the parser after declaring it, allowing it to be used for parsing.
     pub fn define<P: Parser<'a, I, O, E, S> + 'a>(&mut self, parser: P) {
         self.parser()
             .inner

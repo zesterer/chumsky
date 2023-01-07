@@ -2,9 +2,16 @@ use crate::zero_copy::prelude::*;
 
 use super::*;
 
+/// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
+///
+/// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
 pub trait Char: Sized + Copy + PartialEq {
+    /// The default unsized [`str`]-like type of a linear sequence of this character.
+    ///
+    /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
     type Slice: ?Sized + StrInput<Self> + 'static;
 
+    /// The type of a regex expression which can match on this type
     #[cfg(feature = "regex")]
     type Regex;
 
@@ -112,6 +119,7 @@ impl Char for u8 {
     }
 }
 
+/// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
 #[derive(Clone)]
 pub struct Padded<A> {
     pub(crate) parser: A,

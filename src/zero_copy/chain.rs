@@ -1,3 +1,11 @@
+//! Traits that allow chaining parser outputs together.
+//!
+//! *“And what’s happened to the Earth?” “Ah. It’s been demolished.” “Has it,” said Arthur levelly. “Yes. It just
+//! boiled away into space.” “Look,” said Arthur, “I’m a bit upset about that.”*
+//!
+//! You usually don't need to interact with this trait, or even import it. It's only public so that you can see which
+//! types implement it. See [`Parser::chain`](super::Parser) for examples of its usage.
+
 use alloc::{string::String, vec::Vec};
 
 mod private {
@@ -10,9 +18,14 @@ mod private {
     impl Sealed<char> for alloc::string::String {}
 }
 
+/// A utility trait that facilitates chaining parser outputs together into [`Vec`]s.
+///
+/// See [`Parser::chain`](super::Parser).
 #[allow(clippy::len_without_is_empty)]
 pub trait Chain<T>: private::Sealed<T> {
+    /// The number of items that this chain link consists of.
     fn len(&self) -> usize;
+    /// Append the elements in this link to the chain.
     fn append_to(self, v: &mut Vec<T>);
 }
 

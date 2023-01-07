@@ -1,7 +1,15 @@
+//! Combinators that allow combining and extending existing parsers.
+//!
+//! *“Ford... you're turning into a penguin. Stop it.”*
+//!
+//! Although it's *sometimes* useful to be able to name their type, most of these parsers are much easier to work with
+//! when accessed through their respective methods on [`Parser`].
+
 use super::*;
 use core::mem::MaybeUninit;
 use hashbrown::HashSet;
 
+/// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, S, F, U>
 where
     I: Input + SliceInput + ?Sized,
@@ -64,6 +72,7 @@ where
     go_extra!(U);
 }
 
+/// See [`Parser::filter`].
 pub struct Filter<A, F> {
     pub(crate) parser: A,
     pub(crate) filter: F,
@@ -105,6 +114,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map`].
 #[derive(Copy, Clone)]
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,
@@ -129,6 +139,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_with_span`].
 #[derive(Copy, Clone)]
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
@@ -157,6 +168,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_with_state`].
 #[derive(Copy, Clone)]
 pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,
@@ -186,6 +198,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::try_map`].
 #[derive(Copy, Clone)]
 pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
@@ -215,6 +228,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::try_map_with_state`].
 #[derive(Copy, Clone)]
 pub struct TryMapWithState<A, OA, F> {
     pub(crate) parser: A,
@@ -245,6 +259,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::to`].
 pub struct To<A, OA, O, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) to: O,
@@ -279,6 +294,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::ignored`].
 pub struct Ignored<A, OA> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<OA>,
@@ -298,6 +314,7 @@ where
     go_extra!(());
 }
 
+/// See [`Parser::then`].
 pub struct Then<A, B, OA, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
@@ -332,6 +349,7 @@ where
     go_extra!((OA, OB));
 }
 
+/// See [`Parser::ignore_then`].
 pub struct IgnoreThen<A, B, OA, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
@@ -366,6 +384,7 @@ where
     go_extra!(OB);
 }
 
+/// See [`Parser::then_ignore`].
 pub struct ThenIgnore<A, B, OB, E = (), S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
@@ -400,6 +419,7 @@ where
     go_extra!(OA);
 }
 
+/// See [`Parser::then_with`].
 pub struct ThenWith<A, B, OA, F, I: ?Sized, E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
@@ -451,6 +471,7 @@ where
     go_extra!(OB);
 }
 
+/// See [`Parser::delimited_by`].
 #[derive(Copy, Clone)]
 pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
@@ -478,6 +499,7 @@ where
     go_extra!(OA);
 }
 
+/// See [`Parser::padded_by`].
 #[derive(Copy, Clone)]
 pub struct PaddedBy<A, B, OB> {
     pub(crate) parser: A,
@@ -503,6 +525,7 @@ where
     go_extra!(OA);
 }
 
+/// See [`Parser::or`].
 #[derive(Copy, Clone)]
 pub struct Or<A, B> {
     pub(crate) parser_a: A,
@@ -535,6 +558,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::recover_with`].
 #[derive(Copy, Clone)]
 pub struct RecoverWith<A, F> {
     pub(crate) parser: A,

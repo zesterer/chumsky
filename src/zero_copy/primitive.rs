@@ -1,7 +1,57 @@
+//! Parser primitives that accept specific token patterns.
+//!
+//! *“These creatures you call mice, you see, they are not quite as they appear. They are merely the protrusion into
+//! our dimension of vastly hyperintelligent pandimensional beings.”*
+//!
+//! Chumsky parsers are created by combining together smaller parsers. Right at the bottom of the pile are the parser
+//! primitives, a parser developer's bread & butter. Each of these primitives are very easy to understand in isolation,
+//! usually only doing one thing.
+//!
+//! ## The Important Ones
+//!
+//! - [`just`]: parses a specific input or sequence of inputs
+//! - [`filter`]: parses a single input, if the given filter function returns `true`
+//! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
+
 use super::*;
 
+/// See [`end`].
 pub struct End<I: ?Sized>(PhantomData<I>);
 
+/// A parser that accepts only the end of input.
+///
+/// This parser is very useful when you wish to force a parser to consume *all* of the input. It is typically combined
+/// with [`Parser::then_ignore`].
+///
+/// The output type of this parser is `()`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
+/// assert!(end::<Simple<char>>().parse("hello").is_err());
+/// ```
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// let digits = text::digits::<_, Simple<char>>(10);
+///
+/// // This parser parses digits!
+/// assert_eq!(digits.parse("1234"), Ok("1234".to_string()));
+///
+/// // However, parsers are lazy and do not consume trailing input.
+/// // This can be inconvenient if we want to validate all of the input.
+/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK"), Ok("1234".to_string()));
+///
+/// // To fix this problem, we require that the end of input follows any successfully parsed input
+/// let only_digits = digits.then_ignore(end());
+///
+/// // Now our parser correctly produces an error if any trailing input is found...
+/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").is_err());
+/// // ...while still behaving correctly for inputs that only consist of valid patterns
+/// assert_eq!(only_digits.parse("1234"), Ok("1234".to_string()));
+/// ```
 pub const fn end<I: Input + ?Sized>() -> End<I> {
     End(PhantomData)
 }
@@ -33,8 +83,12 @@ where
     go_extra!(());
 }
 
+/// See [`empty`].
 pub struct Empty<I: ?Sized>(PhantomData<I>);
 
+/// A parser that parses no inputs.
+///
+/// The output type of this parser is `()`.
 pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
     Empty(PhantomData)
 }
@@ -134,6 +188,7 @@ impl Seq<char> for String {
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
 // }
 
+/// See [`just`].
 pub struct Just<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
@@ -149,6 +204,23 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
     }
 }
 
+/// A parser that accepts only the given input.
+///
+/// The output type of this parser is `C`, the input or sequence that was provided.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let question = just::<_, _, Cheap<char>>('?');
+///
+/// assert_eq!(question.parse("?"), Ok('?'));
+/// assert!(question.parse("!").is_err());
+/// // This works because parsers do not eagerly consume input, so the '!' is not parsed
+/// assert_eq!(question.parse("?!"), Ok('?'));
+/// // This fails because the parser expects an end to the input after the '?'
+/// assert!(question.then(end()).parse("?!").is_err());
+/// ```
 pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -194,6 +266,7 @@ where
     go_extra!(T);
 }
 
+/// See [`one_of`].
 pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
@@ -209,6 +282,22 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
     }
 }
 
+/// A parser that accepts one of a sequence of specific inputs.
+///
+/// The output type of this parser is `I`, the input that was found.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let digits = one_of::<_, _, Cheap<char>>("0123456789")
+///     .repeated().at_least(1)
+///     .then_ignore(end())
+///     .collect::<String>();
+///
+/// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
+/// assert!(digits.parse("421!53").is_err());
+/// ```
 pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -244,6 +333,7 @@ where
     go_extra!(I::Token);
 }
 
+/// See [`none_of`].
 pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
@@ -259,6 +349,24 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
     }
 }
 
+/// A parser that accepts any input that is *not* in a sequence of specific inputs.
+///
+/// The output type of this parser is `I`, the input that was found.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let string = one_of::<_, _, Cheap<char>>("\"'")
+///     .ignore_then(none_of("\"'").repeated())
+///     .then_ignore(one_of("\"'"))
+///     .then_ignore(end())
+///     .collect::<String>();
+///
+/// assert_eq!(string.parse("'hello'"), Ok("hello".to_string()));
+/// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
+/// assert!(string.parse("\"421!53").is_err());
+/// ```
 pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
     I: Input + ?Sized,
@@ -294,6 +402,7 @@ where
     go_extra!(I::Token);
 }
 
+/// See [`any`].
 pub struct Any<I: ?Sized, E, S = ()> {
     phantom: PhantomData<(E, S, I)>,
 }
@@ -327,12 +436,28 @@ where
     go_extra!(I::Token);
 }
 
+/// A parser that accepts any input (but not the end of input).
+///
+/// The output type of this parser is `I`, the input that was found.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let any = any::<char, Cheap<char>>();
+///
+/// assert_eq!(any.parse("a"), Ok('a'));
+/// assert_eq!(any.parse("7"), Ok('7'));
+/// assert_eq!(any.parse("\t"), Ok('\t'));
+/// assert!(any.parse("").is_err());
+/// ```
 pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     Any {
         phantom: PhantomData,
     }
 }
 
+/// See [`take_until`].
 pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = (), S = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
@@ -364,6 +489,44 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
     }
 }
 
+/// A parser that accepts any number of inputs until a terminating pattern is reached.
+///
+/// The output type of this parser is `(Vec<I>, O)`, a combination of the preceding inputs and the output of the
+/// final patterns.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// let single_line = just::<_, _, Simple<char>>("//")
+///     .then(take_until(text::newline()))
+///     .ignored();
+///
+/// let multi_line = just::<_, _, Simple<char>>("/*")
+///     .then(take_until(just("*/")))
+///     .ignored();
+///
+/// let comment = single_line.or(multi_line);
+///
+/// let tokens = text::ident()
+///     .padded()
+///     .padded_by(comment
+///         .padded()
+///         .repeated())
+///     .repeated();
+///
+/// assert_eq!(tokens.parse(r#"
+///     // These tokens...
+///     these are
+///     /*
+///         ...have some
+///         multi-line...
+///     */
+///     // ...and single-line...
+///     tokens
+///     // ...comments between them
+/// "#), Ok(vec!["these".to_string(), "are".to_string(), "tokens".to_string()]));
+/// ```
 pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
     I: Input + ?Sized,
@@ -412,6 +575,7 @@ where
     go_extra!((C, OP));
 }
 
+/// See [`fn@todo`].
 pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
 
 impl<I: ?Sized, E> Copy for Todo<I, E> {}
@@ -421,6 +585,31 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
     }
 }
 
+/// A parser that can be used wherever you need to implement a parser later.
+///
+/// This parser is analagous to the [`todo!`] and [`unimplemented!`] macros, but will produce a panic when used to
+/// parse input, not immediately when invoked.
+///
+/// This function is useful when developing your parser, allowing you to prototype and run parts of your parser without
+/// committing to implementing the entire thing immediately.
+///
+/// The output type of this parser is whatever you want it to be: it'll never produce output!
+///
+/// # Examples
+///
+/// ```should_panic
+/// # use chumsky::prelude::*;
+/// let int = just::<_, _, Simple<char>>("0x").ignore_then(todo())
+///     .or(just("0b").ignore_then(text::digits(2)))
+///     .or(text::int(10));
+///
+/// // Decimal numbers are parsed
+/// assert_eq!(int.parse("12"), Ok("12".to_string()));
+/// // Binary numbers are parsed
+/// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
+/// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
+/// int.parse("0xd4");
+/// ```
 pub const fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
     Todo(PhantomData)
 }
@@ -438,6 +627,7 @@ where
     go_extra!(());
 }
 
+/// See [`choice`].
 pub struct Choice<T, O> {
     parsers: T,
     phantom: PhantomData<O>,
@@ -453,6 +643,50 @@ impl<T: Clone, O> Clone for Choice<T, O> {
     }
 }
 
+/// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
+///
+/// This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
+///
+/// - Rust's trait solver seems to resolve the [`Parser`] impl for this type much faster, significantly reducing
+///   compilation times.
+///
+/// - Parsing is likely a little faster in some cases because the resulting parser is 'less careful' about error
+///   routing, and doesn't perform the same fine-grained error prioritisation that [`Parser::or`] does.
+///
+/// These qualities make this parser ideal for lexers.
+///
+/// The output type of this parser is the output type of the inner parsers.
+///
+/// # Examples
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     If,
+///     For,
+///     While,
+///     Fn,
+///     Int(u64),
+///     Ident(String),
+/// }
+///
+/// let tokens = choice::<_, Simple<char>>((
+///     text::keyword("if").to(Token::If),
+///     text::keyword("for").to(Token::For),
+///     text::keyword("while").to(Token::While),
+///     text::keyword("fn").to(Token::Fn),
+///     text::int(10).from_str().unwrapped().map(Token::Int),
+///     text::ident().map(Token::Ident),
+/// ))
+///     .padded()
+///     .repeated();
+///
+/// use Token::*;
+/// assert_eq!(
+///     tokens.parse("if 56 for foo while 42 fn bar"),
+///     Ok(vec![If, Int(56), For, Ident("foo".to_string()), While, Int(42), Fn, Ident("bar".to_string())]),
+/// );
+/// ```
 pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {
     Choice {
         parsers,
