@@ -17,8 +17,12 @@ enum RecursiveInner<T: ?Sized> {
 
 type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>;
 
+/// Type for recursive parsers that are defined through a call to `recursive`, and as such
+/// need no internal indirection
 pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, O, E, S> + 'a;
 
+/// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
+/// such require an additional layer of allocation.
 pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
     inner: OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>,
 }
@@ -142,6 +146,54 @@ where
     go_extra!(O);
 }
 
+/// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
+///
+/// The given function must create the parser. The parser must not be used to parse input before this function returns.
+///
+/// This is a wrapper around [`Recursive::declare`] and [`Recursive::define`].
+///
+/// The output type of this parser is `O`, the same as the inner parser.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// #[derive(Debug, PartialEq)]
+/// enum Tree {
+///     Leaf(String),
+///     Branch(Vec<Tree>),
+/// }
+///
+/// // Parser that recursively parses nested lists
+/// let tree = recursive::<_, _, _, _, Simple<char>>(|tree| tree
+///     .separated_by(just(','))
+///     .delimited_by(just('['), just(']'))
+///     .map(Tree::Branch)
+///     .or(text::ident().map(Tree::Leaf))
+///     .padded());
+///
+/// assert_eq!(tree.parse("hello"), Ok(Tree::Leaf("hello".to_string())));
+/// assert_eq!(tree.parse("[a, b, c]"), Ok(Tree::Branch(vec![
+///     Tree::Leaf("a".to_string()),
+///     Tree::Leaf("b".to_string()),
+///     Tree::Leaf("c".to_string()),
+/// ])));
+/// // The parser can deal with arbitrarily complex nested lists
+/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]"), Ok(Tree::Branch(vec![
+///     Tree::Branch(vec![
+///         Tree::Leaf("a".to_string()),
+///         Tree::Leaf("b".to_string()),
+///     ]),
+///     Tree::Leaf("c".to_string()),
+///     Tree::Branch(vec![
+///         Tree::Leaf("d".to_string()),
+///         Tree::Branch(vec![
+///             Tree::Leaf("e".to_string()),
+///             Tree::Leaf("f".to_string()),
+///         ]),
+///     ]),
+/// ])));
+/// ```
 pub fn recursive<'a, I, O, E, S, A, F>(f: F) -> Recursive<Direct<'a, I, O, E, S>>
 where
     I: Input + ?Sized,

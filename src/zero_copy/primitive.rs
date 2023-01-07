@@ -113,10 +113,15 @@ where
     go_extra!(());
 }
 
+/// A utility trait to abstract over linear container-like things.
+///
+/// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
 pub trait Seq<T> {
+    /// An iterator over the items within this container, by reference.
     type Iter<'a>: Iterator<Item = T>
     where
         Self: 'a;
+    /// Iterate over the elements of the container.
     fn iter(&self) -> Self::Iter<'_>;
 }
 
@@ -471,6 +476,7 @@ where
     S: 'a,
     P: Parser<'a, I, OP, E, S>,
 {
+    /// Set the type of [`Container`] to collect into.
     pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, OP, D> {
         TakeUntil {
             until: self.until,
@@ -739,6 +745,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
+/// See [`group`].
 #[derive(Copy, Clone)]
 pub struct Group<T> {
     parsers: T,

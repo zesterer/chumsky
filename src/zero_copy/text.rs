@@ -1,3 +1,14 @@
+//! Text-specific parsers and utilities.
+//!
+//! *“Ford!" he said, "there's an infinite number of monkeys outside who want to talk to us about this script for
+//! Hamlet they've worked out.”*
+//!
+//! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
+//! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
+//!
+//! The [`TextParser`] trait is an extension on top of the main [`Parser`] trait that adds combinators unique to the
+//! parsing of text.
+
 use crate::zero_copy::prelude::*;
 
 use super::*;

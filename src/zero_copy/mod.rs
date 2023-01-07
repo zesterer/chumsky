@@ -1,3 +1,8 @@
+//! A zero-copy implementation of [`Parser`](super::Parser)
+//!
+//! This will likely be moving to the crate root at some point and entirely replacing the current
+//! parser implementation.
+
 macro_rules! go_extra {
     ( $O :ty ) => {
         fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, $O, E> {
@@ -21,6 +26,10 @@ pub mod regex;
 pub mod span;
 pub mod text;
 
+/// Commonly used functions, traits and types.
+///
+/// *Listen, three eyes,” he said, “don’t you try to outweird me, I get stranger things than you free with my breakfast
+/// cereal.”*
 pub mod prelude {
     pub use super::{
         error::{Error as _, Rich, Simple},
@@ -63,6 +72,7 @@ use self::{
     text::*,
 };
 
+/// The result of calling [`Parser::go`]
 pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
 
 #[doc(hidden)]
@@ -1515,6 +1525,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     }
 }
 
+/// See [`Parser::boxed`].
+///
+/// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
+/// around its inner value.
+///
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
+/// it is *currently* the same size as a raw pointer.
+// TODO: Don't use an Rc
 pub struct Boxed<'a, I: ?Sized, O, E, S = ()> {
     inner: Rc<dyn Parser<'a, I, O, E, S> + 'a>,
 }

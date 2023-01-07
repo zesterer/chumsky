@@ -593,7 +593,9 @@ where
     go_extra!(O);
 }
 
+/// A utility trait for types that can be constructed from a series of output values
 pub trait Container<T>: Default {
+    /// Add a value to the end of this container
     fn push(&mut self, item: T);
 }
 
@@ -651,6 +653,7 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
     }
 }
 
+/// See [`Parser::repeated`].
 // FIXME: why C, E, S have default values?
 pub struct Repeated<A, OA, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
@@ -678,10 +681,12 @@ where
     E: Error<I>,
     S: 'a,
 {
+    /// Require that the pattern appear at least a minimum number of times.
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
     }
 
+    /// Require that the pattern appear at most a maximum number of times.
     pub fn at_most(self, at_most: usize) -> Self {
         Self {
             at_most: Some(at_most),
@@ -689,6 +694,43 @@ where
         }
     }
 
+    /// Require that the pattern appear exactly the given number of times. If the value provided
+    /// is constant, consider instead using [`Parser::repeated_exactly`]
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let ring = just::<_, _, Simple<char>>('O');
+    ///
+    /// let for_the_elves = ring
+    ///     .repeated()
+    ///     .exactly(3);
+    ///
+    /// let for_the_dwarves = ring
+    ///     .repeated()
+    ///     .exactly(6);
+    ///
+    /// let for_the_humans = ring
+    ///     .repeated()
+    ///     .exactly(9);
+    ///
+    /// let for_sauron = ring
+    ///     .repeated()
+    ///     .exactly(1);
+    ///
+    /// let rings = for_the_elves
+    ///     .then(for_the_dwarves)
+    ///     .then(for_the_humans)
+    ///     .then(for_sauron)
+    ///     .then_ignore(end());
+    ///
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").is_err()); // Too few rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").is_err()); // Too many rings!
+    /// // The perfect number of rings
+    /// assert_eq!(
+    ///     rings.parse("OOOOOOOOOOOOOOOOOOO"),
+    ///     Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
+    /// );
+    /// ````
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
             at_least: exactly,
@@ -697,6 +739,7 @@ where
         }
     }
 
+    /// Set the type of [`Container`] to collect into.
     pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, I, D, E, S>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -752,6 +795,7 @@ where
     go_extra!(C);
 }
 
+/// See [`Parser::separated_by`].
 pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
     pub(crate) parser: A,
     pub(crate) separator: B,
@@ -787,10 +831,45 @@ where
     E: Error<I>,
     S: 'a,
 {
+    /// Require that the pattern appear at least a minimum number of times.
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let numbers = just::<_, _, Simple<char>>('-')
+    ///     .separated_by(just('.'))
+    ///     .at_least(2);
+    ///
+    /// assert!(numbers.parse("").is_err());
+    /// assert!(numbers.parse("-").is_err());
+    /// assert_eq!(numbers.parse("-.-"), Ok(vec!['-', '-']));
+    /// ````
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
     }
 
+    /// Require that the pattern appear at most a maximum number of times.
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let row_4 = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .at_most(4);
+    ///
+    /// let matrix_4x4 = row_4
+    ///     .separated_by(just(','))
+    ///     .at_most(4);
+    ///
+    /// assert_eq!(
+    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"),
+    ///     Ok(vec![
+    ///         vec!["0".to_string(), "1".to_string(), "2".to_string(), "3".to_string()],
+    ///         vec!["4".to_string(), "5".to_string(), "6".to_string(), "7".to_string()],
+    ///         vec!["8".to_string(), "9".to_string(), "10".to_string(), "11".to_string()],
+    ///         vec!["12".to_string(), "13".to_string(), "14".to_string(), "15".to_string()],
+    ///     ]),
+    /// );
+    /// ````
     pub fn at_most(self, at_most: usize) -> Self {
         Self {
             at_most: Some(at_most),
@@ -798,6 +877,24 @@ where
         }
     }
 
+    /// Require that the pattern appear exactly the given number of times. If the value provided is
+    /// constant, consider instead using [`Parser::separated_by_exactly`].
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let coordinate_3d = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .exactly(3)
+    ///     .then_ignore(end());
+    ///
+    /// // Not enough elements
+    /// assert!(coordinate_3d.parse("4, 3").is_err());
+    /// // Too many elements
+    /// assert!(coordinate_3d.parse("7, 2, 13, 4").is_err());
+    /// // Just the right number of elements
+    /// assert_eq!(coordinate_3d.parse("5, 0, 12"), Ok(vec!["5".to_string(), "0".to_string(), "12".to_string()]));
+    /// ````
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
             at_least: exactly,
@@ -806,6 +903,28 @@ where
         }
     }
 
+    /// Allow a leading separator to appear before the first item.
+    ///
+    /// Note that even if no items are parsed, a leading separator *is* permitted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let r#enum = text::keyword::<_, _, Simple<char>>("enum")
+    ///     .padded()
+    ///     .ignore_then(text::ident()
+    ///         .padded()
+    ///         .separated_by(just('|'))
+    ///         .allow_leading());
+    ///
+    /// assert_eq!(r#enum.parse("enum True | False"), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// assert_eq!(r#enum.parse("
+    ///     enum
+    ///     | True
+    ///     | False
+    /// "), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// ```
     pub fn allow_leading(self) -> Self {
         Self {
             allow_leading: true,
@@ -813,6 +932,23 @@ where
         }
     }
 
+    /// Allow a trailing separator to appear after the last item.
+    ///
+    /// Note that if no items are parsed, no leading separator is permitted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let numbers = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .allow_trailing()
+    ///     .delimited_by(just('('), just(')'));
+    ///
+    /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// ```
     pub fn allow_trailing(self) -> Self {
         Self {
             allow_trailing: true,
@@ -820,6 +956,7 @@ where
         }
     }
 
+    /// Set the type of [`Container`] to collect into.
     pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, I, D, E, S>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -975,6 +1112,7 @@ where
     go_extra!(C);
 }
 
+/// See [`Parser::or_not`].
 #[derive(Copy, Clone)]
 pub struct OrNot<A> {
     pub(crate) parser: A,
@@ -1001,6 +1139,7 @@ where
     go_extra!(Option<O>);
 }
 
+/// See [`Parser::not`].
 #[derive(Copy, Clone)]
 pub struct Not<A, OA> {
     pub(crate) parser: A,
@@ -1035,6 +1174,7 @@ where
     go_extra!(());
 }
 
+/// See [`Parser::and_is`].
 #[derive(Copy, Clone)]
 pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,
@@ -1082,11 +1222,29 @@ where
     go_extra!(OA);
 }
 
+/// A utility trait for types that hold a specific constant number of input values
 pub trait ContainerExactly<T, const N: usize> {
+    /// An uninitialized value of this container
     type Uninit;
+
+    /// Get an uninitialized form of this container
     fn uninit() -> Self::Uninit;
+
+    /// Write a value to a position in an uninitialized container
     fn write(uninit: &mut Self::Uninit, i: usize, item: T);
+
+    /// Drop all values before a provided index in this container
+    ///
+    /// # Safety
+    ///
+    /// All values must be initialized, up to the provided index
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize);
+
+    /// Convert this container into its initialized form
+    ///
+    /// # Safety
+    ///
+    /// All values in the container must be initialized
     unsafe fn take(uninit: Self::Uninit) -> Self;
 }
 
@@ -1114,6 +1272,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
     }
 }
 
+/// See [`Parser::repeated_exactly`].
 #[derive(Copy, Clone)]
 pub struct RepeatedExactly<A, OA, C, const N: usize> {
     pub(crate) parser: A,
@@ -1121,6 +1280,7 @@ pub struct RepeatedExactly<A, OA, C, const N: usize> {
 }
 
 impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
+    /// Set the type of [`ContainerExactly`] to collect into.
     pub fn collect<'a, I, E, S, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -1178,6 +1338,7 @@ where
     go_extra!(C);
 }
 
+/// See [`Parser::separated_by_exactly`].
 #[derive(Copy, Clone)]
 pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
     pub(crate) parser: A,
@@ -1188,6 +1349,28 @@ pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
 }
 
 impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
+    /// Allow a leading separator to appear before the first item.
+    ///
+    /// Note that even if no items are parsed, a leading separator *is* permitted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let r#enum = text::keyword::<_, _, Simple<char>>("enum")
+    ///     .padded()
+    ///     .ignore_then(text::ident()
+    ///         .padded()
+    ///         .separated_by(just('|'))
+    ///         .allow_leading());
+    ///
+    /// assert_eq!(r#enum.parse("enum True | False"), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// assert_eq!(r#enum.parse("
+    ///     enum
+    ///     | True
+    ///     | False
+    /// "), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// ```
     pub fn allow_leading(self) -> Self {
         Self {
             allow_leading: true,
@@ -1195,6 +1378,23 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
         }
     }
 
+    /// Allow a trailing separator to appear after the last item.
+    ///
+    /// Note that if no items are parsed, no trailing separator is permitted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let numbers = text::int::<_, Simple<char>>(10)
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .allow_trailing()
+    ///     .delimited_by(just('('), just(')'));
+    ///
+    /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// ```
     pub fn allow_trailing(self) -> Self {
         Self {
             allow_trailing: true,
@@ -1202,6 +1402,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
         }
     }
 
+    /// Set the type of [`ContainerExactly`] to collect into.
     pub fn collect<'a, I, OA, E, S, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -1287,6 +1488,7 @@ where
     go_extra!([OA; N]);
 }
 
+/// See [`Parser::foldr`].
 pub struct Foldr<P, F, A, B, E = (), S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
@@ -1328,6 +1530,7 @@ where
     go_extra!(B);
 }
 
+/// See [`Parser::foldl`].
 pub struct Foldl<P, F, A, B, E = (), S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
@@ -1368,6 +1571,7 @@ where
     go_extra!(A);
 }
 
+/// See [`Parser::rewind`].
 #[derive(Copy, Clone)]
 pub struct Rewind<A> {
     pub(crate) parser: A,
@@ -1394,6 +1598,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_err`].
 #[derive(Copy, Clone)]
 pub struct MapErr<A, F> {
     pub(crate) parser: A,
@@ -1421,6 +1626,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_err_with_span`].
 #[derive(Copy, Clone)]
 pub struct MapErrWithSpan<A, F> {
     pub(crate) parser: A,
@@ -1450,6 +1656,7 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_err_with_state`].
 #[derive(Copy, Clone)]
 pub struct MapErrWithState<A, F> {
     pub(crate) parser: A,
@@ -1511,6 +1718,7 @@ where
     go_extra!(O);
 }*/
 
+/// See [`Parser::or_else`].
 #[derive(Copy, Clone)]
 pub struct OrElse<A, F> {
     pub(crate) parser: A,
