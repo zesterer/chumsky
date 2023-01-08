@@ -1220,26 +1220,27 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// #[derive(Debug, PartialEq)]
-    /// enum Expr {
+    /// enum Expr<'a> {
     ///     Error,
-    ///     Int(String),
-    ///     List(Vec<Expr>),
+    ///     Int(&'a str),
+    ///     List(Vec<Expr<'a>>),
     /// }
     ///
     /// let expr = recursive::<_, _, Simple<str>, (), _, _>(|expr| expr
     ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(nested_delimiters('[', ']', [], |_| Expr::Error))
+    ///     .recover_with(take_until(just(']')).map(|_| Expr::Error))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///
-    /// assert!(expr.parse("five").is_err()); // Text is not a valid expression in this language...
-    /// assert!(expr.parse("[1, 2, 3]").is_ok()); // ...but lists and numbers are!
+    /// assert!(expr.parse("five").0.is_none()); // Text is not a valid expression in this language...
+    /// assert!(expr.parse("[1, 2, 3]").0.is_some()); // ...but lists and numbers are!
     ///
     /// // This input has two syntax errors...
-    /// let (ast, errors) = expr.parse_recovery("[[1, two], [3, four]]");
+    /// let (ast, errors) = expr.parse("[[1, two], [3, four]]");
     /// // ...and error recovery allows us to catch both of them!
     /// assert_eq!(errors.len(), 2);
     /// // Additionally, the AST we get back still has useful information.
