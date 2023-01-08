@@ -16,7 +16,7 @@
 use super::*;
 
 /// See [`end`].
-pub struct End<I: ?Sized>(PhantomData<I>);
+pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 
 /// A parser that accepts only the end of input.
 ///
@@ -29,41 +29,41 @@ pub struct End<I: ?Sized>(PhantomData<I>);
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// assert_eq!(end::<Simple<str>>().parse(""), Ok(()));
-/// assert!(end::<Simple<str>>().parse("hello").is_err());
+/// assert_eq!(end::<_, Simple<str>, ()>().parse("").0, Some(()));
+/// assert!(end::<_, Simple<str>, ()>().parse("hello").0.is_none());
 /// ```
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<_, Simple<str>>(10);
+/// let digits = text::digits::<_, _, Simple<str>, ()>(10);
 ///
 /// // This parser parses digits!
-/// assert_eq!(digits.parse("1234"), Ok("1234".to_string()));
+/// assert_eq!(digits.parse("1234").0, Some("1234"));
 ///
 /// // However, parsers are lazy and do not consume trailing input.
 /// // This can be inconvenient if we want to validate all of the input.
-/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK"), Ok("1234".to_string()));
+/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK").0, Some("1234"));
 ///
 /// // To fix this problem, we require that the end of input follows any successfully parsed input
 /// let only_digits = digits.then_ignore(end());
 ///
 /// // Now our parser correctly produces an error if any trailing input is found...
-/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").is_err());
+/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").0.is_none());
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
-/// assert_eq!(only_digits.parse("1234"), Ok("1234".to_string()));
+/// assert_eq!(only_digits.parse("1234").0, Some("1234"));
 /// ```
-pub const fn end<I: Input + ?Sized>() -> End<I> {
+pub const fn end<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> End<I, E, S> {
     End(PhantomData)
 }
 
-impl<I: ?Sized> Copy for End<I> {}
-impl<I: ?Sized> Clone for End<I> {
+impl<I: ?Sized, E, S> Copy for End<I, E, S> {}
+impl<I: ?Sized, E, S> Clone for End<I, E, S> {
     fn clone(&self) -> Self {
         End(PhantomData)
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for End<I>
+impl<'a, I, E, S> Parser<'a, I, (), E, S> for End<I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
@@ -217,14 +217,14 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let question = just::<_, _, Simple<str>>('?');
+/// let question = just::<_, _, Simple<str>, ()>('?');
 ///
-/// assert_eq!(question.parse("?"), Ok('?'));
-/// assert!(question.parse("!").is_err());
+/// assert_eq!(question.parse("?").0, Some('?'));
+/// assert!(question.parse("!").0.is_none());
 /// // This works because parsers do not eagerly consume input, so the '!' is not parsed
-/// assert_eq!(question.parse("?!"), Ok('?'));
+/// assert_eq!(question.parse("?!").0, Some('?'));
 /// // This fails because the parser expects an end to the input after the '?'
-/// assert!(question.then(end()).parse("?!").is_err());
+/// assert!(question.then(end()).parse("?!").0.is_none());
 /// ```
 pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
 where
@@ -295,13 +295,14 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let digits = one_of::<_, _, Simple<str>>("0123456789")
-///     .repeated().at_least(1)
-///     .then_ignore(end())
-///     .collect::<String>();
+/// let digits = one_of::<_, _, Simple<str>, ()>("0123456789")
+///     .repeated()
+///     .at_least(1)
+///     .collect::<String>()
+///     .then_ignore(end());
 ///
-/// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
-/// assert!(digits.parse("421!53").is_err());
+/// assert_eq!(digits.parse("48791").0, Some("48791".to_string()));
+/// assert!(digits.parse("421!53").0.is_none());
 /// ```
 pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
@@ -362,15 +363,14 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let string = one_of::<_, _, Simple<str>>("\"'")
-///     .ignore_then(none_of("\"'").repeated())
+/// let string = one_of::<_, _, Simple<str>, ()>("\"'")
+///     .ignore_then(none_of("\"'").repeated().collect::<String>())
 ///     .then_ignore(one_of("\"'"))
-///     .then_ignore(end())
-///     .collect::<String>();
+///     .then_ignore(end());
 ///
-/// assert_eq!(string.parse("'hello'"), Ok("hello".to_string()));
-/// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
-/// assert!(string.parse("\"421!53").is_err());
+/// assert_eq!(string.parse("'hello'").0, Some("hello".to_string()));
+/// assert_eq!(string.parse("\"world\"").0, Some("world".to_string()));
+/// assert!(string.parse("\"421!53").0.is_none());
 /// ```
 pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
 where
@@ -449,12 +449,12 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let any = any::<char, Simple<str>>();
+/// let any = any::<_, Simple<str>, ()>();
 ///
-/// assert_eq!(any.parse("a"), Ok('a'));
-/// assert_eq!(any.parse("7"), Ok('7'));
-/// assert_eq!(any.parse("\t"), Ok('\t'));
-/// assert!(any.parse("").is_err());
+/// assert_eq!(any.parse("a").0, Some('a'));
+/// assert_eq!(any.parse("7").0, Some('7'));
+/// assert_eq!(any.parse("\t").0, Some('\t'));
+/// assert!(any.parse("").0.is_none());
 /// ```
 pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
     Any {
@@ -504,11 +504,11 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let single_line = just::<_, _, Simple<str>>("//")
+/// let single_line = just::<_, _, Simple<str>, ()>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, Simple<str>>("/*")
+/// let multi_line = just::<_, _, Simple<str>, ()>("/*")
 ///     .then(take_until(just("*/")))
 ///     .ignored();
 ///
@@ -518,8 +518,10 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///     .padded()
 ///     .padded_by(comment
 ///         .padded()
-///         .repeated())
-///     .repeated();
+///         .repeated()
+///         .collect::<Vec<_>>())
+///     .repeated()
+///     .collect::<Vec<_>>();
 ///
 /// assert_eq!(tokens.parse(r#"
 ///     // These tokens...
@@ -531,7 +533,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///     // ...and single-line...
 ///     tokens
 ///     // ...comments between them
-/// "#), Ok(vec!["these".to_string(), "are".to_string(), "tokens".to_string()]));
+/// "#).0, Some(vec!["these", "are", "tokens"]));
 /// ```
 pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, (), E, S>
 where
@@ -582,10 +584,10 @@ where
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I: ?Sized, E>(PhantomData<(E, I)>);
+pub struct Todo<I: ?Sized, O, E>(PhantomData<(O, E, I)>);
 
-impl<I: ?Sized, E> Copy for Todo<I, E> {}
-impl<I: ?Sized, E> Clone for Todo<I, E> {
+impl<I: ?Sized, O, E> Copy for Todo<I, O, E> {}
+impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
     fn clone(&self) -> Self {
         *self
     }
@@ -605,32 +607,32 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
 ///
 /// ```should_panic
 /// # use chumsky::zero_copy::prelude::*;
-/// let int = just::<_, _, Simple<str>>("0x").ignore_then(todo())
+/// let int = just::<_, _, Simple<str>, ()>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2)))
 ///     .or(text::int(10));
 ///
 /// // Decimal numbers are parsed
-/// assert_eq!(int.parse("12"), Ok("12".to_string()));
+/// assert_eq!(int.parse("12").0, Some("12"));
 /// // Binary numbers are parsed
-/// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
+/// assert_eq!(int.parse("0b00101").0, Some("00101"));
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
-pub const fn todo<I: Input + ?Sized, E: Error<I>>() -> Todo<I, E> {
+pub const fn todo<I: Input + ?Sized, O, E: Error<I>>() -> Todo<I, O, E> {
     Todo(PhantomData)
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for Todo<I, E>
+impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Todo<I, O, E>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
         todo!("Attempted to use an unimplemented parser")
     }
 
-    go_extra!(());
+    go_extra!(O);
 }
 
 /// See [`choice`].
@@ -667,17 +669,17 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
-/// enum Token {
+/// enum Token<'a> {
 ///     If,
 ///     For,
 ///     While,
 ///     Fn,
 ///     Int(u64),
-///     Ident(String),
+///     Ident(&'a str),
 /// }
 ///
-/// let tokens = choice::<_, Simple<str>>((
-///     text::keyword("if").to(Token::If),
+/// let tokens = choice((
+///     text::keyword::<_, _, _, Simple<str>, ()>("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),
@@ -685,12 +687,13 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 ///     text::ident().map(Token::Ident),
 /// ))
 ///     .padded()
-///     .repeated();
+///     .repeated()
+///     .collect::<Vec<_>>();
 ///
 /// use Token::*;
 /// assert_eq!(
-///     tokens.parse("if 56 for foo while 42 fn bar"),
-///     Ok(vec![If, Int(56), For, Ident("foo".to_string()), While, Int(42), Fn, Ident("bar".to_string())]),
+///     tokens.parse("if 56 for foo while 42 fn bar").0,
+///     Some(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
 /// );
 /// ```
 pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {

@@ -1362,11 +1362,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
     ///     .repeated() // This parser produces an output of `Vec<char>`
     ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
     ///
-    /// assert_eq!(word.parse("hello"), Ok("hello".to_string()));
+    /// assert_eq!(word.parse("hello").0, Some("hello".to_string()));
     /// ```
     // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
     fn collect<C>(self) -> Map<Self, O, fn(O) -> C>
@@ -1387,19 +1387,19 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let int = just('-').or_not()
-    ///     .chain(filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit()).repeated()))
+    ///     .chain(any::<_, Simple<str>, ()>().filter(|c: &char| c.is_ascii_digit() && *c != '0')
+    ///         .chain(any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>()))
     ///     .or(just('0').map(|c| vec![c]))
     ///     .then_ignore(end())
     ///     .collect::<String>()
     ///     .from_str()
     ///     .unwrapped();
     ///
-    /// assert_eq!(int.parse("0"), Ok(0));
-    /// assert_eq!(int.parse("415"), Ok(415));
-    /// assert_eq!(int.parse("-50"), Ok(-50));
-    /// assert!(int.parse("-0").is_err());
-    /// assert!(int.parse("05").is_err());
+    /// assert_eq!(int.parse("0").0, Some(0));
+    /// assert_eq!(int.parse("415").0, Some(415));
+    /// assert_eq!(int.parse("-50").0, Some(-50));
+    /// assert!(int.parse("-0").0.is_none());
+    /// assert!(int.parse("05").0.is_none());
     /// ```
     fn chain<T, U, P>(
         self,
