@@ -28,14 +28,14 @@ pub struct End<I: ?Sized>(PhantomData<I>);
 /// # Examples
 ///
 /// ```
-/// # use chumsky::prelude::*;
-/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
-/// assert!(end::<Simple<char>>().parse("hello").is_err());
+/// # use chumsky::zero_copy::prelude::*;
+/// assert_eq!(end::<Simple<str>>().parse(""), Ok(()));
+/// assert!(end::<Simple<str>>().parse("hello").is_err());
 /// ```
 ///
 /// ```
-/// # use chumsky::prelude::*;
-/// let digits = text::digits::<_, Simple<char>>(10);
+/// # use chumsky::zero_copy::prelude::*;
+/// let digits = text::digits::<_, Simple<str>>(10);
 ///
 /// // This parser parses digits!
 /// assert_eq!(digits.parse("1234"), Ok("1234".to_string()));
@@ -216,8 +216,8 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let question = just::<_, _, Cheap<char>>('?');
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+/// let question = just::<_, _, Simple<str>>('?');
 ///
 /// assert_eq!(question.parse("?"), Ok('?'));
 /// assert!(question.parse("!").is_err());
@@ -294,8 +294,8 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let digits = one_of::<_, _, Cheap<char>>("0123456789")
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+/// let digits = one_of::<_, _, Simple<str>>("0123456789")
 ///     .repeated().at_least(1)
 ///     .then_ignore(end())
 ///     .collect::<String>();
@@ -361,8 +361,8 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let string = one_of::<_, _, Cheap<char>>("\"'")
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+/// let string = one_of::<_, _, Simple<str>>("\"'")
 ///     .ignore_then(none_of("\"'").repeated())
 ///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end())
@@ -448,8 +448,8 @@ where
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let any = any::<char, Cheap<char>>();
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+/// let any = any::<char, Simple<str>>();
 ///
 /// assert_eq!(any.parse("a"), Ok('a'));
 /// assert_eq!(any.parse("7"), Ok('7'));
@@ -503,12 +503,12 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let single_line = just::<_, _, Simple<char>>("//")
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+/// let single_line = just::<_, _, Simple<str>>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, Simple<char>>("/*")
+/// let multi_line = just::<_, _, Simple<str>>("/*")
 ///     .then(take_until(just("*/")))
 ///     .ignored();
 ///
@@ -604,8 +604,8 @@ impl<I: ?Sized, E> Clone for Todo<I, E> {
 /// # Examples
 ///
 /// ```should_panic
-/// # use chumsky::prelude::*;
-/// let int = just::<_, _, Simple<char>>("0x").ignore_then(todo())
+/// # use chumsky::zero_copy::prelude::*;
+/// let int = just::<_, _, Simple<str>>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2)))
 ///     .or(text::int(10));
 ///
@@ -665,7 +665,7 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 ///
 /// # Examples
 /// ```
-/// # use chumsky::prelude::*;
+/// # use chumsky::zero_copy::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
 /// enum Token {
 ///     If,
@@ -676,7 +676,7 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 ///     Ident(String),
 /// }
 ///
-/// let tokens = choice::<_, Simple<char>>((
+/// let tokens = choice::<_, Simple<str>>((
 ///     text::keyword("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
@@ -751,6 +751,7 @@ pub struct Group<T> {
     parsers: T,
 }
 
+/// TODO
 pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }

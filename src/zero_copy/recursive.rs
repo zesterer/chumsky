@@ -58,20 +58,20 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S
     /// }
     ///
     /// // Declare the existence of the parser before defining it so that it can reference itself
-    /// let mut chain = Recursive::<_, _, Simple<char>>::declare();
+    /// let mut chain = Recursive::declare();
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// chain.define(just('+')
+    /// chain.define(just::<_, _, Simple<str>, ()>('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
     ///     .map(|chain| chain.unwrap_or(Chain::End)));
     ///
-    /// assert_eq!(chain.parse(""), Ok(Chain::End));
+    /// assert_eq!(chain.parse("").0, Some(Chain::End));
     /// assert_eq!(
-    ///     chain.parse("++"),
-    ///     Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
+    ///     chain.parse("++").0,
+    ///     Some(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
     /// );
     /// ```
     pub fn declare() -> Self {
@@ -157,39 +157,40 @@ where
 /// # Examples
 ///
 /// ```
-/// # use chumsky::prelude::*;
+/// # use chumsky::zero_copy::prelude::*;
 /// #[derive(Debug, PartialEq)]
-/// enum Tree {
-///     Leaf(String),
-///     Branch(Vec<Tree>),
+/// enum Tree<'a> {
+///     Leaf(&'a str),
+///     Branch(Vec<Tree<'a>>),
 /// }
 ///
 /// // Parser that recursively parses nested lists
-/// let tree = recursive::<_, _, _, _, Simple<char>>(|tree| tree
+/// let tree = recursive::<_, _, Simple<str>, (), _, _>(|tree| tree
 ///     .separated_by(just(','))
+///     .collect::<Vec<_>>()
 ///     .delimited_by(just('['), just(']'))
 ///     .map(Tree::Branch)
 ///     .or(text::ident().map(Tree::Leaf))
 ///     .padded());
 ///
-/// assert_eq!(tree.parse("hello"), Ok(Tree::Leaf("hello".to_string())));
-/// assert_eq!(tree.parse("[a, b, c]"), Ok(Tree::Branch(vec![
-///     Tree::Leaf("a".to_string()),
-///     Tree::Leaf("b".to_string()),
-///     Tree::Leaf("c".to_string()),
+/// assert_eq!(tree.parse("hello").0, Some(Tree::Leaf("hello")));
+/// assert_eq!(tree.parse("[a, b, c]").0, Some(Tree::Branch(vec![
+///     Tree::Leaf("a"),
+///     Tree::Leaf("b"),
+///     Tree::Leaf("c"),
 /// ])));
 /// // The parser can deal with arbitrarily complex nested lists
-/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]"), Ok(Tree::Branch(vec![
+/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]").0, Some(Tree::Branch(vec![
 ///     Tree::Branch(vec![
-///         Tree::Leaf("a".to_string()),
-///         Tree::Leaf("b".to_string()),
+///         Tree::Leaf("a"),
+///         Tree::Leaf("b"),
 ///     ]),
-///     Tree::Leaf("c".to_string()),
+///     Tree::Leaf("c"),
 ///     Tree::Branch(vec![
-///         Tree::Leaf("d".to_string()),
+///         Tree::Leaf("d"),
 ///         Tree::Branch(vec![
-///             Tree::Leaf("e".to_string()),
-///             Tree::Leaf("f".to_string()),
+///             Tree::Leaf("e"),
+///             Tree::Leaf("f"),
 ///         ]),
 ///     ]),
 /// ])));

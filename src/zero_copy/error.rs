@@ -17,7 +17,7 @@ use super::*;
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
 /// type Span = std::ops::Range<usize>;
 ///
 /// // A custom error type
@@ -27,19 +27,14 @@ use super::*;
 ///     NotADigit(Span, char),
 /// }
 ///
-/// impl chumsky::Error<char> for MyError {
-///     type Span = Span;
-///     type Label = ();
-///
-///     fn expected_input_found<Iter: IntoIterator<Item = Option<char>>>(
-///         span: Span,
+/// impl chumsky::zero_copy::error::Error<str> for MyError {
+///     fn expected_found<Iter: IntoIterator<Item = Option<char>>>(
 ///         expected: Iter,
 ///         found: Option<char>,
+///         span: Span,
 ///     ) -> Self {
 ///         Self::ExpectedFound(span, expected.into_iter().collect(), found)
 ///     }
-///
-///     fn with_label(mut self, label: Self::Label) -> Self { self }
 ///
 ///     fn merge(mut self, mut other: Self) -> Self {
 ///         if let (Self::ExpectedFound(_, expected, _), Self::ExpectedFound(_, expected_other, _)) = (
@@ -52,14 +47,14 @@ use super::*;
 ///     }
 /// }
 ///
-/// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
+/// let numeral = any::<_, _, ()>().try_map(|c: char, span| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
 ///     None => Err(MyError::NotADigit(span, c)),
 /// });
 ///
-/// assert_eq!(numeral.parse("3"), Ok(3));
-/// assert_eq!(numeral.parse("7"), Ok(7));
-/// assert_eq!(numeral.parse("f"), Err(vec![MyError::NotADigit(0..1, 'f')]));
+/// assert_eq!(numeral.parse("3").0, Some(3));
+/// assert_eq!(numeral.parse("7").0, Some(7));
+/// assert_eq!(numeral.parse("f").1, vec![MyError::NotADigit(0..1, 'f')]);
 /// ```
 pub trait Error<I: Input + ?Sized>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.

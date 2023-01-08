@@ -698,24 +698,28 @@ where
     /// is constant, consider instead using [`Parser::repeated_exactly`]
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let ring = just::<_, _, Simple<char>>('O');
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let ring = just::<_, _, Simple<str>, ()>('O');
     ///
     /// let for_the_elves = ring
     ///     .repeated()
-    ///     .exactly(3);
+    ///     .exactly(3)
+    ///     .collect::<Vec<_>>();
     ///
     /// let for_the_dwarves = ring
     ///     .repeated()
-    ///     .exactly(6);
+    ///     .exactly(6)
+    ///     .collect::<Vec<_>>();
     ///
     /// let for_the_humans = ring
     ///     .repeated()
-    ///     .exactly(9);
+    ///     .exactly(9)
+    ///     .collect::<Vec<_>>();
     ///
     /// let for_sauron = ring
     ///     .repeated()
-    ///     .exactly(1);
+    ///     .exactly(1)
+    ///     .collect::<Vec<_>>();
     ///
     /// let rings = for_the_elves
     ///     .then(for_the_dwarves)
@@ -723,12 +727,12 @@ where
     ///     .then(for_sauron)
     ///     .then_ignore(end());
     ///
-    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").is_err()); // Too few rings!
-    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").is_err()); // Too many rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").0.is_none()); // Too few rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").0.is_none()); // Too many rings!
     /// // The perfect number of rings
     /// assert_eq!(
-    ///     rings.parse("OOOOOOOOOOOOOOOOOOO"),
-    ///     Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
+    ///     rings.parse("OOOOOOOOOOOOOOOOOOO").0,
+    ///     Some(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
     /// );
     /// ````
     pub fn exactly(self, exactly: usize) -> Self {
@@ -834,14 +838,15 @@ where
     /// Require that the pattern appear at least a minimum number of times.
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let numbers = just::<_, _, Simple<char>>('-')
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let numbers = just::<_, _, Simple<str>, ()>('-')
     ///     .separated_by(just('.'))
-    ///     .at_least(2);
+    ///     .at_least(2)
+    ///     .collect::<Vec<_>>();
     ///
-    /// assert!(numbers.parse("").is_err());
-    /// assert!(numbers.parse("-").is_err());
-    /// assert_eq!(numbers.parse("-.-"), Ok(vec!['-', '-']));
+    /// assert!(numbers.parse("").0.is_none());
+    /// assert!(numbers.parse("-").0.is_none());
+    /// assert_eq!(numbers.parse("-.-").0, Some(vec!['-', '-']));
     /// ````
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
@@ -850,23 +855,25 @@ where
     /// Require that the pattern appear at most a maximum number of times.
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let row_4 = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let row_4 = text::int::<_, _, Simple<str>, ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
-    ///     .at_most(4);
+    ///     .at_most(4)
+    ///     .collect::<Vec<_>>();
     ///
     /// let matrix_4x4 = row_4
     ///     .separated_by(just(','))
-    ///     .at_most(4);
+    ///     .at_most(4)
+    ///     .collect::<Vec<_>>();
     ///
     /// assert_eq!(
-    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"),
-    ///     Ok(vec![
-    ///         vec!["0".to_string(), "1".to_string(), "2".to_string(), "3".to_string()],
-    ///         vec!["4".to_string(), "5".to_string(), "6".to_string(), "7".to_string()],
-    ///         vec!["8".to_string(), "9".to_string(), "10".to_string(), "11".to_string()],
-    ///         vec!["12".to_string(), "13".to_string(), "14".to_string(), "15".to_string()],
+    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15").0,
+    ///     Some(vec![
+    ///         vec!["0", "1", "2", "3"],
+    ///         vec!["4", "5", "6", "7"],
+    ///         vec!["8", "9", "10", "11"],
+    ///         vec!["12", "13", "14", "15"],
     ///     ]),
     /// );
     /// ````
@@ -881,19 +888,20 @@ where
     /// constant, consider instead using [`Parser::separated_by_exactly`].
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let coordinate_3d = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let coordinate_3d = text::int::<_, _, Simple<str>, ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
+    ///     .collect::<Vec<_>>()
     ///     .then_ignore(end());
     ///
     /// // Not enough elements
-    /// assert!(coordinate_3d.parse("4, 3").is_err());
+    /// assert!(coordinate_3d.parse("4, 3").0.is_none());
     /// // Too many elements
-    /// assert!(coordinate_3d.parse("7, 2, 13, 4").is_err());
+    /// assert!(coordinate_3d.parse("7, 2, 13, 4").0.is_none());
     /// // Just the right number of elements
-    /// assert_eq!(coordinate_3d.parse("5, 0, 12"), Ok(vec!["5".to_string(), "0".to_string(), "12".to_string()]));
+    /// assert_eq!(coordinate_3d.parse("5, 0, 12").0, Some(vec!["5", "0", "12"]));
     /// ````
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
@@ -910,20 +918,21 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, Simple<char>>("enum")
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let r#enum = text::keyword::<_, _, _, Simple<str>, ()>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
     ///         .separated_by(just('|'))
-    ///         .allow_leading());
+    ///         .allow_leading()
+    ///         .collect::<Vec<_>>());
     ///
-    /// assert_eq!(r#enum.parse("enum True | False"), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// assert_eq!(r#enum.parse("enum True | False").0, Some(vec!["True", "False"]));
     /// assert_eq!(r#enum.parse("
     ///     enum
     ///     | True
     ///     | False
-    /// "), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// ").0, Some(vec!["True", "False"]));
     /// ```
     pub fn allow_leading(self) -> Self {
         Self {
@@ -939,15 +948,16 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let numbers = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let numbers = text::int::<_, _, Simple<str>, ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
+    ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('('), just(')'));
     ///
-    /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
-    /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(numbers.parse("(1, 2)").0, Some(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2,)").0, Some(vec!["1", "2"]));
     /// ```
     pub fn allow_trailing(self) -> Self {
         Self {
@@ -1356,20 +1366,21 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, Simple<char>>("enum")
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let r#enum = text::keyword::<_, _, _, Simple<str>, ()>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
     ///         .separated_by(just('|'))
-    ///         .allow_leading());
+    ///         .allow_leading()
+    ///         .collect::<Vec<_>>());
     ///
-    /// assert_eq!(r#enum.parse("enum True | False"), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// assert_eq!(r#enum.parse("enum True | False").0, Some(vec!["True", "False"]));
     /// assert_eq!(r#enum.parse("
     ///     enum
     ///     | True
     ///     | False
-    /// "), Ok(vec!["True".to_string(), "False".to_string()]));
+    /// ").0, Some(vec!["True", "False"]));
     /// ```
     pub fn allow_leading(self) -> Self {
         Self {
@@ -1385,15 +1396,16 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let numbers = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let numbers = text::int::<_, _, Simple<str>, ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
+    ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('('), just(')'));
     ///
-    /// assert_eq!(numbers.parse("(1, 2)"), Ok(vec!["1".to_string(), "2".to_string()]));
-    /// assert_eq!(numbers.parse("(1, 2,)"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(numbers.parse("(1, 2)").0, Some(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2,)").0, Some(vec!["1", "2"]));
     /// ```
     pub fn allow_trailing(self) -> Self {
         Self {

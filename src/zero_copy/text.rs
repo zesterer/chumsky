@@ -354,7 +354,7 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
 pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
-) -> impl Parser<'a, I, &'a C::Slice, E, S> {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -432,5 +432,38 @@ where
         }
 
         nesting.remove(0).1
+    })
+}
+
+/// Like [`ident`], but only accepts an exact identifier while ignoring trailing identifier characters.
+///
+/// The output type of this parser is `()`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let def = text::keyword::<_, _, _, Simple<str>, ()>("def");
+///
+/// // Exactly 'def' was found
+/// assert_eq!(def.parse("def").0, Some(()));
+/// // Exactly 'def' was found, with non-identifier trailing characters
+/// assert_eq!(def.parse("def(foo, bar)").0, Some(()));
+/// // 'def' was found, but only as part of a larger identifier, so this fails to parse
+/// assert!(def.parse("define").0.is_none());
+/// ```
+pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: Error<I> + 'a, S: 'a>(
+    keyword: Str,
+) -> impl Parser<'a, I, (), E, S> + Clone + 'a
+where
+    C::Slice: PartialEq,
+{
+    // TODO: use .filter(...), improve error messages
+    ident().try_map(move |s: &C::Slice, span| {
+        if s == keyword.as_ref() {
+            Ok(())
+        } else {
+            Err(E::expected_found(None, None, span))
+        }
     })
 }

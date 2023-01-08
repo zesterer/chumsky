@@ -292,6 +292,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
 
+    /// TODO
     fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, S, F, U>
     where
         Self: Sized,
@@ -314,7 +315,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let lowercase = any()
-    ///     .filter::<_, _, Simple<char>>(char::is_ascii_lowercase)
+    ///     .filter::<_, _, Simple<str>>(char::is_ascii_lowercase)
     ///     .repeated().at_least(1)
     ///     .then_ignore(end())
     ///     .collect::<String>();
@@ -344,13 +345,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// enum Token { Word(String), Num(u64) }
     ///
     /// let word = any()
-    ///     .filter::<_, _, Simple<char>>(|c: &char| c.is_alphabetic())
+    ///     .filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
     /// let num = any()
-    ///     .filter::<_, _, Simple<char>>(|c: &char| c.is_ascii_digit())
+    ///     .filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| Token::Num(s.parse().unwrap()));
@@ -380,14 +381,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
+    /// # use chumsky::zero_copy::prelude::*;
     /// use std::ops::Range;
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, Range<usize>);
     ///
-    /// let ident = text::ident::<_, Simple<char>>()
+    /// let ident = text::ident::<_, Simple<str>>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
@@ -414,14 +415,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
+    /// # use chumsky::zero_copy::prelude::*;
     /// use std::ops::Range;
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, Range<usize>);
     ///
-    /// let ident = text::ident::<_, Simple<char>>()
+    /// let ident = text::ident::<_, Simple<str>>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
@@ -450,8 +451,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let byte = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let byte = text::int::<_, Simple<str>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
     ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
@@ -482,8 +483,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let byte = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let byte = text::int::<_, Simple<str>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
     ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
@@ -517,9 +518,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = filter::<_, _, Cheap<char>>(|c: &char| c.is_whitespace())
+    /// let whitespace = filter::<_, _, Simple<str>>(|c: &char| c.is_whitespace())
     ///     .ignored()
     ///     .repeated();
     ///
@@ -543,11 +544,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// let op = just::<_, _, Cheap<char>>('+').to(Op::Add)
+    /// let op = just::<_, _, Simple<str>>('+').to(Op::Add)
     ///     .or(just('-').to(Op::Sub))
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
@@ -573,8 +574,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
     /// let two_words = word.then_ignore(just(' ')).then(word);
@@ -600,8 +601,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let zeroes = filter::<_, _, Cheap<char>>(|c: &char| *c == '0').ignored().repeated();
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let zeroes = filter::<_, _, Simple<str>>(|c: &char| *c == '0').ignored().repeated();
     /// let digits = filter(|c: &char| c.is_ascii_digit()).repeated();
     /// let integer = zeroes
     ///     .ignore_then(digits)
@@ -630,8 +631,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
@@ -676,9 +677,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, Cheap<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
+    /// let successive_letters = one_of::<_, _, Simple<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
     ///     .then_with(|letter: u8| just(letter + 1));
     ///
     /// assert_eq!(successive_letters.parse(*b"ab"), Ok(b'b')); // 'b' follows 'a'
@@ -743,7 +744,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A LISP-style S-expression
     /// #[derive(Debug, PartialEq)]
     /// enum SExpr {
@@ -752,7 +753,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    /// let ident = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
@@ -806,8 +807,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let ident = text::ident::<_, Simple<char>>()
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let ident = text::ident::<_, Simple<str>>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!"), Ok("hello".to_string()));
@@ -847,8 +848,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let op = just::<_, _, Cheap<char>>('+')
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let op = just::<_, _, Simple<str>>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
@@ -877,8 +878,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>();
     ///
@@ -960,8 +961,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let num = filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .from_str()
@@ -993,8 +994,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let num = filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .from_str()
@@ -1025,8 +1026,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let shopping = text::ident::<_, Simple<char>>()
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let shopping = text::ident::<_, Simple<str>>()
     ///     .padded()
     ///     .separated_by(just(','));
     ///
@@ -1061,8 +1062,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let shopping = text::ident::<_, Simple<char>>()
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let shopping = text::ident::<_, Simple<str>>()
     ///     .padded()
     ///     .separated_by(just(','));
     ///
@@ -1098,8 +1099,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let int = text::int::<char, Cheap<char>>(10)
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let int = text::int::<char, Simple<str>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1136,8 +1137,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let int = text::int::<char, Cheap<char>>(10)
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let int = text::int::<char, Simple<str>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1173,8 +1174,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let just_numbers = text::digits::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let just_numbers = text::digits::<_, Simple<str>>(10)
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
     ///     .separated_by(just(','));
@@ -1195,8 +1196,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let ident = text::ident::<_, Simple<char>>().padded();
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let ident = text::ident::<_, Simple<str>>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello"), Ok("hello".to_string()));
@@ -1244,7 +1245,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// #[derive(Debug, PartialEq)]
     /// enum Expr {
     ///     Error,
@@ -1252,7 +1253,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     List(Vec<Expr>),
     /// }
     ///
-    /// let expr = recursive::<_, _, _, _, Simple<char>>(|expr| expr
+    /// let expr = recursive::<_, _, _, _, Simple<str>>(|expr| expr
     ///     .separated_by(just(','))
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
@@ -1360,8 +1361,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
     ///     .repeated() // This parser produces an output of `Vec<char>`
     ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
     ///
@@ -1384,10 +1385,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let int = just('-').or_not()
-    ///     .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit()).repeated()))
+    ///     .chain(filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit() && *c != '0')
+    ///         .chain(filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit()).repeated()))
     ///     .or(just('0').map(|c| vec![c]))
     ///     .then_ignore(end())
     ///     .collect::<String>()
@@ -1447,8 +1448,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let uint64 = text::int::<_, Simple<char>>(10)
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let uint64 = text::int::<_, Simple<str>>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
@@ -1478,8 +1479,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// let boolean = just::<_, _, Simple<char>>("true")
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let boolean = just::<_, _, Simple<str>>("true")
     ///     .or(just("false"))
     ///     .from_str::<bool>()
     ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
