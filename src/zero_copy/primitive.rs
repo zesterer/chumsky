@@ -161,6 +161,16 @@ impl<'b, T: Clone, const N: usize> Seq<T> for &'b [T; N] {
     }
 }
 
+impl<'b, T: Clone> Seq<T> for Vec<T> {
+    type Iter<'a> = alloc::vec::IntoIter<T>
+    where
+        Self: 'a;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        self.clone().into_iter()
+    }
+}
+
 impl Seq<char> for str {
     type Iter<'a> = core::str::Chars<'a>
     where

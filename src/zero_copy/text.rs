@@ -335,7 +335,7 @@ where
 #[must_use]
 pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E, S> {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)

@@ -314,14 +314,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let lowercase = any()
-    ///     .filter::<_, _, Simple<str>>(char::is_ascii_lowercase)
-    ///     .repeated().at_least(1)
-    ///     .then_ignore(end())
-    ///     .collect::<String>();
+    /// let lowercase = any::<_, Simple<str>, ()>()
+    ///     .filter(char::is_ascii_lowercase)
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>()
+    ///     .then_ignore(end());
     ///
-    /// assert_eq!(lowercase.parse("hello"), Ok("hello".to_string()));
-    /// assert!(lowercase.parse("Hello").is_err());
+    /// assert_eq!(lowercase.parse("hello").0, Some("hello".to_string()));
+    /// assert!(lowercase.parse("Hello").0.is_none());
     /// ```
     fn filter<F: Fn(&O) -> bool>(self, f: F) -> Filter<Self, F>
     where
@@ -344,22 +345,22 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
-    /// let word = any()
-    ///     .filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
+    /// let word = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
-    /// let num = any()
-    ///     .filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
+    /// let num = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| Token::Num(s.parse().unwrap()));
     ///
     /// let token = word.or(num);
     ///
-    /// assert_eq!(token.parse("test"), Ok(Token::Word("test".to_string())));
-    /// assert_eq!(token.parse("42"), Ok(Token::Num(42)));
+    /// assert_eq!(token.parse("test").0, Some(Token::Word("test".to_string())));
+    /// assert_eq!(token.parse("42").0, Some(Token::Num(42)));
     /// ```
     fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, O, F>
     where
@@ -388,12 +389,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, Range<usize>);
     ///
-    /// let ident = text::ident::<_, Simple<str>>()
+    /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello"), Ok(Spanned("hello".to_string(), 0..5)));
-    /// assert_eq!(ident.parse("       hello   "), Ok(Spanned("hello".to_string(), 7..12)));
+    /// assert_eq!(ident.parse("hello").0, Some(Spanned("hello", 0..5)));
+    /// assert_eq!(ident.parse("       hello   ").0, Some(Spanned("hello", 7..12)));
     /// ```
     fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
     where
@@ -422,12 +423,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, Range<usize>);
     ///
-    /// let ident = text::ident::<_, Simple<str>>()
+    /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello"), Ok(Spanned("hello".to_string(), 0..5)));
-    /// assert_eq!(ident.parse("       hello   "), Ok(Spanned("hello".to_string(), 7..12)));
+    /// assert_eq!(ident.parse("hello").0, Some(Spanned("hello", 0..5)));
+    /// assert_eq!(ident.parse("       hello   ").0, Some(Spanned("hello", 7..12)));
     /// ```
     fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(self, f: F) -> MapWithState<Self, O, F>
     where
@@ -452,13 +453,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let byte = text::int::<_, Simple<str>>(10)
+    /// let byte = text::int::<_, _, Rich<str>, ()>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
-    ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
+    ///         .map_err(|e| Rich::expected_found(None, None, span)));
     ///
-    /// assert!(byte.parse("255").is_ok());
-    /// assert!(byte.parse("256").is_err()); // Out of range
+    /// assert!(byte.parse("255").0.is_some());
+    /// assert!(byte.parse("256").0.is_none()); // Out of range
     /// ```
     #[doc(alias = "filter_map")]
     fn try_map<U, F: Fn(O, I::Span) -> Result<U, E>>(self, f: F) -> TryMap<Self, O, F>
@@ -479,19 +480,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// [`Parser::validate`] instead.
     ///
     /// The output type of this parser is `U`, the [`Ok`] return value of the function.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::prelude::*;
-    /// let byte = text::int::<_, Simple<str>>(10)
-    ///     .try_map(|s, span| s
-    ///         .parse::<u8>()
-    ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
-    ///
-    /// assert!(byte.parse("255").is_ok());
-    /// assert!(byte.parse("256").is_err()); // Out of range
-    /// ```
     fn try_map_with_state<U, F: Fn(O, I::Span, &mut S) -> Result<U, E>>(
         self,
         f: F,
@@ -520,12 +508,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = filter::<_, _, Simple<str>>(|c: &char| c.is_whitespace())
+    /// let whitespace = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_whitespace())
     ///     .ignored()
-    ///     .repeated();
+    ///     .repeated()
+    ///     .collect::<Vec<_>>();
     ///
-    /// assert_eq!(whitespace.parse("    "), Ok(vec![(); 4]));
-    /// assert_eq!(whitespace.parse("  hello"), Ok(vec![(); 2]));
+    /// assert_eq!(whitespace.parse("    ").0, Some(vec![(); 4]));
+    /// assert_eq!(whitespace.parse("  hello").0, Some(vec![(); 2]));
     /// ```
     fn ignored(self) -> Ignored<Self, O>
     where
@@ -548,13 +538,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// let op = just::<_, _, Simple<str>>('+').to(Op::Add)
+    /// let op = just::<_, _, Simple<str>, ()>('+').to(Op::Add)
     ///     .or(just('-').to(Op::Sub))
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
     ///
-    /// assert_eq!(op.parse("+"), Ok(Op::Add));
-    /// assert_eq!(op.parse("/"), Ok(Op::Div));
+    /// assert_eq!(op.parse("+").0, Some(Op::Add));
+    /// assert_eq!(op.parse("/").0, Some(Op::Div));
     /// ```
     fn to<U: Clone>(self, to: U) -> To<Self, O, U, E, S>
     where
@@ -575,13 +565,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// let word = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     /// let two_words = word.then_ignore(just(' ')).then(word);
     ///
-    /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
-    /// assert!(two_words.parse("hedgehog").is_err());
+    /// assert_eq!(two_words.parse("dog cat").0, Some(("dog".to_string(), "cat".to_string())));
+    /// assert!(two_words.parse("hedgehog").0.is_none());
     /// ```
     fn then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> Then<Self, B, O, U, E, S>
     where
@@ -602,16 +594,16 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let zeroes = filter::<_, _, Simple<str>>(|c: &char| *c == '0').ignored().repeated();
-    /// let digits = filter(|c: &char| c.is_ascii_digit()).repeated();
+    /// let zeroes = any::<_, Simple<str>, ()>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
+    /// let digits = any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>();
     /// let integer = zeroes
     ///     .ignore_then(digits)
     ///     .collect::<String>()
     ///     .from_str()
     ///     .unwrapped();
     ///
-    /// assert_eq!(integer.parse("00064"), Ok(64));
-    /// assert_eq!(integer.parse("32"), Ok(32));
+    /// assert_eq!(integer.parse("00064").0, Some(64));
+    /// assert_eq!(integer.parse("32").0, Some(32));
     /// ```
     fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, O, E, S>
     where
@@ -632,8 +624,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// let word = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     ///
     /// let punctuated = word
@@ -641,11 +635,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// let sentence = punctuated
     ///     .padded() // Allow for whitespace gaps
-    ///     .repeated();
+    ///     .repeated()
+    ///     .collect::<Vec<_>>();
     ///
     /// assert_eq!(
-    ///     sentence.parse("hello! how are you?"),
-    ///     Ok(vec![
+    ///     sentence.parse("hello! how are you?").0,
+    ///     Some(vec![
     ///         "hello".to_string(),
     ///         "how".to_string(),
     ///         "are".to_string(),
@@ -679,11 +674,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, Simple<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
+    /// let successive_letters = one_of::<_, _, Simple<[u8]>, ()>((b'a'..=b'z').collect::<Vec<u8>>())
     ///     .then_with(|letter: u8| just(letter + 1));
     ///
-    /// assert_eq!(successive_letters.parse(*b"ab"), Ok(b'b')); // 'b' follows 'a'
-    /// assert!(successive_letters.parse(*b"ac").is_err()); // 'c' does not follow 'a'
+    /// assert_eq!(successive_letters.parse(b"ab").0, Some(b'b')); // 'b' follows 'a'
+    /// assert!(successive_letters.parse(b"ac").0.is_none()); // 'c' does not follow 'a'
     /// ```
     fn then_with<U, B: Parser<'a, I, U, E, S>, F: Fn(O) -> B>(
         self,
@@ -753,8 +748,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// let ident = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     ///
     /// let num = text::int(10)
@@ -764,27 +760,27 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// let s_expr = recursive(|s_expr| s_expr
     ///     .padded()
     ///     .repeated()
+    ///     .collect::<Vec<_>>()
     ///     .map(SExpr::List)
     ///     .delimited_by(just('('), just(')'))
     ///     .or(ident.map(SExpr::Ident))
     ///     .or(num.map(SExpr::Num)));
     ///
     /// // A valid input
+    /// let (out, errs) = s_expr.parse("(add (mul 42 3) 15)");
     /// assert_eq!(
-    ///     s_expr.parse_recovery("(add (mul 42 3) 15)"),
-    ///     (
-    ///         Some(SExpr::List(vec![
-    ///             SExpr::Ident("add".to_string()),
-    ///             SExpr::List(vec![
-    ///                 SExpr::Ident("mul".to_string()),
-    ///                 SExpr::Num(42),
-    ///                 SExpr::Num(3),
-    ///             ]),
-    ///             SExpr::Num(15),
-    ///         ])),
-    ///         Vec::new(), // No errors!
-    ///     ),
+    ///     out,
+    ///     Some(SExpr::List(vec![
+    ///         SExpr::Ident("add".to_string()),
+    ///         SExpr::List(vec![
+    ///             SExpr::Ident("mul".to_string()),
+    ///             SExpr::Num(42),
+    ///             SExpr::Num(3),
+    ///         ]),
+    ///         SExpr::Num(15),
+    ///     ])),
     /// );
+    /// assert!(errs.is_empty());
     /// ```
     fn delimited_by<U, V, B, C>(self, start: B, end: C) -> DelimitedBy<Self, B, C, U, V>
     where
@@ -808,13 +804,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let ident = text::ident::<_, Simple<str>>()
+    /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .padded_by(just('!'));
     ///
-    /// assert_eq!(ident.parse("!hello!"), Ok("hello".to_string()));
-    /// assert!(ident.parse("hello!").is_err());
-    /// assert!(ident.parse("!hello").is_err());
-    /// assert!(ident.parse("hello").is_err());
+    /// assert_eq!(ident.parse("!hello!").0, Some("hello"));
+    /// assert!(ident.parse("hello!").0.is_none());
+    /// assert!(ident.parse("!hello").0.is_none());
+    /// assert!(ident.parse("hello").0.is_none());
     /// ```
     fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, U>
     where
@@ -849,14 +845,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let op = just::<_, _, Simple<str>>('+')
+    /// let op = just::<_, _, Simple<str>, ()>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
     ///
-    /// assert_eq!(op.parse("+"), Ok('+'));
-    /// assert_eq!(op.parse("/"), Ok('/'));
-    /// assert!(op.parse("!").is_err());
+    /// assert_eq!(op.parse("+").0, Some('+'));
+    /// assert_eq!(op.parse("/").0, Some('/'));
+    /// assert!(op.parse("!").0.is_none());
     /// ```
     fn or<B>(self, other: B) -> Or<Self, B>
     where
@@ -879,15 +875,16 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = filter::<_, _, Simple<str>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     ///
     /// let word_or_question = word
     ///     .then(just('?').or_not());
     ///
-    /// assert_eq!(word_or_question.parse("hello?"), Ok(("hello".to_string(), Some('?'))));
-    /// assert_eq!(word_or_question.parse("wednesday"), Ok(("wednesday".to_string(), None)));
+    /// assert_eq!(word_or_question.parse("hello?").0, Some(("hello".to_string(), Some('?'))));
+    /// assert_eq!(word_or_question.parse("wednesday").0, Some(("wednesday".to_string(), None)));
     /// ```
     fn or_not(self) -> OrNot<Self>
     where
@@ -962,16 +959,18 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let num = filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated().at_least(1)
+    /// let num = any::<_, Simple<str>, ()>()
+    ///     .filter(|c: &char| c.is_ascii_digit())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>()
     ///     .from_str()
     ///     .unwrapped();
     ///
-    /// let sum = num.then(just('+').ignore_then(num).repeated())
+    /// let sum = num.clone().then(just('+').ignore_then(num).repeated().collect::<Vec<_>>())
     ///     .foldl(|a, b| a + b);
     ///
-    /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
+    /// assert_eq!(sum.parse("2+13+4+0+5").0, Some(24));
     /// ```
     fn repeated(self) -> Repeated<Self, O, I, (), E, S>
     where
@@ -987,25 +986,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 
     /// Parse a pattern a specific number of times.
     ///
-    /// Input is eagerly parsed. Consider using [`Repeated::repeated`] if a non-constant number of values are expected.
+    /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
     ///
     /// The output type of this parser can be any [`ContainerExactly`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let num = filter::<_, _, Simple<str>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated().at_least(1)
-    ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// let sum = num.then(just('+').ignore_then(num).repeated())
-    ///     .foldl(|a, b| a + b);
-    ///
-    /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
-    /// ```
     fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
     where
         Self: Sized,
@@ -1027,12 +1010,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, Simple<str>>()
+    /// let shopping = text::ident::<_, _, Simple<str>, ()>()
     ///     .padded()
-    ///     .separated_by(just(','));
+    ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>();
     ///
-    /// assert_eq!(shopping.parse("eggs"), Ok(vec!["eggs".to_string()]));
-    /// assert_eq!(shopping.parse("eggs, flour, milk"), Ok(vec!["eggs".to_string(), "flour".to_string(), "milk".to_string()]));
+    /// assert_eq!(shopping.parse("eggs").0, Some(vec!["eggs"]));
+    /// assert_eq!(shopping.parse("eggs, flour, milk").0, Some(vec!["eggs", "flour", "milk"]));
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
@@ -1054,24 +1038,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
 
     /// Parse a pattern, separated by another, a specific number of times.
     ///
-    /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
-    /// separators.
+    /// You can use [`SeparatedByExactly::allow_leading`] or [`SeparatedByExactly::allow_trailing`] to
+    /// allow leading or trailing separators.
     ///
     /// The output type of this parser can be any [`ContainerExactly`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, Simple<str>>()
-    ///     .padded()
-    ///     .separated_by(just(','));
-    ///
-    /// assert_eq!(shopping.parse("eggs"), Ok(vec!["eggs".to_string()]));
-    /// assert_eq!(shopping.parse("eggs, flour, milk"), Ok(vec!["eggs".to_string(), "flour".to_string(), "milk".to_string()]));
-    /// ```
-    ///
-    /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
     fn separated_by_exactly<U, B, const N: usize>(
         self,
         separator: B,
@@ -1100,19 +1070,20 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<char, Simple<str>>(10)
+    /// let int = text::int::<_, _, Simple<str>, ()>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
     /// let signed = just('+').to(1)
     ///     .or(just('-').to(-1))
     ///     .repeated()
+    ///     .collect::<Vec<_>>()
     ///     .then(int)
     ///     .foldr(|a, b| a * b);
     ///
-    /// assert_eq!(signed.parse("3"), Ok(3));
-    /// assert_eq!(signed.parse("-17"), Ok(-17));
-    /// assert_eq!(signed.parse("--+-+-5"), Ok(5));
+    /// assert_eq!(signed.parse("3").0, Some(3));
+    /// assert_eq!(signed.parse("-17").0, Some(-17));
+    /// assert_eq!(signed.parse("--+-+-5").0, Some(5));
     /// ```
     fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
     where
@@ -1138,16 +1109,17 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<char, Simple<str>>(10)
+    /// let int = text::int::<_, _, Simple<str>, ()>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
     /// let sum = int
-    ///     .then(just('+').ignore_then(int).repeated())
+    ///     .clone()
+    ///     .then(just('+').ignore_then(int).repeated().collect::<Vec<_>>())
     ///     .foldl(|a, b| a + b);
     ///
-    /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
-    /// assert_eq!(sum.parse("6"), Ok(6));
+    /// assert_eq!(sum.parse("1+12+3+9").0, Some(25));
+    /// assert_eq!(sum.parse("6").0, Some(6));
     /// ```
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
     where
@@ -1175,12 +1147,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let just_numbers = text::digits::<_, Simple<str>>(10)
+    /// let just_numbers = text::digits::<_, _, Simple<str>, ()>(10)
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
-    ///     .separated_by(just(','));
+    ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>();
     /// // 3 is not parsed because it's followed by '+'.
-    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4").0, Some(vec!["1", "2"]));
     /// ```
     fn rewind(self) -> Rewind<Self>
     where
@@ -1197,12 +1170,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ident = text::ident::<_, Simple<str>>().padded();
+    /// let ident = text::ident::<_, _, Simple<str>, ()>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
-    /// assert_eq!(ident.parse("hello"), Ok("hello".to_string()));
+    /// assert_eq!(ident.parse("hello").0, Some("hello"));
     /// // A pattern with arbitrary whitespace surrounding it is also accepted
-    /// assert_eq!(ident.parse(" \t \n  \t   world  \t  "), Ok("world".to_string()));
+    /// assert_eq!(ident.parse(" \t \n  \t   world  \t  ").0, Some("world"));
     /// ```
     fn padded(self) -> Padded<Self>
     where
@@ -1253,7 +1226,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     List(Vec<Expr>),
     /// }
     ///
-    /// let expr = recursive::<_, _, _, _, Simple<str>>(|expr| expr
+    /// let expr = recursive::<_, _, Simple<str>, (), _, _>(|expr| expr
     ///     .separated_by(just(','))
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
@@ -1449,12 +1422,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let uint64 = text::int::<_, Simple<str>>(10)
+    /// let uint64 = text::int::<_, _, Simple<str>, ()>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
-    /// assert_eq!(uint64.parse("7"), Ok(7));
-    /// assert_eq!(uint64.parse("42"), Ok(42));
+    /// assert_eq!(uint64.parse("7").0, Some(7));
+    /// assert_eq!(uint64.parse("42").0, Some(42));
     /// ```
     #[allow(clippy::wrong_self_convention)]
     fn from_str<U>(self) -> Map<Self, O, fn(O) -> Result<U, U::Err>>
@@ -1480,15 +1453,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let boolean = just::<_, _, Simple<str>>("true")
+    /// let boolean = just::<_, _, Simple<str>, ()>("true")
     ///     .or(just("false"))
     ///     .from_str::<bool>()
     ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
     ///
-    /// assert_eq!(boolean.parse("true"), Ok(true));
-    /// assert_eq!(boolean.parse("false"), Ok(false));
+    /// assert_eq!(boolean.parse("true").0, Some(true));
+    /// assert_eq!(boolean.parse("false").0, Some(false));
     /// // Does not panic, because the original parser only accepts "true" or "false"
-    /// assert!(boolean.parse("42").is_err());
+    /// assert!(boolean.parse("42").0.is_none());
     /// ```
     fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where

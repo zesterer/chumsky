@@ -300,6 +300,13 @@ pub struct Ignored<A, OA> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
+impl<A: Copy, OA> Copy for Ignored<A, OA> {}
+impl<A: Clone, OA> Clone for Ignored<A, OA> {
+    fn clone(&self) -> Self {
+        Ignored { parser: self.parser.clone(), phantom: PhantomData }
+    }
+}
+
 impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Ignored<A, OA>
 where
     I: Input + ?Sized,
@@ -1294,7 +1301,7 @@ impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     pub fn collect<'a, I, E, S, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
         A: Parser<'a, I, OA, E, S>,
-        I: Input,
+        I: Input + ?Sized,
         E: Error<I>,
         S: 'a,
         D: ContainerExactly<OA, N>,
