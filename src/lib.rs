@@ -1423,12 +1423,12 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// }
 /// ```
 ///
-/// If you require access to the input's span, you may add an argument after the pattern to gain access to it.
+/// If you require access to the input's span, you may add an argument before the patterns to gain access to it.
 ///
 /// ```ignore
-/// select! {
-///     Token::Num(x), span => Expr::Num(x).spanned(span),
-///     Token::Str(s), span => Expr::Str(s).spanned(span),
+/// select! { |span|
+///     Token::Num(x) => Expr::Num(x).spanned(span),
+///     Token::Str(s) => Expr::Str(s).spanned(span),
 /// }
 /// ```
 ///
@@ -1484,10 +1484,12 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
-        $crate::primitive::filter_map(move |span, x| match x {
-            $($p $(if $guard)? => ::core::result::Result::Ok({ $(let $span = span;)? $out })),+,
-            _ => ::core::result::Result::Err($crate::error::Error::expected_input_found(span, ::core::option::Option::None, ::core::option::Option::Some(x))),
+    (|$span:ident| $($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::primitive::filter_map(move |$span, x| match x {
+            $($p $(if $guard)? => ::core::result::Result::Ok($out)),+,
+            _ => ::core::result::Result::Err($crate::error::Error::expected_input_found($span, ::core::option::Option::None, ::core::option::Option::Some(x))),
         })
     });
+
+    ($($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => (select!(|_span| $($p $(if $guard)? => $out),+));
 }
