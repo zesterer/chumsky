@@ -764,7 +764,10 @@ pub struct Group<T> {
     parsers: T,
 }
 
-/// TODO
+/// Parse using a tuple of many parsers, producing a tuple of outputs if all successfully parse,
+/// otherwise returning an error if any parsers fail.
+///
+/// This parser is to [`Parser::then`] as [`choice`] is to [`Parser::or`]
 pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }

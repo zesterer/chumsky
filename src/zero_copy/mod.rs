@@ -292,7 +292,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
 
-    /// TODO
+    /// Map from a slice of the input based on the current parser's span to a value.
+    ///
+    /// The returned value may borrow data from the input slice, making this function very useful
+    /// for creating zero-copy AST output values
     fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, S, F, U>
     where
         Self: Sized,
