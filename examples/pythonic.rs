@@ -87,7 +87,7 @@ fn main() {
     let code = include_str!("sample.py");
 
     // First, lex the code into some nested token trees
-    let tts = lexer().parse(code).0.unwrap();
+    let tts = lexer().parse(code).into_output().unwrap();
 
     println!("--- Token Trees ---\n{:#?}", tts);
 
