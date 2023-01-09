@@ -10,6 +10,34 @@
 
 use super::*;
 
+#[cfg(feature = "nightly")]
+use core::cell::OnceCell;
+
+// TODO: Remove when `OnceCell` is stable
+#[cfg(not(feature = "nightly"))]
+struct OnceCell<T>(core::cell::RefCell<Option<T>>);
+#[cfg(not(feature = "nightly"))]
+impl<T> OnceCell<T> {
+    pub fn new() -> Self {
+        Self(core::cell::RefCell::new(None))
+    }
+    pub fn set(&self, x: T) -> Result<(), ()> {
+        let mut inner = self.0.try_borrow_mut().map_err(|_| ())?;
+
+        if inner.is_none() {
+            *inner = Some(x);
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+    pub fn get(&self) -> Option<core::cell::Ref<T>> {
+        Some(core::cell::Ref::map(self.0.borrow(), |x| {
+            x.as_ref().unwrap()
+        }))
+    }
+}
+
 enum RecursiveInner<T: ?Sized> {
     Owned(Rc<T>),
     Unowned(Weak<T>),

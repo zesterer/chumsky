@@ -9,6 +9,28 @@ use super::*;
 use core::mem::MaybeUninit;
 use hashbrown::HashSet;
 
+// TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
+trait MaybeUninitExt<T>: Sized {
+    /// Identical to the unstable [`MaybeUninit::uninit_array`]
+    fn uninit_array<const N: usize>() -> [Self; N];
+
+    /// Identical to the unstable [`MaybeUninit::array_assume_init`]
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N];
+}
+
+impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
+    fn uninit_array<const N: usize>() -> [Self; N] {
+        // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
+        unsafe { MaybeUninit::uninit().assume_init() }
+    }
+
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
+        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
+        core::mem::forget(uninit);
+        out
+    }
+}
+
 /// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, S, F, U>
 where
@@ -1276,7 +1298,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for () {
 impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
     type Uninit = [MaybeUninit<T>; N];
     fn uninit() -> Self::Uninit {
-        MaybeUninit::uninit_array()
+        MaybeUninitExt::uninit_array()
     }
     fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
         uninit[i].write(item);
@@ -1285,7 +1307,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
         uninit[..i].iter_mut().for_each(|o| o.assume_init_drop());
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        MaybeUninit::array_assume_init(uninit)
+        MaybeUninitExt::array_assume_init(uninit)
     }
 }
 
@@ -1461,7 +1483,7 @@ where
         }
 
         let mut i = 0;
-        let mut output = MaybeUninit::uninit_array();
+        let mut output = <MaybeUninit<_> as MaybeUninitExt<_>>::uninit_array();
         loop {
             let before = inp.save();
             match self.parser.go::<M>(inp) {
@@ -1478,7 +1500,7 @@ where
 
                         // SAFETY: All entries with an index < i are filled
                         break Ok(M::array::<OA, N>(unsafe {
-                            MaybeUninit::array_assume_init(output)
+                            MaybeUninitExt::array_assume_init(output)
                         }));
                     } else {
                         let before_separator = inp.save();
