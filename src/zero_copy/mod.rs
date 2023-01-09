@@ -50,6 +50,7 @@ use alloc::{
     rc::{Rc, Weak},
     string::String,
     vec::Vec,
+    vec,
 };
 use core::{
     cmp::{Eq, Ordering},
@@ -77,7 +78,7 @@ pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
-/// error and output via [`ParseResult::into_tuple`]
+/// error and output via [`ParseResult::into_output_errors`]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseResult<T, E> {
     output: Option<T>,
@@ -106,8 +107,8 @@ impl<T, E> ParseResult<T, E> {
 
     /// Get a slice containing the parse errors for this result. The slice will be empty
     /// if there are no errors.
-    pub fn errors(&self) -> &[E] {
-        &self.errs
+    pub fn errors(&self) -> impl ExactSizeIterator<Item = &E> {
+        self.errs.iter()
     }
 
     /// Convert this `ParseResult` into an option containing the output, if any exists
