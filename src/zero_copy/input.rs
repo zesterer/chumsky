@@ -266,6 +266,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
 
     pub(crate) fn emit(&mut self, error: E) {
         self.errors.push(error);
+        self.marker.err_count += 1;
     }
 
     pub(crate) fn into_errs(self) -> Vec<E> {

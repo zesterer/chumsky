@@ -1228,13 +1228,16 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///     List(Vec<Expr<'a>>),
     /// }
     ///
+    /// let recover = just::<_, _, Simple<str>, ()>('[')
+    ///         .ignore_then(take_until(just(']')).ignored());
+    ///
     /// let expr = recursive::<_, _, Simple<str>, (), _, _>(|expr| expr
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(take_until(just(']')).map(|_| Expr::Error))
+    ///     .recover_with(recover.map(|_| Expr::Error))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///
