@@ -51,7 +51,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    cell::OnceCell,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,

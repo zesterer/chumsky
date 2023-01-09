@@ -3,9 +3,6 @@
     feature = "nightly",
     feature(
         rustc_attrs,
-        bench_black_box,
-        maybe_uninit_uninit_array,
-        maybe_uninit_array_assume_init,
         once_cell,
     )
 )]
@@ -25,7 +22,6 @@ pub mod recursive;
 pub mod span;
 pub mod stream;
 pub mod text;
-#[cfg(feature = "nightly")]
 pub mod zero_copy;
 
 pub use crate::{error::Error, span::Span};
