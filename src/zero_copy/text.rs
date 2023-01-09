@@ -167,9 +167,9 @@ where
 /// let whitespace = text::whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse("\t \n  \r ").0, Some(()));
+/// assert_eq!(whitespace.parse("\t \n  \r "), ParseResult::Ok(()));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse("").0, Some(()));
+/// assert_eq!(whitespace.parse(""), ParseResult::Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
 ) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
@@ -195,11 +195,11 @@ where
 /// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of inline whitespace is parsed...
-/// assert_eq!(inline_whitespace.parse("\t  ").0, Some(()));
+/// assert_eq!(inline_whitespace.parse("\t  "), ParseResult::Ok(()));
 /// // ...including none at all!
-/// assert_eq!(inline_whitespace.parse("").0, Some(()));
+/// assert_eq!(inline_whitespace.parse(""), ParseResult::Ok(()));
 /// // ... but not newlines
-/// assert_eq!(inline_whitespace.at_least(1).parse("\n\r").0, None);
+/// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
 ) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
@@ -234,14 +234,14 @@ where
 /// let newline = text::newline::<str, Simple<str>, ()>()
 ///     .then_ignore(end());
 ///
-/// assert_eq!(newline.parse("\n").0, Some(()));
-/// assert_eq!(newline.parse("\r").0, Some(()));
-/// assert_eq!(newline.parse("\r\n").0, Some(()));
-/// assert_eq!(newline.parse("\x0B").0, Some(()));
-/// assert_eq!(newline.parse("\x0C").0, Some(()));
-/// assert_eq!(newline.parse("\u{0085}").0, Some(()));
-/// assert_eq!(newline.parse("\u{2028}").0, Some(()));
-/// assert_eq!(newline.parse("\u{2029}").0, Some(()));
+/// assert_eq!(newline.parse("\n"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\r"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\r\n"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\x0B"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\x0C"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\u{0085}"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\u{2028}"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\u{2029}"), ParseResult::Ok(()));
 /// ```
 #[must_use]
 pub fn newline<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> impl Parser<'a, I, (), E, S>
@@ -278,13 +278,13 @@ where
 /// # use chumsky::zero_copy::prelude::*;
 /// let digits = text::digits::<'_, _, _, Simple<str>, ()>(10);
 ///
-/// assert_eq!(digits.parse("0").0, Some("0"));
-/// assert_eq!(digits.parse("1").0, Some("1"));
-/// assert_eq!(digits.parse("01234").0, Some("01234"));
-/// assert_eq!(digits.parse("98345").0, Some("98345"));
+/// assert_eq!(digits.parse("0"), ParseResult::Ok("0"));
+/// assert_eq!(digits.parse("1"), ParseResult::Ok("1"));
+/// assert_eq!(digits.parse("01234"), ParseResult::Ok("01234"));
+/// assert_eq!(digits.parse("98345"), ParseResult::Ok("98345"));
 /// // A string of zeroes is still valid. Use `int` if this is not desirable.
-/// assert_eq!(digits.parse("0000").0, Some("0000"));
-/// assert!(digits.parse("").0.is_none());
+/// assert_eq!(digits.parse("0000"), ParseResult::Ok("0000"));
+/// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
 pub fn digits<'a, C, I, E, S: 'a>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E, S>
@@ -317,19 +317,19 @@ where
 /// let dec = text::int::<_, _, Simple<str>, ()>(10)
 ///     .then_ignore(end());
 ///
-/// assert_eq!(dec.parse("0").0, Some("0"));
-/// assert_eq!(dec.parse("1").0, Some("1"));
-/// assert_eq!(dec.parse("1452").0, Some("1452"));
+/// assert_eq!(dec.parse("0"), ParseResult::Ok("0"));
+/// assert_eq!(dec.parse("1"), ParseResult::Ok("1"));
+/// assert_eq!(dec.parse("1452"), ParseResult::Ok("1452"));
 /// // No leading zeroes are permitted!
-/// assert!(dec.parse("04").0.is_none());
+/// assert!(dec.parse("04").has_errors());
 ///
 /// let hex = text::int::<_, _, Simple<str>, ()>(16)
 ///     .then_ignore(end());
 ///
-/// assert_eq!(hex.parse("2A").0, Some("2A"));
-/// assert_eq!(hex.parse("d").0, Some("d"));
-/// assert_eq!(hex.parse("b4").0, Some("b4"));
-/// assert!(hex.parse("0B").0.is_none());
+/// assert_eq!(hex.parse("2A"), ParseResult::Ok("2A"));
+/// assert_eq!(hex.parse("d"), ParseResult::Ok("d"));
+/// assert_eq!(hex.parse("b4"), ParseResult::Ok("b4"));
+/// assert!(hex.parse("0B").has_errors());
 /// ```
 ///
 #[must_use]
@@ -446,11 +446,11 @@ where
 /// let def = text::keyword::<_, _, _, Simple<str>, ()>("def");
 ///
 /// // Exactly 'def' was found
-/// assert_eq!(def.parse("def").0, Some(()));
+/// assert_eq!(def.parse("def"), ParseResult::Ok(()));
 /// // Exactly 'def' was found, with non-identifier trailing characters
-/// assert_eq!(def.parse("def(foo, bar)").0, Some(()));
+/// assert_eq!(def.parse("def(foo, bar)"), ParseResult::Ok(()));
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
-/// assert!(def.parse("define").0.is_none());
+/// assert!(def.parse("define").has_errors());
 /// ```
 pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: Error<I> + 'a, S: 'a>(
     keyword: Str,

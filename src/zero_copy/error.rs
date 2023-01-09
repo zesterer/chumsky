@@ -52,9 +52,9 @@ use super::*;
 ///     None => Err(MyError::NotADigit(span, c)),
 /// });
 ///
-/// assert_eq!(numeral.parse("3").0, Some(3));
-/// assert_eq!(numeral.parse("7").0, Some(7));
-/// assert_eq!(numeral.parse("f").1, vec![MyError::NotADigit(0..1, 'f')]);
+/// assert_eq!(numeral.parse("3"), ParseResult::Ok(3));
+/// assert_eq!(numeral.parse("7"), ParseResult::Ok(7));
+/// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit(0..1, 'f')]);
 /// ```
 pub trait Error<I: Input + ?Sized>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
@@ -98,6 +98,16 @@ impl<I: Input + ?Sized> Error<I> for Simple<I> {
         span: I::Span,
     ) -> Self {
         Self { span, found }
+    }
+}
+
+impl<I: Input + ?Sized> PartialEq for Simple<I>
+where
+    I::Token: PartialEq,
+    I::Span: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span && self.found == other.found
     }
 }
 

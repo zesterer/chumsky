@@ -96,10 +96,10 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S
     ///     .or_not()
     ///     .map(|chain| chain.unwrap_or(Chain::End)));
     ///
-    /// assert_eq!(chain.parse("").0, Some(Chain::End));
+    /// assert_eq!(chain.parse(""), ParseResult::Ok(Chain::End));
     /// assert_eq!(
-    ///     chain.parse("++").0,
-    ///     Some(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
+    ///     chain.parse("++"),
+    ///     ParseResult::Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
     /// );
     /// ```
     pub fn declare() -> Self {
@@ -201,14 +201,14 @@ where
 ///     .or(text::ident().map(Tree::Leaf))
 ///     .padded());
 ///
-/// assert_eq!(tree.parse("hello").0, Some(Tree::Leaf("hello")));
-/// assert_eq!(tree.parse("[a, b, c]").0, Some(Tree::Branch(vec![
+/// assert_eq!(tree.parse("hello"), ParseResult::Ok(Tree::Leaf("hello")));
+/// assert_eq!(tree.parse("[a, b, c]"), ParseResult::Ok(Tree::Branch(vec![
 ///     Tree::Leaf("a"),
 ///     Tree::Leaf("b"),
 ///     Tree::Leaf("c"),
 /// ])));
 /// // The parser can deal with arbitrarily complex nested lists
-/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]").0, Some(Tree::Branch(vec![
+/// assert_eq!(tree.parse("[[a, b], c, [d, [e, f]]]"), ParseResult::Ok(Tree::Branch(vec![
 ///     Tree::Branch(vec![
 ///         Tree::Leaf("a"),
 ///         Tree::Leaf("b"),
