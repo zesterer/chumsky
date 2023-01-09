@@ -167,9 +167,9 @@ where
 /// let whitespace = text::whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse("\t \n  \r "), ParseResult::Ok(()));
+/// assert_eq!(whitespace.parse("\t \n  \r ").into_result(), Ok(()));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse(""), ParseResult::Ok(()));
+/// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
 ) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
@@ -195,9 +195,9 @@ where
 /// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>, ()>();
 ///
 /// // Any amount of inline whitespace is parsed...
-/// assert_eq!(inline_whitespace.parse("\t  "), ParseResult::Ok(()));
+/// assert_eq!(inline_whitespace.parse("\t  ").into_result(), Ok(()));
 /// // ...including none at all!
-/// assert_eq!(inline_whitespace.parse(""), ParseResult::Ok(()));
+/// assert_eq!(inline_whitespace.parse("").into_result(), Ok(()));
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
@@ -234,14 +234,14 @@ where
 /// let newline = text::newline::<str, Simple<str>, ()>()
 ///     .then_ignore(end());
 ///
-/// assert_eq!(newline.parse("\n"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\r"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\r\n"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\x0B"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\x0C"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\u{0085}"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\u{2028}"), ParseResult::Ok(()));
-/// assert_eq!(newline.parse("\u{2029}"), ParseResult::Ok(()));
+/// assert_eq!(newline.parse("\n").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\r").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\r\n").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\x0B").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\x0C").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\u{0085}").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\u{2028}").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
 pub fn newline<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> impl Parser<'a, I, (), E, S>
@@ -278,12 +278,12 @@ where
 /// # use chumsky::zero_copy::prelude::*;
 /// let digits = text::digits::<'_, _, _, Simple<str>, ()>(10);
 ///
-/// assert_eq!(digits.parse("0"), ParseResult::Ok("0"));
-/// assert_eq!(digits.parse("1"), ParseResult::Ok("1"));
-/// assert_eq!(digits.parse("01234"), ParseResult::Ok("01234"));
-/// assert_eq!(digits.parse("98345"), ParseResult::Ok("98345"));
+/// assert_eq!(digits.parse("0").into_result(), Ok("0"));
+/// assert_eq!(digits.parse("1").into_result(), Ok("1"));
+/// assert_eq!(digits.parse("01234").into_result(), Ok("01234"));
+/// assert_eq!(digits.parse("98345").into_result(), Ok("98345"));
 /// // A string of zeroes is still valid. Use `int` if this is not desirable.
-/// assert_eq!(digits.parse("0000"), ParseResult::Ok("0000"));
+/// assert_eq!(digits.parse("0000").into_result(), Ok("0000"));
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
@@ -317,18 +317,18 @@ where
 /// let dec = text::int::<_, _, Simple<str>, ()>(10)
 ///     .then_ignore(end());
 ///
-/// assert_eq!(dec.parse("0"), ParseResult::Ok("0"));
-/// assert_eq!(dec.parse("1"), ParseResult::Ok("1"));
-/// assert_eq!(dec.parse("1452"), ParseResult::Ok("1452"));
+/// assert_eq!(dec.parse("0").into_result(), Ok("0"));
+/// assert_eq!(dec.parse("1").into_result(), Ok("1"));
+/// assert_eq!(dec.parse("1452").into_result(), Ok("1452"));
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
 /// let hex = text::int::<_, _, Simple<str>, ()>(16)
 ///     .then_ignore(end());
 ///
-/// assert_eq!(hex.parse("2A"), ParseResult::Ok("2A"));
-/// assert_eq!(hex.parse("d"), ParseResult::Ok("d"));
-/// assert_eq!(hex.parse("b4"), ParseResult::Ok("b4"));
+/// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
+/// assert_eq!(hex.parse("d").into_result(), Ok("d"));
+/// assert_eq!(hex.parse("b4").into_result(), Ok("b4"));
 /// assert!(hex.parse("0B").has_errors());
 /// ```
 ///
@@ -446,9 +446,9 @@ where
 /// let def = text::keyword::<_, _, _, Simple<str>, ()>("def");
 ///
 /// // Exactly 'def' was found
-/// assert_eq!(def.parse("def"), ParseResult::Ok(()));
+/// assert_eq!(def.parse("def").into_result(), Ok(()));
 /// // Exactly 'def' was found, with non-identifier trailing characters
-/// assert_eq!(def.parse("def(foo, bar)"), ParseResult::Ok(()));
+/// assert_eq!(def.parse("def(foo, bar)").into_result(), Ok(()));
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```

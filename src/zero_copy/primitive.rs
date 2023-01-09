@@ -29,7 +29,7 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// assert_eq!(end::<_, Simple<str>, ()>().parse(""), ParseResult::Ok(()));
+/// assert_eq!(end::<_, Simple<str>, ()>().parse("").into_result(), Ok(()));
 /// assert!(end::<_, Simple<str>, ()>().parse("hello").has_errors());
 /// ```
 ///
@@ -38,11 +38,11 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 /// let digits = text::digits::<_, _, Simple<str>, ()>(10);
 ///
 /// // This parser parses digits!
-/// assert_eq!(digits.parse("1234"), ParseResult::Ok("1234"));
+/// assert_eq!(digits.parse("1234").into_result(), Ok("1234"));
 ///
 /// // However, parsers are lazy and do not consume trailing input.
 /// // This can be inconvenient if we want to validate all of the input.
-/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK"), ParseResult::Ok("1234"));
+/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK").into_result(), Ok("1234"));
 ///
 /// // To fix this problem, we require that the end of input follows any successfully parsed input
 /// let only_digits = digits.then_ignore(end());
@@ -50,7 +50,7 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 /// // Now our parser correctly produces an error if any trailing input is found...
 /// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").has_errors());
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
-/// assert_eq!(only_digits.parse("1234"), ParseResult::Ok("1234"));
+/// assert_eq!(only_digits.parse("1234").into_result(), Ok("1234"));
 /// ```
 pub const fn end<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> End<I, E, S> {
     End(PhantomData)
@@ -229,10 +229,10 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
 /// let question = just::<_, _, Simple<str>, ()>('?');
 ///
-/// assert_eq!(question.parse("?"), ParseResult::Ok('?'));
+/// assert_eq!(question.parse("?").into_result(), Ok('?'));
 /// assert!(question.parse("!").has_errors());
 /// // This works because parsers do not eagerly consume input, so the '!' is not parsed
-/// assert_eq!(question.parse("?!"), ParseResult::Ok('?'));
+/// assert_eq!(question.parse("?!").into_result(), Ok('?'));
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").has_errors());
 /// ```
@@ -311,7 +311,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 ///     .collect::<String>()
 ///     .then_ignore(end());
 ///
-/// assert_eq!(digits.parse("48791"), ParseResult::Ok("48791".to_string()));
+/// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
 /// ```
 pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
@@ -378,8 +378,8 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 ///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end());
 ///
-/// assert_eq!(string.parse("'hello'"), ParseResult::Ok("hello".to_string()));
-/// assert_eq!(string.parse("\"world\""), ParseResult::Ok("world".to_string()));
+/// assert_eq!(string.parse("'hello'").into_result(), Ok("hello".to_string()));
+/// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").has_errors());
 /// ```
 pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
@@ -461,9 +461,9 @@ where
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
 /// let any = any::<_, Simple<str>, ()>();
 ///
-/// assert_eq!(any.parse("a"), ParseResult::Ok('a'));
-/// assert_eq!(any.parse("7"), ParseResult::Ok('7'));
-/// assert_eq!(any.parse("\t"), ParseResult::Ok('\t'));
+/// assert_eq!(any.parse("a").into_result(), Ok('a'));
+/// assert_eq!(any.parse("7").into_result(), Ok('7'));
+/// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
 pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
@@ -543,7 +543,7 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///     // ...and single-line...
 ///     tokens
 ///     // ...comments between them
-/// "#), ParseResult::Ok(vec!["these", "are", "tokens"]));
+/// "#).into_result(), Ok(vec!["these", "are", "tokens"]));
 /// ```
 pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, OP, (), E, S>
 where
@@ -622,9 +622,9 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 ///     .or(text::int(10));
 ///
 /// // Decimal numbers are parsed
-/// assert_eq!(int.parse("12"), ParseResult::Ok("12"));
+/// assert_eq!(int.parse("12").into_result(), Ok("12"));
 /// // Binary numbers are parsed
-/// assert_eq!(int.parse("0b00101"), ParseResult::Ok("00101"));
+/// assert_eq!(int.parse("0b00101").into_result(), Ok("00101"));
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
@@ -702,8 +702,8 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 ///
 /// use Token::*;
 /// assert_eq!(
-///     tokens.parse("if 56 for foo while 42 fn bar"),
-///     ParseResult::Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
+///     tokens.parse("if 56 for foo while 42 fn bar").into_result(),
+///     Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
 /// );
 /// ```
 pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {

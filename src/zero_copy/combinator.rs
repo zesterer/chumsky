@@ -760,8 +760,8 @@ where
     /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").has_errors()); // Too many rings!
     /// // The perfect number of rings
     /// assert_eq!(
-    ///     rings.parse("OOOOOOOOOOOOOOOOOOO"),
-    ///     ParseResult::Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
+    ///     rings.parse("OOOOOOOOOOOOOOOOOOO").into_result(),
+    ///     Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
     /// );
     /// ````
     pub fn exactly(self, exactly: usize) -> Self {
@@ -875,7 +875,7 @@ where
     ///
     /// assert!(numbers.parse("").has_errors());
     /// assert!(numbers.parse("-").has_errors());
-    /// assert_eq!(numbers.parse("-.-"), ParseResult::Ok(vec!['-', '-']));
+    /// assert_eq!(numbers.parse("-.-").into_result(), Ok(vec!['-', '-']));
     /// ````
     pub fn at_least(self, at_least: usize) -> Self {
         Self { at_least, ..self }
@@ -897,8 +897,8 @@ where
     ///     .collect::<Vec<_>>();
     ///
     /// assert_eq!(
-    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"),
-    ///     ParseResult::Ok(vec![
+    ///     matrix_4x4.parse("0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15").into_result(),
+    ///     Ok(vec![
     ///         vec!["0", "1", "2", "3"],
     ///         vec!["4", "5", "6", "7"],
     ///         vec!["8", "9", "10", "11"],
@@ -930,7 +930,7 @@ where
     /// // Too many elements
     /// assert!(coordinate_3d.parse("7, 2, 13, 4").has_errors());
     /// // Just the right number of elements
-    /// assert_eq!(coordinate_3d.parse("5, 0, 12"), ParseResult::Ok(vec!["5", "0", "12"]));
+    /// assert_eq!(coordinate_3d.parse("5, 0, 12").into_result(), Ok(vec!["5", "0", "12"]));
     /// ````
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
@@ -956,12 +956,12 @@ where
     ///         .allow_leading()
     ///         .collect::<Vec<_>>());
     ///
-    /// assert_eq!(r#enum.parse("enum True | False"), ParseResult::Ok(vec!["True", "False"]));
+    /// assert_eq!(r#enum.parse("enum True | False").into_result(), Ok(vec!["True", "False"]));
     /// assert_eq!(r#enum.parse("
     ///     enum
     ///     | True
     ///     | False
-    /// "), ParseResult::Ok(vec!["True", "False"]));
+    /// ").into_result(), Ok(vec!["True", "False"]));
     /// ```
     pub fn allow_leading(self) -> Self {
         Self {
@@ -985,8 +985,8 @@ where
     ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('('), just(')'));
     ///
-    /// assert_eq!(numbers.parse("(1, 2)"), ParseResult::Ok(vec!["1", "2"]));
-    /// assert_eq!(numbers.parse("(1, 2,)"), ParseResult::Ok(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2)").into_result(), Ok(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2,)").into_result(), Ok(vec!["1", "2"]));
     /// ```
     pub fn allow_trailing(self) -> Self {
         Self {
@@ -1404,12 +1404,12 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///         .allow_leading()
     ///         .collect::<Vec<_>>());
     ///
-    /// assert_eq!(r#enum.parse("enum True | False"), ParseResult::Ok(vec!["True", "False"]));
+    /// assert_eq!(r#enum.parse("enum True | False").into_result(), Ok(vec!["True", "False"]));
     /// assert_eq!(r#enum.parse("
     ///     enum
     ///     | True
     ///     | False
-    /// "), ParseResult::Ok(vec!["True", "False"]));
+    /// ").into_result(), Ok(vec!["True", "False"]));
     /// ```
     pub fn allow_leading(self) -> Self {
         Self {
@@ -1433,8 +1433,8 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('('), just(')'));
     ///
-    /// assert_eq!(numbers.parse("(1, 2)"), ParseResult::Ok(vec!["1", "2"]));
-    /// assert_eq!(numbers.parse("(1, 2,)"), ParseResult::Ok(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2)").into_result(), Ok(vec!["1", "2"]));
+    /// assert_eq!(numbers.parse("(1, 2,)").into_result(), Ok(vec!["1", "2"]));
     /// ```
     pub fn allow_trailing(self) -> Self {
         Self {
@@ -1804,7 +1804,7 @@ mod tests {
             .at_least(3)
             .collect();
 
-        assert_eq!(parser.parse("-,-,-"), ParseResult::Ok(vec!['-', '-', '-']));
+        assert_eq!(parser.parse("-,-,-").into_result(), Ok(vec!['-', '-', '-']));
     }
 
     #[test]
@@ -1838,7 +1838,7 @@ mod tests {
             .at_least(3)
             .collect();
 
-        assert_eq!(parser.parse(",-,-,-"), ParseResult::Ok(vec!['-', '-', '-']));
+        assert_eq!(parser.parse(",-,-,-").into_result(), Ok(vec!['-', '-', '-']));
         assert!(parser.parse(",-,-").has_errors());
     }
 
@@ -1850,7 +1850,7 @@ mod tests {
             .at_least(3)
             .collect();
 
-        assert_eq!(parser.parse("-,-,-,"), ParseResult::Ok(vec!['-', '-', '-']));
+        assert_eq!(parser.parse("-,-,-,").into_result(), Ok(vec!['-', '-', '-']));
         assert!(parser.parse("-,-,").has_errors());
     }
 
@@ -1861,8 +1861,8 @@ mod tests {
             .collect::<Vec<_>>()
             .chain(just(','));
         assert_eq!(
-            parser.parse("-,-,-,"),
-            ParseResult::Ok(vec!['-', '-', '-', ',']),
+            parser.parse("-,-,-,").into_result(),
+            Ok(vec!['-', '-', '-', ',']),
         )
     }
 }

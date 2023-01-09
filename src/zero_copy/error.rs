@@ -52,8 +52,8 @@ use super::*;
 ///     None => Err(MyError::NotADigit(span, c)),
 /// });
 ///
-/// assert_eq!(numeral.parse("3"), ParseResult::Ok(3));
-/// assert_eq!(numeral.parse("7"), ParseResult::Ok(7));
+/// assert_eq!(numeral.parse("3").into_result(), Ok(3));
+/// assert_eq!(numeral.parse("7").into_result(), Ok(7));
 /// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit(0..1, 'f')]);
 /// ```
 pub trait Error<I: Input + ?Sized>: Sized {
