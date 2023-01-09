@@ -187,12 +187,15 @@ mod internal {
     pub struct Emit;
     impl Mode for Emit {
         type Output<T> = T;
+        #[inline(always)]
         fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
             f()
         }
+        #[inline(always)]
         fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
             f(x)
         }
+        #[inline(always)]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             x: Self::Output<T>,
             y: Self::Output<U>,
@@ -200,10 +203,12 @@ mod internal {
         ) -> Self::Output<V> {
             f(x, y)
         }
+        #[inline(always)]
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
             x
         }
 
+        #[inline(always)]
         fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
@@ -221,16 +226,21 @@ mod internal {
     pub struct Check;
     impl Mode for Check {
         type Output<T> = ();
+        #[inline(always)]
         fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
+        #[inline(always)]
         fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
+        #[inline(always)]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             _: Self::Output<T>,
             _: Self::Output<U>,
             _: F,
         ) -> Self::Output<V> {
         }
+        #[inline(always)]
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
+        #[inline(always)]
         fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,

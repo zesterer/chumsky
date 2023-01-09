@@ -50,13 +50,13 @@ fn bench_json(c: &mut Criterion) {
     c.bench_function("chumsky_zero_copy", {
         use ::chumsky::zero_copy::prelude::*;
         let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| black_box(json.parse(JSON).0.unwrap()))
+        move |b| b.iter(|| black_box(json.parse(JSON)).into_result().unwrap())
     });
 
     c.bench_function("chumsky_zero_copy_check", {
         use ::chumsky::zero_copy::prelude::*;
         let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| assert!(black_box(json.check(JSON)).is_empty()))
+        move |b| b.iter(|| assert!(black_box(json.check(JSON)).into_errors().is_empty()))
     });
 }
 
