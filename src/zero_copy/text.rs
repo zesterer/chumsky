@@ -1,10 +1,28 @@
+//! Text-specific parsers and utilities.
+//!
+//! *“Ford!" he said, "there's an infinite number of monkeys outside who want to talk to us about this script for
+//! Hamlet they've worked out.”*
+//!
+//! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
+//! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
+//!
+//! The [`TextParser`] trait is an extension on top of the main [`Parser`] trait that adds combinators unique to the
+//! parsing of text.
+
 use crate::zero_copy::prelude::*;
 
 use super::*;
 
+/// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
+///
+/// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
 pub trait Char: Sized + Copy + PartialEq {
+    /// The default unsized [`str`]-like type of a linear sequence of this character.
+    ///
+    /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
     type Slice: ?Sized + StrInput<Self> + 'static;
 
+    /// The type of a regex expression which can match on this type
     #[cfg(feature = "regex")]
     type Regex;
 
@@ -112,6 +130,7 @@ impl Char for u8 {
     }
 }
 
+/// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
 #[derive(Clone)]
 pub struct Padded<A> {
     pub(crate) parser: A,
@@ -316,7 +335,7 @@ where
 #[must_use]
 pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E, S> {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -335,7 +354,7 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
 pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
-) -> impl Parser<'a, I, &'a C::Slice, E, S> {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -413,5 +432,38 @@ where
         }
 
         nesting.remove(0).1
+    })
+}
+
+/// Like [`ident`], but only accepts an exact identifier while ignoring trailing identifier characters.
+///
+/// The output type of this parser is `()`.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::zero_copy::prelude::*;
+/// let def = text::keyword::<_, _, _, Simple<str>, ()>("def");
+///
+/// // Exactly 'def' was found
+/// assert_eq!(def.parse("def").0, Some(()));
+/// // Exactly 'def' was found, with non-identifier trailing characters
+/// assert_eq!(def.parse("def(foo, bar)").0, Some(()));
+/// // 'def' was found, but only as part of a larger identifier, so this fails to parse
+/// assert!(def.parse("define").0.is_none());
+/// ```
+pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: Error<I> + 'a, S: 'a>(
+    keyword: Str,
+) -> impl Parser<'a, I, (), E, S> + Clone + 'a
+where
+    C::Slice: PartialEq,
+{
+    // TODO: use .filter(...), improve error messages
+    ident().try_map(move |s: &C::Slice, span| {
+        if s == keyword.as_ref() {
+            Ok(())
+        } else {
+            Err(E::expected_found(None, None, span))
+        }
     })
 }

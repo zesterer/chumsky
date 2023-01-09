@@ -1,25 +1,46 @@
+//! Token input streams and tools converting to and from them..
+//!
+//! *“What’s up?” “I don’t know,” said Marvin, “I’ve never been there.”*
+//!
+//! [`Input`] is the primary trait used to feed input data into a chumsky parser. You can create them in a number of
+//! ways: from strings, slices, arrays, etc.
+
 use super::*;
 
+/// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
+/// supports backtracking and a few other features required by the crate.
 pub trait Input {
+    /// The type used to keep track of the current location in the stream
     type Offset: Copy + Ord;
+    /// The type of singular items read from the stream
     type Token;
+    /// The type of a span on this input - to provide custom span context see [`WithContext`]
     type Span: Span;
 
+    /// Get the offset representing the start of this stream
     fn start(&self) -> Self::Offset;
 
+    /// Get the next offset from the provided one, and the next token if it exists
     fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
 
+    /// Create a span from a start and end offset
     fn span(&self, range: Range<Self::Offset>) -> Self::Span;
 }
 
+/// A trait for types that represent slice-like streams of input tokens.
 pub trait SliceInput: Input {
+    /// The unsized slice type of this input. For [`&str`] it's `str`, and for [`&[T]`] it will be
+    /// `[T]`
     type Slice: ?Sized;
 
+    /// Get a slice from a start and end offset
     fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice;
+    /// Get a slice from a start offset till the end of the input
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice;
 }
 
-// Implemented by inputs that reference a string slice and use byte indices as their offset.
+// Implemented by inputs that rference a string slice and use byte indices as their offset.
+/// A trait for types that represent string-like streams of input tokens
 pub trait StrInput<C: Char>:
     Input<Offset = usize, Token = C> + SliceInput<Slice = C::Slice>
 {
@@ -101,6 +122,7 @@ impl<T: Clone> SliceInput for [T] {
     }
 }
 
+///
 pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
 
 impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
@@ -154,6 +176,7 @@ impl<I: Input + ?Sized> Clone for Marker<I> {
     }
 }
 
+/// Internal type representing an input as well as all the necessary context for parsing.
 pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> {
     input: &'a I,
     marker: Marker<I>,
