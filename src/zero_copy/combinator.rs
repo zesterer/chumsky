@@ -48,7 +48,7 @@ where
 
 impl<'a, A: Copy, I, O, E, S, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, S, F, U>
 where
-    I: Input + SliceInput + Sized,
+    I: Input + SliceInput + ?Sized,
     E: Error<I>,
     S: 'a,
     I::Slice: 'a,
@@ -137,11 +137,21 @@ where
 }
 
 /// See [`Parser::map`].
-#[derive(Copy, Clone)]
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for Map<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
+    fn clone(&self) -> Self {
+        Map {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for Map<A, OA, F>

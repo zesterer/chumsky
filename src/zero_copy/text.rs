@@ -131,7 +131,7 @@ impl Char for u8 {
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Padded<A> {
     pub(crate) parser: A,
 }
@@ -354,7 +354,7 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
 pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
-) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
+) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone + Copy {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(

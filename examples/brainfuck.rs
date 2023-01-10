@@ -2,7 +2,7 @@
 //! Run it with the following command:
 //! cargo run --example brainfuck -- examples/sample.bf
 
-use chumsky::prelude::*;
+use chumsky::zero_copy::prelude::*;
 use std::{
     env, fs,
     io::{self, Read},
@@ -20,7 +20,7 @@ enum Instr {
     Loop(Vec<Self>),
 }
 
-fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
+fn parser<'a>() -> impl Parser<'a, str, Vec<Instr>, Rich<str>, ()> {
     use Instr::*;
     recursive(|bf| {
         choice((
@@ -32,9 +32,10 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
             just('.').to(Write),
         ))
         .or(bf.delimited_by(just('['), just(']')).map(Loop))
-        .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
-        .recover_with(skip_then_retry_until([']']))
+        .recover_with(any().repeated().delimited_by(just('['), just(']')).to(Invalid))
+        .recover_with(take_until(just(']')).to(Invalid))
         .repeated()
+        .collect::<Vec<_>>()
     })
     .then_ignore(end())
 }
@@ -66,8 +67,8 @@ fn main() {
         .expect("Failed to read file");
 
     // let src = "[!]+";
-    match parser().parse(src.trim()) {
+    match parser().parse(src.trim()).into_result() {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs.into_iter().for_each(|e| println!("{:?}", e)),
-    }
+    };
 }

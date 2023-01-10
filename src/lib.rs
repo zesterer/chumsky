@@ -11,6 +11,7 @@
 #![allow(deprecated)] // TODO: Don't allow this
 
 extern crate alloc;
+extern crate core;
 
 pub mod chain;
 pub mod combinator;

@@ -6,6 +6,7 @@
 //! You can implement the [`Error`] trait to create your own parser errors, or you can use one provided by the crate
 //! like [`Simple`] or [`Rich`].
 
+use core::fmt::Formatter;
 use super::*;
 
 /// A trait that describes parser error types.
@@ -134,6 +135,27 @@ pub struct Rich<I: Input + ?Sized> {
     found: Option<I::Token>,
 }
 
+impl<I: Input + ?Sized> Rich<I>
+where
+    I::Span: Clone,
+    I::Token: Clone,
+{
+    /// Get the span associated with this error
+    pub fn span(&self) -> I::Span {
+        self.span.clone()
+    }
+
+    /// Get an iterator over the expected items associated with this error
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = Option<I::Token>> + '_ {
+        self.expected.iter().cloned()
+    }
+
+    /// Get an iterator over the items found by this error
+    pub fn found(&self) -> Option<I::Token> {
+        self.found.clone()
+    }
+}
+
 impl<I: Input + ?Sized> Error<I> for Rich<I>
 where
     I::Token: PartialEq,
@@ -183,6 +205,16 @@ where
             }
         }
         Ok(())
+    }
+}
+
+impl<I: Input + ?Sized> fmt::Display for Rich<I>
+where
+    I::Span: fmt::Debug,
+    I::Token: fmt::Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        <Self as fmt::Debug>::fmt(self, f)
     }
 }
 
