@@ -801,8 +801,8 @@ where
             let before = inp.save();
             match self.parser.go::<M>(inp) {
                 Ok(out) => {
-                    output = M::map(output, |mut output: C| {
-                        M::map(out, |out| output.push(out));
+                    output = M::combine(output, out, |mut output: C, out| {
+                        output.push(out);
                         output
                     });
                     count += 1;

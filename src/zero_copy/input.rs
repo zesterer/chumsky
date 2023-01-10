@@ -212,10 +212,12 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
 
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
-            let before = self.save();
-            if self.next().1.filter(&mut f).is_none() {
-                self.rewind(before);
-                break;
+            let (offset, token) = self.input.next(self.marker.offset);
+            if token.filter(&mut f).is_none() {
+                break
+            } else {
+                self.marker.offset = offset;
+                self.marker.pos += 1;
             }
         }
     }
