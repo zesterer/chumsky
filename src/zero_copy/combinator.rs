@@ -172,11 +172,21 @@ where
 }
 
 /// See [`Parser::map_with_span`].
-#[derive(Copy, Clone)]
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for MapWithSpan<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for MapWithSpan<A, OA, F> {
+    fn clone(&self) -> Self {
+        MapWithSpan {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithSpan<A, OA, F>
@@ -201,11 +211,21 @@ where
 }
 
 /// See [`Parser::map_with_state`].
-#[derive(Copy, Clone)]
 pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for MapWithState<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for MapWithState<A, OA, F> {
+    fn clone(&self) -> Self {
+        MapWithState {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithState<A, OA, F>
@@ -231,11 +251,21 @@ where
 }
 
 /// See [`Parser::try_map`].
-#[derive(Copy, Clone)]
 pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for TryMap<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
+    fn clone(&self) -> Self {
+        TryMap {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMap<A, OA, F>
@@ -261,11 +291,21 @@ where
 }
 
 /// See [`Parser::try_map_with_state`].
-#[derive(Copy, Clone)]
 pub struct TryMapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for TryMapWithState<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for TryMapWithState<A, OA, F> {
+    fn clone(&self) -> Self {
+        TryMapWithState {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMapWithState<A, OA, F>
@@ -511,12 +551,23 @@ where
 }
 
 /// See [`Parser::delimited_by`].
-#[derive(Copy, Clone)]
 pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
     pub(crate) phantom: PhantomData<(OB, OC)>,
+}
+
+impl<A: Copy, B: Copy, C: Copy, OB, OC> Copy for DelimitedBy<A, B, C, OB, OC> {}
+impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC> {
+    fn clone(&self) -> Self {
+        DelimitedBy {
+            parser: self.parser.clone(),
+            start: self.start.clone(),
+            end: self.end.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, E, S, A, B, C, OA, OB, OC> Parser<'a, I, OA, E, S> for DelimitedBy<A, B, C, OB, OC>
@@ -539,11 +590,21 @@ where
 }
 
 /// See [`Parser::padded_by`].
-#[derive(Copy, Clone)]
 pub struct PaddedBy<A, B, OB> {
     pub(crate) parser: A,
     pub(crate) padding: B,
     pub(crate) phantom: PhantomData<OB>,
+}
+
+impl<A: Copy, B: Copy, OB> Copy for PaddedBy<A, B, OB> {}
+impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
+    fn clone(&self) -> Self {
+        PaddedBy {
+            parser: self.parser.clone(),
+            padding: self.padding.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for PaddedBy<A, B, OB>
@@ -1189,10 +1250,19 @@ where
 }
 
 /// See [`Parser::not`].
-#[derive(Copy, Clone)]
 pub struct Not<A, OA> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, OA> Copy for Not<A, OA> {}
+impl<A: Clone, OA> Clone for Not<A, OA> {
+    fn clone(&self) -> Self {
+        Not {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Not<A, OA>
@@ -1224,11 +1294,21 @@ where
 }
 
 /// See [`Parser::and_is`].
-#[derive(Copy, Clone)]
 pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<OB>,
+}
+
+impl<A: Copy, B: Copy, OB> Copy for AndIs<A, B, OB> {}
+impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
+    fn clone(&self) -> Self {
+        AndIs {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for AndIs<A, B, OB>
@@ -1322,10 +1402,19 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 }
 
 /// See [`Parser::repeated_exactly`].
-#[derive(Copy, Clone)]
 pub struct RepeatedExactly<A, OA, C, const N: usize> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<(OA, C)>,
+}
+
+impl<A: Copy, OA, C, const N: usize> Copy for RepeatedExactly<A, OA, C, N> {}
+impl<A: Clone, OA, C, const N: usize> Clone for RepeatedExactly<A, OA, C, N> {
+    fn clone(&self) -> Self {
+        RepeatedExactly {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
@@ -1388,13 +1477,25 @@ where
 }
 
 /// See [`Parser::separated_by_exactly`].
-#[derive(Copy, Clone)]
 pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
     pub(crate) phantom: PhantomData<(OB, C)>,
+}
+
+impl<A: Copy, B: Copy, OB, C, const N: usize> Copy for SeparatedByExactly<A, B, OB, C, N> {}
+impl<A: Clone, B: Clone, OB, C, const N: usize> Clone for SeparatedByExactly<A, B, OB, C, N> {
+    fn clone(&self) -> Self {
+        SeparatedByExactly {
+            parser: self.parser.clone(),
+            separator: self.separator.clone(),
+            allow_leading: self.allow_leading,
+            allow_trailing: self.allow_trailing,
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
