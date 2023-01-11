@@ -276,6 +276,11 @@ where
     pub fn span(&self) -> I::Span {
         self.span.clone()
     }
+
+    /// Get the reason fro this error
+    pub fn reason(&self) -> &RichReason<I> {
+        &self.reason
+    }
 }
 
 impl<I: Input + ?Sized> Error<I> for Rich<I>
