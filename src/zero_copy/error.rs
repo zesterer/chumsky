@@ -176,6 +176,36 @@ where
     }
 }
 
+impl<I: Input + ?Sized> PartialEq for RichReason<I>
+where
+    I::Token: PartialEq,
+    I::Span: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                RichReason::ExpectedFound { expected: e1, found: f1 },
+                RichReason::ExpectedFound { expected: e2, found: f2 },
+            ) => {
+                f1 == f2 && e1 == e2
+            }
+            (
+                RichReason::Custom(msg1),
+                RichReason::Custom(msg2),
+            ) => {
+                msg1 == msg2
+            }
+            (
+                RichReason::Many(m1),
+                RichReason::Many(m2),
+            ) => {
+                m1 == m2
+            }
+            _ => false,
+        }
+    }
+}
+
 /// A rich default error type that tracks error spans, expected inputs, and the actual input found at an error site.
 ///
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
@@ -272,6 +302,16 @@ where
             span: self.span,
             reason: new_reason,
         }
+    }
+}
+
+impl<I: Input + ?Sized> PartialEq for Rich<I>
+where
+    I::Token: PartialEq,
+    I::Span: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span && self.reason == other.reason
     }
 }
 

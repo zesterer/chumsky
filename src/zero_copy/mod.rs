@@ -1411,7 +1411,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let large_int = text::int::<_, _, Rich<str>>(10)
+    /// let large_int = text::int::<_, _, Rich<str>, ()>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .validate(|x: u32, span, emit| {
@@ -1419,8 +1419,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///         x
     ///     });
     ///
-    /// assert_eq!(large_int.parse("537"), Ok(537));
-    /// assert!(large_int.parse("243").is_err());
+    /// assert_eq!(large_int.parse("537").into_result(), Ok(537));
+    /// assert!(large_int.parse("243").into_result().is_err());
     /// ```
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
