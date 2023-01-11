@@ -275,3 +275,25 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.errors
     }
 }
+
+/// Struct used in [`Parser::validate`] to collect user-emitted errors
+pub struct Emitter<E> {
+    emitted: Vec<E>,
+}
+
+impl<E> Emitter<E> {
+    pub(crate) fn new() -> Emitter<E> {
+        Emitter {
+            emitted: Vec::new(),
+        }
+    }
+
+    pub(crate) fn errors(self) -> Vec<E> {
+        self.emitted
+    }
+
+    /// Emit a non-fatal error
+    pub fn emit(&mut self, err: E) {
+        self.emitted.push(err)
+    }
+}

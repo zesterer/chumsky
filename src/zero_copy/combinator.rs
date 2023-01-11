@@ -1751,7 +1751,7 @@ where
     E: Error<I>,
     S: 'a,
     A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span, &mut dyn FnMut(E)) -> U,
+    F: Fn(OA, I::Span, &mut Emitter<E>) -> U,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E>
     where
@@ -1760,8 +1760,11 @@ where
         let before = inp.save();
         self.parser.go::<Emit>(inp).map(|out| {
             let span = inp.span_since(before);
-            let mut emit = |e| inp.emit(e);
-            let out = (self.validator)(out, span, &mut emit);
+            let mut emitter = Emitter::new();
+            let out = (self.validator)(out, span, &mut emitter);
+            for err in emitter.errors() {
+                inp.emit(err);
+            }
             M::bind(|| out)
         })
     }

@@ -537,7 +537,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// let byte = text::int::<_, _, Rich<str>, ()>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
-    ///         .map_err(|e| Rich::expected_found(None, None, span)));
+    ///         .map_err(|e| Rich::custom(span, e)));
     ///
     /// assert!(byte.parse("255").has_output());
     /// assert!(byte.parse("256").has_errors()); // Out of range
@@ -1425,7 +1425,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U,
+        F: Fn(O, I::Span, &mut Emitter<E>) -> U,
     {
         Validate {
             parser: self,
@@ -1709,6 +1709,7 @@ fn zero_copy() {
 }
 
 use combinator::MapSlice;
+use crate::zero_copy::input::Emitter;
 
 #[test]
 fn zero_copy_repetition() {
