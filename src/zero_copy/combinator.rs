@@ -1727,37 +1727,47 @@ where
     go_extra!(O);
 }
 
-// TODO: Finish implementing this once full error recovery is implemented
-/*#[derive(Copy, Clone)]
-pub struct Validate<A, F> {
+/// See [`Parser::validate`]
+pub struct Validate<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) validator: F,
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for Validate<A, F>
+impl<A: Copy, OA, F: Copy> Copy for Validate<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
+    fn clone(&self) -> Self {
+        Validate {
+            parser: self.parser.clone(),
+            validator: self.validator.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, OA, U, E, S, A, F> Parser<'a, I, U, E, S> for Validate<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E, I::Span, &mut dyn FnMut(E)) -> E,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span, &mut dyn FnMut(E)) -> U,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E>
     where
         Self: Sized,
     {
         let before = inp.save();
-        self.parser.go::<Emit>(inp).and_then(|out| {
+        self.parser.go::<Emit>(inp).map(|out| {
             let span = inp.span_since(before);
-            match (self.validator)(out, span, todo!()) {
-                Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.last_pos(), e)),
-            }
+            let mut emit = |e| inp.emit(e);
+            let out = (self.validator)(out, span, &mut emit);
+            M::bind(|| out)
         })
     }
 
-    go_extra!(O);
-}*/
+    go_extra!(U);
+}
 
 /// See [`Parser::or_else`].
 #[derive(Copy, Clone)]

@@ -1398,17 +1398,41 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    // TODO: Finish implementing this once full error recovery is implemented
-    /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
+    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    ///
+    /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
+    ///
+    /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
+    /// [`Parser::try_map`] instead.
+    ///
+    /// The output type of this parser is `U`, the result of the validation closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let large_int = text::int::<_, _, Rich<str>>(10)
+    ///     .from_str()
+    ///     .unwrapped()
+    ///     .validate(|x: u32, span, emit| {
+    ///         if x < 256 { emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///         x
+    ///     });
+    ///
+    /// assert_eq!(large_int.parse("537"), Ok(537));
+    /// assert!(large_int.parse("243").is_err());
+    /// ```
+    fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
-    Self: Sized,
-    F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
+        Self: Sized,
+        F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U,
     {
-    Validate {
-    parser: self,
-    validator: f,
+        Validate {
+            parser: self,
+            validator: f,
+            phantom: PhantomData,
+        }
     }
-    }*/
 
     /// Collect the output of this parser into a type implementing [`FromIterator`].
     ///
