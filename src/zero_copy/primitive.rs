@@ -611,6 +611,17 @@ impl<A, B, O, C, E, S> RepeatPrefixed<A, B, O, C, E, S> {
     }
 }
 
+impl<A: Copy, B: Copy, O, C, E, S> Copy for RepeatPrefixed<A, B, O, C, E, S> {}
+impl<A: Clone, B: Clone, O, C, E, S> Clone for RepeatPrefixed<A, B, O, C, E, S> {
+    fn clone(&self) -> Self {
+        RepeatPrefixed {
+            prefix: self.prefix.clone(),
+            repeat: self.repeat.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
 impl<'a, A, B, I, O, C, E, S> Parser<'a, I, C, E, S> for RepeatPrefixed<A, B, O, C, E, S>
 where
     A: Parser<'a, I, usize, E, S>,
