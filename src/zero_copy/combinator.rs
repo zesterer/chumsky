@@ -94,6 +94,43 @@ where
     go_extra!(U);
 }
 
+/// See [`Parser::slice`]
+pub struct Slice<A, O> {
+    pub(crate) parser: A,
+    pub(crate) phantom: PhantomData<O>,
+}
+
+impl<A: Copy, O> Copy for Slice<A, O> {}
+impl<A: Clone, O> Clone for Slice<A, O> {
+    fn clone(&self) -> Self {
+        Slice {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, A, I, O, E, S> Parser<'a, I, &'a I::Slice, E, S> for Slice<A, O>
+where
+    A: Parser<'a, I, O, E, S>,
+    I: Input + SliceInput + ?Sized,
+    E: Error<I>,
+    S: 'a,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, &'a I::Slice, E>
+    where
+        Self: Sized,
+    {
+        let before = inp.save();
+        self.parser.go::<Check>(inp)?;
+        let after = inp.save();
+
+        Ok(M::bind(|| inp.slice(before..after)))
+    }
+
+    go_extra!(&'a I::Slice);
+}
+
 /// See [`Parser::filter`].
 pub struct Filter<A, F> {
     pub(crate) parser: A,
