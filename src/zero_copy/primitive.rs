@@ -593,6 +593,70 @@ where
     go_extra!((C, OP));
 }
 
+/// See [`repeat_prefixed`]
+pub struct RepeatPrefixed<A, B, O, C = (), E = (), S = ()> {
+    prefix: A,
+    repeat: B,
+    phantom: PhantomData<(O, C, E, S)>,
+}
+
+impl<A, B, O, C, E, S> RepeatPrefixed<A, B, O, C, E, S> {
+    /// Set the type of [`Container`] to collect into.
+    pub fn collect<D: Container<O>>(self) -> RepeatPrefixed<A, B, O, D, E, S> {
+        RepeatPrefixed {
+            prefix: self.prefix,
+            repeat: self.repeat,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, A, B, I, O, C, E, S> Parser<'a, I, C, E, S> for RepeatPrefixed<A, B, O, C, E, S>
+where
+    A: Parser<'a, I, usize, E, S>,
+    B: Parser<'a, I, O, E, S>,
+    C: Container<O>,
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E>
+    where
+        Self: Sized,
+    {
+        let prefix = self.prefix.go::<Emit>(inp)?;
+        let mut output = M::bind(|| C::default());
+        for _ in 0..prefix {
+            let out = self.repeat.go::<M>(inp)?;
+            output = M::combine(output, out, |mut output, out| {
+                output.push(out);
+                output
+            });
+        }
+        Ok(output)
+    }
+
+    go_extra!(C);
+}
+
+/// A parser that accepts a specific number of inputs, based on the result of a previous parser.
+/// This is useful for things such as length-prefixed arrays.
+///
+/// The output type of this parser is a container of the encountered repetition.
+pub fn repeat_prefixed<'a, I, O, E, S, A, B>(
+    prefix: A,
+    repeat: B,
+) -> RepeatPrefixed<A, B, (), E, S>
+where
+    A: Parser<'a, I, usize, E, S>,
+    B: Parser<'a, I, O, E, S>,
+    I: Input + ?Sized,
+    E: Error<I>,
+    S: 'a,
+{
+    RepeatPrefixed { prefix, repeat, phantom: PhantomData }
+}
+
 /// See [`fn@todo`].
 pub struct Todo<I: ?Sized, O, E>(PhantomData<(O, E, I)>);
 

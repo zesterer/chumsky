@@ -476,25 +476,9 @@ where
     F: Fn(OA) -> B,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OB, E> {
-        let before = inp.save();
-        match self.parser.go::<Emit>(inp) {
-            Ok(output) => {
-                let then = (self.then)(output);
-
-                let before = inp.save();
-                match then.go::<M>(inp) {
-                    Ok(output) => Ok(output),
-                    Err(e) => {
-                        inp.rewind(before);
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                inp.rewind(before);
-                Err(e)
-            }
-        }
+        let prefix = self.parser.go::<Emit>(inp)?;
+        let then = (self.then)(prefix);
+        then.go::<M>(inp)
     }
 
     go_extra!(OB);
