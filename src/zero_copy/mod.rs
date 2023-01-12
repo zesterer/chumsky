@@ -387,6 +387,20 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
+    /// Convert the output of this parser into a slice of the input, based on the current parser's
+    /// span.
+    ///
+    /// This is effectively a special case of [`map_slice`](Parser::map_slice)`(|x| x)`
+    fn slice(self) -> Slice<Self, O>
+    where
+        Self: Sized,
+    {
+        Slice {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
     /// Filter the output of this parser, accepting only inputs that match the given predicate.
     ///
     /// The output type of this parser is `I`, the input that was found.
@@ -788,7 +802,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///         any()
     ///             .and_is(close.not())
     ///             .repeated()
-    ///             .map_slice(|s| s)
+    ///             .slice()
     ///             .then_ignore(close)
     ///     });
     ///
@@ -1732,7 +1746,7 @@ fn zero_copy_group() {
                 .filter(|c: &char| c.is_ascii_alphabetic())
                 .repeated()
                 .at_least(1)
-                .map_slice(|s: &str| s)
+                .slice()
                 .padded(),
             any()
                 .filter(|c: &char| c.is_ascii_digit())

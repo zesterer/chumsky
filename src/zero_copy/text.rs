@@ -297,7 +297,7 @@ where
         .filter(move |c: &C| c.is_digit(radix))
         .repeated()
         .at_least(1)
-        .map_slice(|x| x)
+        .slice()
 }
 
 /// A parser that accepts a non-negative integer.
@@ -342,7 +342,7 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
         .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
         .ignored()
         .or(just(C::digit_zero()).ignored())
-        .map_slice(|x| x)
+        .slice()
 }
 
 /// A parser that accepts a C-style identifier.
@@ -362,7 +362,7 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
                 .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
                 .repeated(),
         )
-        .map_slice(|x| x)
+        .slice()
 }
 
 /// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
@@ -386,7 +386,7 @@ where
 
     let lines = line_ws
         .repeated()
-        .map_slice(|x| x)
+        .slice()
         .then(
             line.collect::<Vec<_>>()
                 .map_with_span(|line, span| (line, span)),

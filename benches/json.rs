@@ -74,7 +74,7 @@ mod chumsky_zero_copy {
             let digits = any()
                 .filter(|b: &u8| b.is_ascii_digit())
                 .repeated()
-                .map_slice(|x| x);
+                .slice();
 
             let int = any()
                 .filter(|b: &u8| b.is_ascii_digit() && *b != b'0')
@@ -119,7 +119,7 @@ mod chumsky_zero_copy {
                 .ignored()
                 .or(escape)
                 .repeated()
-                .map_slice(|bytes| bytes)
+                .slice()
                 .delimited_by(just(b'"'), just(b'"'))
                 .boxed();
 
