@@ -390,7 +390,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// Convert the output of this parser into a slice of the input, based on the current parser's
     /// span.
     ///
-    /// This is effecitively a special case of [`map_slice`](Parser::map_slice)`(|x| x)`
+    /// This is effectively a special case of [`map_slice`](Parser::map_slice)`(|x| x)`
     fn slice(self) -> Slice<Self, O>
     where
         Self: Sized,
