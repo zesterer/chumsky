@@ -36,6 +36,11 @@ impl<T> OnceCell<T> {
             x.as_ref().unwrap()
         }))
     }
+    pub fn get_mut(&mut self) -> Option<core::cell::RefMut<T>> {
+        Some(core::cell::RefMut::map(self.0.borrow_mut(), |x| {
+            x.as_mut().unwrap()
+        }))
+    }
 }
 
 enum RecursiveInner<T: ?Sized> {
@@ -43,16 +48,14 @@ enum RecursiveInner<T: ?Sized> {
     Unowned(Weak<T>),
 }
 
-type OnceParser<'a, I, O, E, S> = OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>;
-
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
-pub type Direct<'a, I, O, E, S = ()> = dyn Parser<'a, I, O, E, S> + 'a;
+pub type Direct<'a, In, Out, Err, State = (), Ctx = (), Conf = ()> = dyn Parser<'a, In, Out, Err, State, Ctx, Config = Conf> + 'a;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'a, I: ?Sized, O, E, S = ()> {
-    inner: OnceCell<Box<dyn Parser<'a, I, O, E, S> + 'a>>,
+pub struct Indirect<'a, In: ?Sized, Out, Err, State = (), Ctx = (), Conf = ()> {
+    inner: OnceCell<Box<dyn Parser<'a, In, Out, Err, State, Ctx, Config = Conf> + 'a>>,
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -63,7 +66,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S>> {
+impl<'a, In: Input + ?Sized, Out, Err: Error<In>, State, Ctx, Conf> Recursive<Indirect<'a, In, Out, Err, State, Ctx, Conf>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -90,7 +93,7 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// chain.define(just::<_, _, Simple<str>, ()>('+')
+    /// chain.define(just('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
@@ -111,7 +114,7 @@ impl<'a, I: Input + ?Sized, O, E: Error<I>, S> Recursive<Indirect<'a, I, O, E, S
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    pub fn define<P: Parser<'a, I, O, E, S> + 'a>(&mut self, parser: P) {
+    pub fn define<P: Parser<'a, In, Out, Err, State, Ctx, Config =Conf> + 'a>(&mut self, parser: P) {
         self.parser()
             .inner
             .set(Box::new(parser))
@@ -141,13 +144,16 @@ impl<P: ?Sized> Clone for Recursive<P> {
     }
 }
 
-impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Recursive<Indirect<'a, I, O, E, S>>
+impl<'a, In, Out, Err, State, Ctx, Conf> Parser<'a, In, Out, Err, State, Ctx> for Recursive<Indirect<'a, In, Out, Err, State, Ctx, Conf>>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    Conf: Default,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = Conf;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         M::invoke(
             self.parser()
                 .inner
@@ -158,20 +164,23 @@ where
         )
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
-impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Recursive<Direct<'a, I, O, E, S>>
+impl<'a, In, Out, Err, State, Ctx, Conf> Parser<'a, In, Out, Err, State, Ctx> for Recursive<Direct<'a, In, Out, Err, State, Ctx, Conf>>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    Conf: Default,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = Conf;
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         M::invoke(&*self.parser(), inp)
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// Construct a recursive parser (i.e: a parser that may contain itself as part of its pattern).
@@ -223,16 +232,16 @@ where
 ///     ]),
 /// ])));
 /// ```
-pub fn recursive<'a, I, O, E, S, A, F>(f: F) -> Recursive<Direct<'a, I, O, E, S>>
+pub fn recursive<'a, In, Out, Err, State, Ctx, A, F>(f: F) -> Recursive<Direct<'a, In, Out, Err, State, Ctx, A::Config>>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S> + 'a,
-    F: FnOnce(Recursive<Direct<'a, I, O, E, S>>) -> A,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx> + 'a,
+    F: FnOnce(Recursive<Direct<'a, In, Out, Err, State, Ctx, A::Config>>) -> A,
 {
     let rc = Rc::new_cyclic(|rc| {
-        let rc: Weak<dyn Parser<'a, I, O, E, S>> = rc.clone() as _;
+        let rc: Weak<dyn Parser<'a, In, Out, Err, State, Ctx, Config = A::Config>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };

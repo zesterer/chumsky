@@ -16,7 +16,7 @@
 use super::*;
 
 /// See [`end`].
-pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
+pub struct End<In: ?Sized, Err, State>(PhantomData<(Err, State, In)>);
 
 /// A parser that accepts only the end of input.
 ///
@@ -52,30 +52,32 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
 /// assert_eq!(only_digits.parse("1234").into_result(), Ok("1234"));
 /// ```
-pub const fn end<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> End<I, E, S> {
+pub const fn end<'a, In: Input + ?Sized, Err: Error<In>, State: 'a>() -> End<In, Err, State> {
     End(PhantomData)
 }
 
-impl<I: ?Sized, E, S> Copy for End<I, E, S> {}
-impl<I: ?Sized, E, S> Clone for End<I, E, S> {
+impl<In: ?Sized, Err, State> Copy for End<In, Err, State> {}
+impl<In: ?Sized, Err, State> Clone for End<In, Err, State> {
     fn clone(&self) -> Self {
         End(PhantomData)
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for End<I, E, S>
+impl<'a, In, Err, State, Ctx> Parser<'a, In, (), Err, State, Ctx> for End<In, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (), Err> {
         let before = inp.save();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => Err(Located::at(
                 at,
-                E::expected_found(None, Some(tok), inp.span_since(before)),
+                Err::expected_found(None, Some(tok), inp.span_since(before)),
             )),
         }
     }
@@ -84,29 +86,31 @@ where
 }
 
 /// See [`empty`].
-pub struct Empty<I: ?Sized>(PhantomData<I>);
+pub struct Empty<In: ?Sized>(PhantomData<In>);
 
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
-pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
+pub const fn empty<In: Input + ?Sized>() -> Empty<In> {
     Empty(PhantomData)
 }
 
-impl<I: ?Sized> Copy for Empty<I> {}
-impl<I: ?Sized> Clone for Empty<I> {
+impl<In: ?Sized> Copy for Empty<In> {}
+impl<In: ?Sized> Clone for Empty<In> {
     fn clone(&self) -> Self {
         Empty(PhantomData)
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for Empty<I>
+impl<'a, In, Err, State, Ctx> Parser<'a, In, (), Err, State, Ctx> for Empty<In>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (), Err> {
         Ok(M::bind(|| ()))
     }
 
@@ -119,13 +123,13 @@ where
 // }
 
 /// See [`just`].
-pub struct Just<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct Just<T, In: ?Sized, Err = EmptyErr, State = (), Ctx = ()> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(Err, State, Ctx, In)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for Just<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
+impl<T: Copy, In: ?Sized, Err, State, Ctx> Copy for Just<T, In, Err, State, Ctx> {}
+impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for Just<T, In, Err, State, Ctx> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -142,7 +146,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let question = just::<_, _, Simple<str>, ()>('?');
+/// let question = just('?').error::<Simple<str>>();
 ///
 /// assert_eq!(question.parse("?").into_result(), Ok('?'));
 /// assert!(question.parse("!").has_errors());
@@ -151,12 +155,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").has_errors());
 /// ```
-pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
+pub const fn just<T, In, Err, State, Ctx>(seq: T) -> Just<T, In, Err, State, Ctx>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    I::Token: PartialEq,
-    T: OrderedSeq<I::Token> + Clone,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    In::Token: PartialEq,
+    T: OrderedSeq<In::Token> + Clone,
 {
     Just {
         seq,
@@ -164,15 +168,17 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, T, E, S> for Just<T, I, E, S>
+impl<'a, In, Err, State, Ctx, T> Parser<'a, In, T, Err, State, Ctx> for Just<T, In, Err, State, Ctx>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Token: Clone + PartialEq,
-    T: OrderedSeq<I::Token> + Clone,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Token: Clone + PartialEq,
+    T: OrderedSeq<In::Token> + Clone,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, T, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, T, Err> {
         let mut items = self.seq.seq_iter();
         loop {
             match items.next() {
@@ -184,7 +190,7 @@ where
                         (at, tok) => {
                             break Err(Located::at(
                                 at,
-                                E::expected_found(Some(Some(I::Token::clone(next))), tok, inp.span_since(before)),
+                                Err::expected_found(Some(Some(In::Token::clone(next))), tok, inp.span_since(before)),
                             ))
                         }
                     }
@@ -198,13 +204,13 @@ where
 }
 
 /// See [`one_of`].
-pub struct OneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct OneOf<T, In: ?Sized, Err = EmptyErr, State = (), Ctx = ()> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(Err, State, Ctx, In)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for OneOf<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
+impl<T: Copy, In: ?Sized, Err, State, Ctx> Copy for OneOf<T, In, Err, State, Ctx> {}
+impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for OneOf<T, In, Err, State, Ctx> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -230,12 +236,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 /// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
 /// ```
-pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
+pub const fn one_of<T, In, Err, State>(seq: T) -> OneOf<T, In, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    I::Token: Clone + PartialEq,
-    T: Seq<I::Token>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    In::Token: Clone + PartialEq,
+    T: Seq<In::Token>,
 {
     OneOf {
         seq,
@@ -243,36 +249,38 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for OneOf<T, I, E, S>
+impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for OneOf<T, In, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Token: Clone + PartialEq,
-    T: Seq<I::Token>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Token: Clone + PartialEq,
+    T: Seq<In::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, In::Token, Err> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
+                Err::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
             )),
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(In::Token);
 }
 
 /// See [`none_of`].
-pub struct NoneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct NoneOf<T, In: ?Sized, Err = EmptyErr, State = (), Ctx = ()> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(Err, State, Ctx, In)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for NoneOf<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
+impl<T: Copy, In: ?Sized, Err, State, Ctx> Copy for NoneOf<T, In, Err, State, Ctx> {}
+impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for NoneOf<T, In, Err, State, Ctx> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -298,12 +306,12 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 /// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").has_errors());
 /// ```
-pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
+pub const fn none_of<T, In, Err, State>(seq: T) -> NoneOf<T, In, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    I::Token: PartialEq,
-    T: Seq<I::Token>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    In::Token: PartialEq,
+    T: Seq<In::Token>,
 {
     NoneOf {
         seq,
@@ -311,35 +319,37 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for NoneOf<T, I, E, S>
+impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for NoneOf<T, In, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Token: PartialEq,
-    T: Seq<I::Token>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Token: PartialEq,
+    T: Seq<In::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, In::Token, Err> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(None, found, inp.span_since(before)),
+                Err::expected_found(None, found, inp.span_since(before)),
             )),
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(In::Token);
 }
 
 /// See [`any`].
-pub struct Any<I: ?Sized, E, S = ()> {
-    phantom: PhantomData<(E, S, I)>,
+pub struct Any<In: ?Sized, Err, State = (), Ctx = ()> {
+    phantom: PhantomData<(Err, State, Ctx, In)>,
 }
 
-impl<I: ?Sized, E, S> Copy for Any<I, E, S> {}
-impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
+impl<In: ?Sized, Err, State, Ctx> Copy for Any<In, Err, State, Ctx> {}
+impl<In: ?Sized, Err, State, Ctx> Clone for Any<In, Err, State, Ctx> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
@@ -347,24 +357,26 @@ impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, I::Token, E, S> for Any<I, E, S>
+impl<'a, In, Err, State, Ctx> Parser<'a, In, In::Token, Err, State, Ctx> for Any<In, Err, State, Ctx>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, In::Token, Err> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(None, found, inp.span_since(before)),
+                Err::expected_found(None, found, inp.span_since(before)),
             )),
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(In::Token);
 }
 
 /// A parser that accepts any input (but not the end of input).
@@ -375,35 +387,35 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let any = any::<_, Simple<str>, ()>();
+/// let any = any();
 ///
 /// assert_eq!(any.parse("a").into_result(), Ok('a'));
 /// assert_eq!(any.parse("7").into_result(), Ok('7'));
 /// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
-pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
+pub const fn any<In: Input + ?Sized, Err: Error<In>, State, Ctx>() -> Any<In, Err, State, Ctx> {
     Any {
         phantom: PhantomData,
     }
 }
 
 /// See [`take_until`].
-pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = EmptyErr, S = ()> {
+pub struct TakeUntil<P, In: ?Sized, OP, C = (), Err = EmptyErr, State = (), Ctx = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
-    phantom: PhantomData<(OP, C, E, S, I)>,
+    phantom: PhantomData<(OP, C, Err, State, Ctx, In)>,
 }
 
-impl<'a, I, E, S, P, OP, C> TakeUntil<P, I, OP, C, E, S>
+impl<'a, In, Err, State, Ctx, P, OP, C> TakeUntil<P, In, OP, C, Err, State, Ctx>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    P: Parser<'a, In, OP, Err, State, Ctx>,
 {
     /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, I, OP, D, E, S> {
+    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, In, OP, D, Err, State> {
         TakeUntil {
             until: self.until,
             phantom: PhantomData,
@@ -411,8 +423,8 @@ where
     }
 }
 
-impl<P: Copy, I: ?Sized, C, E, S> Copy for TakeUntil<P, I, C, E, S> {}
-impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
+impl<P: Copy, In: ?Sized, C, Err, State> Copy for TakeUntil<P, In, C, Err, State> {}
+impl<P: Clone, In: ?Sized, C, Err, State> Clone for TakeUntil<P, In, C, Err, State> {
     fn clone(&self) -> Self {
         TakeUntil {
             until: self.until.clone(),
@@ -430,11 +442,11 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let single_line = just::<_, _, Simple<str>, ()>("//")
+/// let single_line = just("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, Simple<str>, ()>("/*")
+/// let multi_line = just("/*")
 ///     .then(take_until(just("*/")))
 ///     .ignored();
 ///
@@ -461,12 +473,12 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///     // ...comments between them
 /// "#).into_result(), Ok(vec!["these", "are", "tokens"]));
 /// ```
-pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, OP, (), E, S>
+pub const fn take_until<'a, P, OP, In, Err, State>(until: P) -> TakeUntil<P, In, OP, (), Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    P: Parser<'a, In, OP, Err, State>,
 {
     TakeUntil {
         until,
@@ -474,15 +486,17 @@ where
     }
 }
 
-impl<'a, P, OP, I, E, S, C> Parser<'a, I, (C, OP), E, S> for TakeUntil<P, I, OP, C, E, S>
+impl<'a, P, OP, In, Err, State, Ctx, C> Parser<'a, In, (C, OP), Err, State, Ctx> for TakeUntil<P, In, OP, C, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
-    C: Container<I::Token>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    P: Parser<'a, In, OP, Err, State, Ctx>,
+    C: Container<In::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (C, OP), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (C, OP), Err> {
         let mut output = M::bind(|| C::default());
 
         loop {
@@ -510,10 +524,10 @@ where
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I: ?Sized, O, E>(PhantomData<(O, E, I)>);
+pub struct Todo<In: ?Sized, Out, Err>(PhantomData<(Out, Err, In)>);
 
-impl<I: ?Sized, O, E> Copy for Todo<I, O, E> {}
-impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
+impl<In: ?Sized, Out, Err> Copy for Todo<In, Out, Err> {}
+impl<In: ?Sized, Out, Err> Clone for Todo<In, Out, Err> {
     fn clone(&self) -> Self {
         *self
     }
@@ -533,7 +547,7 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 ///
 /// ```should_panic
 /// # use chumsky::zero_copy::prelude::*;
-/// let int = just::<_, _, Simple<str>, ()>("0x").ignore_then(todo())
+/// let int = just("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2)))
 ///     .or(text::int(10));
 ///
@@ -544,21 +558,23 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
-pub const fn todo<I: Input + ?Sized, O, E: Error<I>>() -> Todo<I, O, E> {
+pub const fn todo<In: Input + ?Sized, Out, Err: Error<In>>() -> Todo<In, Out, Err> {
     Todo(PhantomData)
 }
 
-impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Todo<I, O, E>
+impl<'a, In, Out, Err, State, Ctx> Parser<'a, In, Out, Err, State, Ctx> for Todo<In, Out, Err>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         todo!("Attempted to use an unimplemented parser")
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`choice`].
@@ -637,19 +653,21 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $($X:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*, O> Parser<'a, I, O, E, S> for Choice<($($X,)*), O>
+        impl<'a, In, Err, State, Ctx, $($X),*, Out> Parser<'a, In, Out, Err, State, Ctx> for Choice<($($X,)*), Out>
         where
-            I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            $($X: Parser<'a, I, O, E, S>),*
+            In: Input + ?Sized,
+            Err: Error<In>,
+            State: 'a,
+            $($X: Parser<'a, In, Out, Err, State, Ctx>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+            type Config = ();
+
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
                 let before = inp.save();
 
                 let Choice { parsers: ($($X,)*), .. } = self;
 
-                let mut err: Option<Located<E>> = None;
+                let mut err: Option<Located<Err>> = None;
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
@@ -664,10 +682,10 @@ macro_rules! impl_choice_for_tuple {
                     };
                 )*
 
-                Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
+                Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), Err::expected_found(None, None, inp.span_since(before)))))
             }
 
-            go_extra!(O);
+            go_extra!(Out);
         }
     };
 }
@@ -725,14 +743,16 @@ macro_rules! impl_group_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E, S> for Group<($($X,)*)>
+        impl<'a, In, Err, State, Ctx, $($X),*, $($O),*> Parser<'a, In, ($($O,)*), Err, State, Ctx> for Group<($($X,)*)>
         where
-            I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            $($X: Parser<'a, I, $O, E, S>),*
+            In: Input + ?Sized,
+            Err: Error<In>,
+            State: 'a,
+            $($X: Parser<'a, In, $O, Err, State, Ctx>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, ($($O,)*), E> {
+            type Config = ();
+
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, ($($O,)*), Err> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(

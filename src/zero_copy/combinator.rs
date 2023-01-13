@@ -8,39 +8,67 @@
 use super::*;
 use core::mem::MaybeUninit;
 
-/// See [`Parser::map_slice`].
-pub struct MapSlice<'a, A, I, O, E, S, F, U>
+/// Alter the configuration of a struct using parse-time context
+pub struct Configure<A, F> {
+    pub(crate) parser: A,
+    pub(crate) cfg: F,
+}
+
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for Configure<A, F>
 where
-    I: Input + SliceInput + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Slice: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(&'a I::Slice) -> U,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&mut A::Config, &mut State),
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+{
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err>
+    where
+        Self: Sized,
+    {
+        let mut cfg = A::Config::default();
+        (self.cfg)(&mut cfg, inp.state());
+        self.parser.go::<M>(inp)
+    }
+
+    go_extra!(Out);
+}
+
+/// See [`Parser::map_slice`].
+pub struct MapSlice<'a, A, In, Out, Err, State, Ctx, F, U>
+where
+    In: Input + SliceInput + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Slice: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&'a In::Slice) -> U,
 {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<(&'a I::Slice, O, E, S)>,
+    pub(crate) phantom: PhantomData<(&'a In::Slice, Out, Err, State, Ctx)>,
 }
 
-impl<'a, A: Copy, I, O, E, S, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, S, F, U>
+impl<'a, A: Copy, In, Out, Err, State, Ctx, F: Copy, U> Copy for MapSlice<'a, A, In, Out, Err, State, Ctx, F, U>
 where
-    I: Input + SliceInput + Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Slice: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(&'a I::Slice) -> U,
+    In: Input + SliceInput + Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Slice: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&'a In::Slice) -> U,
 {
 }
-impl<'a, A: Clone, I, O, E, S, F: Clone, U> Clone for MapSlice<'a, A, I, O, E, S, F, U>
+impl<'a, A: Clone, In, Out, Err, State, Ctx, F: Clone, U> Clone for MapSlice<'a, A, In, Out, Err, State, Ctx, F, U>
 where
-    I: Input + SliceInput + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Slice: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(&'a I::Slice) -> U,
+    In: Input + SliceInput + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Slice: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&'a In::Slice) -> U,
 {
     fn clone(&self) -> Self {
         Self {
@@ -51,16 +79,18 @@ where
     }
 }
 
-impl<'a, I, O, E, S, A, F, U> Parser<'a, I, U, E, S> for MapSlice<'a, A, I, O, E, S, F, U>
+impl<'a, In, Out, Err, State, Ctx, A, F, U> Parser<'a, In, U, Err, State, Ctx> for MapSlice<'a, A, In, Out, Err, State, Ctx, F, U>
 where
-    I: Input + SliceInput + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Slice: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(&'a I::Slice) -> U,
+    In: Input + SliceInput + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Slice: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&'a In::Slice) -> U,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, U, Err> {
         let before = inp.save();
         self.parser.go::<Check>(inp)?;
         let after = inp.save();
@@ -87,14 +117,16 @@ impl<A: Clone, O> Clone for Slice<A, O> {
     }
 }
 
-impl<'a, A, I, O, E, S> Parser<'a, I, &'a I::Slice, E, S> for Slice<A, O>
+impl<'a, A, In, Out, Err, State, Ctx> Parser<'a, In, &'a In::Slice, Err, State, Ctx> for Slice<A, Out>
 where
-    A: Parser<'a, I, O, E, S>,
-    I: Input + SliceInput + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    In: Input + SliceInput + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, &'a I::Slice, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, &'a In::Slice, Err>
     where
         Self: Sized,
     {
@@ -105,7 +137,7 @@ where
         Ok(M::bind(|| inp.slice(before..after)))
     }
 
-    go_extra!(&'a I::Slice);
+    go_extra!(&'a In::Slice);
 }
 
 /// See [`Parser::filter`].
@@ -124,15 +156,17 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
     }
 }
 
-impl<'a, A, I, O, E, S, F> Parser<'a, I, O, E, S> for Filter<A, F>
+impl<'a, A, In, Out, Err, State, Ctx, F> Parser<'a, In, Out, Err, State, Ctx> for Filter<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(&O) -> bool,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(&Out) -> bool,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             if (self.filter)(&out) {
@@ -141,13 +175,13 @@ where
                 let span = inp.span_since(before);
                 Err(Located::at(
                     inp.last_pos(),
-                    E::expected_found(None, None, span),
+                    Err::expected_found(None, None, span),
                 ))
             }
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map`].
@@ -158,21 +192,23 @@ pub struct Map<A, OA, F> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for Map<A, OA, F>
+impl<'a, In, Out, Err, State, Ctx, A, OA, F> Parser<'a, In, Out, Err, State, Ctx> for Map<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA) -> O,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA) -> Out,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         self.parser
             .go::<M>(inp)
             .map(|out| M::map(out, &self.mapper))
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map_with_span`].
@@ -183,15 +219,17 @@ pub struct MapWithSpan<A, OA, F> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithSpan<A, OA, F>
+impl<'a, In, Out, Err, State, Ctx, A, OA, F> Parser<'a, In, Out, Err, State, Ctx> for MapWithSpan<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span) -> O,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA, In::Span) -> Out,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         self.parser.go::<M>(inp).map(|out| {
             M::map(out, |out| {
@@ -201,7 +239,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map_with_state`].
@@ -212,15 +250,17 @@ pub struct MapWithState<A, OA, F> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for MapWithState<A, OA, F>
+impl<'a, In, Out, Err, State, Ctx, A, OA, F> Parser<'a, In, Out, Err, State, Ctx> for MapWithState<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span, &mut S) -> O,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA, In::Span, &mut State) -> Out,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).map(|out| {
             M::bind(|| {
@@ -231,7 +271,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::try_map`].
@@ -242,15 +282,17 @@ pub struct TryMap<A, OA, F> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMap<A, OA, F>
+impl<'a, In, Out, Err, State, Ctx, A, OA, F> Parser<'a, In, Out, Err, State, Ctx> for TryMap<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span) -> Result<O, E>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA, In::Span) -> Result<Out, Err>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
@@ -261,7 +303,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::try_map_with_state`].
@@ -272,15 +314,17 @@ pub struct TryMapWithState<A, OA, F> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, OA, F> Parser<'a, I, O, E, S> for TryMapWithState<A, OA, F>
+impl<'a, In, Out, Err, State, Ctx, A, OA, F> Parser<'a, In, Out, Err, State, Ctx> for TryMapWithState<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span, &mut S) -> Result<O, E>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA, In::Span, &mut State) -> Result<Out, Err>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
@@ -292,7 +336,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::to`].
@@ -302,8 +346,8 @@ pub struct To<A, OA, O, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
-impl<A: Copy, OA, O: Copy, E, S> Copy for To<A, OA, O, E, S> {}
-impl<A: Clone, OA, O: Clone, E, S> Clone for To<A, OA, O, E, S> {
+impl<A: Copy, OA, Out: Copy, Err, State> Copy for To<A, OA, Out, Err, State> {}
+impl<A: Clone, OA, Out: Clone, Err, State> Clone for To<A, OA, Out, Err, State> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -313,21 +357,23 @@ impl<A: Clone, OA, O: Clone, E, S> Clone for To<A, OA, O, E, S> {
     }
 }
 
-impl<'a, I, O, E, S, A, OA> Parser<'a, I, O, E, S> for To<A, OA, O, E, S>
+impl<'a, In, Out, Err, State, Ctx, A, OA> Parser<'a, In, Out, Err, State, Ctx> for To<A, OA, Out, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    O: Clone,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    Out: Clone,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         self.parser
             .go::<Check>(inp)
             .map(|_| M::bind(|| self.to.clone()))
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::ignored`].
@@ -343,14 +389,16 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
     }
 }
 
-impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Ignored<A, OA>
+impl<'a, In, Err, State, Ctx, A, OA> Parser<'a, In, (), Err, State, Ctx> for Ignored<A, OA>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (), Err> {
         self.parser.go::<Check>(inp).map(|_| M::bind(|| ()))
     }
 
@@ -364,8 +412,8 @@ pub struct Then<A, B, OA, OB, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, E, S> Copy for Then<A, B, OA, OB, E, S> {}
-impl<A: Clone, B: Clone, OA, OB, E, S> Clone for Then<A, B, OA, OB, E, S> {
+impl<A: Copy, B: Copy, OA, OB, Err, State> Copy for Then<A, B, OA, OB, Err, State> {}
+impl<A: Clone, B: Clone, OA, OB, Err, State> Clone for Then<A, B, OA, OB, Err, State> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -375,15 +423,17 @@ impl<A: Clone, B: Clone, OA, OB, E, S> Clone for Then<A, B, OA, OB, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, (OA, OB), E, S> for Then<A, B, OA, OB, E, S>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB> Parser<'a, In, (OA, OB), Err, State, Ctx> for Then<A, B, OA, OB, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (OA, OB), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (OA, OB), Err> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::combine(a, b, |a: OA, b: OB| (a, b)))
@@ -399,8 +449,8 @@ pub struct IgnoreThen<A, B, OA, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(OA, E, S)>,
 }
 
-impl<A: Copy, B: Copy, OA, E, S> Copy for IgnoreThen<A, B, OA, E, S> {}
-impl<A: Clone, B: Clone, OA, E, S> Clone for IgnoreThen<A, B, OA, E, S> {
+impl<A: Copy, B: Copy, OA, Err, State> Copy for IgnoreThen<A, B, OA, Err, State> {}
+impl<A: Clone, B: Clone, OA, Err, State> Clone for IgnoreThen<A, B, OA, Err, State> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -410,15 +460,17 @@ impl<A: Clone, B: Clone, OA, E, S> Clone for IgnoreThen<A, B, OA, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OB, E, S> for IgnoreThen<A, B, OA, E, S>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB> Parser<'a, In, OB, Err, State, Ctx> for IgnoreThen<A, B, OA, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OB, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OB, Err> {
         let _a = self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::map(b, |b: OB| b))
@@ -434,8 +486,8 @@ pub struct ThenIgnore<A, B, OB, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(OB, E, S)>,
 }
 
-impl<A: Copy, B: Copy, OB, E, S> Copy for ThenIgnore<A, B, OB, E, S> {}
-impl<A: Clone, B: Clone, OB, E, S> Clone for ThenIgnore<A, B, OB, E, S> {
+impl<A: Copy, B: Copy, OB, Err, State> Copy for ThenIgnore<A, B, OB, Err, State> {}
+impl<A: Clone, B: Clone, OB, Err, State> Clone for ThenIgnore<A, B, OB, Err, State> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -445,15 +497,17 @@ impl<A: Clone, B: Clone, OB, E, S> Clone for ThenIgnore<A, B, OB, E, S> {
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for ThenIgnore<A, B, OB, E, S>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB> Parser<'a, In, OA, Err, State, Ctx> for ThenIgnore<A, B, OB, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OA, Err> {
         let a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<Check>(inp)?;
         Ok(M::map(a, |a: OA| a))
@@ -463,52 +517,43 @@ where
 }
 
 /// See [`Parser::then_with`].
-pub struct ThenWith<A, B, OA, F, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct ThenWithCtx<A, B, OA, F, In: ?Sized, Err = EmptyErr, S = (), CtxN = ()> {
     pub(crate) parser: A,
-    pub(crate) then: F,
-    pub(crate) phantom: PhantomData<(B, OA, E, S, I)>,
+    pub(crate) then: B,
+    pub(crate) make_ctx: F,
+    pub(crate) phantom: PhantomData<(B, OA, Err, S, CtxN, In)>,
 }
 
-impl<A: Copy, B, OA, F: Copy, I: ?Sized, E, S> Copy for ThenWith<A, B, OA, F, I, E, S> {}
-impl<A: Clone, B, OA, F: Clone, I: ?Sized, E, S> Clone for ThenWith<A, B, OA, F, I, E, S> {
+impl<A: Copy, B: Copy, OA, F: Copy, In: ?Sized, Err, State, CtxN> Copy for ThenWithCtx<A, B, OA, F, In, Err, State, CtxN> {}
+impl<A: Clone, B: Clone, OA, F: Clone, In: ?Sized, Err, State, CtxN> Clone for ThenWithCtx<A, B, OA, F, In, Err, State, CtxN> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             then: self.then.clone(),
+            make_ctx: self.make_ctx.clone(),
             phantom: PhantomData,
         }
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB, F> Parser<'a, I, OB, E, S> for ThenWith<A, B, OA, F, I, E, S>
+impl<'a, In, Err, State, Ctx, CtxN, A, B, OA, OB, F> Parser<'a, In, OB, Err, State, Ctx> for ThenWithCtx<A, B, OA, F, In, Err, CtxN>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
-    F: Fn(OA) -> B,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, CtxN>,
+    F: Fn(&Ctx, OA) -> CtxN,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OB, E> {
-        let before = inp.save();
-        match self.parser.go::<Emit>(inp) {
-            Ok(output) => {
-                let then = (self.then)(output);
+    type Config = ();
 
-                let before = inp.save();
-                match then.go::<M>(inp) {
-                    Ok(output) => Ok(output),
-                    Err(e) => {
-                        inp.rewind(before);
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                inp.rewind(before);
-                Err(e)
-            }
-        }
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OB, Err> {
+        let p1 = self.parser.go::<Emit>(inp)?;
+        let ctx = (self.make_ctx)(inp.ctx(), p1);
+        inp.with_ctx(
+            ctx,
+            |inp| self.then.go::<M>(inp)
+        )
     }
 
     go_extra!(OB);
@@ -523,16 +568,18 @@ pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) phantom: PhantomData<(OB, OC)>,
 }
 
-impl<'a, I, E, S, A, B, C, OA, OB, OC> Parser<'a, I, OA, E, S> for DelimitedBy<A, B, C, OB, OC>
+impl<'a, In, Err, State, Ctx, A, B, C, OA, OB, OC> Parser<'a, In, OA, Err, State, Ctx> for DelimitedBy<A, B, C, OB, OC>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
-    C: Parser<'a, I, OC, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
+    C: Parser<'a, In, OC, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OA, Err> {
         let _ = self.start.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
         let _ = self.end.go::<Check>(inp)?;
@@ -550,15 +597,17 @@ pub struct PaddedBy<A, B, OB> {
     pub(crate) phantom: PhantomData<OB>,
 }
 
-impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for PaddedBy<A, B, OB>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB> Parser<'a, In, OA, Err, State, Ctx> for PaddedBy<A, B, OB>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OA, Err> {
         let _ = self.padding.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
         let _ = self.padding.go::<Check>(inp)?;
@@ -575,15 +624,17 @@ pub struct Or<A, B> {
     pub(crate) parser_b: B,
 }
 
-impl<'a, I, O, E, S, A, B> Parser<'a, I, O, E, S> for Or<A, B>
+impl<'a, In, Out, Err, State, Ctx, A, B> Parser<'a, In, Out, Err, State, Ctx> for Or<A, B>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    B: Parser<'a, I, O, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    B: Parser<'a, In, Out, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => Ok(out),
@@ -598,7 +649,7 @@ where
         }
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::recover_with`].
@@ -608,15 +659,17 @@ pub struct RecoverWith<A, F> {
     pub(crate) fallback: F,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for RecoverWith<A, F>
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for RecoverWith<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Parser<'a, I, O, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Parser<'a, In, Out, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(out) => Ok(out),
@@ -633,20 +686,20 @@ where
         }
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::repeated`].
 // FIXME: why C, E, S have default values?
-pub struct Repeated<A, OA, I: ?Sized, C = (), E = EmptyErr, S = ()> {
+pub struct Repeated<A, OA, In: ?Sized, C = (), E = EmptyErr, S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    pub(crate) phantom: PhantomData<(OA, C, E, S, I)>,
+    pub(crate) phantom: PhantomData<(OA, C, E, S, In)>,
 }
 
-impl<A: Copy, OA, I: ?Sized, C, E, S> Copy for Repeated<A, OA, I, C, E, S> {}
-impl<A: Clone, OA, I: ?Sized, C, E, S> Clone for Repeated<A, OA, I, C, E, S> {
+impl<A: Copy, OA, In: ?Sized, C, Err, State> Copy for Repeated<A, OA, In, C, Err, State> {}
+impl<A: Clone, OA, In: ?Sized, C, Err, State> Clone for Repeated<A, OA, In, C, Err, State> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -657,12 +710,12 @@ impl<A: Clone, OA, I: ?Sized, C, E, S> Clone for Repeated<A, OA, I, C, E, S> {
     }
 }
 
-impl<'a, A, OA, I, C, E, S> Repeated<A, OA, I, C, E, S>
+impl<'a, A, OA, In, C, Err, State> Repeated<A, OA, In, C, Err, State>
 where
-    A: Parser<'a, I, OA, E, S>,
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    A: Parser<'a, In, OA, Err, State>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
     /// Require that the pattern appear at least a minimum number of times.
     pub fn at_least(self, at_least: usize) -> Self {
@@ -682,7 +735,9 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ring = just::<_, _, Simple<str>, ()>('O');
+    /// let ring = just('O')
+    ///     .error::<Simple<str>>()
+    ///     .state::<()>();
     ///
     /// let for_the_elves = ring
     ///     .repeated()
@@ -727,9 +782,9 @@ where
     }
 
     /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, I, D, E, S>
+    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, In, D, Err, State>
     where
-        A: Parser<'a, I, OA, E, S>,
+        A: Parser<'a, In, OA, Err, State>,
     {
         Repeated {
             parser: self.parser,
@@ -740,15 +795,17 @@ where
     }
 }
 
-impl<'a, I, E, S, A, OA, C> Parser<'a, I, C, E, S> for Repeated<A, OA, I, C, E, S>
+impl<'a, In, Err, State, Ctx, A, OA, C> Parser<'a, In, C, Err, State, Ctx> for Repeated<A, OA, In, C, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
     C: Container<OA>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, C, Err> {
         let mut count = 0;
         let mut output = M::bind::<C, _>(|| C::default());
         loop {
@@ -783,19 +840,19 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = EmptyErr, S = ()> {
+pub struct SeparatedBy<A, B, OA, OB, In: ?Sized, C = (), Err = EmptyErr, State = ()> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(OA, OB, C, E, S, I)>,
+    pub(crate) phantom: PhantomData<(OA, OB, C, Err, State, In)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, I: ?Sized, C, E, S> Copy for SeparatedBy<A, B, OA, OB, I, C, E, S> {}
-impl<A: Clone, B: Clone, OA, OB, I: ?Sized, C, E, S> Clone
-    for SeparatedBy<A, B, OA, OB, I, C, E, S>
+impl<A: Copy, B: Copy, OA, OB, In: ?Sized, C, Err, State> Copy for SeparatedBy<A, B, OA, OB, In, C, Err, State> {}
+impl<A: Clone, B: Clone, OA, OB, In: ?Sized, C, Err, State> Clone
+    for SeparatedBy<A, B, OA, OB, In, C, Err, State>
 {
     fn clone(&self) -> Self {
         Self {
@@ -810,19 +867,21 @@ impl<A: Clone, B: Clone, OA, OB, I: ?Sized, C, E, S> Clone
     }
 }
 
-impl<'a, A, B, OA, OB, I, C, E, S> SeparatedBy<A, B, OA, OB, I, C, E, S>
+impl<'a, A, B, OA, OB, In, C, Err, State> SeparatedBy<A, B, OA, OB, In, C, Err, State>
 where
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    A: Parser<'a, In, OA, Err, State>,
+    B: Parser<'a, In, OB, Err, State>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
 {
     /// Require that the pattern appear at least a minimum number of times.
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = just::<_, _, Simple<str>, ()>('-')
+    /// let numbers = just('-')
+    ///     .error::<Simple<str>>()
+    ///     .state::<()>()
     ///     .separated_by(just('.'))
     ///     .at_least(2)
     ///     .collect::<Vec<_>>();
@@ -950,10 +1009,10 @@ where
     }
 
     /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, I, D, E, S>
+    pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, In, D, Err, State>
     where
-        A: Parser<'a, I, OA, E, S>,
-        B: Parser<'a, I, OB, E, S>,
+        A: Parser<'a, In, OA, Err, State>,
+        B: Parser<'a, In, OB, Err, State>,
     {
         SeparatedBy {
             parser: self.parser,
@@ -967,16 +1026,18 @@ where
     }
 }
 
-impl<'a, I, E, S, A, B, OA, OB, C> Parser<'a, I, C, E, S> for SeparatedBy<A, B, OA, OB, I, C, E, S>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB, C> Parser<'a, In, C, Err, State, Ctx> for SeparatedBy<A, B, OA, OB, In, C, Err, State>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
     C: Container<OA>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, C, Err> {
         // STEPS:
         // 1. If allow_leading -> Consume separator if there
         //    if Ok  -> continue
@@ -1111,25 +1172,27 @@ pub struct OrNot<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, S, A> Parser<'a, I, Option<O>, E, S> for OrNot<A>
+impl<'a, In, Out, Err, State, Ctx, A> Parser<'a, In, Option<Out>, Err, State, Ctx> for OrNot<A>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, Option<O>, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Option<Out>, Err> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
-            Ok(o) => M::map::<O, _, _>(o, Some),
+            Ok(o) => M::map::<Out, _, _>(o, Some),
             Err(_) => {
                 inp.rewind(before);
-                M::bind::<Option<O>, _>(|| None)
+                M::bind::<Option<Out>, _>(|| None)
             }
         })
     }
 
-    go_extra!(Option<O>);
+    go_extra!(Option<Out>);
 }
 
 /// See [`Parser::not`].
@@ -1139,14 +1202,16 @@ pub struct Not<A, OA> {
     pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, E, S, A, OA> Parser<'a, I, (), E, S> for Not<A, OA>
+impl<'a, In, Err, State, Ctx, A, OA> Parser<'a, In, (), Err, State, Ctx> for Not<A, OA>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, (), Err> {
         let before = inp.save();
 
         let result = self.parser.go::<Check>(inp);
@@ -1157,7 +1222,7 @@ where
                 let (at, tok) = inp.next();
                 Err(Located::at(
                     at,
-                    E::expected_found(None, tok, inp.span_since(before)),
+                    Err::expected_found(None, tok, inp.span_since(before)),
                 ))
             }
             Err(_) => Ok(M::bind(|| ())),
@@ -1175,15 +1240,17 @@ pub struct AndIs<A, B, OB> {
     pub(crate) phantom: PhantomData<OB>,
 }
 
-impl<'a, I, E, S, A, B, OA, OB> Parser<'a, I, OA, E, S> for AndIs<A, B, OB>
+impl<'a, In, Err, State, Ctx, A, B, OA, OB> Parser<'a, In, OA, Err, State, Ctx> for AndIs<A, B, OB>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, OA, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OA, Err> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => {
@@ -1224,12 +1291,12 @@ pub struct RepeatedExactly<A, OA, C, const N: usize> {
 
 impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, I, E, S, D>(self) -> RepeatedExactly<A, OA, D, N>
+    pub fn collect<'a, In, Err, State, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
-        A: Parser<'a, I, OA, E, S>,
-        I: Input + ?Sized,
-        E: Error<I>,
-        S: 'a,
+        A: Parser<'a, In, OA, Err, State>,
+        In: Input + ?Sized,
+        Err: Error<In>,
+        State: 'a,
         D: ContainerExactly<OA, N>,
     {
         RepeatedExactly {
@@ -1239,15 +1306,17 @@ impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     }
 }
 
-impl<'a, I, E, S, A, OA, C, const N: usize> Parser<'a, I, C, E, S> for RepeatedExactly<A, OA, C, N>
+impl<'a, In, Err, State, Ctx, A, OA, C, const N: usize> Parser<'a, In, C, Err, State, Ctx> for RepeatedExactly<A, OA, C, N>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
     C: ContainerExactly<OA, N>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, C, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, C, Err> {
         let mut i = 0;
         let mut output = M::bind(|| C::uninit());
         loop {
@@ -1348,12 +1417,12 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     }
 
     /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, I, OA, E, S, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
+    pub fn collect<'a, In, OA, Err, State, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
     where
-        A: Parser<'a, I, OA, E, S>,
-        I: Input,
-        E: Error<I>,
-        S: 'a,
+        A: Parser<'a, In, OA, Err, State>,
+        In: Input,
+        Err: Error<In>,
+        State: 'a,
         D: ContainerExactly<OA, N>,
     {
         SeparatedByExactly {
@@ -1366,19 +1435,21 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     }
 }
 
-// FIXME: why parser output is not C ?
-impl<'a, I, E, S, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E, S>
+// FIXMErr: why parser output is not C ?
+impl<'a, In, Err, State, Ctx, A, B, OA, OB, C, const N: usize> Parser<'a, In, [OA; N], Err, State, Ctx>
     for SeparatedByExactly<A, B, OB, C, N>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    B: Parser<'a, I, OB, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
     C: ContainerExactly<OA, N>,
 {
-    // FIXME: why parse result output is not C ?
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, [OA; N], E> {
+    type Config = ();
+
+    // FIXMErr: why parse result output is not C ?
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, [OA; N], Err> {
         if self.allow_leading {
             let before_separator = inp.save();
             if let Err(_) = self.separator.go::<Check>(inp) {
@@ -1440,8 +1511,8 @@ pub struct Foldr<P, F, A, B, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
 }
 
-impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldr<P, F, A, B, E, S> {}
-impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldr<P, F, A, B, E, S> {
+impl<P: Copy, F: Copy, A, B, Err, State> Copy for Foldr<P, F, A, B, Err, State> {}
+impl<P: Clone, F: Clone, A, B, Err, State> Clone for Foldr<P, F, A, B, Err, State> {
     fn clone(&self) -> Self {
         Foldr {
             parser: self.parser.clone(),
@@ -1451,17 +1522,19 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldr<P, F, A, B, E, S> {
     }
 }
 
-impl<'a, I, P, F, A, B, E, S> Parser<'a, I, B, E, S> for Foldr<P, F, A, B, E, S>
+impl<'a, In, P, F, A, B, Err, State, Ctx> Parser<'a, In, B, Err, State, Ctx> for Foldr<P, F, A, B, Err, State>
 where
-    I: Input + ?Sized,
-    P: Parser<'a, I, (A, B), E, S>,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    P: Parser<'a, In, (A, B), Err, State, Ctx>,
+    Err: Error<In>,
+    State: 'a,
     A: IntoIterator,
     A::IntoIter: DoubleEndedIterator,
     F: Fn(A::Item, B) -> B,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, B, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, B, Err>
     where
         Self: Sized,
     {
@@ -1482,8 +1555,8 @@ pub struct Foldl<P, F, A, B, E = EmptyErr, S = ()> {
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
 }
 
-impl<P: Copy, F: Copy, A, B, E, S> Copy for Foldl<P, F, A, B, E, S> {}
-impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldl<P, F, A, B, E, S> {
+impl<P: Copy, F: Copy, A, B, Err, State> Copy for Foldl<P, F, A, B, Err, State> {}
+impl<P: Clone, F: Clone, A, B, Err, State> Clone for Foldl<P, F, A, B, Err, State> {
     fn clone(&self) -> Self {
         Foldl {
             parser: self.parser.clone(),
@@ -1493,16 +1566,18 @@ impl<P: Clone, F: Clone, A, B, E, S> Clone for Foldl<P, F, A, B, E, S> {
     }
 }
 
-impl<'a, I, P, F, A, B, E, S> Parser<'a, I, A, E, S> for Foldl<P, F, A, B, E, S>
+impl<'a, In, P, F, A, B, Err, State, Ctx> Parser<'a, In, A, Err, State, Ctx> for Foldl<P, F, A, B, Err, State>
 where
-    I: Input + ?Sized,
-    P: Parser<'a, I, (A, B), E, S>,
-    E: Error<I>,
-    S: 'a,
+    In: Input + ?Sized,
+    P: Parser<'a, In, (A, B), Err, State, Ctx>,
+    Err: Error<In>,
+    State: 'a,
     B: IntoIterator,
     F: Fn(A, B::Item) -> A,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, A, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, A, Err>
     where
         Self: Sized,
     {
@@ -1522,14 +1597,16 @@ pub struct Rewind<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for Rewind<A>
+impl<'a, In, Out, Err, State, Ctx, A> Parser<'a, In, Out, Err, State, Ctx> for Rewind<A>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(o) => {
@@ -1540,7 +1617,7 @@ where
         }
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map_err`].
@@ -1550,15 +1627,17 @@ pub struct MapErr<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErr<A, F>
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for MapErr<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E) -> E,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(Err) -> Err,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err>
     where
         Self: Sized,
     {
@@ -1568,7 +1647,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map_err_with_span`].
@@ -1578,15 +1657,17 @@ pub struct MapErrWithSpan<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErrWithSpan<A, F>
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for MapErrWithSpan<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E, I::Span) -> E,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(Err, In::Span) -> Err,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err>
     where
         Self: Sized,
     {
@@ -1598,7 +1679,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::map_err_with_state`].
@@ -1608,15 +1689,17 @@ pub struct MapErrWithState<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for MapErrWithState<A, F>
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for MapErrWithState<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E, I::Span, &mut S) -> E,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(Err, In::Span, &mut State) -> Err,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err>
     where
         Self: Sized,
     {
@@ -1628,7 +1711,7 @@ where
         })
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// See [`Parser::validate`]
@@ -1649,15 +1732,17 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
     }
 }
 
-impl<'a, I, OA, U, E, S, A, F> Parser<'a, I, U, E, S> for Validate<A, OA, F>
+impl<'a, In, OA, U, Err, State, Ctx, A, F> Parser<'a, In, U, Err, State, Ctx> for Validate<A, OA, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, OA, E, S>,
-    F: Fn(OA, I::Span, &mut Emitter<E>) -> U,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    F: Fn(OA, In::Span, &mut Emitter<Err>) -> U,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, U, Err>
     where
         Self: Sized,
     {
@@ -1683,15 +1768,17 @@ pub struct OrElse<A, F> {
     pub(crate) or_else: F,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for OrElse<A, F>
+impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for OrElse<A, F>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E) -> Result<O, E>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
+    F: Fn(Err) -> Result<Out, Err>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err>
     where
         Self: Sized,
     {
@@ -1707,7 +1794,7 @@ where
         }
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 #[cfg(test)]
@@ -1716,7 +1803,8 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .at_least(3)
             .collect();
@@ -1726,7 +1814,8 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>();
@@ -1737,7 +1826,8 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>()
@@ -1749,7 +1839,8 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .allow_leading()
             .at_least(3)
@@ -1761,7 +1852,8 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3)
@@ -1773,7 +1865,8 @@ mod tests {
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just('-')
+            .error::<EmptyErr>()
             .separated_by(just(','))
             .collect::<Vec<_>>()
             .chain(just(','));

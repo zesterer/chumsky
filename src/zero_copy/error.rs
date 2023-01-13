@@ -47,25 +47,25 @@ use super::*;
 ///     }
 /// }
 ///
-/// let numeral = any::<_, _, ()>().try_map(|c: char, span| match c.to_digit(10) {
+/// let numeral = any().try_map(|c: char, span| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
 ///     None => Err(MyError::NotADigit(span, c)),
-/// });
+/// }).state::<()>().ctx::<()>();
 ///
 /// assert_eq!(numeral.parse("3").into_result(), Ok(3));
 /// assert_eq!(numeral.parse("7").into_result(), Ok(7));
 /// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
-pub trait Error<I: Input + ?Sized>: Sized {
+pub trait Error<In: Input + ?Sized>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
     ///
     /// An expected input having the value `None` indicates that the end of input was expected.
-    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
-        expected: E,
-        found: Option<I::Token>,
-        span: I::Span,
+    fn expected_found<Err: IntoIterator<Item = Option<In::Token>>>(
+        expected: Err,
+        found: Option<In::Token>,
+        span: In::Span,
     ) -> Self;
 
     /// Merge two errors that point to the same input together, combining their information.
@@ -80,11 +80,11 @@ pub trait Error<I: Input + ?Sized>: Sized {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct EmptyErr(());
 
-impl<I: Input + ?Sized> Error<I> for EmptyErr {
-    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
-        _: E,
-        _: Option<I::Token>,
-        _: I::Span,
+impl<In: Input + ?Sized> Error<In> for EmptyErr {
+    fn expected_found<Err: IntoIterator<Item = Option<In::Token>>>(
+        _: Err,
+        _: Option<In::Token>,
+        _: In::Span,
     ) -> Self {
         EmptyErr(())
     }
@@ -92,39 +92,39 @@ impl<I: Input + ?Sized> Error<I> for EmptyErr {
 
 /// A minimal error type that tracks only the error span and found token. This type is most useful
 /// when you want fast parsing but do not particularly care about the quality of error messages.
-pub struct Simple<I: Input + ?Sized> {
-    span: I::Span,
-    found: Option<I::Token>,
+pub struct Simple<In: Input + ?Sized> {
+    span: In::Span,
+    found: Option<In::Token>,
 }
 
-impl<I: Input + ?Sized> Error<I> for Simple<I> {
-    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
-        _expected: E,
-        found: Option<I::Token>,
-        span: I::Span,
+impl<In: Input + ?Sized> Error<In> for Simple<In> {
+    fn expected_found<Err: IntoIterator<Item = Option<In::Token>>>(
+        _expected: Err,
+        found: Option<In::Token>,
+        span: In::Span,
     ) -> Self {
         Self { span, found }
     }
 }
 
-impl<I: Input + ?Sized> PartialEq for Simple<I>
+impl<In: Input + ?Sized> PartialEq for Simple<In>
 where
-    I::Token: PartialEq,
-    I::Span: PartialEq,
+    In::Token: PartialEq,
+    In::Span: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.span == other.span && self.found == other.found
     }
 }
 
-impl<I: Input + ?Sized> fmt::Debug for Simple<I>
+impl<In: Input + ?Sized> fmt::Debug for Simple<In>
 where
-    I::Span: fmt::Debug,
-    I::Token: fmt::Debug,
+    In::Span: fmt::Debug,
+    In::Token: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "found ")?;
-        write_token(f, I::Token::fmt, &self.found)?;
+        write_token(f, In::Token::fmt, &self.found)?;
         write!(f, " at {:?}", self.span)?;
         Ok(())
     }
@@ -216,17 +216,17 @@ where
 ///
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
-pub struct Rich<I: Input + ?Sized> {
-    span: I::Span,
-    reason: RichReason<I>,
+pub struct Rich<In: Input + ?Sized> {
+    span: In::Span,
+    reason: RichReason<In>,
 }
 
-impl<I: Input + ?Sized> Rich<I> {
+impl<In: Input + ?Sized> Rich<In> {
     fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
-        token: fn(&I::Token, &mut fmt::Formatter<'_>) -> fmt::Result,
-        span: fn(&I::Span, &mut fmt::Formatter<'_>) -> fmt::Result,
+        token: fn(&In::Token, &mut fmt::Formatter<'_>) -> fmt::Result,
+        span: fn(&In::Span, &mut fmt::Formatter<'_>) -> fmt::Result,
     ) -> fmt::Result {
         match &self.reason {
             RichReason::ExpectedFound {
@@ -265,13 +265,13 @@ impl<I: Input + ?Sized> Rich<I> {
     }
 }
 
-impl<I: Input + ?Sized> Rich<I>
+impl<In: Input + ?Sized> Rich<In>
 where
-    I::Span: Clone,
-    I::Token: Clone,
+    In::Span: Clone,
+    In::Token: Clone,
 {
     /// Create an error with a custom message and span
-    pub fn custom<M: ToString>(span: I::Span, msg: M) -> Rich<I> {
+    pub fn custom<M: ToString>(span: In::Span, msg: M) -> Rich<In> {
         Rich {
             span,
             reason: RichReason::Custom(msg.to_string()),
@@ -279,24 +279,24 @@ where
     }
 
     /// Get the span associated with this error
-    pub fn span(&self) -> I::Span {
+    pub fn span(&self) -> In::Span {
         self.span.clone()
     }
 
     /// Get the reason fro this error
-    pub fn reason(&self) -> &RichReason<I> {
+    pub fn reason(&self) -> &RichReason<In> {
         &self.reason
     }
 }
 
-impl<I: Input + ?Sized> Error<I> for Rich<I>
+impl<In: Input + ?Sized> Error<In> for Rich<In>
 where
-    I::Token: PartialEq,
+    In::Token: PartialEq,
 {
-    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
-        expected: E,
-        found: Option<I::Token>,
-        span: I::Span,
+    fn expected_found<Err: IntoIterator<Item = Option<In::Token>>>(
+        expected: Err,
+        found: Option<In::Token>,
+        span: In::Span,
     ) -> Self {
         Self {
             span,
@@ -326,23 +326,23 @@ where
     }
 }
 
-impl<I: Input + ?Sized> fmt::Debug for Rich<I>
+impl<In: Input + ?Sized> fmt::Debug for Rich<In>
 where
-    I::Span: fmt::Debug,
-    I::Token: fmt::Debug,
+    In::Span: fmt::Debug,
+    In::Token: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
+        self.inner_fmt(f, In::Token::fmt, In::Span::fmt)
     }
 }
 
-impl<I: Input + ?Sized> fmt::Display for Rich<I>
+impl<In: Input + ?Sized> fmt::Display for Rich<In>
 where
-    I::Span: fmt::Display,
-    I::Token: fmt::Display,
+    In::Span: fmt::Display,
+    In::Token: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
+        self.inner_fmt(f, In::Token::fmt, In::Span::fmt)
     }
 }
 

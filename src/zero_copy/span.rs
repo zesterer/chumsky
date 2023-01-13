@@ -18,7 +18,7 @@ pub trait Span {
     /// This is usually some way to uniquely identity the source file that a span originated in such as the file's
     /// path, URL, etc.
     ///
-    /// NOTE: Span contexts have no inherent meaning to Chumsky and can be anything. For example, [`Range<usize>`]'s
+    /// NOTErr: Span contexts have no inherent meaning to Chumsky and can be anything. For example, [`Range<usize>`]'s
     /// implementation of [`Span`] simply uses [`()`] as its context.
     type Context;
 
@@ -26,7 +26,7 @@ pub trait Span {
     ///
     /// Typically, [`usize`] is used.
     ///
-    /// NOTE: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritise errors. This
+    /// NOTErr: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritise errors. This
     /// means that it's perfectly fine for tokens to have non-continuous spans that bear no relation to their actual
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.

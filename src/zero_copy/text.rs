@@ -136,22 +136,24 @@ pub struct Padded<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, S, A> Parser<'a, I, O, E, S> for Padded<A>
+impl<'a, In, Out, Err, State, Ctx, A> Parser<'a, In, Out, Err, State, Ctx> for Padded<A>
 where
-    I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    I::Token: Char,
-    A: Parser<'a, I, O, E, S>,
+    In: Input + ?Sized,
+    Err: Error<In>,
+    State: 'a,
+    In::Token: Char,
+    A: Parser<'a, In, Out, Err, State, Ctx>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         inp.skip_while(|c| c.is_whitespace());
         let out = self.parser.go::<M>(inp)?;
         inp.skip_while(|c| c.is_whitespace());
         Ok(out)
     }
 
-    go_extra!(O);
+    go_extra!(Out);
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
@@ -171,13 +173,13 @@ where
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
-) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
+pub fn whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a>(
+) -> Repeated<impl Parser<'a, In, (), Err, State>, (), In, (), Err, State>
 where
-    I::Token: Char,
+    In::Token: Char,
 {
     any()
-        .filter(|c: &I::Token| c.is_whitespace())
+        .filter(|c: &In::Token| c.is_whitespace())
         .ignored()
         .repeated()
 }
@@ -201,13 +203,13 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: Error<I>, S: 'a>(
-) -> Repeated<impl Parser<'a, I, (), E, S>, (), I, (), E, S>
+pub fn inline_whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a>(
+) -> Repeated<impl Parser<'a, In, (), Err, State>, (), In, (), Err, State>
 where
-    I::Token: Char,
+    In::Token: Char,
 {
     any()
-        .filter(|c: &I::Token| c.is_inline_whitespace())
+        .filter(|c: &In::Token| c.is_inline_whitespace())
         .ignored()
         .repeated()
 }
@@ -244,14 +246,14 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> impl Parser<'a, I, (), E, S>
+pub fn newline<'a, In: Input + ?Sized, Err: Error<In>, State: 'a, Ctx>() -> impl Parser<'a, In, (), Err, State, Ctx>
 where
-    I::Token: Char,
+    In::Token: Char,
 {
-    just(I::Token::from_ascii(b'\r'))
+    just(In::Token::from_ascii(b'\r'))
         .or_not()
-        .ignore_then(just(I::Token::from_ascii(b'\n')))
-        .or(any().filter(|c: &I::Token| {
+        .ignore_then(just(In::Token::from_ascii(b'\n')))
+        .or(any().filter(|c: &In::Token| {
             [
                 '\r',       // Carriage return
                 '\x0B',     // Vertical tab
@@ -267,8 +269,8 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
-/// when `I::Slice` is [`[u8]`]).
+/// The output type of this parser is [`&In::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// when `In::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -287,11 +289,11 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'a, C, I, E, S: 'a>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E, S>
+pub fn digits<'a, C, In, Err, State: 'a>(radix: u32) -> impl Parser<'a, In, &'a In::Slice, Err, State>
 where
     C: Char,
-    I: StrInput<C> + ?Sized,
-    E: Error<I>,
+    In: StrInput<C> + ?Sized,
+    Err: Error<In>,
 {
     any()
         .filter(move |c: &C| c.is_digit(radix))
@@ -305,8 +307,8 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
-/// when `I::Slice` is [`[u8]`]).
+/// The output type of this parser is [`&In::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// when `In::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -333,9 +335,9 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
+pub fn int<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
+) -> impl Parser<'a, In, &'a C::Slice, Err, State> + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -353,8 +355,8 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
-) -> impl Parser<'a, I, &'a C::Slice, E, S> + Clone {
+pub fn ident<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
+) -> impl Parser<'a, In, &'a C::Slice, Err, State> + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -369,15 +371,15 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: Error<I>, S: 'a>(
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: Error<str>, S: 'a>(
+pub fn semantic_indentation<'a, Tok, T, F, Err: Error<str>, State: 'a>(
     token: T,
     make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, E, S>
+) -> impl Parser<'a, str, Vec<Tok>, Err, State>
 where
-    T: Parser<'a, str, Tok, E, S>,
+    T: Parser<'a, str, Tok, Err, State>,
     F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
 {
-    let line_ws = any::<str, E, _>().filter(|c: &char| c.is_inline_whitespace());
+    let line_ws = any::<str, Err, _, _>().filter(|c: &char| c.is_inline_whitespace());
 
     let line = token
         .padded_by(line_ws.repeated())
@@ -452,9 +454,9 @@ where
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```
-pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: Error<I> + 'a, S: 'a>(
+pub fn keyword<'a, In: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, Err: Error<In> + 'a, State: 'a>(
     keyword: Str,
-) -> impl Parser<'a, I, (), E, S> + Clone + 'a
+) -> impl Parser<'a, In, (), Err, State> + Clone + 'a
 where
     C::Slice: PartialEq,
 {
@@ -463,7 +465,7 @@ where
         if s == keyword.as_ref() {
             Ok(())
         } else {
-            Err(E::expected_found(None, None, span))
+            Err(Err::expected_found(None, None, span))
         }
     })
 }

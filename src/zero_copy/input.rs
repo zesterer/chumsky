@@ -123,12 +123,12 @@ impl<T: Clone> SliceInput for [T] {
 }
 
 ///
-pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
+pub struct WithContext<'a, Ctx, In: ?Sized>(pub Ctx, pub &'a In);
 
-impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
-    type Offset = I::Offset;
-    type Token = I::Token;
-    type Span = (Ctx, I::Span);
+impl<'a, Ctx: Clone, In: Input + ?Sized> Input for WithContext<'a, Ctx, In> {
+    type Offset = In::Offset;
+    type Token = In::Token;
+    type Span = (Ctx, In::Span);
 
     fn start(&self) -> Self::Offset {
         self.1.start()
@@ -143,49 +143,53 @@ impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
     }
 }
 
-impl<'a, Ctx: Clone, I: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx, I> {
-    type Slice = I::Slice;
+impl<'a, Ctx: Clone, In: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx, In> {
+    type Slice = In::Slice;
 
     fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice {
-        <I as SliceInput>::slice(&*self.1, range)
+        <In as SliceInput>::slice(&*self.1, range)
     }
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice {
-        <I as SliceInput>::slice_from(&*self.1, from)
+        <In as SliceInput>::slice_from(&*self.1, from)
     }
 }
 
-impl<'a, Ctx, C, I> StrInput<C> for WithContext<'a, Ctx, I>
+impl<'a, Ctx, C, In> StrInput<C> for WithContext<'a, Ctx, In>
 where
     Ctx: Clone,
     C: Char,
-    I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>,
+    In: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>,
 {
 }
 
 // Represents the progress of a parser through the input
-pub(crate) struct Marker<I: Input + ?Sized> {
+pub(crate) struct Marker<In: Input + ?Sized> {
     pos: usize,
-    offset: I::Offset,
+    offset: In::Offset,
     err_count: usize,
 }
 
-impl<I: Input + ?Sized> Copy for Marker<I> {}
-impl<I: Input + ?Sized> Clone for Marker<I> {
+impl<In: Input + ?Sized> Copy for Marker<In> {}
+impl<In: Input + ?Sized> Clone for Marker<In> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
 /// Internal type representing an input as well as all the necessary context for parsing.
-pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> {
-    input: &'a I,
-    marker: Marker<I>,
-    state: &'parse mut S,
-    errors: Vec<E>,
+pub struct InputRef<'a, 'parse, In: Input + ?Sized, Err: Error<In>, State, Ctx> {
+    input: &'a In,
+    marker: Marker<In>,
+    state: &'parse mut State,
+    ctx: Ctx,
+    errors: Vec<Err>,
 }
 
-impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S> {
-    pub(crate) fn new(input: &'a I, state: &'parse mut S) -> Self {
+impl<'a, 'parse, In: Input + ?Sized, Err: Error<In>, State, Ctx> InputRef<'a, 'parse, In, Err, State, Ctx> {
+    pub(crate) fn new(input: &'a In, state: &'parse mut State) -> Self
+    where
+        Ctx: Default,
+    {
         Self {
             input,
             marker: Marker {
@@ -194,23 +198,51 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
                 err_count: 0,
             },
             state,
+            ctx: Ctx::default(),
             errors: Vec::new(),
         }
     }
 
-    pub(crate) fn save(&mut self) -> Marker<I> {
+    pub(crate) fn with_ctx<'sub_parse, CtxN, O>(
+        &'sub_parse mut self,
+        new_ctx: CtxN,
+        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, In, Err, State, CtxN>) -> O,
+    ) -> O
+    where
+        'parse: 'sub_parse,
+    {
+        use core::mem;
+
+        let mut new_ctx = InputRef {
+            input: self.input,
+            marker: self.marker,
+            state: self.state,
+            ctx: new_ctx,
+            errors: mem::take(&mut self.errors),
+        };
+        let res = f(&mut new_ctx);
+        self.marker = new_ctx.marker;
+        self.errors = mem::take(&mut new_ctx.errors);
+        res
+    }
+
+    pub(crate) fn save(&mut self) -> Marker<In> {
         self.marker
     }
-    pub(crate) fn rewind(&mut self, marker: Marker<I>) {
+    pub(crate) fn rewind(&mut self, marker: Marker<In>) {
         self.errors.truncate(marker.err_count);
         self.marker = marker;
     }
 
-    pub(crate) fn state(&mut self) -> &mut S {
+    pub(crate) fn state(&mut self) -> &mut State {
         self.state
     }
 
-    pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
+    pub(crate) fn ctx(&self) -> &Ctx {
+        &self.ctx
+    }
+
+    pub(crate) fn skip_while<F: FnMut(&In::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let (offset, token) = self.input.next(self.marker.offset);
             if token.filter(&mut f).is_none() {
@@ -222,7 +254,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn next(&mut self) -> (usize, Option<I::Token>) {
+    pub(crate) fn next(&mut self) -> (usize, Option<In::Token>) {
         let (offset, token) = self.input.next(self.marker.offset);
         self.marker.offset = offset;
         self.marker.pos += 1;
@@ -233,45 +265,45 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.marker.pos
     }
 
-    pub(crate) fn slice(&self, range: Range<Marker<I>>) -> &'a I::Slice
+    pub(crate) fn slice(&self, range: Range<Marker<In>>) -> &'a In::Slice
     where
-        I: SliceInput,
+        In: SliceInput,
     {
         self.input.slice(range.start.offset..range.end.offset)
     }
 
-    pub(crate) fn slice_from(&self, from: RangeFrom<Marker<I>>) -> &'a I::Slice
+    pub(crate) fn slice_from(&self, from: RangeFrom<Marker<In>>) -> &'a In::Slice
     where
-        I: SliceInput,
+        In: SliceInput,
     {
         self.input.slice_from(from.start.offset..)
     }
 
-    pub(crate) fn slice_trailing(&self) -> &'a I::Slice
+    pub(crate) fn slice_trailing(&self) -> &'a In::Slice
     where
-        I: SliceInput,
+        In: SliceInput,
     {
         self.input.slice_from(self.marker.offset..)
     }
 
-    pub(crate) fn span_since(&self, before: Marker<I>) -> I::Span {
+    pub(crate) fn span_since(&self, before: Marker<In>) -> In::Span {
         self.input.span(before.offset..self.marker.offset)
     }
 
     pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
     where
         C: Char,
-        I: StrInput<C>,
+        In: StrInput<C>,
     {
         self.marker.offset += skip;
     }
 
-    pub(crate) fn emit(&mut self, error: E) {
+    pub(crate) fn emit(&mut self, error: Err) {
         self.errors.push(error);
         self.marker.err_count += 1;
     }
 
-    pub(crate) fn into_errs(self) -> Vec<E> {
+    pub(crate) fn into_errs(self) -> Vec<Err> {
         self.errors
     }
 }
