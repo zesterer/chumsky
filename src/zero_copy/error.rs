@@ -75,7 +75,7 @@ pub trait Error<I: Input + ?Sized>: Sized {
     }
 }
 
-/// A ZST error type that tracks only whether a parse error occured at all. This type is for when
+/// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
 /// you want maximum parse speed, at the cost of all error reporting.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct EmptyErr(());
