@@ -75,12 +75,18 @@ pub trait Error<I: Input + ?Sized>: Sized {
     }
 }
 
-impl<I: Input + ?Sized> Error<I> for () {
+/// A ZST error type that tracks only whether a parse error occured at all. This type is for when
+/// you want maximum parse speed, at the cost of all error reporting.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct EmptyErr(());
+
+impl<I: Input + ?Sized> Error<I> for EmptyErr {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
         _: E,
         _: Option<I::Token>,
         _: I::Span,
     ) -> Self {
+        EmptyErr(())
     }
 }
 

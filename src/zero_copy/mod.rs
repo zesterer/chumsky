@@ -32,7 +32,7 @@ pub mod text;
 /// cereal.”*
 pub mod prelude {
     pub use super::{
-        error::{Error as _, Rich, Simple},
+        error::{Error as _, EmptyErr, Rich, Simple},
         primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
@@ -66,7 +66,7 @@ use hashbrown::HashMap;
 use self::{
     chain::Chain,
     combinator::*,
-    error::Error,
+    error::{Error, EmptyErr},
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
     span::{Span, SimpleSpan},
@@ -275,7 +275,7 @@ mod internal {
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
+pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -1823,7 +1823,7 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::<_, (), _>::new(input, &mut state);
+    let mut input = InputRef::<_, EmptyErr, _>::new(input, &mut state);
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);

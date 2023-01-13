@@ -204,7 +204,7 @@ impl Seq<char> for String {
 // }
 
 /// See [`just`].
-pub struct Just<T, I: ?Sized, E = (), S = ()> {
+pub struct Just<T, I: ?Sized, E = EmptyErr, S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
 }
@@ -282,7 +282,7 @@ where
 }
 
 /// See [`one_of`].
-pub struct OneOf<T, I: ?Sized, E = (), S = ()> {
+pub struct OneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
 }
@@ -350,7 +350,7 @@ where
 }
 
 /// See [`none_of`].
-pub struct NoneOf<T, I: ?Sized, E = (), S = ()> {
+pub struct NoneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
     seq: T,
     phantom: PhantomData<(E, S, I)>,
 }
@@ -473,7 +473,7 @@ pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
 }
 
 /// See [`take_until`].
-pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = (), S = ()> {
+pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = EmptyErr, S = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
     phantom: PhantomData<(OP, C, E, S, I)>,
