@@ -37,7 +37,7 @@ pub mod prelude {
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
-        span::Span as _,
+        span::{Span as _, SimpleSpan},
         text,
         Boxed,
         Parser,
@@ -69,7 +69,7 @@ use self::{
     error::Error,
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
-    span::Span,
+    span::{Span, SimpleSpan},
     text::*,
 };
 
@@ -468,14 +468,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, Range<usize>);
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
     /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", 0..5)));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", 7..12)));
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
     fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
     where
@@ -502,14 +502,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, Range<usize>);
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
     /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", 0..5)));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", 7..12)));
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
     fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(self, f: F) -> MapWithState<Self, O, F>
     where
@@ -1414,8 +1414,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// let large_int = text::int::<_, _, Rich<str>, ()>(10)
     ///     .from_str()
     ///     .unwrapped()
-    ///     .validate(|x: u32, span, emit| {
-    ///         if x < 256 { emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///     .validate(|x: u32, span, emitter| {
+    ///         if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
     ///         x
     ///     });
     ///
@@ -1672,7 +1672,7 @@ fn zero_copy() {
 
     type FileId = u32;
 
-    type Span = (FileId, Range<usize>);
+    type Span = (FileId, SimpleSpan<usize>);
 
     fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, [(Span, Token<'a>); 6]> {
         let ident = any()
@@ -1698,12 +1698,12 @@ fn zero_copy() {
         parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#))
             .into_result(),
         Ok([
-            ((42, 0..5), Token::Ident("hello")),
-            ((42, 6..13), Token::String("\"world\"")),
-            ((42, 14..19), Token::Ident("these")),
-            ((42, 20..23), Token::Ident("are")),
-            ((42, 24..30), Token::String("\"test\"")),
-            ((42, 31..37), Token::Ident("tokens")),
+            ((42, (0..5).into()), Token::Ident("hello")),
+            ((42, (6..13).into()), Token::String("\"world\"")),
+            ((42, (14..19).into()), Token::Ident("these")),
+            ((42, (20..23).into()), Token::Ident("are")),
+            ((42, (24..30).into()), Token::String("\"test\"")),
+            ((42, (31..37).into()), Token::Ident("tokens")),
         ]),
     );
 }

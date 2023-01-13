@@ -33,7 +33,58 @@ pub trait Span {
     type Offset;
 }
 
-impl<T> Span for Range<T> {
+/// The most basic implementor of `Span` - equivalent to `Range`, but `Copy` since it's not also
+/// an iterator. Also has a `Display` implementation
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct SimpleSpan<T> {
+    start: T,
+    end: T,
+}
+
+impl<T> SimpleSpan<T> {
+    /// Create a new `SimpleSpan` from a start and end offset
+    pub fn new(start: T, end: T) -> SimpleSpan<T> {
+        SimpleSpan { start, end }
+    }
+}
+
+impl<T> From<Range<T>> for SimpleSpan<T> {
+    fn from(range: Range<T>) -> Self {
+        SimpleSpan {
+            start: range.start,
+            end: range.end,
+        }
+    }
+}
+
+impl<T> From<SimpleSpan<T>> for Range<T> {
+    fn from(span: SimpleSpan<T>) -> Self {
+        Range {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
+impl<T> fmt::Debug for SimpleSpan<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}:{:?}", self.start, self.end)
+    }
+}
+
+impl<T> fmt::Display for SimpleSpan<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.start, self.end)
+    }
+}
+
+impl<T> Span for SimpleSpan<T> {
     type Context = ();
     type Offset = T;
 }

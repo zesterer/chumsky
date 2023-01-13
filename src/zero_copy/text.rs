@@ -375,7 +375,7 @@ pub fn semantic_indentation<'a, Tok, T, F, E: Error<str>, S: 'a>(
 ) -> impl Parser<'a, str, Vec<Tok>, E, S>
 where
     T: Parser<'a, str, Tok, E, S>,
-    F: Fn(Vec<Tok>, Range<usize>) -> Tok,
+    F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
 {
     let line_ws = any::<str, E, _>().filter(|c: &char| c.is_inline_whitespace());
 
@@ -395,13 +395,13 @@ where
         .separated_by(newline())
         .collect();
 
-    lines.map(move |lines: Vec<(&str, (Vec<Tok>, Range<usize>))>| {
+    lines.map(move |lines: Vec<(&str, (Vec<Tok>, SimpleSpan<usize>))>| {
         fn collapse<'b, Tok, F>(
-            mut tree: Vec<(&'b str, Vec<Tok>, Option<Range<usize>>)>,
+            mut tree: Vec<(&'b str, Vec<Tok>, Option<SimpleSpan<usize>>)>,
             make_group: &F,
         ) -> Option<Tok>
         where
-            F: Fn(Vec<Tok>, Range<usize>) -> Tok,
+            F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
         {
             while let Some((_, tts, line_span)) = tree.pop() {
                 let tt = make_group(tts, line_span?);

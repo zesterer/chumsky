@@ -18,7 +18,7 @@ use super::*;
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// type Span = std::ops::Range<usize>;
+/// type Span = SimpleSpan<usize>;
 ///
 /// // A custom error type
 /// #[derive(Debug, PartialEq)]
@@ -54,7 +54,7 @@ use super::*;
 ///
 /// assert_eq!(numeral.parse("3").into_result(), Ok(3));
 /// assert_eq!(numeral.parse("7").into_result(), Ok(7));
-/// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit(0..1, 'f')]);
+/// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
 pub trait Error<I: Input + ?Sized>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
