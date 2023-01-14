@@ -71,7 +71,7 @@ where
     T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}:{:?}", self.start, self.end)
+        write!(f, "{:?}..{:?}", self.start, self.end)
     }
 }
 
@@ -80,7 +80,7 @@ where
     T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.start, self.end)
+        write!(f, "{}..{}", self.start, self.end)
     }
 }
 
