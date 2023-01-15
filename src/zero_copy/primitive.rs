@@ -234,8 +234,8 @@ pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
 where
     I: Input + ?Sized,
     E: Error<I>,
-    I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    I::Token: Clone + PartialEq,
+    T: Seq<I::Token>,
 {
     OneOf {
         seq,
@@ -303,7 +303,7 @@ where
     I: Input + ?Sized,
     E: Error<I>,
     I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    T: Seq<I::Token>,
 {
     NoneOf {
         seq,
