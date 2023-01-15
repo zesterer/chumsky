@@ -113,91 +113,6 @@ where
     go_extra!(());
 }
 
-/// A utility trait to abstract over linear container-like things.
-///
-/// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
-pub trait Seq<T> {
-    /// An iterator over the items within this container, by reference.
-    type Iter<'a>: Iterator<Item = T>
-    where
-        Self: 'a;
-    /// Iterate over the elements of the container.
-    fn iter(&self) -> Self::Iter<'_>;
-}
-
-impl<T: Clone> Seq<T> for T {
-    type Iter<'a> = core::iter::Once<T>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        core::iter::once(self.clone())
-    }
-}
-
-impl<'b, T: Clone> Seq<T> for &'b [T] {
-    type Iter<'a> = core::iter::Cloned<core::slice::Iter<'a, T>>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        (self as &[T]).iter().cloned()
-    }
-}
-
-impl<T: Clone, const N: usize> Seq<T> for [T; N] {
-    type Iter<'a> = core::array::IntoIter<T, N>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        core::array::IntoIter::new(self.clone())
-    }
-}
-
-impl<'b, T: Clone, const N: usize> Seq<T> for &'b [T; N] {
-    type Iter<'a> = core::array::IntoIter<T, N>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        core::array::IntoIter::new((*self).clone())
-    }
-}
-
-impl<'b, T: Clone> Seq<T> for Vec<T> {
-    type Iter<'a> = alloc::vec::IntoIter<T>
-    where
-        Self: 'a;
-
-    fn iter(&self) -> Self::Iter<'_> {
-        self.clone().into_iter()
-    }
-}
-
-impl Seq<char> for str {
-    type Iter<'a> = core::str::Chars<'a>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        self.chars()
-    }
-}
-
-impl<'b> Seq<char> for &'b str {
-    type Iter<'a> = core::str::Chars<'a>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        self.chars()
-    }
-}
-
-impl Seq<char> for String {
-    type Iter<'a> = core::str::Chars<'a>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
-        self.chars()
-    }
-}
-
 // impl<'b, T, C: Container<T>> Container<T> for &'b C {
 //     type Iter<'a> = C::Iter<'a>;
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
@@ -241,7 +156,7 @@ where
     I: Input + ?Sized,
     E: Error<I>,
     I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    T: OrderedSeq<I::Token> + Clone,
 {
     Just {
         seq,
@@ -254,21 +169,22 @@ where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    I::Token: Clone + PartialEq,
+    T: OrderedSeq<I::Token> + Clone,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, T, E> {
-        let mut items = self.seq.iter();
+        let mut items = self.seq.seq_iter();
         loop {
             match items.next() {
                 Some(next) => {
+                    let next = next.borrow();
                     let before = inp.save();
                     match inp.next() {
-                        (_, Some(tok)) if next == tok => {}
+                        (_, Some(tok)) if *next == tok => {}
                         (at, tok) => {
                             break Err(Located::at(
                                 at,
-                                E::expected_found(Some(Some(next)), tok, inp.span_since(before)),
+                                E::expected_found(Some(Some(I::Token::clone(next))), tok, inp.span_since(before)),
                             ))
                         }
                     }
@@ -332,16 +248,16 @@ where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    I::Token: Clone + PartialEq,
+    T: Seq<I::Token>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
-            (_, Some(tok)) if self.seq.iter().any(|not| not == tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if self.seq.seq_iter().any(|not| *not.borrow() == tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(self.seq.iter().map(Some), found, inp.span_since(before)),
+                E::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
             )),
         }
     }
@@ -401,12 +317,12 @@ where
     E: Error<I>,
     S: 'a,
     I::Token: PartialEq,
-    T: Seq<I::Token> + Clone,
+    T: Seq<I::Token>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
-            (_, Some(tok)) if self.seq.iter().all(|not| not != tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if self.seq.seq_iter().all(|not| *not.borrow() != tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
                 E::expected_found(None, found, inp.span_since(before)),

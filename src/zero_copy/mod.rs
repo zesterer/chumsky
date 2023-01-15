@@ -17,6 +17,7 @@ macro_rules! go_extra {
 mod blanket;
 pub mod chain;
 pub mod combinator;
+pub mod container;
 pub mod error;
 pub mod input;
 pub mod primitive;
@@ -53,6 +54,7 @@ use alloc::{
     vec,
 };
 use core::{
+    borrow::Borrow,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
@@ -60,18 +62,42 @@ use core::{
     marker::PhantomData,
     ops::{Range, RangeFrom},
     str::FromStr,
+    mem::MaybeUninit,
 };
 use hashbrown::HashMap;
 
 use self::{
     chain::Chain,
     combinator::*,
+    container::*,
     error::{Error, EmptyErr},
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
     span::{Span, SimpleSpan},
     text::*,
 };
+
+// TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
+trait MaybeUninitExt<T>: Sized {
+    /// Identical to the unstable [`MaybeUninit::uninit_array`]
+    fn uninit_array<const N: usize>() -> [Self; N];
+
+    /// Identical to the unstable [`MaybeUninit::array_assume_init`]
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N];
+}
+
+impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
+    fn uninit_array<const N: usize>() -> [Self; N] {
+        // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
+        unsafe { MaybeUninit::uninit().assume_init() }
+    }
+
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
+        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
+        core::mem::forget(uninit);
+        out
+    }
+}
 
 /// The result of calling [`Parser::go`]
 pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
