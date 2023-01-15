@@ -18,7 +18,7 @@ use super::*;
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// type Span = std::ops::Range<usize>;
+/// type Span = SimpleSpan<usize>;
 ///
 /// // A custom error type
 /// #[derive(Debug, PartialEq)]
@@ -54,7 +54,7 @@ use super::*;
 ///
 /// assert_eq!(numeral.parse("3").into_result(), Ok(3));
 /// assert_eq!(numeral.parse("7").into_result(), Ok(7));
-/// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit(0..1, 'f')]);
+/// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
 pub trait Error<I: Input + ?Sized>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
@@ -75,12 +75,18 @@ pub trait Error<I: Input + ?Sized>: Sized {
     }
 }
 
-impl<I: Input + ?Sized> Error<I> for () {
+/// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
+/// you want maximum parse speed, at the cost of all error reporting.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct EmptyErr(());
+
+impl<I: Input + ?Sized> Error<I> for EmptyErr {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
         _: E,
         _: Option<I::Token>,
         _: I::Span,
     ) -> Self {
+        EmptyErr(())
     }
 }
 
@@ -118,9 +124,91 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "found ")?;
-        write_token_debug(f, &self.found)?;
+        write_token(f, I::Token::fmt, &self.found)?;
         write!(f, " at {:?}", self.span)?;
         Ok(())
+    }
+}
+
+// TODO: Maybe should make ExpectedFound encapsulated a bit more
+/// The reason for a [`Rich`] error
+pub enum RichReason<I: Input + ?Sized> {
+    /// An unexpected input was found
+    ExpectedFound {
+        /// The tokens expected
+        expected: Vec<Option<I::Token>>,
+        /// The tokens found
+        found: Option<I::Token>,
+    },
+    /// An error with a custom message
+    Custom(String),
+    /// Multiple unrelated reasons were merged
+    Many(Vec<RichReason<I>>),
+}
+
+impl<I: Input + ?Sized> RichReason<I>
+where
+    I::Token: PartialEq,
+{
+    fn flat_merge(self, other: RichReason<I>) -> RichReason<I> {
+        match (self, other) {
+            (
+                RichReason::ExpectedFound { expected: mut this_expected, found },
+                RichReason::ExpectedFound { expected: other_expected, .. },
+            ) => {
+                for expected in other_expected {
+                    if !this_expected.contains(&expected) {
+                        this_expected.push(expected);
+                    }
+                }
+                RichReason::ExpectedFound { expected: this_expected, found }
+            }
+            (RichReason::Many(mut m1), RichReason::Many(m2)) => {
+                m1.extend(m2);
+                RichReason::Many(m1)
+            }
+            (RichReason::Many(mut m), other) => {
+                m.push(other);
+                RichReason::Many(m)
+            }
+            (this, RichReason::Many(mut m)) => {
+                m.push(this);
+                RichReason::Many(m)
+            }
+            (this, other) => {
+                RichReason::Many(vec![this, other])
+            }
+        }
+    }
+}
+
+impl<I: Input + ?Sized> PartialEq for RichReason<I>
+where
+    I::Token: PartialEq,
+    I::Span: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                RichReason::ExpectedFound { expected: e1, found: f1 },
+                RichReason::ExpectedFound { expected: e2, found: f2 },
+            ) => {
+                f1 == f2 && e1 == e2
+            }
+            (
+                RichReason::Custom(msg1),
+                RichReason::Custom(msg2),
+            ) => {
+                msg1 == msg2
+            }
+            (
+                RichReason::Many(m1),
+                RichReason::Many(m2),
+            ) => {
+                m1 == m2
+            }
+            _ => false,
+        }
     }
 }
 
@@ -130,8 +218,75 @@ where
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 pub struct Rich<I: Input + ?Sized> {
     span: I::Span,
-    expected: Vec<Option<I::Token>>,
-    found: Option<I::Token>,
+    reason: RichReason<I>,
+}
+
+impl<I: Input + ?Sized> Rich<I> {
+    fn inner_fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        token: fn(&I::Token, &mut fmt::Formatter<'_>) -> fmt::Result,
+        span: fn(&I::Span, &mut fmt::Formatter<'_>) -> fmt::Result,
+    ) -> fmt::Result {
+        match &self.reason {
+            RichReason::ExpectedFound {
+                expected,
+                found,
+            } => {
+                write!(f, "found ")?;
+                write_token(f, token, &found)?;
+                write!(f, " at ")?;
+                span(&self.span, f)?;
+                write!(f, "expected ")?;
+                match &expected[..] {
+                    [] => write!(f, "something else")?,
+                    [expected] => write_token(f, token, expected)?,
+                    _ => {
+                        write!(f, "one of ")?;
+                        for expected in &expected[..expected.len() - 1] {
+                            write_token(f, token, expected)?;
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "or ")?;
+                        write_token(f, token, expected.last().unwrap())?;
+                    }
+                }
+            }
+            RichReason::Custom(msg) => {
+                write!(f, "{} at ", msg)?;
+                span(&self.span, f)?;
+            }
+            RichReason::Many(_) => {
+                write!(f, "Multiple errors found at ")?;
+                span(&self.span, f)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<I: Input + ?Sized> Rich<I>
+where
+    I::Span: Clone,
+    I::Token: Clone,
+{
+    /// Create an error with a custom message and span
+    pub fn custom<M: ToString>(span: I::Span, msg: M) -> Rich<I> {
+        Rich {
+            span,
+            reason: RichReason::Custom(msg.to_string()),
+        }
+    }
+
+    /// Get the span associated with this error
+    pub fn span(&self) -> I::Span {
+        self.span.clone()
+    }
+
+    /// Get the reason fro this error
+    pub fn reason(&self) -> &RichReason<I> {
+        &self.reason
+    }
 }
 
 impl<I: Input + ?Sized> Error<I> for Rich<I>
@@ -145,18 +300,29 @@ where
     ) -> Self {
         Self {
             span,
-            expected: expected.into_iter().collect(),
-            found,
+            reason: RichReason::ExpectedFound {
+                expected: expected.into_iter().collect(),
+                found,
+            },
         }
     }
 
-    fn merge(mut self, other: Self) -> Self {
-        for expected in other.expected {
-            if !self.expected.contains(&expected) {
-                self.expected.push(expected);
-            }
+    fn merge(self, other: Self) -> Self {
+        let new_reason = self.reason.flat_merge(other.reason);
+        Self {
+            span: self.span,
+            reason: new_reason,
         }
-        self
+    }
+}
+
+impl<I: Input + ?Sized> PartialEq for Rich<I>
+where
+    I::Token: PartialEq,
+    I::Span: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span && self.reason == other.reason
     }
 }
 
@@ -166,29 +332,27 @@ where
     I::Token: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "found ")?;
-        write_token_debug(f, &self.found)?;
-        write!(f, " at {:?}, expected ", self.span)?;
-        match &self.expected[..] {
-            [] => write!(f, "something else")?,
-            [expected] => write_token_debug(f, expected)?,
-            _ => {
-                write!(f, "one of ")?;
-                for expected in &self.expected[..self.expected.len() - 1] {
-                    write_token_debug(f, expected)?;
-                    write!(f, ", ")?;
-                }
-                write!(f, "or ")?;
-                write_token_debug(f, self.expected.last().unwrap())?;
-            }
-        }
-        Ok(())
+        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
     }
 }
 
-fn write_token_debug<T: fmt::Debug>(f: &mut fmt::Formatter, tok: &Option<T>) -> fmt::Result {
+impl<I: Input + ?Sized> fmt::Display for Rich<I>
+where
+    I::Span: fmt::Display,
+    I::Token: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
+    }
+}
+
+fn write_token<T>(
+    f: &mut fmt::Formatter,
+    writer: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
+    tok: &Option<T>
+) -> fmt::Result {
     match tok {
-        Some(tok) => write!(f, "{:?}", tok),
+        Some(tok) => writer(tok, f),
         None => write!(f, "end of input"),
     }
 }

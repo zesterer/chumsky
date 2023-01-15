@@ -319,7 +319,7 @@ where
 }
 
 /// See [`Parser::to`].
-pub struct To<A, OA, O, E = (), S = ()> {
+pub struct To<A, OA, O, E = EmptyErr, S = ()> {
     pub(crate) parser: A,
     pub(crate) to: O,
     pub(crate) phantom: PhantomData<(OA, E, S)>,
@@ -381,7 +381,7 @@ where
 }
 
 /// See [`Parser::then`].
-pub struct Then<A, B, OA, OB, E = (), S = ()> {
+pub struct Then<A, B, OA, OB, E = EmptyErr, S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(OA, OB, E, S)>,
@@ -416,7 +416,7 @@ where
 }
 
 /// See [`Parser::ignore_then`].
-pub struct IgnoreThen<A, B, OA, E = (), S = ()> {
+pub struct IgnoreThen<A, B, OA, E = EmptyErr, S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(OA, E, S)>,
@@ -451,7 +451,7 @@ where
 }
 
 /// See [`Parser::then_ignore`].
-pub struct ThenIgnore<A, B, OB, E = (), S = ()> {
+pub struct ThenIgnore<A, B, OB, E = EmptyErr, S = ()> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) phantom: PhantomData<(OB, E, S)>,
@@ -486,7 +486,7 @@ where
 }
 
 /// See [`Parser::then_with`].
-pub struct ThenWith<A, B, OA, F, I: ?Sized, E = (), S = ()> {
+pub struct ThenWith<A, B, OA, F, I: ?Sized, E = EmptyErr, S = ()> {
     pub(crate) parser: A,
     pub(crate) then: F,
     pub(crate) phantom: PhantomData<(B, OA, E, S, I)>,
@@ -721,7 +721,7 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
 
 /// See [`Parser::repeated`].
 // FIXME: why C, E, S have default values?
-pub struct Repeated<A, OA, I: ?Sized, C = (), E = (), S = ()> {
+pub struct Repeated<A, OA, I: ?Sized, C = (), E = EmptyErr, S = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
@@ -866,7 +866,7 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = (), S = ()> {
+pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, C = (), E = EmptyErr, S = ()> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
@@ -1567,7 +1567,7 @@ where
 }
 
 /// See [`Parser::foldr`].
-pub struct Foldr<P, F, A, B, E = (), S = ()> {
+pub struct Foldr<P, F, A, B, E = EmptyErr, S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
@@ -1609,7 +1609,7 @@ where
 }
 
 /// See [`Parser::foldl`].
-pub struct Foldl<P, F, A, B, E = (), S = ()> {
+pub struct Foldl<P, F, A, B, E = EmptyErr, S = ()> {
     pub(crate) parser: P,
     pub(crate) folder: F,
     pub(crate) phantom: PhantomData<(A, B, E, S)>,
@@ -1764,37 +1764,50 @@ where
     go_extra!(O);
 }
 
-// TODO: Finish implementing this once full error recovery is implemented
-/*#[derive(Copy, Clone)]
-pub struct Validate<A, F> {
+/// See [`Parser::validate`]
+pub struct Validate<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) validator: F,
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<'a, I, O, E, S, A, F> Parser<'a, I, O, E, S> for Validate<A, F>
+impl<A: Copy, OA, F: Copy> Copy for Validate<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
+    fn clone(&self) -> Self {
+        Validate {
+            parser: self.parser.clone(),
+            validator: self.validator.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, OA, U, E, S, A, F> Parser<'a, I, U, E, S> for Validate<A, OA, F>
 where
     I: Input + ?Sized,
     E: Error<I>,
     S: 'a,
-    A: Parser<'a, I, O, E, S>,
-    F: Fn(E, I::Span, &mut dyn FnMut(E)) -> E,
+    A: Parser<'a, I, OA, E, S>,
+    F: Fn(OA, I::Span, &mut Emitter<E>) -> U,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, U, E>
     where
         Self: Sized,
     {
         let before = inp.save();
-        self.parser.go::<Emit>(inp).and_then(|out| {
+        self.parser.go::<Emit>(inp).map(|out| {
             let span = inp.span_since(before);
-            match (self.validator)(out, span, todo!()) {
-                Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.last_pos(), e)),
+            let mut emitter = Emitter::new();
+            let out = (self.validator)(out, span, &mut emitter);
+            for err in emitter.errors() {
+                inp.emit(err);
             }
+            M::bind(|| out)
         })
     }
 
-    go_extra!(O);
-}*/
+    go_extra!(U);
+}
 
 /// See [`Parser::or_else`].
 #[derive(Copy, Clone)]
@@ -1836,7 +1849,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect();
@@ -1846,7 +1859,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>();
@@ -1857,7 +1870,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>()
@@ -1869,7 +1882,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .allow_leading()
             .at_least(3)
@@ -1881,7 +1894,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3)
@@ -1893,7 +1906,7 @@ mod tests {
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just::<_, _, (), ()>('-')
+        let parser = just::<_, _, EmptyErr, ()>('-')
             .separated_by(just(','))
             .collect::<Vec<_>>()
             .chain(just(','));

@@ -32,12 +32,12 @@ pub mod text;
 /// cereal.”*
 pub mod prelude {
     pub use super::{
-        error::{Error as _, Rich, Simple},
+        error::{Error as _, EmptyErr, Rich, Simple},
         primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
-        span::Span as _,
+        span::{Span as _, SimpleSpan},
         text,
         Boxed,
         Parser,
@@ -66,10 +66,10 @@ use hashbrown::HashMap;
 use self::{
     chain::Chain,
     combinator::*,
-    error::Error,
+    error::{Error, EmptyErr},
     input::{Input, InputRef, SliceInput, StrInput},
     internal::*,
-    span::Span,
+    span::{Span, SimpleSpan},
     text::*,
 };
 
@@ -275,7 +275,7 @@ mod internal {
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
+pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -482,14 +482,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, Range<usize>);
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
     /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", 0..5)));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", 7..12)));
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
     fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
     where
@@ -516,14 +516,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, Range<usize>);
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
     /// let ident = text::ident::<_, _, Simple<str>, ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", 0..5)));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", 7..12)));
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
     fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(self, f: F) -> MapWithState<Self, O, F>
     where
@@ -551,7 +551,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
     /// let byte = text::int::<_, _, Rich<str>, ()>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
-    ///         .map_err(|e| Rich::expected_found(None, None, span)));
+    ///         .map_err(|e| Rich::custom(span, e)));
     ///
     /// assert!(byte.parse("255").has_output());
     /// assert!(byte.parse("256").has_errors()); // Out of range
@@ -1412,17 +1412,41 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = (), S: 'a = ()> {
         }
     }
 
-    // TODO: Finish implementing this once full error recovery is implemented
-    /*fn validate<U, F>(self, f: F) -> Validate<Self, F>
+    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    ///
+    /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
+    ///
+    /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
+    /// [`Parser::try_map`] instead.
+    ///
+    /// The output type of this parser is `U`, the result of the validation closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let large_int = text::int::<_, _, Rich<str>, ()>(10)
+    ///     .from_str()
+    ///     .unwrapped()
+    ///     .validate(|x: u32, span, emitter| {
+    ///         if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///         x
+    ///     });
+    ///
+    /// assert_eq!(large_int.parse("537").into_result(), Ok(537));
+    /// assert!(large_int.parse("243").into_result().is_err());
+    /// ```
+    fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
-    Self: Sized,
-    F: Fn(O, I::Span, &mut dyn FnMut(E)) -> U
+        Self: Sized,
+        F: Fn(O, I::Span, &mut Emitter<E>) -> U,
     {
-    Validate {
-    parser: self,
-    validator: f,
+        Validate {
+            parser: self,
+            validator: f,
+            phantom: PhantomData,
+        }
     }
-    }*/
 
     /// Collect the output of this parser into a type implementing [`FromIterator`].
     ///
@@ -1662,7 +1686,7 @@ fn zero_copy() {
 
     type FileId = u32;
 
-    type Span = (FileId, Range<usize>);
+    type Span = (FileId, SimpleSpan<usize>);
 
     fn parser<'a>() -> impl Parser<'a, WithContext<'a, FileId, str>, [(Span, Token<'a>); 6]> {
         let ident = any()
@@ -1688,17 +1712,18 @@ fn zero_copy() {
         parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#))
             .into_result(),
         Ok([
-            ((42, 0..5), Token::Ident("hello")),
-            ((42, 6..13), Token::String("\"world\"")),
-            ((42, 14..19), Token::Ident("these")),
-            ((42, 20..23), Token::Ident("are")),
-            ((42, 24..30), Token::String("\"test\"")),
-            ((42, 31..37), Token::Ident("tokens")),
+            ((42, (0..5).into()), Token::Ident("hello")),
+            ((42, (6..13).into()), Token::String("\"world\"")),
+            ((42, (14..19).into()), Token::Ident("these")),
+            ((42, (20..23).into()), Token::Ident("are")),
+            ((42, (24..30).into()), Token::String("\"test\"")),
+            ((42, (31..37).into()), Token::Ident("tokens")),
         ]),
     );
 }
 
 use combinator::MapSlice;
+use crate::zero_copy::input::Emitter;
 
 #[test]
 fn zero_copy_repetition() {
@@ -1812,7 +1837,7 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::<_, (), _>::new(input, &mut state);
+    let mut input = InputRef::<_, EmptyErr, _>::new(input, &mut state);
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);

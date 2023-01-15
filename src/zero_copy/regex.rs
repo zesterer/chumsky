@@ -1,6 +1,6 @@
 use super::*;
 
-pub struct Regex<C: Char, I: ?Sized, E = (), S = ()> {
+pub struct Regex<C: Char, I: ?Sized, E = EmptyErr, S = ()> {
     regex: C::Regex,
     phantom: PhantomData<(E, S, I)>,
 }

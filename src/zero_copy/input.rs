@@ -49,7 +49,7 @@ pub trait StrInput<C: Char>:
 impl Input for str {
     type Offset = usize;
     type Token = char;
-    type Span = Range<usize>;
+    type Span = SimpleSpan<usize>;
 
     fn start(&self) -> Self::Offset {
         0
@@ -70,7 +70,7 @@ impl Input for str {
     }
 
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
-        range
+        range.into()
     }
 }
 
@@ -90,7 +90,7 @@ impl SliceInput for str {
 impl<T: Clone> Input for [T] {
     type Offset = usize;
     type Token = T;
-    type Span = Range<usize>;
+    type Span = SimpleSpan<usize>;
 
     fn start(&self) -> Self::Offset {
         0
@@ -105,7 +105,7 @@ impl<T: Clone> Input for [T] {
     }
 
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
-        range
+        range.into()
     }
 }
 
@@ -273,5 +273,27 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
 
     pub(crate) fn into_errs(self) -> Vec<E> {
         self.errors
+    }
+}
+
+/// Struct used in [`Parser::validate`] to collect user-emitted errors
+pub struct Emitter<E> {
+    emitted: Vec<E>,
+}
+
+impl<E> Emitter<E> {
+    pub(crate) fn new() -> Emitter<E> {
+        Emitter {
+            emitted: Vec::new(),
+        }
+    }
+
+    pub(crate) fn errors(self) -> Vec<E> {
+        self.emitted
+    }
+
+    /// Emit a non-fatal error
+    pub fn emit(&mut self, err: E) {
+        self.emitted.push(err)
     }
 }
