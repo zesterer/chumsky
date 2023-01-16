@@ -125,15 +125,22 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
 pub trait Seq<T> {
     /// The item yielded by the iterator
-    type Item<'a>: core::borrow::Borrow<T>
+    type Item<'a>: Borrow<T>
     where
         Self: 'a;
+
     /// An iterator over the items within this container, by reference.
     type Iter<'a>: Iterator<Item = Self::Item<'a>>
     where
         Self: 'a;
+
     /// Iterate over the elements of the container.
     fn seq_iter(&self) -> Self::Iter<'_>;
+
+    /// Check whether an item is contained within this sequence
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq;
 }
 
 impl<T> Seq<T> for T {
@@ -144,8 +151,16 @@ impl<T> Seq<T> for T {
     type Iter<'a> = core::iter::Once<&'a T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         core::iter::once(self)
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self == val
     }
 }
 
@@ -153,11 +168,20 @@ impl<'b, T> Seq<T> for &'b [T] {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = core::slice::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         (self as &[T]).iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        <[T]>::contains(self, val)
     }
 }
 
@@ -165,11 +189,20 @@ impl<T, const N: usize> Seq<T> for [T; N] {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = core::slice::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        <[T]>::contains(self, val)
     }
 }
 
@@ -177,11 +210,20 @@ impl<'b, T, const N: usize> Seq<T> for &'b [T; N] {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = core::slice::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        <[T]>::contains(*self, val)
     }
 }
 
@@ -189,11 +231,20 @@ impl<'b, T> Seq<T> for Vec<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = core::slice::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        <[T]>::contains(self, val)
     }
 }
 
@@ -201,36 +252,63 @@ impl<'b, T> Seq<T> for LinkedList<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = alloc::collections::linked_list::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        LinkedList::contains(self, val)
+    }
 }
 
-impl<T> Seq<T> for HashSet<T> {
+impl<T: Eq + Hash> Seq<T> for HashSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = hashbrown::hash_set::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        HashSet::contains(self, val)
     }
 }
 
 #[cfg(feature = "std")]
-impl<T> Seq<T> for std::collections::HashSet<T> {
+impl<T: Eq + Hash> Seq<T> for std::collections::HashSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = std::collections::hash_set::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.contains(val)
     }
 }
 
@@ -238,11 +316,20 @@ impl<T: Ord> Seq<T> for alloc::collections::BTreeSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
+
     type Iter<'a> = alloc::collections::btree_set::Iter<'a, T>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
+    }
+
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.contains(val)
     }
 }
 
@@ -253,15 +340,42 @@ macro_rules! impl_for_range {
             type Item<'a> = $ty
             where
                 Self: 'a;
+
             type Iter<'a> = Range<$ty>
             where
                 Self: 'a;
+
             fn seq_iter(&self) -> Self::Iter<'_> {
                 self.clone()
             }
+
+            fn contains(&self, val: &$ty) -> bool {
+                Range::contains(self, val)
+            }
         }
 
+        impl Seq<$ty> for core::ops::RangeInclusive<$ty> {
+            type Item<'a> = $ty
+            where
+                Self: 'a;
+
+            type Iter<'a> = core::ops::RangeInclusive<$ty>
+            where
+                Self: 'a;
+
+            fn seq_iter(&self) -> Self::Iter<'_> {
+                self.clone()
+            }
+
+            fn contains(&self, val: &$ty) -> bool {
+                core::ops::RangeInclusive::contains(self, val)
+            }
+        }
+
+        // TODO: Other range types
+
         impl OrderedSeq<$ty> for Range<$ty> {}
+        impl OrderedSeq<$ty> for core::ops::RangeInclusive<$ty> {}
         )*
     }
 }
@@ -276,11 +390,17 @@ impl Seq<char> for str {
     type Item<'a> = char
     where
         Self: 'a;
+
     type Iter<'a> = core::str::Chars<'a>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
+    }
+
+    fn contains(&self, val: &char) -> bool {
+        self.contains(*val)
     }
 }
 
@@ -288,11 +408,17 @@ impl<'b> Seq<char> for &'b str {
     type Item<'a> = char
     where
         Self: 'a;
+
     type Iter<'a> = core::str::Chars<'a>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
+    }
+
+    fn contains(&self, val: &char) -> bool {
+        str::contains(self, *val)
     }
 }
 
@@ -300,11 +426,17 @@ impl Seq<char> for String {
     type Item<'a> = char
     where
         Self: 'a;
+
     type Iter<'a> = core::str::Chars<'a>
     where
         Self: 'a;
+
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
+    }
+
+    fn contains(&self, val: &char) -> bool {
+        str::contains(self, *val)
     }
 }
 

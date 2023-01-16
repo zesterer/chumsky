@@ -254,7 +254,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
-            (_, Some(tok)) if self.seq.seq_iter().any(|not| *not.borrow() == tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
                 E::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
@@ -322,7 +322,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
         let before = inp.save();
         match inp.next() {
-            (_, Some(tok)) if self.seq.seq_iter().all(|not| *not.borrow() != tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
                 E::expected_found(None, found, inp.span_since(before)),
