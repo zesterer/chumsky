@@ -333,58 +333,71 @@ impl<T: Ord> Seq<T> for alloc::collections::BTreeSet<T> {
     }
 }
 
-macro_rules! impl_for_range {
-    ($($ty:ty),* $(,)?) => {
-        $(
-        impl Seq<$ty> for Range<$ty> {
-            type Item<'a> = $ty
-            where
-                Self: 'a;
+impl<T> Seq<T> for Range<T>
+where
+    T: Clone + PartialOrd, // Explicit declaration of an implied truth - `Step` requires these
+    Self: Iterator<Item = T>,
+{
+    type Item<'a> = T
+    where
+        Self: 'a;
 
-            type Iter<'a> = Range<$ty>
-            where
-                Self: 'a;
+    type Iter<'a> = Range<T>
+    where
+        Self: 'a;
 
-            fn seq_iter(&self) -> Self::Iter<'_> {
-                self.clone()
-            }
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        (*self).clone()
+    }
 
-            fn contains(&self, val: &$ty) -> bool {
-                Range::contains(self, val)
-            }
-        }
-
-        impl Seq<$ty> for core::ops::RangeInclusive<$ty> {
-            type Item<'a> = $ty
-            where
-                Self: 'a;
-
-            type Iter<'a> = core::ops::RangeInclusive<$ty>
-            where
-                Self: 'a;
-
-            fn seq_iter(&self) -> Self::Iter<'_> {
-                self.clone()
-            }
-
-            fn contains(&self, val: &$ty) -> bool {
-                core::ops::RangeInclusive::contains(self, val)
-            }
-        }
-
-        // TODO: Other range types
-
-        impl OrderedSeq<$ty> for Range<$ty> {}
-        impl OrderedSeq<$ty> for core::ops::RangeInclusive<$ty> {}
-        )*
+    fn contains(&self, val: &T) -> bool {
+        Range::contains(self, val)
     }
 }
 
-impl_for_range!(
-    u8, u16, u32, u64, usize,
-    i8, i16, i32, i64, isize,
-    char,
-);
+impl<T> Seq<T> for core::ops::RangeInclusive<T>
+where
+    T: Clone + PartialOrd,
+    Self: Iterator<Item = T>,
+{
+    type Item<'a> = T
+    where
+        Self: 'a;
+
+    type Iter<'a> = core::ops::RangeInclusive<T>
+    where
+        Self: 'a;
+
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        self.clone()
+    }
+
+    fn contains(&self, val: &T) -> bool {
+        core::ops::RangeInclusive::contains(self, val)
+    }
+}
+
+impl<T> Seq<T> for RangeFrom<T>
+where
+    T: Clone + PartialOrd,
+    Self: Iterator<Item = T>,
+{
+    type Item<'a> = T
+    where
+        Self: 'a;
+
+    type Iter<'a> = RangeFrom<T>
+    where
+        Self: 'a;
+
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        self.clone()
+    }
+
+    fn contains(&self, val: &T) -> bool {
+        RangeFrom::contains(self, val)
+    }
+}
 
 impl Seq<char> for str {
     type Item<'a> = char
@@ -450,6 +463,18 @@ impl<'b, T: Clone> OrderedSeq<T> for &'b [T] {}
 impl<T: Clone, const N: usize> OrderedSeq<T> for [T; N] {}
 impl<'b, T: Clone, const N: usize> OrderedSeq<T> for &'b [T; N] {}
 impl<'b, T: Clone> OrderedSeq<T> for Vec<T> {}
+impl<T> OrderedSeq<T> for Range<T>
+where
+    Self: Seq<T>,
+{}
+impl<T> OrderedSeq<T> for core::ops::RangeInclusive<T>
+where
+    Self: Seq<T>,
+{}
+impl<T> OrderedSeq<T> for RangeFrom<T>
+where
+    Self: Seq<T>,
+{}
 
 impl OrderedSeq<char> for str {}
 impl<'b> OrderedSeq<char> for &'b str {}
