@@ -16,7 +16,7 @@
 use super::*;
 
 /// See [`end`].
-pub struct End<In: ?Sized, Err, State>(PhantomData<(Err, State, In)>);
+pub struct End<In: ?Sized, Err, State, Ctx>(PhantomData<(Err, State, Ctx, In)>);
 
 /// A parser that accepts only the end of input.
 ///
@@ -29,13 +29,13 @@ pub struct End<In: ?Sized, Err, State>(PhantomData<(Err, State, In)>);
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// assert_eq!(end::<_, Simple<str>, ()>().parse("").into_result(), Ok(()));
-/// assert!(end::<_, Simple<str>, ()>().parse("hello").has_errors());
+/// assert_eq!(end::<_, Simple<str>, (), ()>().parse("").into_result(), Ok(()));
+/// assert!(end::<_, Simple<str>, (), ()>().parse("hello").has_errors());
 /// ```
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<_, _, Simple<str>, ()>(10);
+/// let digits = text::digits::<_, _, Simple<str>, (), ()>(10);
 ///
 /// // This parser parses digits!
 /// assert_eq!(digits.parse("1234").into_result(), Ok("1234"));
@@ -52,18 +52,18 @@ pub struct End<In: ?Sized, Err, State>(PhantomData<(Err, State, In)>);
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
 /// assert_eq!(only_digits.parse("1234").into_result(), Ok("1234"));
 /// ```
-pub const fn end<'a, In: Input + ?Sized, Err: Error<In>, State: 'a>() -> End<In, Err, State> {
+pub const fn end<'a, In: Input + ?Sized, Err: Error<In>, State: 'a, Ctx>() -> End<In, Err, State, Ctx> {
     End(PhantomData)
 }
 
-impl<In: ?Sized, Err, State> Copy for End<In, Err, State> {}
-impl<In: ?Sized, Err, State> Clone for End<In, Err, State> {
+impl<In: ?Sized, Err, State, Ctx> Copy for End<In, Err, State, Ctx> {}
+impl<In: ?Sized, Err, State, Ctx> Clone for End<In, Err, State, Ctx> {
     fn clone(&self) -> Self {
         End(PhantomData)
     }
 }
 
-impl<'a, In, Err, State, Ctx> Parser<'a, In, (), Err, State, Ctx> for End<In, Err, State>
+impl<'a, In, Err, State, Ctx> Parser<'a, In, (), Err, State, Ctx> for End<In, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,
@@ -165,7 +165,7 @@ impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for Just<T, In, Err, State, Ct
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let question = just('?').error::<Simple<str>>();
+/// let question = just::<_, _, Simple<str>, (), ()>('?');
 ///
 /// assert_eq!(question.parse("?").into_result(), Ok('?'));
 /// assert!(question.parse("!").has_errors());
@@ -253,7 +253,7 @@ impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for OneOf<T, In, Err, State, C
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let digits = one_of::<_, _, Simple<str>, ()>("0123456789")
+/// let digits = one_of::<_, _, Simple<str>, (), ()>("0123456789")
 ///     .repeated()
 ///     .at_least(1)
 ///     .collect::<String>()
@@ -323,7 +323,7 @@ impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for NoneOf<T, In, Err, State, 
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let string = one_of::<_, _, Simple<str>, ()>("\"'")
+/// let string = one_of::<_, _, Simple<str>, (), ()>("\"'")
 ///     .ignore_then(none_of("\"'").repeated().collect::<String>())
 ///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end());
@@ -413,7 +413,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let any = any();
+/// let any = any::<_, Simple<str>, (), ()>();
 ///
 /// assert_eq!(any.parse("a").into_result(), Ok('a'));
 /// assert_eq!(any.parse("7").into_result(), Ok('7'));
@@ -468,7 +468,7 @@ impl<P: Clone, In: ?Sized, C, Err, State> Clone for TakeUntil<P, In, C, Err, Sta
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let single_line = just("//")
+/// let single_line = just::<_, _, Simple<str>, (), ()>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
@@ -499,12 +499,12 @@ impl<P: Clone, In: ?Sized, C, Err, State> Clone for TakeUntil<P, In, C, Err, Sta
 ///     // ...comments between them
 /// "#).into_result(), Ok(vec!["these", "are", "tokens"]));
 /// ```
-pub const fn take_until<'a, P, OP, In, Err, State>(until: P) -> TakeUntil<P, In, OP, (), Err, State>
+pub const fn take_until<'a, P, OP, In, Err, State, Ctx>(until: P) -> TakeUntil<P, In, OP, (), Err, State>
 where
     In: Input + ?Sized,
     Err: Error<In>,
     State: 'a,
-    P: Parser<'a, In, OP, Err, State>,
+    P: Parser<'a, In, OP, Err, State, Ctx>,
 {
     TakeUntil {
         until,
@@ -573,7 +573,7 @@ impl<In: ?Sized, Out, Err> Clone for Todo<In, Out, Err> {
 ///
 /// ```should_panic
 /// # use chumsky::zero_copy::prelude::*;
-/// let int = just("0x").ignore_then(todo())
+/// let int = just::<_, _, Simple<str>, (), ()>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2)))
 ///     .or(text::int(10));
 ///
@@ -647,7 +647,7 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 /// }
 ///
 /// let tokens = choice((
-///     text::keyword::<_, _, _, Simple<str>, ()>("if").to(Token::If),
+///     text::keyword::<_, _, _, Simple<str>, (), ()>("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),

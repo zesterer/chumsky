@@ -11,6 +11,12 @@ macro_rules! go_extra {
         fn go_check(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<Check, $Out, Err> {
             Parser::<In, $Out, Err, State, Ctx>::go::<Check>(self, inp)
         }
+        fn go_cfg_emit(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<Emit, $Out, Err> {
+            Parser::<In, $Out, Err, State, Ctx>::go_cfg::<Emit>(self, inp, cfg)
+        }
+        fn go_cfg_check(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<Check, $Out, Err> {
+            Parser::<In, $Out, Err, State, Ctx>::go_cfg::<Check>(self, inp, cfg)
+        }
     };
 }
 
@@ -208,6 +214,17 @@ mod internal {
             Err: Error<In>,
             State: 'a,
             P: Parser<'a, In, Out, Err, State, Ctx> + ?Sized;
+
+        fn invoke_cfg<'a, In, Out, Err, State, Ctx, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, In, Err, State, Ctx>,
+            cfg: P::Config,
+        ) -> PResult<Self, Out, Err>
+        where
+            In: Input + ?Sized,
+            Err: Error<In>,
+            State: 'a,
+            P: Parser<'a, In, Out, Err, State, Ctx> + ?Sized;
     }
 
     pub struct Emit;
@@ -247,6 +264,20 @@ mod internal {
         {
             parser.go_emit(inp)
         }
+
+        fn invoke_cfg<'a, In, Out, Err, State, Ctx, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, In, Err, State, Ctx>,
+            cfg: P::Config,
+        ) -> PResult<Self, Out, Err>
+        where
+            In: Input + ?Sized,
+            Err: Error<In>,
+            State: 'a,
+            P: Parser<'a, In, Out, Err, State, Ctx> + ?Sized,
+        {
+            parser.go_cfg_emit(inp, cfg)
+        }
     }
 
     pub struct Check;
@@ -279,6 +310,20 @@ mod internal {
         {
             parser.go_check(inp)
         }
+
+        fn invoke_cfg<'a, In, Out, Err, State, Ctx, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, In, Err, State, Ctx>,
+            cfg: P::Config,
+        ) -> PResult<Self, Out, Err>
+        where
+            In: Input + ?Sized,
+            Err: Error<In>,
+            State: 'a,
+            P: Parser<'a, In, Out, Err, State, Ctx> + ?Sized,
+        {
+            parser.go_cfg_check(inp, cfg)
+        }
     }
 }
 
@@ -308,12 +353,12 @@ pub trait Parser<
     // The output type of the parser, when it succeeds
     Out,
     // The error type of the parser
-    Err: Error<In> = EmptyErr,
+    Err: Error<In>,
     // Global state - this can pass information up the parse chain
-    State: 'a = (),
+    State: 'a,
     // Local context - this can pass information down the parse chain, and be used to configure
     // parsers based of prior results.
-    Ctx = (),
+    Ctx,
 > {
     /// Type used to configure this parser - `()` if the parser takes no configuration
     type Config: Default;
@@ -425,6 +470,11 @@ pub trait Parser<
         Self::go::<M>(self, inp)
     }
 
+    #[doc(hidden)]
+    fn go_cfg_emit(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<Emit, Out, Err>;
+    #[doc(hidden)]
+    fn go_cfg_check(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<Check, Out, Err>;
+
     /// TODO
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
@@ -476,7 +526,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let lowercase = any()
+    /// let lowercase = any::<_, Simple<str>, (), ()>()
     ///     .filter(char::is_ascii_lowercase)
     ///     .repeated()
     ///     .at_least(1)
@@ -507,7 +557,7 @@ pub trait Parser<
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
-    /// let word = any()
+    /// let word = any::<_, Simple<str>, (), ()>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
@@ -551,7 +601,7 @@ pub trait Parser<
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, Simple<str>, (), ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
@@ -585,7 +635,7 @@ pub trait Parser<
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, Simple<str>, (), ()>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
@@ -615,7 +665,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let byte = text::int::<_, _, Rich<str>, ()>(10)
+    /// let byte = text::int::<_, _, Rich<str>, (), ()>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
     ///         .map_err(|e| Rich::custom(span, e)));
@@ -670,7 +720,7 @@ pub trait Parser<
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = any::<_, Simple<str>, ()>()
+    /// let whitespace = any::<_, Simple<str>, (), ()>()
     ///     .filter(|c: &char| c.is_whitespace())
     ///     .ignored()
     ///     .repeated()
@@ -700,7 +750,7 @@ pub trait Parser<
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// let op = just('+').to(Op::Add)
+    /// let op = just::<_, _, Simple<str>, (), ()>('+').to(Op::Add)
     ///     .or(just('-').to(Op::Sub))
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
@@ -727,7 +777,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>()
+    /// let word = any::<_, Simple<str>, (), ()>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
@@ -756,7 +806,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let zeroes = any::<_, Simple<str>, ()>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
+    /// let zeroes = any::<_, Simple<str>, (), ()>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
     /// let digits = any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>();
     /// let integer = zeroes
     ///     .ignore_then(digits)
@@ -786,7 +836,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>()
+    /// let word = any::<_, Simple<str>, (), ()>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
@@ -867,7 +917,7 @@ pub trait Parser<
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     ///
     /// // Lua-style multiline string literal
-    /// let string = just::<_, _, Simple<str>, _, ()>('=')
+    /// let string = just::<_, _, Simple<str>, (), ()>('=')
     ///     .repeated()
     ///     .map_slice(str::len)
     ///     .padded_by(just('['))
@@ -920,7 +970,7 @@ pub trait Parser<
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    /// let ident = any::<_, Simple<str>, (), ()>().filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -955,8 +1005,8 @@ pub trait Parser<
     fn delimited_by<U, V, B, C>(self, start: B, end: C) -> DelimitedBy<Self, B, C, U, V>
     where
         Self: Sized,
-        B: Parser<'a, In, U, Err, State>,
-        C: Parser<'a, In, V, Err, State>,
+        B: Parser<'a, In, U, Err, State, Ctx>,
+        C: Parser<'a, In, V, Err, State, Ctx>,
     {
         DelimitedBy {
             parser: self,
@@ -974,7 +1024,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, Simple<str>, (), ()>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
@@ -1015,7 +1065,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let op = just('+')
+    /// let op = just::<_, _, Simple<str>, (), ()>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
@@ -1045,7 +1095,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    /// let word = any::<_, Simple<str>, (), ()>().filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -1073,7 +1123,7 @@ pub trait Parser<
     /// }
     ///
     /// // Arbitrary text, nested in a tree with { ... } delimiters
-    /// let tree = recursive::<_, _, Simple<str>, (), _, _>(|tree| {
+    /// let tree = recursive::<_, _, Simple<str>, (), (), _, _>(|tree| {
     ///     let text = any()
     ///         .and_is(one_of("{}").not())
     ///         .repeated()
@@ -1129,7 +1179,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let num = any::<_, Simple<str>, ()>()
+    /// let num = any::<_, Simple<str>, (), ()>()
     ///     .filter(|c: &char| c.is_ascii_digit())
     ///     .repeated()
     ///     .at_least(1)
@@ -1142,7 +1192,7 @@ pub trait Parser<
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self, Out, In, (), Err, State>
+    fn repeated(self) -> Repeated<Self, Out, In, (), Err, State, Ctx>
     where
         Self: Sized,
     {
@@ -1180,7 +1230,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, _, Simple<str>, ()>()
+    /// let shopping = text::ident::<_, _, Simple<str>, (), ()>()
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
@@ -1190,10 +1240,10 @@ pub trait Parser<
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, Out, U, In, (), Err, State>
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, Out, U, In, (), Err, State, Ctx>
     where
         Self: Sized,
-        B: Parser<'a, In, U, Err, State>,
+        B: Parser<'a, In, U, Err, State, Ctx>,
     {
         SeparatedBy {
             parser: self,
@@ -1218,7 +1268,7 @@ pub trait Parser<
     ) -> SeparatedByExactly<Self, B, U, (), N>
     where
         Self: Sized,
-        B: Parser<'a, In, U, Err, State>,
+        B: Parser<'a, In, U, Err, State, Ctx>,
     {
         SeparatedByExactly {
             parser: self,
@@ -1240,7 +1290,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, Simple<str>, ()>(10)
+    /// let int = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1257,7 +1307,7 @@ pub trait Parser<
     /// ```
     fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, Err, State>
     where
-        Self: Parser<'a, In, (A, B), Err, State> + Sized,
+        Self: Parser<'a, In, (A, B), Err, State, Ctx> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
         F: Fn(A::Item, B) -> B,
@@ -1279,7 +1329,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, Simple<str>, ()>(10)
+    /// let int = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1293,7 +1343,7 @@ pub trait Parser<
     /// ```
     fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, Err, State>
     where
-        Self: Parser<'a, In, (A, B), Err, State> + Sized,
+        Self: Parser<'a, In, (A, B), Err, State, Ctx> + Sized,
         B: IntoIterator,
         F: Fn(A, B::Item) -> A,
     {
@@ -1317,7 +1367,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let just_numbers = text::digits::<_, _, Simple<str>, ()>(10)
+    /// let just_numbers = text::digits::<_, _, Simple<str>, (), ()>(10)
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
     ///     .separated_by(just(','))
@@ -1340,7 +1390,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ident = text::ident::<_, _, Simple<str>, ()>().padded();
+    /// let ident = text::ident::<_, _, Simple<str>, (), ()>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
@@ -1399,7 +1449,7 @@ pub trait Parser<
     /// let recover = just('[')
     ///         .ignore_then(take_until(just(']')).ignored());
     ///
-    /// let expr = recursive::<_, _, Simple<str>, (), _, _>(|expr| expr
+    /// let expr = recursive::<_, _, Simple<str>, (), (), _, _>(|expr| expr
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('['), just(']'))
@@ -1422,7 +1472,7 @@ pub trait Parser<
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(res.output(), Some(&Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<F: Parser<'a, In, Out, Err, State>>(self, fallback: F) -> RecoverWith<Self, F>
+    fn recover_with<F: Parser<'a, In, Out, Err, State, Ctx>>(self, fallback: F) -> RecoverWith<Self, F>
     where
         Self: Sized,
     {
@@ -1502,7 +1552,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let large_int = text::int::<_, _, Rich<str>, ()>(10)
+    /// let large_int = text::int::<_, _, Rich<str>, (), ()>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .validate(|x: u32, span, emitter| {
@@ -1536,7 +1586,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    /// let word = any::<_, Simple<str>, (), ()>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
     ///     .repeated() // This parser produces an output of `Vec<char>`
     ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
     ///
@@ -1560,7 +1610,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = just('-').or_not()
+    /// let int = just::<_, _, Simple<str>, (), ()>('-').or_not()
     ///     .chain(any().filter(|c: &char| c.is_ascii_digit() && *c != '0')
     ///         .chain(any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>()))
     ///     .or(just('0').map(|c| vec![c]))
@@ -1623,7 +1673,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let uint64 = text::int::<_, _, Simple<str>, ()>(10)
+    /// let uint64 = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
@@ -1654,7 +1704,7 @@ pub trait Parser<
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let boolean = just("true")
+    /// let boolean = just::<_, _, Simple<str>, (), ()>("true")
     ///     .or(just("false"))
     ///     .from_str::<bool>()
     ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
@@ -1666,7 +1716,7 @@ pub trait Parser<
     /// ```
     fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where
-        Self: Sized + Parser<'a, In, Result<U, E1>, Err, State>,
+        Self: Sized + Parser<'a, In, Result<U, E1>, Err, State, Ctx>,
         E1: fmt::Debug,
     {
         self.map(|o| o.unwrap())
@@ -1732,6 +1782,10 @@ where
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, Out, Err> {
         M::invoke(&*self.inner, inp)
+    }
+
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<M, Out, Err> where Self: Sized {
+        M::invoke_cfg(&*self.inner, inp, cfg)
     }
 
     go_extra!(Out);
@@ -1917,7 +1971,7 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::<_, EmptyErr, _>::new(input, &mut state);
+    let mut input = InputRef::<_, EmptyErr, _, ()>::new(input, &mut state);
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);

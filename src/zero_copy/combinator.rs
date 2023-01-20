@@ -525,7 +525,7 @@ where
     go_extra!(OA);
 }
 
-/// See [`Parser::then_with`].
+/// See [`Parser::then_with_ctx`].
 pub struct ThenWithCtx<A, B, OA, F, In: ?Sized, Err = EmptyErr, S = (), CtxN = ()> {
     pub(crate) parser: A,
     pub(crate) then: B,
@@ -728,15 +728,15 @@ impl RepeatedCfg {
 
 /// See [`Parser::repeated`].
 // FIXME: why C, E, S have default values?
-pub struct Repeated<A, OA, In: ?Sized, C = (), E = EmptyErr, S = ()> {
+pub struct Repeated<A, OA, In: ?Sized, C = (), Err = EmptyErr, State = (), Ctx = ()> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    pub(crate) phantom: PhantomData<(OA, C, E, S, In)>,
+    pub(crate) phantom: PhantomData<(OA, C, Err, State, Ctx, In)>,
 }
 
-impl<A: Copy, OA, In: ?Sized, C, Err, State> Copy for Repeated<A, OA, In, C, Err, State> {}
-impl<A: Clone, OA, In: ?Sized, C, Err, State> Clone for Repeated<A, OA, In, C, Err, State> {
+impl<A: Copy, OA, In: ?Sized, C, Err, State, Ctx> Copy for Repeated<A, OA, In, C, Err, State, Ctx> {}
+impl<A: Clone, OA, In: ?Sized, C, Err, State, Ctx> Clone for Repeated<A, OA, In, C, Err, State, Ctx> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -747,9 +747,9 @@ impl<A: Clone, OA, In: ?Sized, C, Err, State> Clone for Repeated<A, OA, In, C, E
     }
 }
 
-impl<'a, A, OA, In, C, Err, State> Repeated<A, OA, In, C, Err, State>
+impl<'a, A, OA, In, C, Err, State, Ctx> Repeated<A, OA, In, C, Err, State, Ctx>
 where
-    A: Parser<'a, In, OA, Err, State>,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
     In: Input + ?Sized,
     Err: Error<In>,
     State: 'a,
@@ -772,9 +772,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ring = just('O')
-    ///     .error::<Simple<str>>()
-    ///     .state::<()>();
+    /// let ring = just::<_, _, Simple<str>, (), ()>('O');
     ///
     /// let for_the_elves = ring
     ///     .repeated()
@@ -819,9 +817,9 @@ where
     }
 
     /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, In, D, Err, State>
+    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, In, D, Err, State, Ctx>
     where
-        A: Parser<'a, In, OA, Err, State>,
+        A: Parser<'a, In, OA, Err, State, Ctx>,
     {
         Repeated {
             parser: self.parser,
@@ -832,7 +830,7 @@ where
     }
 }
 
-impl<'a, In, Err, State, Ctx, A, OA, C> Parser<'a, In, C, Err, State, Ctx> for Repeated<A, OA, In, C, Err, State>
+impl<'a, In, Err, State, Ctx, A, OA, C> Parser<'a, In, C, Err, State, Ctx> for Repeated<A, OA, In, C, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,
@@ -884,14 +882,14 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, In: ?Sized, C = (), Err = EmptyErr, State = ()> {
+pub struct SeparatedBy<A, B, OA, OB, In: ?Sized, C = (), Err = EmptyErr, State = (), Ctx = ()> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(OA, OB, C, Err, State, In)>,
+    pub(crate) phantom: PhantomData<(OA, OB, C, Err, State, Ctx, In)>,
 }
 
 impl<A: Copy, B: Copy, OA, OB, In: ?Sized, C, Err, State> Copy for SeparatedBy<A, B, OA, OB, In, C, Err, State> {}
@@ -911,10 +909,10 @@ impl<A: Clone, B: Clone, OA, OB, In: ?Sized, C, Err, State> Clone
     }
 }
 
-impl<'a, A, B, OA, OB, In, C, Err, State> SeparatedBy<A, B, OA, OB, In, C, Err, State>
+impl<'a, A, B, OA, OB, In, C, Err, State, Ctx> SeparatedBy<A, B, OA, OB, In, C, Err, State, Ctx>
 where
-    A: Parser<'a, In, OA, Err, State>,
-    B: Parser<'a, In, OB, Err, State>,
+    A: Parser<'a, In, OA, Err, State, Ctx>,
+    B: Parser<'a, In, OB, Err, State, Ctx>,
     In: Input + ?Sized,
     Err: Error<In>,
     State: 'a,
@@ -923,9 +921,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = just('-')
-    ///     .error::<Simple<str>>()
-    ///     .state::<()>()
+    /// let numbers = just::<_, _, Simple<str>, (), ()>('-')
     ///     .separated_by(just('.'))
     ///     .at_least(2)
     ///     .collect::<Vec<_>>();
@@ -942,7 +938,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let row_4 = text::int::<_, _, Simple<str>, ()>(10)
+    /// let row_4 = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .at_most(4)
@@ -975,7 +971,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let coordinate_3d = text::int::<_, _, Simple<str>, ()>(10)
+    /// let coordinate_3d = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
@@ -1005,7 +1001,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, Simple<str>, ()>("enum")
+    /// let r#enum = text::keyword::<_, _, _, Simple<str>, (), ()>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1035,7 +1031,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = text::int::<_, _, Simple<str>, ()>(10)
+    /// let numbers = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
@@ -1055,8 +1051,8 @@ where
     /// Set the type of [`Container`] to collect into.
     pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, In, D, Err, State>
     where
-        A: Parser<'a, In, OA, Err, State>,
-        B: Parser<'a, In, OB, Err, State>,
+        A: Parser<'a, In, OA, Err, State, Ctx>,
+        B: Parser<'a, In, OB, Err, State, Ctx>,
     {
         SeparatedBy {
             parser: self.parser,
@@ -1335,9 +1331,9 @@ pub struct RepeatedExactly<A, OA, C, const N: usize> {
 
 impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, In, Err, State, D>(self) -> RepeatedExactly<A, OA, D, N>
+    pub fn collect<'a, In, Err, State, Ctx, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
-        A: Parser<'a, In, OA, Err, State>,
+        A: Parser<'a, In, OA, Err, State, Ctx>,
         In: Input + ?Sized,
         Err: Error<In>,
         State: 'a,
@@ -1413,7 +1409,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, Simple<str>, ()>("enum")
+    /// let r#enum = text::keyword::<_, _, _, Simple<str>, (), ()>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1443,7 +1439,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = text::int::<_, _, Simple<str>, ()>(10)
+    /// let numbers = text::int::<_, _, Simple<str>, (), ()>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
@@ -1461,9 +1457,9 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     }
 
     /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, In, OA, Err, State, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
+    pub fn collect<'a, In, OA, Err, State, Ctx, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
     where
-        A: Parser<'a, In, OA, Err, State>,
+        A: Parser<'a, In, OA, Err, State, Ctx>,
         In: Input,
         Err: Error<In>,
         State: 'a,
@@ -1847,8 +1843,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect();
@@ -1858,8 +1853,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>();
@@ -1870,8 +1864,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>()
@@ -1883,8 +1876,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .allow_leading()
             .at_least(3)
@@ -1896,8 +1888,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3)
@@ -1909,8 +1900,7 @@ mod tests {
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just('-')
-            .error::<EmptyErr>()
+        let parser = just::<_, _, EmptyErr, (), _>('-')
             .separated_by(just(','))
             .collect::<Vec<_>>()
             .chain(just(','));

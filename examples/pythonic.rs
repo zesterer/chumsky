@@ -31,7 +31,7 @@ type Spanned<T> = (T, Span);
 
 // A parser that turns pythonic code with semantic whitespace into a token tree
 fn lexer<'a>() -> impl Parser<'a, str, Vec<Spanned<TokenTree>>> {
-    let tt = recursive::<'a, str, _, _, _, _, _>(|tt| {
+    let tt = recursive(|tt| {
         // Define some atomic tokens
         let int = text::int::<'a, str, _, _, _>(10)
             .from_str()

@@ -166,15 +166,15 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let whitespace = text::whitespace::<_, _, Simple<str>, ()>();
+/// let whitespace = text::whitespace::<_, _, Simple<str>, (), ()>();
 ///
 /// // Any amount of whitespace is parsed...
 /// assert_eq!(whitespace.parse("\t \n  \r ").into_result(), Ok(()));
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a>(
-) -> Repeated<impl Parser<'a, In, (), Err, State>, (), In, (), Err, State>
+pub fn whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a, Ctx>(
+) -> Repeated<impl Parser<'a, In, (), Err, State, Ctx>, (), In, (), Err, State, Ctx>
 where
     In::Token: Char,
 {
@@ -194,7 +194,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>, ()>();
+/// let inline_whitespace = text::inline_whitespace::<_, _, Simple<str>, (), ()>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  ").into_result(), Ok(()));
@@ -203,8 +203,8 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a>(
-) -> Repeated<impl Parser<'a, In, (), Err, State>, (), In, (), Err, State>
+pub fn inline_whitespace<'a, C: Char, In: StrInput<C> + ?Sized, Err: Error<In>, State: 'a, Ctx>(
+) -> Repeated<impl Parser<'a, In, (), Err, State, Ctx>, (), In, (), Err, State, Ctx>
 where
     In::Token: Char,
 {
@@ -233,7 +233,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let newline = text::newline::<str, Simple<str>, ()>()
+/// let newline = text::newline::<str, Simple<str>, (), ()>()
 ///     .then_ignore(end());
 ///
 /// assert_eq!(newline.parse("\n").into_result(), Ok(()));
@@ -278,7 +278,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<'_, _, _, Simple<str>, ()>(10);
+/// let digits = text::digits::<'_, _, _, Simple<str>, (), ()>(10);
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -289,13 +289,13 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'a, C, In, Err, State: 'a>(radix: u32) -> impl Parser<'a, In, &'a In::Slice, Err, State>
+pub fn digits<'a, C, In, Err, State: 'a, Ctx>(radix: u32) -> impl Parser<'a, In, &'a In::Slice, Err, State, Ctx>
 where
     C: Char,
     In: StrInput<C> + ?Sized,
     Err: Error<In>,
 {
-    any()
+    any::<In, Err, State, Ctx>()
         .filter(move |c: &C| c.is_digit(radix))
         .repeated()
         .at_least(1)
@@ -316,7 +316,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let dec = text::int::<_, _, Simple<str>, ()>(10)
+/// let dec = text::int::<_, _, Simple<str>, (), ()>(10)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(dec.parse("0").into_result(), Ok("0"));
@@ -325,7 +325,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
-/// let hex = text::int::<_, _, Simple<str>, ()>(16)
+/// let hex = text::int::<_, _, Simple<str>, (), ()>(16)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
@@ -335,9 +335,9 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
+pub fn int<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a, Ctx>(
     radix: u32,
-) -> impl Parser<'a, In, &'a C::Slice, Err, State> + Clone {
+) -> impl Parser<'a, In, &'a C::Slice, Err, State, Ctx> + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -355,8 +355,8 @@ pub fn int<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
-) -> impl Parser<'a, In, &'a C::Slice, Err, State> + Clone {
+pub fn ident<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a, Ctx>(
+) -> impl Parser<'a, In, &'a C::Slice, Err, State, Ctx> + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -371,15 +371,15 @@ pub fn ident<'a, In: StrInput<C> + ?Sized, C: Char, Err: Error<In>, State: 'a>(
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, Err: Error<str>, State: 'a>(
+pub fn semantic_indentation<'a, Tok, T, F, Err: Error<str>, State: 'a, Ctx>(
     token: T,
     make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, Err, State>
+) -> impl Parser<'a, str, Vec<Tok>, Err, State, Ctx>
 where
-    T: Parser<'a, str, Tok, Err, State>,
+    T: Parser<'a, str, Tok, Err, State, Ctx>,
     F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
 {
-    let line_ws = any::<str, Err, _, _>().filter(|c: &char| c.is_inline_whitespace());
+    let line_ws = any::<str, Err, State, Ctx>().filter(|c: &char| c.is_inline_whitespace());
 
     let line = token
         .padded_by(line_ws.repeated())
@@ -445,7 +445,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let def = text::keyword::<_, _, _, Simple<str>, ()>("def");
+/// let def = text::keyword::<_, _, _, Simple<str>, (), ()>("def");
 ///
 /// // Exactly 'def' was found
 /// assert_eq!(def.parse("def").into_result(), Ok(()));
@@ -454,9 +454,9 @@ where
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```
-pub fn keyword<'a, In: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, Err: Error<In> + 'a, State: 'a>(
+pub fn keyword<'a, In: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, Err: Error<In> + 'a, State: 'a, Ctx: 'a>(
     keyword: Str,
-) -> impl Parser<'a, In, (), Err, State> + Clone + 'a
+) -> impl Parser<'a, In, (), Err, State, Ctx> + Clone + 'a
 where
     C::Slice: PartialEq,
 {

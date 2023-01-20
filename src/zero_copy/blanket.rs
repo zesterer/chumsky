@@ -16,5 +16,9 @@ where
         (*self).go::<M>(inp)
     }
 
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<M, Out, Err> where Self: Sized {
+        (*self).go_cfg::<M>(inp, cfg)
+    }
+
     go_extra!(Out);
 }
