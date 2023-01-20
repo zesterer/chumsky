@@ -122,6 +122,25 @@ where
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
 // }
 
+/// TODO
+pub struct JustCfg<T> {
+    seq: Option<T>,
+}
+
+impl<T> JustCfg<T> {
+    /// TODO
+    pub fn set_seq(mut self, new_seq: T) -> Self {
+        self.seq = Some(new_seq);
+        self
+    }
+}
+
+impl<T> Default for JustCfg<T> {
+    fn default() -> Self {
+        JustCfg { seq: None }
+    }
+}
+
 /// See [`just`].
 pub struct Just<T, In: ?Sized, Err = EmptyErr, State = (), Ctx = ()> {
     seq: T,
@@ -176,10 +195,17 @@ where
     In::Token: Clone + PartialEq,
     T: OrderedSeq<In::Token> + Clone,
 {
-    type Config = ();
+    type Config = JustCfg<T>;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, T, Err> {
-        let mut items = self.seq.seq_iter();
+        Self::go_cfg::<M>(self, inp, JustCfg::default())
+    }
+
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<M, T, Err> where Self: Sized {
+        let seq = cfg.seq.as_ref()
+            .unwrap_or(&self.seq);
+
+        let mut items = seq.seq_iter();
         loop {
             match items.next() {
                 Some(next) => {
@@ -195,7 +221,7 @@ where
                         }
                     }
                 }
-                None => break Ok(M::bind(|| self.seq.clone())),
+                None => break Ok(M::bind(|| seq.clone())),
             }
         }
     }
@@ -236,7 +262,7 @@ impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for OneOf<T, In, Err, State, C
 /// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
 /// ```
-pub const fn one_of<T, In, Err, State>(seq: T) -> OneOf<T, In, Err, State>
+pub const fn one_of<T, In, Err, State, Ctx>(seq: T) -> OneOf<T, In, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,
@@ -249,7 +275,7 @@ where
     }
 }
 
-impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for OneOf<T, In, Err, State>
+impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for OneOf<T, In, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,
@@ -306,7 +332,7 @@ impl<T: Clone, In: ?Sized, Err, State, Ctx> Clone for NoneOf<T, In, Err, State, 
 /// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").has_errors());
 /// ```
-pub const fn none_of<T, In, Err, State>(seq: T) -> NoneOf<T, In, Err, State>
+pub const fn none_of<T, In, Err, State, Ctx>(seq: T) -> NoneOf<T, In, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,
@@ -319,7 +345,7 @@ where
     }
 }
 
-impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for NoneOf<T, In, Err, State>
+impl<'a, In, Err, State, Ctx, T> Parser<'a, In, In::Token, Err, State, Ctx> for NoneOf<T, In, Err, State, Ctx>
 where
     In: Input + ?Sized,
     Err: Error<In>,

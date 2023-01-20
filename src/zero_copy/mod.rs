@@ -417,36 +417,19 @@ pub trait Parser<
     fn go_check(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<Check, Out, Err>;
 
     /// TODO
-    fn error<E>(self) -> Self
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<M, Out, Err>
     where
-        Self: Sized + Parser<'a, In, Out, E, State, Ctx>,
-        E: Error<In>,
+        Self: Sized,
     {
-        self
-    }
-
-    /// TODO
-    fn state<S>(self) -> Self
-    where
-        Self: Sized + Parser<'a, In, Out, Err, S, Ctx>,
-        S: 'a,
-    {
-        self
-    }
-
-    /// TODO
-    fn ctx<C>(self) -> Self
-    where
-        Self: Sized + Parser<'a, In, Out, Err, State, C>,
-    {
-        self
+        #![allow(unused_variables)]
+        Self::go::<M>(self, inp)
     }
 
     /// TODO
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
         Self: Sized,
-        F: Fn(&mut Self::Config, &mut State),
+        F: Fn(Self::Config, &Ctx) -> Self::Config,
     {
         Configure {
             parser: self,
@@ -853,24 +836,24 @@ pub trait Parser<
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, Simple<[u8]>, ()>((b'a'..=b'z').collect::<Vec<u8>>())
-    ///     .then_with_state(
-    ///         just('\0').configure(|cfg, state| cfg.set_seq(*state)),
-    ///         |_, letter: u8| letter,
+    /// let successive_letters = one_of::<_, _, Simple<[u8]>, (), ()>(b'a'..=b'z')
+    ///     .then_with_ctx(
+    ///         just(b'\0').configure(|cfg, ctx: &u8| cfg.set_seq(*ctx + 1)),
+    ///         |letter, _| letter,
     ///     );
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
-    fn then_with_state<U, P, F>(
+    fn then_with_ctx<U, CtxN, P, F>(
         self,
         then: P,
         make_ctx: F,
-    ) -> ThenWithCtx<Self, P, Out, F, In, Err, State>
+    ) -> ThenWithCtx<Self, P, Out, F, In, Err, State, CtxN>
     where
         Self: Sized,
-        P: Parser<'a, In, U, Err, State, Ctx>,
-        F: Fn(&mut State, Out) -> P,
+        P: Parser<'a, In, U, Err, State, CtxN>,
+        F: Fn(Out, &Ctx) -> CtxN,
     {
         ThenWithCtx {
             parser: self,
@@ -884,18 +867,21 @@ pub trait Parser<
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     ///
     /// // Lua-style multiline string literal
-    /// let string = just('=')
+    /// let string = just::<_, _, Simple<str>, _, ()>('=')
     ///     .repeated()
     ///     .map_slice(str::len)
     ///     .padded_by(just('['))
-    ///     .then_with(|n| {
-    ///         let close = just('=').repeated().exactly(n).padded_by(just(']'));
-    ///         any()
-    ///             .and_is(close.not())
-    ///             .repeated()
-    ///             .slice()
-    ///             .then_ignore(close)
-    ///     });
+    ///     .then_with_ctx(
+    ///         {
+    ///             let close = just('=').repeated().configure(|cfg, n| cfg.exactly(*n)).padded_by(just(']'));
+    ///             any()
+    ///                 .and_is(close.not())
+    ///                 .repeated()
+    ///                 .slice()
+    ///                 .then_ignore(close)
+    ///         },
+    ///         |n, _| n,
+    ///     );
     ///
     /// assert_eq!(
     ///     string.parse("[[wxyz]]").into_result(),
@@ -999,7 +985,7 @@ pub trait Parser<
     fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, U>
     where
         Self: Sized,
-        B: Parser<'a, In, U, Err, State>,
+        B: Parser<'a, In, U, Err, State, Ctx>,
     {
         PaddedBy {
             parser: self,

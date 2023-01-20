@@ -14,10 +14,20 @@ pub struct Configure<A, F> {
     pub(crate) cfg: F,
 }
 
+impl<A: Copy, F: Copy> Copy for Configure<A, F> {}
+impl<A: Clone, F: Clone> Clone for Configure<A, F> {
+    fn clone(&self) -> Self {
+        Configure {
+            parser: self.parser.clone(),
+            cfg: self.cfg.clone(),
+        }
+    }
+}
+
 impl<'a, In, Out, Err, State, Ctx, A, F> Parser<'a, In, Out, Err, State, Ctx> for Configure<A, F>
 where
     A: Parser<'a, In, Out, Err, State, Ctx>,
-    F: Fn(&mut A::Config, &mut State),
+    F: Fn(A::Config, &Ctx) -> A::Config,
     In: Input + ?Sized,
     Err: Error<In>,
     State: 'a,
@@ -28,9 +38,8 @@ where
     where
         Self: Sized,
     {
-        let mut cfg = A::Config::default();
-        (self.cfg)(&mut cfg, inp.state());
-        self.parser.go::<M>(inp)
+        let cfg = (self.cfg)(A::Config::default(), inp.ctx());
+        self.parser.go_cfg::<M>(inp, cfg)
     }
 
     go_extra!(Out);
@@ -536,20 +545,20 @@ impl<A: Clone, B: Clone, OA, F: Clone, In: ?Sized, Err, State, CtxN> Clone for T
     }
 }
 
-impl<'a, In, Err, State, Ctx, CtxN, A, B, OA, OB, F> Parser<'a, In, OB, Err, State, Ctx> for ThenWithCtx<A, B, OA, F, In, Err, CtxN>
+impl<'a, In, Err, State, Ctx, CtxN, A, B, OA, OB, F> Parser<'a, In, OB, Err, State, Ctx> for ThenWithCtx<A, B, OA, F, In, Err, State, CtxN>
 where
     In: Input + ?Sized,
     Err: Error<In>,
     State: 'a,
     A: Parser<'a, In, OA, Err, State, Ctx>,
     B: Parser<'a, In, OB, Err, State, CtxN>,
-    F: Fn(&Ctx, OA) -> CtxN,
+    F: Fn(OA, &Ctx) -> CtxN,
 {
     type Config = ();
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, OB, Err> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        let ctx = (self.make_ctx)(inp.ctx(), p1);
+        let ctx = (self.make_ctx)(p1, inp.ctx());
         inp.with_ctx(
             ctx,
             |inp| self.then.go::<M>(inp)
@@ -689,6 +698,34 @@ where
     go_extra!(Out);
 }
 
+/// TODO
+#[derive(Default)]
+pub struct RepeatedCfg {
+    at_least: Option<usize>,
+    at_most: Option<usize>,
+}
+
+impl RepeatedCfg {
+    /// TODO
+    pub fn at_least(mut self, n: usize) -> Self {
+        self.at_least = Some(n);
+        self
+    }
+
+    /// TODO
+    pub fn at_most(mut self, n: usize) -> Self {
+        self.at_most = Some(n);
+        self
+    }
+
+    /// TODO
+    pub fn exactly(mut self, n: usize) -> Self {
+        self.at_least = Some(n);
+        self.at_most = Some(n);
+        self
+    }
+}
+
 /// See [`Parser::repeated`].
 // FIXME: why C, E, S have default values?
 pub struct Repeated<A, OA, In: ?Sized, C = (), E = EmptyErr, S = ()> {
@@ -803,11 +840,18 @@ where
     A: Parser<'a, In, OA, Err, State, Ctx>,
     C: Container<OA>,
 {
-    type Config = ();
+    type Config = RepeatedCfg;
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>) -> PResult<M, C, Err> {
+        Self::go_cfg::<M>(self, inp, RepeatedCfg::default())
+    }
+
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, In, Err, State, Ctx>, cfg: Self::Config) -> PResult<M, C, Err> where Self: Sized {
         let mut count = 0;
         let mut output = M::bind::<C, _>(|| C::default());
+        let at_least = cfg.at_least.unwrap_or(self.at_least);
+        let at_most = cfg.at_most.or(self.at_most);
+
         loop {
             let before = inp.save();
             match self.parser.go::<M>(inp) {
@@ -818,7 +862,7 @@ where
                     });
                     count += 1;
 
-                    if let Some(at_most) = self.at_most {
+                    if let Some(at_most) = at_most {
                         if count >= at_most {
                             break Ok(output);
                         }
@@ -826,7 +870,7 @@ where
                 }
                 Err(e) => {
                     inp.rewind(before);
-                    break if count >= self.at_least {
+                    break if count >= at_least {
                         Ok(output)
                     } else {
                         Err(e)
