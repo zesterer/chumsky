@@ -162,9 +162,9 @@ where
 {
 }
 
-// Represents the progress of a parser through the input
-pub(crate) struct Marker<I: Input + ?Sized> {
-    pos: usize,
+/// Represents the progress of a parser through the input
+pub struct Marker<I: Input + ?Sized> {
+    pub(crate) pos: usize,
     offset: I::Offset,
     err_count: usize,
 }
@@ -198,10 +198,13 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn save(&mut self) -> Marker<I> {
+    /// Save off a [`Marker`] to the current position in the input
+    pub fn save(&mut self) -> Marker<I> {
         self.marker
     }
-    pub(crate) fn rewind(&mut self, marker: Marker<I>) {
+
+    /// Reset the input state to the provided [`Marker`]
+    pub fn rewind(&mut self, marker: Marker<I>) {
         self.errors.truncate(marker.err_count);
         self.marker = marker;
     }
@@ -222,15 +225,16 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn next(&mut self) -> (usize, Option<I::Token>) {
+    pub(crate) fn next(&mut self) -> (Marker<I>, Option<I::Token>) {
         let (offset, token) = self.input.next(self.marker.offset);
         self.marker.offset = offset;
         self.marker.pos += 1;
-        (self.marker.pos, token)
+        (self.marker, token)
     }
 
-    pub(crate) fn last_pos(&self) -> usize {
-        self.marker.pos
+    /// Get the next token in the input. Returns `None` for EOI
+    pub fn next_token(&mut self) -> Option<I::Token> {
+        self.next().1
     }
 
     pub(crate) fn slice(&self, range: Range<Marker<I>>) -> &'a I::Slice
@@ -254,7 +258,8 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.input.slice_from(self.marker.offset..)
     }
 
-    pub(crate) fn span_since(&self, before: Marker<I>) -> I::Span {
+    /// Return the span from the provided [`Marker`] to the current position
+    pub fn span_since(&self, before: Marker<I>) -> I::Span {
         self.input.span(before.offset..self.marker.offset)
     }
 

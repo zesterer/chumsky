@@ -71,8 +71,7 @@ use self::{
     combinator::*,
     container::*,
     error::{Error, EmptyErr},
-    input::{Input, InputRef, SliceInput, StrInput},
-    internal::*,
+    input::{Input, InputRef, Marker, SliceInput, StrInput},
     span::{Span, SimpleSpan},
     text::*,
 };
@@ -172,13 +171,17 @@ pub struct Located<E> {
 }
 
 impl<E> Located<E> {
-    fn at(pos: usize, err: E) -> Self {
+    pub fn at<I: Input + ?Sized>(mark: Marker<I>, err: E) -> Self {
+        Self { pos: mark.pos, err }
+    }
+
+    fn at_pos(pos: usize, err: E) -> Self {
         Self { pos, err }
     }
 
     fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
         match self.pos.cmp(&other.pos) {
-            Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
+            Ordering::Equal => Self::at_pos(self.pos, merge(self.err, other.err)),
             Ordering::Greater => self,
             Ordering::Less => other,
         }
@@ -188,17 +191,37 @@ impl<E> Located<E> {
 mod internal {
     use super::*;
 
-    pub trait Mode {
+    pub trait ModeSealed {}
+
+    impl ModeSealed for Emit {}
+    impl ModeSealed for Check {}
+
+    /// An abstract parse mode - can be [`Emit`] or [`Check`] in practice, and represents the
+    /// common interface for handling both in the same method.
+    pub trait Mode: ModeSealed {
+        /// The output of this mode for a given type
         type Output<T>;
+
+        /// Bind the result of a closure into an output
         fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
+
+        /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
         fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
+
+        /// Given two [`Output`](Self::Output)s, take their values and combine them into a new
+        /// output value
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             x: Self::Output<T>,
             y: Self::Output<U>,
             f: F,
         ) -> Self::Output<V>;
+
+        /// Given an array of outputs, bind them into an output of arrays
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
+        /// Invoke a parser user the current mode. This is normally equivalent to
+        /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
+        /// `dyn Parser`.
         fn invoke<'a, I, O, E, S, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E, S>,
@@ -210,7 +233,9 @@ mod internal {
             P: Parser<'a, I, O, E, S> + ?Sized;
     }
 
+    /// Emit mode - generates parser output
     pub struct Emit;
+
     impl Mode for Emit {
         type Output<T> = T;
         #[inline(always)]
@@ -249,7 +274,9 @@ mod internal {
         }
     }
 
+    /// Check mode - all output is discarded, and only uses parsers to check validity
     pub struct Check;
+
     impl Mode for Check {
         type Output<T> = ();
         #[inline(always)]
@@ -281,6 +308,8 @@ mod internal {
         }
     }
 }
+
+pub use internal::{Mode, Emit, Check};
 
 /// A trait implemented by parsers.
 ///
@@ -384,9 +413,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
-    /// covers your use-case.
-    #[doc(hidden)]
+    /// own.
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized;
