@@ -16,7 +16,7 @@
 use super::*;
 
 /// See [`end`].
-pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
+pub struct End<I: ?Sized, E>(PhantomData<(E, I)>);
 
 /// A parser that accepts only the end of input.
 ///
@@ -29,13 +29,13 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// assert_eq!(end::<_, Simple<str>, ()>().parse("").into_result(), Ok(()));
-/// assert!(end::<_, Simple<str>, ()>().parse("hello").has_errors());
+/// assert_eq!(end::<_, extra::Err<Simple<str>>>().parse("").into_result(), Ok(()));
+/// assert!(end::<_, extra::Err<Simple<str>>>().parse("hello").has_errors());
 /// ```
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<_, _, Simple<str>, ()>(10);
+/// let digits = text::digits::<_, _, extra::Err<Simple<str>>>(10);
 ///
 /// // This parser parses digits!
 /// assert_eq!(digits.parse("1234").into_result(), Ok("1234"));
@@ -52,30 +52,29 @@ pub struct End<I: ?Sized, E, S>(PhantomData<(E, S, I)>);
 /// // ...while still behaving correctly for inputs that only consist of valid patterns
 /// assert_eq!(only_digits.parse("1234").into_result(), Ok("1234"));
 /// ```
-pub const fn end<'a, I: Input + ?Sized, E: Error<I>, S: 'a>() -> End<I, E, S> {
+pub const fn end<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> End<I, E> {
     End(PhantomData)
 }
 
-impl<I: ?Sized, E, S> Copy for End<I, E, S> {}
-impl<I: ?Sized, E, S> Clone for End<I, E, S> {
+impl<I: ?Sized, E> Copy for End<I, E> {}
+impl<I: ?Sized, E> Clone for End<I, E> {
     fn clone(&self) -> Self {
         End(PhantomData)
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for End<I, E, S>
+impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.save();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => Err(Located::at(
                 at,
-                E::expected_found(None, Some(tok), inp.span_since(before)),
+                E::Error::expected_found(None, Some(tok), inp.span_since(before)),
             )),
         }
     }
@@ -100,13 +99,12 @@ impl<I: ?Sized> Clone for Empty<I> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, (), E, S> for Empty<I>
+impl<'a, I, E> Parser<'a, I, (), E> for Empty<I>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (), E> {
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         Ok(M::bind(|| ()))
     }
 
@@ -119,13 +117,13 @@ where
 // }
 
 /// See [`just`].
-pub struct Just<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct Just<T, I: ?Sized, E = EmptyErr> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for Just<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
+impl<T: Copy, I: ?Sized, E> Copy for Just<T, I, E> {}
+impl<T: Clone, I: ?Sized, E> Clone for Just<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -142,7 +140,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let question = just::<_, _, Simple<str>, ()>('?');
+/// let question = just::<_, _, extra::Err<Simple<str>>>('?');
 ///
 /// assert_eq!(question.parse("?").into_result(), Ok('?'));
 /// assert!(question.parse("!").has_errors());
@@ -151,10 +149,10 @@ impl<T: Clone, I: ?Sized, E, S> Clone for Just<T, I, E, S> {
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.then(end()).parse("?!").has_errors());
 /// ```
-pub const fn just<T, I, E, S>(seq: T) -> Just<T, I, E, S>
+pub const fn just<'a, T, I, E>(seq: T) -> Just<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
+    E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: OrderedSeq<I::Token> + Clone,
 {
@@ -164,15 +162,14 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, T, E, S> for Just<T, I, E, S>
+impl<'a, I, E, T> Parser<'a, I, T, E> for Just<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
     I::Token: Clone + PartialEq,
     T: OrderedSeq<I::Token> + Clone,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, T, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T, E::Error> {
         let mut items = self.seq.seq_iter();
         loop {
             match items.next() {
@@ -184,7 +181,7 @@ where
                         (at, tok) => {
                             break Err(Located::at(
                                 at,
-                                E::expected_found(Some(Some(I::Token::clone(next))), tok, inp.span_since(before)),
+                                E::Error::expected_found(Some(Some(I::Token::clone(next))), tok, inp.span_since(before)),
                             ))
                         }
                     }
@@ -198,13 +195,13 @@ where
 }
 
 /// See [`one_of`].
-pub struct OneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct OneOf<T, I: ?Sized, E> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for OneOf<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
+impl<T: Copy, I: ?Sized, E> Copy for OneOf<T, I, E> {}
+impl<T: Clone, I: ?Sized, E> Clone for OneOf<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -221,7 +218,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let digits = one_of::<_, _, Simple<str>, ()>("0123456789")
+/// let digits = one_of::<_, _, extra::Err<Simple<str>>>("0123456789")
 ///     .repeated()
 ///     .at_least(1)
 ///     .collect::<String>()
@@ -230,10 +227,10 @@ impl<T: Clone, I: ?Sized, E, S> Clone for OneOf<T, I, E, S> {
 /// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
 /// ```
-pub const fn one_of<T, I, E, S>(seq: T) -> OneOf<T, I, E, S>
+pub const fn one_of<'a, T, I, E>(seq: T) -> OneOf<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
+    E: ParserExtra<'a, I>,
     I::Token: Clone + PartialEq,
     T: Seq<I::Token>,
 {
@@ -243,21 +240,20 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for OneOf<T, I, E, S>
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
     I::Token: Clone + PartialEq,
     T: Seq<I::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
+                E::Error::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
             )),
         }
     }
@@ -266,13 +262,13 @@ where
 }
 
 /// See [`none_of`].
-pub struct NoneOf<T, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct NoneOf<T, I: ?Sized, E> {
     seq: T,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<T: Copy, I: ?Sized, E, S> Copy for NoneOf<T, I, E, S> {}
-impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
+impl<T: Copy, I: ?Sized, E> Copy for NoneOf<T, I, E> {}
+impl<T: Clone, I: ?Sized, E> Clone for NoneOf<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
@@ -289,7 +285,7 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let string = one_of::<_, _, Simple<str>, ()>("\"'")
+/// let string = one_of::<_, _, extra::Err<Simple<str>>>("\"'")
 ///     .ignore_then(none_of("\"'").repeated().collect::<String>())
 ///     .then_ignore(one_of("\"'"))
 ///     .then_ignore(end());
@@ -298,10 +294,10 @@ impl<T: Clone, I: ?Sized, E, S> Clone for NoneOf<T, I, E, S> {
 /// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").has_errors());
 /// ```
-pub const fn none_of<T, I, E, S>(seq: T) -> NoneOf<T, I, E, S>
+pub const fn none_of<'a, T, I, E>(seq: T) -> NoneOf<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
+    E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: Seq<I::Token>,
 {
@@ -311,21 +307,20 @@ where
     }
 }
 
-impl<'a, I, E, S, T> Parser<'a, I, I::Token, E, S> for NoneOf<T, I, E, S>
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: Seq<I::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(None, found, inp.span_since(before)),
+                E::Error::expected_found(None, found, inp.span_since(before)),
             )),
         }
     }
@@ -334,12 +329,12 @@ where
 }
 
 /// See [`any`].
-pub struct Any<I: ?Sized, E, S = ()> {
-    phantom: PhantomData<(E, S, I)>,
+pub struct Any<I: ?Sized, E> {
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<I: ?Sized, E, S> Copy for Any<I, E, S> {}
-impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
+impl<I: ?Sized, E> Copy for Any<I, E> {}
+impl<I: ?Sized, E> Clone for Any<I, E> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
@@ -347,19 +342,18 @@ impl<I: ?Sized, E, S> Clone for Any<I, E, S> {
     }
 }
 
-impl<'a, I, E, S> Parser<'a, I, I::Token, E, S> for Any<I, E, S>
+impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, I::Token, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::expected_found(None, found, inp.span_since(before)),
+                E::Error::expected_found(None, found, inp.span_since(before)),
             )),
         }
     }
@@ -375,35 +369,34 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let any = any::<_, Simple<str>, ()>();
+/// let any = any::<_, extra::Err<Simple<str>>>();
 ///
 /// assert_eq!(any.parse("a").into_result(), Ok('a'));
 /// assert_eq!(any.parse("7").into_result(), Ok('7'));
 /// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
-pub const fn any<I: Input + ?Sized, E: Error<I>, S>() -> Any<I, E, S> {
+pub const fn any<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> Any<I, E> {
     Any {
         phantom: PhantomData,
     }
 }
 
 /// See [`take_until`].
-pub struct TakeUntil<P, I: ?Sized, OP, C = (), E = EmptyErr, S = ()> {
+pub struct TakeUntil<P, I: ?Sized, OP, E, C = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
-    phantom: PhantomData<(OP, C, E, S, I)>,
+    phantom: PhantomData<(OP, E, C, I)>,
 }
 
-impl<'a, I, E, S, P, OP, C> TakeUntil<P, I, OP, C, E, S>
+impl<'a, I, E, P, OP, C> TakeUntil<P, I, OP, E, C>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
 {
     /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, I, OP, D, E, S> {
+    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, I, OP, E, D> {
         TakeUntil {
             until: self.until,
             phantom: PhantomData,
@@ -411,8 +404,8 @@ where
     }
 }
 
-impl<P: Copy, I: ?Sized, C, E, S> Copy for TakeUntil<P, I, C, E, S> {}
-impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
+impl<P: Copy, I: ?Sized, C, E> Copy for TakeUntil<P, I, E, C> {}
+impl<P: Clone, I: ?Sized, C, E> Clone for TakeUntil<P, I, E, C> {
     fn clone(&self) -> Self {
         TakeUntil {
             until: self.until.clone(),
@@ -430,11 +423,11 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///
 /// ```
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-/// let single_line = just::<_, _, Simple<str>, ()>("//")
+/// let single_line = just::<_, _, extra::Err<Simple<str>>>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, Simple<str>, ()>("/*")
+/// let multi_line = just::<_, _, extra::Err<Simple<str>>>("/*")
 ///     .then(take_until(just("*/")))
 ///     .ignored();
 ///
@@ -461,12 +454,11 @@ impl<P: Clone, I: ?Sized, C, E, S> Clone for TakeUntil<P, I, C, E, S> {
 ///     // ...comments between them
 /// "#).into_result(), Ok(vec!["these", "are", "tokens"]));
 /// ```
-pub const fn take_until<'a, P, OP, I, E, S>(until: P) -> TakeUntil<P, I, OP, (), E, S>
+pub const fn take_until<'a, P, OP, I, E>(until: P) -> TakeUntil<P, I, OP, (), E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
 {
     TakeUntil {
         until,
@@ -474,15 +466,14 @@ where
     }
 }
 
-impl<'a, P, OP, I, E, S, C> Parser<'a, I, (C, OP), E, S> for TakeUntil<P, I, OP, C, E, S>
+impl<'a, P, OP, I, E, C> Parser<'a, I, (C, OP), E> for TakeUntil<P, I, OP, C, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
-    P: Parser<'a, I, OP, E, S>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
     C: Container<I::Token>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, (C, OP), E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP), E::Error> {
         let mut output = M::bind(|| C::default());
 
         loop {
@@ -533,7 +524,7 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 ///
 /// ```should_panic
 /// # use chumsky::zero_copy::prelude::*;
-/// let int = just::<_, _, Simple<str>, ()>("0x").ignore_then(todo())
+/// let int = just::<_, _, extra::Err<Simple<str>>>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2)))
 ///     .or(text::int(10));
 ///
@@ -544,17 +535,16 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
-pub const fn todo<I: Input + ?Sized, O, E: Error<I>>() -> Todo<I, O, E> {
+pub const fn todo<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
     Todo(PhantomData)
 }
 
-impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Todo<I, O, E>
+impl<'a, I, O, E> Parser<'a, I, O, E> for Todo<I, O, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         todo!("Attempted to use an unimplemented parser")
     }
 
@@ -605,7 +595,7 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 /// }
 ///
 /// let tokens = choice((
-///     text::keyword::<_, _, _, Simple<str>, ()>("if").to(Token::If),
+///     text::keyword::<_, _, _, extra::Err<Simple<str>>>("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),
@@ -637,19 +627,18 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $($X:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*, O> Parser<'a, I, O, E, S> for Choice<($($X,)*), O>
+        impl<'a, I, E, $($X),*, O> Parser<'a, I, O, E> for Choice<($($X,)*), O>
         where
             I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            $($X: Parser<'a, I, O, E, S>),*
+            E: ParserExtra<'a, I>,
+            $($X: Parser<'a, I, O, E>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
                 let before = inp.save();
 
                 let Choice { parsers: ($($X,)*), .. } = self;
 
-                let mut err: Option<Located<E>> = None;
+                let mut err: Option<Located<E::Error>> = None;
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
@@ -664,7 +653,7 @@ macro_rules! impl_choice_for_tuple {
                     };
                 )*
 
-                Err(err.unwrap_or_else(|| Located::at(inp.save(), E::expected_found(None, None, inp.span_since(before)))))
+                Err(err.unwrap_or_else(|| Located::at(inp.save(), E::Error::expected_found(None, None, inp.span_since(before)))))
             }
 
             go_extra!(O);
@@ -725,14 +714,13 @@ macro_rules! impl_group_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, S, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E, S> for Group<($($X,)*)>
+        impl<'a, I, E, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E> for Group<($($X,)*)>
         where
             I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            $($X: Parser<'a, I, $O, E, S>),*
+            E: ParserExtra<'a, I>,
+            $($X: Parser<'a, I, $O, E>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, ($($O,)*), E> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*), E::Error> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(

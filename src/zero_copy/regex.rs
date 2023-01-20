@@ -1,26 +1,25 @@
 use super::*;
 
-pub struct Regex<C: Char, I: ?Sized, E = EmptyErr, S = ()> {
+pub struct Regex<C: Char, I: ?Sized, E> {
     regex: C::Regex,
-    phantom: PhantomData<(E, S, I)>,
+    phantom: PhantomData<(E, I)>,
 }
 
-pub fn regex<C: Char, I: ?Sized, E, S>(pattern: &str) -> Regex<C, I, E, S> {
+pub fn regex<C: Char, I: ?Sized, E>(pattern: &str) -> Regex<C, I, E> {
     Regex {
         regex: C::new_regex(pattern),
         phantom: PhantomData,
     }
 }
 
-impl<'a, C, I, E, S> Parser<'a, I, &'a C::Slice, E, S> for Regex<C, I, E, S>
+impl<'a, C, I, E> Parser<'a, I, &'a C::Slice, E> for Regex<C, I, E>
 where
     C: Char,
     C::Slice: 'a,
     I: Input + StrInput<C> + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, &'a C::Slice, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Slice, E::Error> {
         let before = inp.save();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
@@ -33,7 +32,7 @@ where
             .ok_or_else(|| {
                 Located::at(
                     inp.last_pos(),
-                    E::expected_found(None, None, inp.span_since(before)),
+                    E::Error::expected_found(None, None, inp.span_since(before)),
                 )
             })
     }

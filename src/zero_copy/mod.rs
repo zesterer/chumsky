@@ -5,11 +5,11 @@
 
 macro_rules! go_extra {
     ( $O :ty ) => {
-        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, $O, E> {
-            Parser::<I, $O, E, S>::go::<Emit>(self, inp)
+        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O, E::Error> {
+            Parser::<I, $O, E>::go::<Emit>(self, inp)
         }
-        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, $O, E> {
-            Parser::<I, $O, E, S>::go::<Check>(self, inp)
+        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O, E::Error> {
+            Parser::<I, $O, E>::go::<Check>(self, inp)
         }
     };
 }
@@ -19,6 +19,7 @@ pub mod chain;
 pub mod combinator;
 pub mod container;
 pub mod error;
+pub mod extra;
 pub mod input;
 pub mod primitive;
 pub mod recursive;
@@ -40,6 +41,7 @@ pub mod prelude {
         // select,
         span::{Span as _, SimpleSpan},
         text,
+        extra,
         Boxed,
         Parser,
         ParseResult,
@@ -71,6 +73,7 @@ use self::{
     combinator::*,
     container::*,
     error::{Error, EmptyErr},
+    extra::{ParserExtra, ExtraDefault},
     input::{Input, InputRef, Marker, SliceInput, StrInput},
     span::{Span, SimpleSpan},
     text::*,
@@ -222,15 +225,14 @@ mod internal {
         /// Invoke a parser user the current mode. This is normally equivalent to
         /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
         /// `dyn Parser`.
-        fn invoke<'a, I, O, E, S, P>(
+        fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, O, E>
+            inp: &mut InputRef<'a, '_, I, E>,
+        ) -> PResult<Self, O, E::Error>
         where
             I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            P: Parser<'a, I, O, E, S> + ?Sized;
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized;
     }
 
     /// Emit mode - generates parser output
@@ -260,15 +262,14 @@ mod internal {
         }
 
         #[inline(always)]
-        fn invoke<'a, I, O, E, S, P>(
+        fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, O, E>
+            inp: &mut InputRef<'a, '_, I, E>,
+        ) -> PResult<Self, O, E::Error>
         where
             I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            P: Parser<'a, I, O, E, S> + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized,
         {
             parser.go_emit(inp)
         }
@@ -294,15 +295,14 @@ mod internal {
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
         #[inline(always)]
-        fn invoke<'a, I, O, E, S, P>(
+        fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E, S>,
-        ) -> PResult<Self, O, E>
+            inp: &mut InputRef<'a, '_, I, E>,
+        ) -> PResult<Self, O, E::Error>
         where
             I: Input + ?Sized,
-            E: Error<I>,
-            S: 'a,
-            P: Parser<'a, I, O, E, S> + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized,
         {
             parser.go_check(inp)
         }
@@ -330,7 +330,7 @@ pub use internal::{Mode, Emit, Check};
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
+pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = ExtraDefault> {
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -338,12 +338,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
-    fn parse(&self, input: &'a I) -> ParseResult<O, E>
+    fn parse(&self, input: &'a I) -> ParseResult<O, E::Error>
     where
         Self: Sized,
-        S: Default,
+        E::State: Default,
     {
-        self.parse_with_state(input, &mut S::default())
+        self.parse_with_state(input, &mut E::State::default())
     }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
@@ -354,7 +354,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
-    fn parse_with_state(&self, input: &'a I, state: &mut S) -> ParseResult<O, E>
+    fn parse_with_state(&self, input: &'a I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
         Self: Sized,
     {
@@ -378,12 +378,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
-    fn check(&self, input: &'a I) -> ParseResult<(), E>
+    fn check(&self, input: &'a I) -> ParseResult<(), E::Error>
     where
         Self: Sized,
-        S: Default,
+        E::State: Default,
     {
-        self.check_with_state(input, &mut S::default())
+        self.check_with_state(input, &mut E::State::default())
     }
 
     /// Parse a stream of tokens, ignoring any output, and returning any errors encountered along the way.
@@ -393,7 +393,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
-    fn check_with_state(&self, input: &'a I, state: &mut S) -> ParseResult<(), E>
+    fn check_with_state(&self, input: &'a I, state: &mut E::State) -> ParseResult<(), E::Error>
     where
         Self: Sized,
     {
@@ -414,20 +414,20 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Emit, O, E>;
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O, E::Error>;
     #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<Check, O, E>;
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O, E::Error>;
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
     /// The returned value may borrow data from the input slice, making this function very useful
     /// for creating zero-copy AST output values
-    fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, S, F, U>
+    fn map_slice<U, F: Fn(&'a I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, F, U>
     where
         Self: Sized,
         I: SliceInput,
@@ -462,7 +462,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let lowercase = any::<_, Simple<str>, ()>()
+    /// let lowercase = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(char::is_ascii_lowercase)
     ///     .repeated()
     ///     .at_least(1)
@@ -493,13 +493,13 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
-    /// let word = any::<_, Simple<str>, ()>()
+    /// let word = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
-    /// let num = any::<_, Simple<str>, ()>()
+    /// let num = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
@@ -537,7 +537,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, extra::Err<Simple<str>>>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
@@ -571,14 +571,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, extra::Err<Simple<str>>>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
     /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
     /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
-    fn map_with_state<U, F: Fn(O, I::Span, &mut S) -> U>(self, f: F) -> MapWithState<Self, O, F>
+    fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(self, f: F) -> MapWithState<Self, O, F>
     where
         Self: Sized,
     {
@@ -601,7 +601,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let byte = text::int::<_, _, Rich<str>, ()>(10)
+    /// let byte = text::int::<_, _, extra::Err<Rich<str>>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
     ///         .map_err(|e| Rich::custom(span, e)));
@@ -610,7 +610,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert!(byte.parse("256").has_errors()); // Out of range
     /// ```
     #[doc(alias = "filter_map")]
-    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E>>(self, f: F) -> TryMap<Self, O, F>
+    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E::Error>>(self, f: F) -> TryMap<Self, O, F>
     where
         Self: Sized,
     {
@@ -628,7 +628,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// [`Parser::validate`] instead.
     ///
     /// The output type of this parser is `U`, the [`Ok`] return value of the function.
-    fn try_map_with_state<U, F: Fn(O, I::Span, &mut S) -> Result<U, E>>(
+    fn try_map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> Result<U, E::Error>>(
         self,
         f: F,
     ) -> TryMapWithState<Self, O, F>
@@ -656,7 +656,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = any::<_, Simple<str>, ()>()
+    /// let whitespace = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_whitespace())
     ///     .ignored()
     ///     .repeated()
@@ -686,7 +686,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// #[derive(Clone, Debug, PartialEq)]
     /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// let op = just::<_, _, Simple<str>, ()>('+').to(Op::Add)
+    /// let op = just::<_, _, extra::Err<Simple<str>>>('+').to(Op::Add)
     ///     .or(just('-').to(Op::Sub))
     ///     .or(just('*').to(Op::Mul))
     ///     .or(just('/').to(Op::Div));
@@ -694,7 +694,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert_eq!(op.parse("+").into_result(), Ok(Op::Add));
     /// assert_eq!(op.parse("/").into_result(), Ok(Op::Div));
     /// ```
-    fn to<U: Clone>(self, to: U) -> To<Self, O, U, E, S>
+    fn to<U: Clone>(self, to: U) -> To<Self, O, U, E>
     where
         Self: Sized,
     {
@@ -713,7 +713,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>()
+    /// let word = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
@@ -723,7 +723,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert_eq!(two_words.parse("dog cat").into_result(), Ok(("dog".to_string(), "cat".to_string())));
     /// assert!(two_words.parse("hedgehog").has_errors());
     /// ```
-    fn then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> Then<Self, B, O, U, E, S>
+    fn then<U, B: Parser<'a, I, U, E>>(self, other: B) -> Then<Self, B, O, U, E>
     where
         Self: Sized,
     {
@@ -742,7 +742,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let zeroes = any::<_, Simple<str>, ()>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
+    /// let zeroes = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
     /// let digits = any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>();
     /// let integer = zeroes
     ///     .ignore_then(digits)
@@ -753,7 +753,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert_eq!(integer.parse("00064").into_result(), Ok(64));
     /// assert_eq!(integer.parse("32").into_result(), Ok(32));
     /// ```
-    fn ignore_then<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> IgnoreThen<Self, B, O, E, S>
+    fn ignore_then<U, B: Parser<'a, I, U, E>>(self, other: B) -> IgnoreThen<Self, B, O, E>
     where
         Self: Sized,
     {
@@ -772,7 +772,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>()
+    /// let word = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
@@ -796,7 +796,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///     ]),
     /// );
     /// ```
-    fn then_ignore<U, B: Parser<'a, I, U, E, S>>(self, other: B) -> ThenIgnore<Self, B, U, E, S>
+    fn then_ignore<U, B: Parser<'a, I, U, E>>(self, other: B) -> ThenIgnore<Self, B, U, E>
     where
         Self: Sized,
     {
@@ -822,16 +822,16 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, Simple<[u8]>, ()>((b'a'..=b'z').collect::<Vec<u8>>())
+    /// let successive_letters = one_of::<_, _, extra::Err<Simple<[u8]>>>((b'a'..=b'z').collect::<Vec<u8>>())
     ///     .then_with(|letter: u8| just(letter + 1));
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
-    fn then_with<U, B: Parser<'a, I, U, E, S>, F: Fn(O) -> B>(
+    fn then_with<U, B: Parser<'a, I, U, E>, F: Fn(O) -> B>(
         self,
         then: F,
-    ) -> ThenWith<Self, B, O, F, I, E, S>
+    ) -> ThenWith<Self, B, O, F, I, E>
     where
         Self: Sized,
     {
@@ -846,7 +846,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     ///
     /// // Lua-style multiline string literal
-    /// let string = just::<_, _, Simple<str>, ()>('=')
+    /// let string = just::<_, _, extra::Err<Simple<str>>>('=')
     ///     .repeated()
     ///     .map_slice(str::len)
     ///     .padded_by(just('['))
@@ -871,7 +871,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn and_is<U, B>(self, other: B) -> AndIs<Self, B, U>
     where
         Self: Sized,
-        B: Parser<'a, I, U, E, S>,
+        B: Parser<'a, I, U, E>,
     {
         AndIs {
             parser_a: self,
@@ -896,7 +896,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    /// let ident = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -931,8 +931,8 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn delimited_by<U, V, B, C>(self, start: B, end: C) -> DelimitedBy<Self, B, C, U, V>
     where
         Self: Sized,
-        B: Parser<'a, I, U, E, S>,
-        C: Parser<'a, I, V, E, S>,
+        B: Parser<'a, I, U, E>,
+        C: Parser<'a, I, V, E>,
     {
         DelimitedBy {
             parser: self,
@@ -950,7 +950,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let ident = text::ident::<_, _, Simple<str>, ()>()
+    /// let ident = text::ident::<_, _, extra::Err<Simple<str>>>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
@@ -961,7 +961,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, U>
     where
         Self: Sized,
-        B: Parser<'a, I, U, E, S>,
+        B: Parser<'a, I, U, E>,
     {
         PaddedBy {
             parser: self,
@@ -991,7 +991,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let op = just::<_, _, Simple<str>, ()>('+')
+    /// let op = just::<_, _, extra::Err<Simple<str>>>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
@@ -1003,7 +1003,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn or<B>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
-        B: Parser<'a, I, O, E, S>,
+        B: Parser<'a, I, O, E>,
     {
         Or {
             parser_a: self,
@@ -1021,7 +1021,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic())
+    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -1049,7 +1049,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// }
     ///
     /// // Arbitrary text, nested in a tree with { ... } delimiters
-    /// let tree = recursive::<_, _, Simple<str>, (), _, _>(|tree| {
+    /// let tree = recursive::<_, _, extra::Err<Simple<str>>, _, _>(|tree| {
     ///     let text = any()
     ///         .and_is(one_of("{}").not())
     ///         .repeated()
@@ -1105,7 +1105,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let num = any::<_, Simple<str>, ()>()
+    /// let num = any::<_, extra::Err<Simple<str>>>()
     ///     .filter(|c: &char| c.is_ascii_digit())
     ///     .repeated()
     ///     .at_least(1)
@@ -1118,7 +1118,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self, O, I, (), E, S>
+    fn repeated(self) -> Repeated<Self, O, I, E, ()>
     where
         Self: Sized,
     {
@@ -1156,7 +1156,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, _, Simple<str>, ()>()
+    /// let shopping = text::ident::<_, _, extra::Err<Simple<str>>>()
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
@@ -1166,10 +1166,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, (), E, S>
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, E, ()>
     where
         Self: Sized,
-        B: Parser<'a, I, U, E, S>,
+        B: Parser<'a, I, U, E>,
     {
         SeparatedBy {
             parser: self,
@@ -1194,7 +1194,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ) -> SeparatedByExactly<Self, B, U, (), N>
     where
         Self: Sized,
-        B: Parser<'a, I, U, E, S>,
+        B: Parser<'a, I, U, E>,
     {
         SeparatedByExactly {
             parser: self,
@@ -1216,7 +1216,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, Simple<str>, ()>(10)
+    /// let int = text::int::<_, _, extra::Err<Simple<str>>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1231,9 +1231,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert_eq!(signed.parse("-17").into_result(), Ok(-17));
     /// assert_eq!(signed.parse("--+-+-5").into_result(), Ok(5));
     /// ```
-    fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E, S>
+    fn foldr<A, B, F>(self, f: F) -> Foldr<Self, F, A, B, E>
     where
-        Self: Parser<'a, I, (A, B), E, S> + Sized,
+        Self: Parser<'a, I, (A, B), E> + Sized,
         A: IntoIterator,
         A::IntoIter: DoubleEndedIterator,
         F: Fn(A::Item, B) -> B,
@@ -1255,7 +1255,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, Simple<str>, ()>(10)
+    /// let int = text::int::<_, _, extra::Err<Simple<str>>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1267,9 +1267,9 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// assert_eq!(sum.parse("1+12+3+9").into_result(), Ok(25));
     /// assert_eq!(sum.parse("6").into_result(), Ok(6));
     /// ```
-    fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E, S>
+    fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B, E>
     where
-        Self: Parser<'a, I, (A, B), E, S> + Sized,
+        Self: Parser<'a, I, (A, B), E> + Sized,
         B: IntoIterator,
         F: Fn(A, B::Item) -> A,
     {
@@ -1293,7 +1293,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let just_numbers = text::digits::<_, _, Simple<str>, ()>(10)
+    /// let just_numbers = text::digits::<_, _, extra::Err<Simple<str>>>(10)
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
     ///     .separated_by(just(','))
@@ -1316,7 +1316,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ident = text::ident::<_, _, Simple<str>, ()>().padded();
+    /// let ident = text::ident::<_, _, extra::Err<Simple<str>>>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
@@ -1372,10 +1372,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///     List(Vec<Expr<'a>>),
     /// }
     ///
-    /// let recover = just::<_, _, Simple<str>, ()>('[')
+    /// let recover = just::<_, _, extra::Err<Simple<str>>>('[')
     ///         .ignore_then(take_until(just(']')).ignored());
     ///
-    /// let expr = recursive::<_, _, Simple<str>, (), _, _>(|expr| expr
+    /// let expr = recursive::<_, _, extra::Err<Simple<str>>, _, _>(|expr| expr
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('['), just(']'))
@@ -1398,7 +1398,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(res.output(), Some(&Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<F: Parser<'a, I, O, E, S>>(self, fallback: F) -> RecoverWith<Self, F>
+    fn recover_with<F: Parser<'a, I, O, E>>(self, fallback: F) -> RecoverWith<Self, F>
     where
         Self: Sized,
     {
@@ -1418,7 +1418,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn map_err<F>(self, f: F) -> MapErr<Self, F>
     where
         Self: Sized,
-        F: Fn(E) -> E,
+        F: Fn(E::Error) -> E::Error,
     {
         MapErr {
             parser: self,
@@ -1438,7 +1438,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
     where
         Self: Sized,
-        F: Fn(E, I::Span) -> E,
+        F: Fn(E::Error, I::Span) -> E::Error,
     {
         MapErrWithSpan {
             parser: self,
@@ -1457,7 +1457,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
     where
         Self: Sized,
-        F: Fn(E, I::Span, &mut S) -> E,
+        F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
     {
         MapErrWithState {
             parser: self,
@@ -1478,7 +1478,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let large_int = text::int::<_, _, Rich<str>, ()>(10)
+    /// let large_int = text::int::<_, _, extra::Err<Rich<str>>>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .validate(|x: u32, span, emitter| {
@@ -1492,7 +1492,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, I::Span, &mut Emitter<E>) -> U,
+        F: Fn(O, I::Span, &mut Emitter<E::Error>) -> U,
     {
         Validate {
             parser: self,
@@ -1512,7 +1512,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, Simple<str>, ()>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
     ///     .repeated() // This parser produces an output of `Vec<char>`
     ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
     ///
@@ -1537,7 +1537,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let int = just('-').or_not()
-    ///     .chain(any::<_, Simple<str>, ()>().filter(|c: &char| c.is_ascii_digit() && *c != '0')
+    ///     .chain(any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_ascii_digit() && *c != '0')
     ///         .chain(any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>()))
     ///     .or(just('0').map(|c| vec![c]))
     ///     .then_ignore(end())
@@ -1554,12 +1554,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn chain<T, U, P>(
         self,
         other: P,
-    ) -> Map<Then<Self, P, O, U, E, S>, (O, U), fn((O, U)) -> Vec<T>>
+    ) -> Map<Then<Self, P, O, U, E>, (O, U), fn((O, U)) -> Vec<T>>
     where
         Self: Sized,
         O: Chain<T>,
         U: Chain<T>,
-        P: Parser<'a, I, U, E, S>,
+        P: Parser<'a, I, U, E>,
     {
         self.then(other).map(|(a, b)| {
             let mut v = Vec::with_capacity(a.len() + b.len());
@@ -1579,7 +1579,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
     where
         Self: Sized,
-        F: Fn(E) -> Result<O, E>,
+        F: Fn(E::Error) -> Result<O, E::Error>,
     {
         OrElse {
             parser: self,
@@ -1599,7 +1599,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let uint64 = text::int::<_, _, Simple<str>, ()>(10)
+    /// let uint64 = text::int::<_, _, extra::Err<Simple<str>>>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
@@ -1630,7 +1630,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let boolean = just::<_, _, Simple<str>, ()>("true")
+    /// let boolean = just::<_, _, extra::Err<Simple<str>>>("true")
     ///     .or(just("false"))
     ///     .from_str::<bool>()
     ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
@@ -1642,7 +1642,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// ```
     fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where
-        Self: Sized + Parser<'a, I, Result<U, E1>, E, S>,
+        Self: Sized + Parser<'a, I, Result<U, E1>, E>,
         E1: fmt::Debug,
     {
         self.map(|o| o.unwrap())
@@ -1666,7 +1666,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
-    fn boxed(self) -> Boxed<'a, I, O, E, S>
+    fn boxed(self) -> Boxed<'a, I, O, E>
     where
         Self: Sized + 'a,
     {
@@ -1685,11 +1685,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
-pub struct Boxed<'a, I: ?Sized, O, E, S = ()> {
-    inner: Rc<dyn Parser<'a, I, O, E, S> + 'a>,
+pub struct Boxed<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> {
+    inner: Rc<dyn Parser<'a, I, O, E> + 'a>,
 }
 
-impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
+impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -1697,13 +1697,12 @@ impl<'a, I: ?Sized, E, O, S> Clone for Boxed<'a, I, O, E, S> {
     }
 }
 
-impl<'a, I, O, E, S> Parser<'a, I, O, E, S> for Boxed<'a, I, O, E, S>
+impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, I, O, E>
 where
     I: Input + ?Sized,
-    E: Error<I>,
-    S: 'a,
+    E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(&*self.inner, inp)
     }
 
