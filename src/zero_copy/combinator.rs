@@ -140,7 +140,7 @@ where
             } else {
                 let span = inp.span_since(before);
                 Err(Located::at(
-                    inp.last_pos(),
+                    inp.save(),
                     E::expected_found(None, None, span),
                 ))
             }
@@ -256,7 +256,7 @@ where
             let span = inp.span_since(before);
             match (self.mapper)(out, span) {
                 Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.last_pos(), e)),
+                Err(e) => Err(Located::at(inp.save(), e)),
             }
         })
     }
@@ -287,7 +287,7 @@ where
             let state = inp.state();
             match (self.mapper)(out, span, state) {
                 Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.last_pos(), e)),
+                Err(e) => Err(Located::at(inp.save(), e)),
             }
         })
     }

@@ -664,7 +664,7 @@ macro_rules! impl_choice_for_tuple {
                     };
                 )*
 
-                Err(err.unwrap_or_else(|| Located::at(inp.last_pos(), E::expected_found(None, None, inp.span_since(before)))))
+                Err(err.unwrap_or_else(|| Located::at(inp.save(), E::expected_found(None, None, inp.span_since(before)))))
             }
 
             go_extra!(O);
