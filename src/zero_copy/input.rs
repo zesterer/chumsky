@@ -198,10 +198,10 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn save(&mut self) -> Marker<I> {
+    pub fn save(&mut self) -> Marker<I> {
         self.marker
     }
-    pub(crate) fn rewind(&mut self, marker: Marker<I>) {
+    pub fn rewind(&mut self, marker: Marker<I>) {
         self.errors.truncate(marker.err_count);
         self.marker = marker;
     }
@@ -222,7 +222,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         }
     }
 
-    pub(crate) fn next(&mut self) -> (usize, Option<I::Token>) {
+    pub fn next(&mut self) -> (usize, Option<I::Token>) {
         let (offset, token) = self.input.next(self.marker.offset);
         self.marker.offset = offset;
         self.marker.pos += 1;
@@ -254,7 +254,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.input.slice_from(self.marker.offset..)
     }
 
-    pub(crate) fn span_since(&self, before: Marker<I>) -> I::Span {
+    pub fn span_since(&self, before: Marker<I>) -> I::Span {
         self.input.span(before.offset..self.marker.offset)
     }
 

@@ -172,7 +172,7 @@ pub struct Located<E> {
 }
 
 impl<E> Located<E> {
-    fn at(pos: usize, err: E) -> Self {
+    pub fn at(pos: usize, err: E) -> Self {
         Self { pos, err }
     }
 
@@ -188,7 +188,12 @@ impl<E> Located<E> {
 mod internal {
     use super::*;
 
-    pub trait Mode {
+    pub trait ModeSealed {}
+
+    impl ModeSealed for Emit {}
+    impl ModeSealed for Check {}
+
+    pub trait Mode: ModeSealed {
         type Output<T>;
         fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
         fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
@@ -281,6 +286,8 @@ mod internal {
         }
     }
 }
+
+pub use internal::{Mode, Emit, Check};
 
 /// A trait implemented by parsers.
 ///
@@ -384,9 +391,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: Error<I> = EmptyErr, S: 'a = ()> {
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
-    /// covers your use-case.
-    #[doc(hidden)]
+    /// own.
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E, S>) -> PResult<M, O, E>
     where
         Self: Sized;
