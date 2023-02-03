@@ -738,6 +738,16 @@ where
             phantom: PhantomData,
         }
     }
+
+    /// Output the number of items parsed.
+    ///
+    /// This is a shorthand for [`.collect::<usize>()`](Self::collect).
+    pub fn count(self) -> Repeated<A, OA, I, usize, E, S>
+    where
+        A: Parser<'a, I, OA, E, S>,
+    {
+        self.collect()
+    }
 }
 
 impl<'a, I, E, S, A, OA, C> Parser<'a, I, C, E, S> for Repeated<A, OA, I, C, E, S>
@@ -964,6 +974,17 @@ where
             allow_trailing: self.allow_trailing,
             phantom: PhantomData,
         }
+    }
+
+    /// Output the number of items parsed.
+    ///
+    /// This is a shorthand for [`.collect::<usize>()`](Self::collect).
+    pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, usize, E, S>
+    where
+        A: Parser<'a, I, OA, E, S>,
+        B: Parser<'a, I, OB, E, S>,
+    {
+        self.collect()
     }
 }
 

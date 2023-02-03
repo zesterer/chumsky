@@ -14,6 +14,12 @@ impl<T> Container<T> for () {
     fn push(&mut self, _: T) {}
 }
 
+impl<T> Container<T> for usize {
+    fn push(&mut self, _: T) {
+        *self += 1;
+    }
+}
+
 impl<T> Container<T> for Vec<T> {
     fn push(&mut self, item: T) {
         (*self).push(item);
