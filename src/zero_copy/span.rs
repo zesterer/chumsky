@@ -84,6 +84,15 @@ where
     }
 }
 
+impl<T> IntoIterator for SimpleSpan<T> where Range<T>: Iterator<Item = T> {
+    type IntoIter = Range<T>;
+    type Item = T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into()
+    }
+}
+
 impl<T> Span for SimpleSpan<T> {
     type Context = ();
     type Offset = T;
