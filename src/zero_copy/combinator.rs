@@ -741,7 +741,7 @@ where
 
     /// Output the number of items parsed.
     ///
-    /// This is a shorthand for [`.collect::<usize>()`](Self::collect).
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
     pub fn count(self) -> Repeated<A, OA, I, usize, E, S>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -764,9 +764,9 @@ where
         loop {
             let before = inp.save();
             match self.parser.go::<M>(inp) {
-                Ok(out) => {
-                    output = M::combine(output, out, |mut output: C, out| {
-                        output.push(out);
+                Ok(item) => {
+                    output = M::combine(output, item, |mut output: C, item| {
+                        output.push(item);
                         output
                     });
                     count += 1;
@@ -978,7 +978,15 @@ where
 
     /// Output the number of items parsed.
     ///
-    /// This is a shorthand for [`.collect::<usize>()`](Self::collect).
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// 
+    /// let letters = 
+    /// ```
     pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, usize, E, S>
     where
         A: Parser<'a, I, OA, E, S>,
@@ -1043,8 +1051,8 @@ where
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(item) => {
-                output = M::map(output, |mut output: C| {
-                    M::map(item, |item| output.push(item));
+                output = M::combine(output, item, |mut output: C, item| {
+                    output.push(item);
                     output
                 });
                 count += 1;
@@ -1079,8 +1087,8 @@ where
             // Step 4
             match self.parser.go::<M>(inp) {
                 Ok(item) => {
-                    output = M::map(output, |mut output: C| {
-                        M::map(item, |item| output.push(item));
+                    output = M::combine(output, item, |mut output: C, item| {
+                        output.push(item);
                         output
                     });
                     count += 1;
