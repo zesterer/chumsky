@@ -738,6 +738,29 @@ where
             phantom: PhantomData,
         }
     }
+
+    /// Output the number of items parsed.
+    ///
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    ///
+    /// // Counts how many chess squares are in the input.
+    /// let squares = one_of::<_, _, Simple<str>, ()>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
+    ///
+    /// assert_eq!(squares.parse("a1 b2 c3").into_result(), Ok(3));
+    /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
+    /// assert_eq!(squares.parse("").into_result(), Ok(0));
+    /// ```
+    pub fn count(self) -> Repeated<A, OA, I, usize, E, S>
+    where
+        A: Parser<'a, I, OA, E, S>,
+    {
+        self.collect()
+    }
 }
 
 impl<'a, I, E, S, A, OA, C> Parser<'a, I, C, E, S> for Repeated<A, OA, I, C, E, S>
@@ -754,9 +777,9 @@ where
         loop {
             let before = inp.save();
             match self.parser.go::<M>(inp) {
-                Ok(out) => {
-                    output = M::combine(output, out, |mut output: C, out| {
-                        output.push(out);
+                Ok(item) => {
+                    output = M::combine(output, item, |mut output: C, item| {
+                        output.push(item);
                         output
                     });
                     count += 1;
@@ -965,6 +988,30 @@ where
             phantom: PhantomData,
         }
     }
+
+    /// Output the number of items parsed.
+    ///
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    ///
+    /// // Counts how many chess squares are in the input.
+    /// let squares = one_of::<_, _, Simple<str>, ()>('a'..='z').then(one_of('1'..='8')).separated_by(just(',')).allow_trailing().count();
+    ///
+    /// assert_eq!(squares.parse("a1,b2,c3,").into_result(), Ok(3));
+    /// assert_eq!(squares.parse("e5,e7,c6,c7,f6,d5,e6,d7,e4,c5,d6,c4,b6,f5").into_result(), Ok(14));
+    /// assert_eq!(squares.parse("").into_result(), Ok(0));
+    /// ```
+    pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, usize, E, S>
+    where
+        A: Parser<'a, I, OA, E, S>,
+        B: Parser<'a, I, OB, E, S>,
+    {
+        self.collect()
+    }
 }
 
 impl<'a, I, E, S, A, B, OA, OB, C> Parser<'a, I, C, E, S> for SeparatedBy<A, B, OA, OB, I, C, E, S>
@@ -1022,8 +1069,8 @@ where
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(item) => {
-                output = M::map(output, |mut output: C| {
-                    M::map(item, |item| output.push(item));
+                output = M::combine(output, item, |mut output: C, item| {
+                    output.push(item);
                     output
                 });
                 count += 1;
@@ -1058,8 +1105,8 @@ where
             // Step 4
             match self.parser.go::<M>(inp) {
                 Ok(item) => {
-                    output = M::map(output, |mut output: C| {
-                        M::map(item, |item| output.push(item));
+                    output = M::combine(output, item, |mut output: C, item| {
+                        output.push(item);
                         output
                     });
                     count += 1;

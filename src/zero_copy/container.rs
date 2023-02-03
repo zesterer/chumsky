@@ -4,14 +4,20 @@ use super::*;
 use alloc::collections::LinkedList;
 use hashbrown::HashSet;
 
-/// A utility trait for types that can be constructed from a series of output values
+/// A utility trait for types that can be constructed from a series of output values.
 pub trait Container<T>: Default {
-    /// Add a value to the end of this container
+    /// Add a value to the end of this container.
     fn push(&mut self, item: T);
 }
 
 impl<T> Container<T> for () {
     fn push(&mut self, _: T) {}
+}
+
+impl<T> Container<T> for usize {
+    fn push(&mut self, _: T) {
+        *self += 1;
+    }
 }
 
 impl<T> Container<T> for Vec<T> {
@@ -70,29 +76,29 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
     }
 }
 
-/// A utility trait for types that hold a specific constant number of input values
+/// A utility trait for types that hold a specific constant number of output values.
 pub trait ContainerExactly<T, const N: usize> {
-    /// An uninitialized value of this container
+    /// An uninitialized value of this container.
     type Uninit;
 
-    /// Get an uninitialized form of this container
+    /// Get an uninitialized form of this container.
     fn uninit() -> Self::Uninit;
 
-    /// Write a value to a position in an uninitialized container
+    /// Write a value to a position in an uninitialized container.
     fn write(uninit: &mut Self::Uninit, i: usize, item: T);
 
-    /// Drop all values before a provided index in this container
+    /// Drop all values before a provided index in this container.
     ///
     /// # Safety
     ///
-    /// All values must be initialized, up to the provided index
+    /// All values up to the provided index must be initialized.
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize);
 
-    /// Convert this container into its initialized form
+    /// Convert this container into its initialized form.
     ///
     /// # Safety
     ///
-    /// All values in the container must be initialized
+    /// All values in the container must be initialized.
     unsafe fn take(uninit: Self::Uninit) -> Self;
 }
 
@@ -124,7 +130,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
 pub trait Seq<T> {
-    /// The item yielded by the iterator
+    /// The item yielded by the iterator.
     type Item<'a>: Borrow<T>
     where
         Self: 'a;
@@ -137,7 +143,7 @@ pub trait Seq<T> {
     /// Iterate over the elements of the container.
     fn seq_iter(&self) -> Self::Iter<'_>;
 
-    /// Check whether an item is contained within this sequence
+    /// Check whether an item is contained within this sequence.
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq;
