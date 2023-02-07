@@ -6,62 +6,35 @@ mod internal {
     use super::*;
 
     pub trait ExtraSealed {}
-
-    impl ExtraSealed for ExtraDefault {}
-    impl<E> ExtraSealed for Err<E> {}
-    impl<S> ExtraSealed for State<S> {}
     impl<E, S> ExtraSealed for Full<E, S> {}
 }
 
 use internal::ExtraSealed;
 
-/// TODO
+type DefaultErr = EmptyErr;
+type DefaultState = ();
+
+/// Sealed trait for parser extra information - error type, state type, etc.
 pub trait ParserExtra<'a, I>: 'a + ExtraSealed
 where
     I: ?Sized + Input,
 {
-    /// TODO
+    /// Error type to use for the parser
     type Error: Error<I> + 'a;
-    /// TODO
+    /// State type to use for the parser
     type State: 'a;
 }
 
-/// TODO
-pub struct ExtraDefault;
+/// Use all default extra types
+pub type Default = Full<DefaultErr, DefaultState>;
 
-impl<'a, I> ParserExtra<'a, I> for ExtraDefault
-where
-    I: ?Sized + Input,
-{
-    type Error = EmptyErr;
-    type State = ();
-}
+/// Use specified error type, but default other types
+pub type Err<E> = Full<E, DefaultState>;
 
-/// TODO
-pub struct Err<E>(PhantomData<E>);
+/// Use specified state type, but default other types
+pub type State<S> = Full<DefaultErr, S>;
 
-impl<'a, I, E> ParserExtra<'a, I> for Err<E>
-where
-    I: ?Sized + Input,
-    E: Error<I> + 'a,
-{
-    type Error = E;
-    type State = ();
-}
-
-/// TODO
-pub struct State<S>(PhantomData<S>);
-
-impl<'a, I, S> ParserExtra<'a, I> for State<S>
-where
-    I: ?Sized + Input,
-    S: 'a,
-{
-    type Error = EmptyErr;
-    type State = S;
-}
-
-/// TODO
+/// Specify all extra types
 pub struct Full<E, S>(PhantomData<(E, S)>);
 
 impl<'a, I, E, S> ParserExtra<'a, I> for Full<E, S>

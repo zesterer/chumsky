@@ -73,7 +73,7 @@ use self::{
     combinator::*,
     container::*,
     error::{Error, EmptyErr},
-    extra::{ParserExtra, ExtraDefault},
+    extra::ParserExtra,
     input::{Input, InputRef, Marker, SliceInput, StrInput},
     span::{Span, SimpleSpan},
     text::*,
@@ -330,7 +330,7 @@ pub use internal::{Mode, Emit, Check};
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = ExtraDefault> {
+pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default> {
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
