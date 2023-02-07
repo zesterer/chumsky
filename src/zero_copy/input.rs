@@ -177,15 +177,15 @@ impl<I: Input + ?Sized> Clone for Marker<I> {
 }
 
 /// Internal type representing an input as well as all the necessary context for parsing.
-pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> {
+pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     input: &'a I,
     marker: Marker<I>,
-    state: &'parse mut S,
-    errors: Vec<E>,
+    state: &'parse mut E::State,
+    errors: Vec<E::Error>,
 }
 
-impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S> {
-    pub(crate) fn new(input: &'a I, state: &'parse mut S) -> Self {
+impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
+    pub(crate) fn new(input: &'a I, state: &'parse mut E::State) -> Self {
         Self {
             input,
             marker: Marker {
@@ -209,7 +209,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.marker = marker;
     }
 
-    pub(crate) fn state(&mut self) -> &mut S {
+    pub(crate) fn state(&mut self) -> &mut E::State {
         self.state
     }
 
@@ -271,12 +271,12 @@ impl<'a, 'parse, I: Input + ?Sized, E: Error<I>, S> InputRef<'a, 'parse, I, E, S
         self.marker.offset += skip;
     }
 
-    pub(crate) fn emit(&mut self, error: E) {
+    pub(crate) fn emit(&mut self, error: E::Error) {
         self.errors.push(error);
         self.marker.err_count += 1;
     }
 
-    pub(crate) fn into_errs(self) -> Vec<E> {
+    pub(crate) fn into_errs(self) -> Vec<E::Error> {
         self.errors
     }
 }

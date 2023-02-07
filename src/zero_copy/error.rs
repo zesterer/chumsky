@@ -48,7 +48,7 @@ use alloc::string::ToString;
 ///     }
 /// }
 ///
-/// let numeral = any::<_, _, ()>().try_map(|c: char, span| match c.to_digit(10) {
+/// let numeral = any::<_, extra::Err<MyError>>().try_map(|c: char, span| match c.to_digit(10) {
 ///     Some(x) => Ok(x),
 ///     None => Err(MyError::NotADigit(span, c)),
 /// });
