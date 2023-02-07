@@ -15,6 +15,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.9.0] - 2023-02-07
+
+### Added
+
+- A `spill-stack` feature that uses `stacker` to avoid stack overflow errors for deeply recursive parsers
+- The ability to access the token span when using `select!` like `select! { |span| Token::Num(x) => (x, span) }`
+- Added a `skip_parser` recovery strategy that allows you to implement your own recovery strategies in terms of other
+  parsers. For example, `.recover_with(skip_parser(take_until(just(';'))))` skips tokens until after the next semicolon
+- A `not` combinator that consumes a single token if it is *not* the start of a given pattern. For example,
+  `just("\\n").or(just('"')).not()` matches any `char` that is not either the final quote of a string, and is not the
+  start of a newline escape sequence
+- A `semantic_indentation` parser for parsing indentation-sensitive languages. Note that this is likely to be
+  deprecated/removed in the future in favour of a more powerful solution
+- `#[must_use]` attribute for parsers to ensure that they're not accidentally created without being used
+- `Option<Vec<T>>` and `Vec<Option<T>>` now implement `Chain<T>` and `Option<String>` implements `Chain<char>`
+- `choice` now supports both arrays and vectors of parsers in addition to tuples
+- The `Simple` error type now implements `Eq`
+
+### Changed
+
+- `text::whitespace` returns a `Repeated` instead of an `impl Parser`, allowing you to call methods like `at_least` and
+  `exactly` on it.
+- Improved `no_std` support
+- Improved examples and documentation
+- Use zero-width spans for EoI by default
+- Don't allow defining a recursive parser more than once
+- Various minor bug fixes
+- Improved `Display` implementations for various built-in error types and `SimpleReason`
+- Use an `OrderedContainer` trait to avoid unexpected behaviour for unordered containers in combination with `just`
+
+### Fixed
+
+- Made several parsers (`todo`, `unwrapped`, etc.) more useful by reporting the parser's location on panic
+- Boxing a parser that is already boxed just gives you the original parser to avoid double indirection
+- Improved compilation speeds
+
 # [0.8.0] - 2022-02-07
 
 ### Added
