@@ -181,11 +181,15 @@ pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     input: &'a I,
     marker: Marker<I>,
     state: &'parse mut E::State,
+    ctx: E::Context,
     errors: Vec<E::Error>,
 }
 
 impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'a I, state: &'parse mut E::State) -> Self {
+    pub(crate) fn new(input: &'a I, state: &'parse mut E::State) -> Self
+    where
+        E::Context: Default,
+    {
         Self {
             input,
             marker: Marker {
@@ -194,8 +198,33 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
                 err_count: 0,
             },
             state,
+            ctx: E::Context::default(),
             errors: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_ctx<'sub_parse, CtxN, O>(
+        &'sub_parse mut self,
+        new_ctx: CtxN,
+        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, E::State, CtxN>>) -> O,
+    ) -> O
+    where
+        'parse: 'sub_parse,
+        CtxN: 'a,
+    {
+        use core::mem;
+
+        let mut new_ctx = InputRef {
+            input: self.input,
+            marker: self.marker,
+            state: self.state,
+            ctx: new_ctx,
+            errors: mem::take(&mut self.errors),
+        };
+        let res = f(&mut new_ctx);
+        self.marker = new_ctx.marker;
+        self.errors = mem::take(&mut new_ctx.errors);
+        res
     }
 
     /// Save off a [`Marker`] to the current position in the input
@@ -211,6 +240,10 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     pub(crate) fn state(&mut self) -> &mut E::State {
         self.state
+    }
+
+    pub(crate) fn ctx(&self) -> &E::Context {
+        &self.ctx
     }
 
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {

@@ -68,6 +68,8 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.save();
         match inp.next() {
@@ -104,6 +106,8 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         Ok(M::bind(|| ()))
     }
@@ -115,6 +119,25 @@ where
 //     type Iter<'a> = C::Iter<'a>;
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
 // }
+
+/// TODO
+pub struct JustCfg<T> {
+    seq: Option<T>,
+}
+
+impl<T> JustCfg<T> {
+    /// TODO
+    pub fn set_seq(mut self, new_seq: T) -> Self {
+        self.seq = Some(new_seq);
+        self
+    }
+}
+
+impl<T> Default for JustCfg<T> {
+    fn default() -> Self {
+        JustCfg { seq: None }
+    }
+}
 
 /// See [`just`].
 pub struct Just<T, I: ?Sized, E = EmptyErr> {
@@ -169,8 +192,17 @@ where
     I::Token: Clone + PartialEq,
     T: OrderedSeq<I::Token> + Clone,
 {
+    type Config = JustCfg<T>;
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T, E::Error> {
-        let mut items = self.seq.seq_iter();
+        Self::go_cfg::<M>(self, inp, JustCfg::default())
+    }
+
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, T, E::Error> {
+        let seq = cfg.seq.as_ref()
+            .unwrap_or(&self.seq);
+
+        let mut items = seq.seq_iter();
         loop {
             match items.next() {
                 Some(next) => {
@@ -186,7 +218,7 @@ where
                         }
                     }
                 }
-                None => break Ok(M::bind(|| self.seq.clone())),
+                None => break Ok(M::bind(|| seq.clone())),
             }
         }
     }
@@ -247,6 +279,8 @@ where
     I::Token: Clone + PartialEq,
     T: Seq<I::Token>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
@@ -314,6 +348,8 @@ where
     I::Token: PartialEq,
     T: Seq<I::Token>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
@@ -347,6 +383,8 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.save();
         match inp.next() {
@@ -473,6 +511,8 @@ where
     P: Parser<'a, I, OP, E>,
     C: Container<I::Token>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP), E::Error> {
         let mut output = M::bind(|| C::default());
 
@@ -544,6 +584,8 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    type Config = ();
+
     fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         todo!("Attempted to use an unimplemented parser")
     }
@@ -633,6 +675,8 @@ macro_rules! impl_choice_for_tuple {
             E: ParserExtra<'a, I>,
             $($X: Parser<'a, I, O, E>),*
         {
+            type Config = ();
+
             fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
                 let before = inp.save();
 
@@ -720,6 +764,8 @@ macro_rules! impl_group_for_tuple {
             E: ParserExtra<'a, I>,
             $($X: Parser<'a, I, $O, E>),*
         {
+            type Config = ();
+
             fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*), E::Error> {
                 let Group { parsers: ($($X,)*) } = self;
 
