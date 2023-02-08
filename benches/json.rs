@@ -71,9 +71,7 @@ mod chumsky_zero_copy {
 
     pub fn json<'a>() -> impl Parser<'a, [u8], JsonZero<'a>> {
         recursive(|value| {
-            let digits = one_of(b'0'..=b'9')
-                .repeated()
-                .slice();
+            let digits = one_of(b'0'..=b'9').repeated().slice();
 
             let int = one_of(b'1'..=b'9')
                 .repeated()

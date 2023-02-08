@@ -181,7 +181,11 @@ where
                         (at, tok) => {
                             break Err(Located::at(
                                 at,
-                                E::Error::expected_found(Some(Some(I::Token::clone(next))), tok, inp.span_since(before)),
+                                E::Error::expected_found(
+                                    Some(Some(I::Token::clone(next))),
+                                    tok,
+                                    inp.span_since(before),
+                                ),
                             ))
                         }
                     }
@@ -253,7 +257,11 @@ where
             (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
                 at,
-                E::Error::expected_found(self.seq.seq_iter().map(|not| Some(not.borrow().clone())), found, inp.span_since(before)),
+                E::Error::expected_found(
+                    self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
+                    found,
+                    inp.span_since(before),
+                ),
             )),
         }
     }

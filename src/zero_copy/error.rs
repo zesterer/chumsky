@@ -154,15 +154,24 @@ where
     fn flat_merge(self, other: RichReason<I>) -> RichReason<I> {
         match (self, other) {
             (
-                RichReason::ExpectedFound { expected: mut this_expected, found },
-                RichReason::ExpectedFound { expected: other_expected, .. },
+                RichReason::ExpectedFound {
+                    expected: mut this_expected,
+                    found,
+                },
+                RichReason::ExpectedFound {
+                    expected: other_expected,
+                    ..
+                },
             ) => {
                 for expected in other_expected {
                     if !this_expected.contains(&expected) {
                         this_expected.push(expected);
                     }
                 }
-                RichReason::ExpectedFound { expected: this_expected, found }
+                RichReason::ExpectedFound {
+                    expected: this_expected,
+                    found,
+                }
             }
             (RichReason::Many(mut m1), RichReason::Many(m2)) => {
                 m1.extend(m2);
@@ -176,9 +185,7 @@ where
                 m.push(this);
                 RichReason::Many(m)
             }
-            (this, other) => {
-                RichReason::Many(vec![this, other])
-            }
+            (this, other) => RichReason::Many(vec![this, other]),
         }
     }
 }
@@ -191,23 +198,17 @@ where
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
-                RichReason::ExpectedFound { expected: e1, found: f1 },
-                RichReason::ExpectedFound { expected: e2, found: f2 },
-            ) => {
-                f1 == f2 && e1 == e2
-            }
-            (
-                RichReason::Custom(msg1),
-                RichReason::Custom(msg2),
-            ) => {
-                msg1 == msg2
-            }
-            (
-                RichReason::Many(m1),
-                RichReason::Many(m2),
-            ) => {
-                m1 == m2
-            }
+                RichReason::ExpectedFound {
+                    expected: e1,
+                    found: f1,
+                },
+                RichReason::ExpectedFound {
+                    expected: e2,
+                    found: f2,
+                },
+            ) => f1 == f2 && e1 == e2,
+            (RichReason::Custom(msg1), RichReason::Custom(msg2)) => msg1 == msg2,
+            (RichReason::Many(m1), RichReason::Many(m2)) => m1 == m2,
             _ => false,
         }
     }
@@ -230,10 +231,7 @@ impl<I: Input + ?Sized> Rich<I> {
         span: fn(&I::Span, &mut fmt::Formatter<'_>) -> fmt::Result,
     ) -> fmt::Result {
         match &self.reason {
-            RichReason::ExpectedFound {
-                expected,
-                found,
-            } => {
+            RichReason::ExpectedFound { expected, found } => {
                 write!(f, "found ")?;
                 write_token(f, token, &found)?;
                 write!(f, " at ")?;
@@ -350,7 +348,7 @@ where
 fn write_token<T>(
     f: &mut fmt::Formatter,
     writer: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
-    tok: &Option<T>
+    tok: &Option<T>,
 ) -> fmt::Result {
     match tok {
         Some(tok) => writer(tok, f),

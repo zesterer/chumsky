@@ -1,11 +1,5 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
-#![cfg_attr(
-    feature = "nightly",
-    feature(
-        rustc_attrs,
-        once_cell,
-    )
-)]
+#![cfg_attr(feature = "nightly", feature(rustc_attrs, once_cell,))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![allow(deprecated)] // TODO: Don't allow this

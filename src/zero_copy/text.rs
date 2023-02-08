@@ -171,7 +171,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, ()>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, Empty>
 where
     I::Token: Char,
 {
@@ -201,7 +201,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, ()>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, Empty>
 where
     I::Token: Char,
 {
@@ -451,7 +451,13 @@ where
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```
-pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: ParserExtra<'a, I> + 'a>(
+pub fn keyword<
+    'a,
+    I: StrInput<C> + ?Sized + 'a,
+    C: Char + 'a,
+    Str: AsRef<C::Slice> + 'a + Clone,
+    E: ParserExtra<'a, I> + 'a,
+>(
     keyword: Str,
 ) -> impl Parser<'a, I, (), E> + Clone + 'a
 where

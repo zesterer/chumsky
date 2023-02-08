@@ -327,7 +327,10 @@ pub struct Ignored<A, OA> {
 impl<A: Copy, OA> Copy for Ignored<A, OA> {}
 impl<A: Clone, OA> Clone for Ignored<A, OA> {
     fn clone(&self) -> Self {
-        Ignored { parser: self.parser.clone(), phantom: PhantomData }
+        Ignored {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -617,7 +620,7 @@ where
 
 /// See [`Parser::repeated`].
 // FIXME: why C has default value?
-pub struct Repeated<A, OA, I: ?Sized, E, C = ()> {
+pub struct Repeated<A, OA, I: ?Sized, E, C = Empty> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
@@ -733,9 +736,9 @@ where
     /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
     /// assert_eq!(squares.parse("").into_result(), Ok(0));
     /// ```
-    pub fn count(self) -> Repeated<A, OA, I, usize, E, S>
+    pub fn count(self) -> Repeated<A, OA, I, E, usize>
     where
-        A: Parser<'a, I, OA, E, S>,
+        A: Parser<'a, I, OA, E>,
     {
         self.collect()
     }
@@ -783,7 +786,7 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E, C = ()> {
+pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E, C = Empty> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
@@ -794,9 +797,7 @@ pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E, C = ()> {
 }
 
 impl<A: Copy, B: Copy, OA, OB, I: ?Sized, E, C> Copy for SeparatedBy<A, B, OA, OB, I, E, C> {}
-impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E, C> Clone
-    for SeparatedBy<A, B, OA, OB, I, E, C>
-{
+impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E, C> Clone for SeparatedBy<A, B, OA, OB, I, E, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -981,10 +982,10 @@ where
     /// assert_eq!(squares.parse("e5,e7,c6,c7,f6,d5,e6,d7,e4,c5,d6,c4,b6,f5").into_result(), Ok(14));
     /// assert_eq!(squares.parse("").into_result(), Ok(0));
     /// ```
-    pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, usize, E, S>
+    pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, E, usize>
     where
-        A: Parser<'a, I, OA, E, S>,
-        B: Parser<'a, I, OB, E, S>,
+        A: Parser<'a, I, OA, E>,
+        B: Parser<'a, I, OB, E>,
     {
         self.collect()
     }
@@ -1723,7 +1724,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect();
@@ -1733,7 +1734,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_leading() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>();
@@ -1744,7 +1745,7 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_without_trailing() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .at_least(3)
             .collect::<Vec<_>>()
@@ -1756,31 +1757,37 @@ mod tests {
 
     #[test]
     fn separated_by_at_least_with_leading() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .allow_leading()
             .at_least(3)
             .collect();
 
-        assert_eq!(parser.parse(",-,-,-").into_result(), Ok(vec!['-', '-', '-']));
+        assert_eq!(
+            parser.parse(",-,-,-").into_result(),
+            Ok(vec!['-', '-', '-'])
+        );
         assert!(parser.parse(",-,-").has_errors());
     }
 
     #[test]
     fn separated_by_at_least_with_trailing() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .allow_trailing()
             .at_least(3)
             .collect();
 
-        assert_eq!(parser.parse("-,-,-,").into_result(), Ok(vec!['-', '-', '-']));
+        assert_eq!(
+            parser.parse("-,-,-,").into_result(),
+            Ok(vec!['-', '-', '-'])
+        );
         assert!(parser.parse("-,-,").has_errors());
     }
 
     #[test]
     fn separated_by_leaves_last_separator() {
-        let parser = just::<_, _, EmptyErr, ()>('-')
+        let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .collect::<Vec<_>>()
             .chain(just(','));

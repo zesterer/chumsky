@@ -4,10 +4,18 @@ use super::*;
 use alloc::collections::LinkedList;
 use hashbrown::HashSet;
 
-/// A utility trait for types that can be constructed from a series of output values.
+/// A utility trait for types that can be constructed from a series of items.
 pub trait Container<T>: Default {
     /// Add a value to the end of this container.
     fn push(&mut self, item: T);
+}
+
+/// A collection that does not collect any items.
+#[derive(Default)]
+pub struct Empty;
+
+impl<T> Container<T> for Empty {
+    fn push(&mut self, _: T) {}
 }
 
 impl<T> Container<T> for () {
@@ -469,18 +477,9 @@ impl<'b, T: Clone> OrderedSeq<T> for &'b [T] {}
 impl<T: Clone, const N: usize> OrderedSeq<T> for [T; N] {}
 impl<'b, T: Clone, const N: usize> OrderedSeq<T> for &'b [T; N] {}
 impl<'b, T: Clone> OrderedSeq<T> for Vec<T> {}
-impl<T> OrderedSeq<T> for Range<T>
-where
-    Self: Seq<T>,
-{}
-impl<T> OrderedSeq<T> for core::ops::RangeInclusive<T>
-where
-    Self: Seq<T>,
-{}
-impl<T> OrderedSeq<T> for RangeFrom<T>
-where
-    Self: Seq<T>,
-{}
+impl<T> OrderedSeq<T> for Range<T> where Self: Seq<T> {}
+impl<T> OrderedSeq<T> for core::ops::RangeInclusive<T> where Self: Seq<T> {}
+impl<T> OrderedSeq<T> for RangeFrom<T> where Self: Seq<T> {}
 
 impl OrderedSeq<char> for str {}
 impl<'b> OrderedSeq<char> for &'b str {}

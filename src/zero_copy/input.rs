@@ -180,12 +180,13 @@ impl<I: Input + ?Sized> Clone for Marker<I> {
 pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     input: &'a I,
     marker: Marker<I>,
-    state: &'parse mut E::State,
+    // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
+    state: Result<&'parse mut E::State, E::State>,
     errors: Vec<E::Error>,
 }
 
 impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'a I, state: &'parse mut E::State) -> Self {
+    pub(crate) fn new(input: &'a I, state: Result<&'parse mut E::State, E::State>) -> Self {
         Self {
             input,
             marker: Marker {
@@ -210,14 +211,17 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     }
 
     pub(crate) fn state(&mut self) -> &mut E::State {
-        self.state
+        match &mut self.state {
+            Ok(state) => *state,
+            Err(state) => state,
+        }
     }
 
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
         loop {
             let (offset, token) = self.input.next(self.marker.offset);
             if token.filter(&mut f).is_none() {
-                break
+                break;
             } else {
                 self.marker.offset = offset;
                 self.marker.pos += 1;
