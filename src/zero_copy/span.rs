@@ -84,7 +84,10 @@ where
     }
 }
 
-impl<T> IntoIterator for SimpleSpan<T> where Range<T>: Iterator<Item = T> {
+impl<T> IntoIterator for SimpleSpan<T>
+where
+    Range<T>: Iterator<Item = T>,
+{
     type IntoIter = Range<T>;
     type Item = T;
 

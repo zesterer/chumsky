@@ -171,7 +171,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, ()>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
 where
     I::Token: Char,
 {
@@ -201,7 +201,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, ()>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
 where
     I::Token: Char,
 {
@@ -266,7 +266,7 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
 /// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
@@ -304,7 +304,7 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
 /// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
@@ -386,10 +386,7 @@ where
     let lines = line_ws
         .repeated()
         .slice()
-        .then(
-            line.collect::<Vec<_>>()
-                .map_with_span(|line, span| (line, span)),
-        )
+        .then(line.map_with_span(|line, span| (line, span)))
         .then_ignore(line_ws.repeated())
         .separated_by(newline())
         .collect();
@@ -451,7 +448,13 @@ where
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```
-pub fn keyword<'a, I: StrInput<C> + ?Sized + 'a, C: Char + 'a, Str: AsRef<C::Slice> + 'a + Clone, E: ParserExtra<'a, I> + 'a>(
+pub fn keyword<
+    'a,
+    I: StrInput<C> + ?Sized + 'a,
+    C: Char + 'a,
+    Str: AsRef<C::Slice> + 'a + Clone,
+    E: ParserExtra<'a, I> + 'a,
+>(
     keyword: Str,
 ) -> impl Parser<'a, I, (), E> + Clone + 'a
 where

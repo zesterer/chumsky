@@ -15,7 +15,6 @@ macro_rules! go_extra {
 }
 
 mod blanket;
-pub mod chain;
 pub mod combinator;
 pub mod container;
 pub mod error;
@@ -34,17 +33,18 @@ pub mod text;
 /// cereal.”*
 pub mod prelude {
     pub use super::{
-        error::{Error as _, EmptyErr, Rich, Simple},
+        error::{EmptyErr, Error as _, Rich, Simple},
+        extra,
         primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
         // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
         recursive::{recursive, Recursive},
         // select,
-        span::{Span as _, SimpleSpan},
+        span::{SimpleSpan, Span as _},
         text,
-        extra,
         Boxed,
-        Parser,
+        IterParser,
         ParseResult,
+        Parser,
     };
 }
 
@@ -52,30 +52,28 @@ use alloc::{
     boxed::Box,
     rc::{Rc, Weak},
     string::String,
-    vec::Vec,
     vec,
+    vec::Vec,
 };
 use core::{
     borrow::Borrow,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
-    iter::FromIterator,
     marker::PhantomData,
+    mem::MaybeUninit,
     ops::{Range, RangeFrom},
     str::FromStr,
-    mem::MaybeUninit,
 };
 use hashbrown::HashMap;
 
 use self::{
-    chain::Chain,
     combinator::*,
     container::*,
-    error::{Error, EmptyErr},
+    error::{EmptyErr, Error},
     extra::ParserExtra,
     input::{Input, InputRef, Marker, SliceInput, StrInput},
-    span::{Span, SimpleSpan},
+    span::{SimpleSpan, Span},
     text::*,
 };
 
@@ -309,7 +307,7 @@ mod internal {
     }
 }
 
-pub use internal::{Mode, Emit, Check};
+pub use internal::{Check, Emit, Mode};
 
 /// A trait implemented by parsers.
 ///
@@ -358,7 +356,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     where
         Self: Sized,
     {
-        let mut inp = InputRef::new(input, state);
+        let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Emit>(&mut inp);
         let mut errs = inp.into_errs();
         let out = match res {
@@ -397,7 +395,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     where
         Self: Sized,
     {
-        let mut inp = InputRef::new(input, state);
+        let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Check>(&mut inp);
         let mut errs = inp.into_errs();
         let out = match res {
@@ -578,7 +576,10 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
     /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
-    fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(self, f: F) -> MapWithState<Self, O, F>
+    fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
+        self,
+        f: F,
+    ) -> MapWithState<Self, O, F>
     where
         Self: Sized,
     {
@@ -671,7 +672,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     {
         Ignored {
             parser: self,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -743,10 +744,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let zeroes = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
-    /// let digits = any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>();
+    /// let digits = any().filter(|c: &char| c.is_ascii_digit())
+    ///     .repeated()
+    ///     .collect::<String>();
     /// let integer = zeroes
     ///     .ignore_then(digits)
-    ///     .collect::<String>()
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1118,7 +1120,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self, O, I, E, ()>
+    fn repeated(self) -> Repeated<Self, O, I, E>
     where
         Self: Sized,
     {
@@ -1135,7 +1137,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
     ///
     /// The output type of this parser can be any [`ContainerExactly`].
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
+    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, Empty, N>
     where
         Self: Sized,
     {
@@ -1501,74 +1503,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         }
     }
 
-    /// Collect the output of this parser into a type implementing [`FromIterator`].
-    ///
-    /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
-    /// [`HashMap`] and is analagous to [`Iterator::collect`].
-    ///
-    /// The output type of this parser is `C`, the type being collected into.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
-    ///     .repeated() // This parser produces an output of `Vec<char>`
-    ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
-    ///
-    /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
-    /// ```
-    // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
-    fn collect<C>(self) -> Map<Self, O, fn(O) -> C>
-    where
-        Self: Sized,
-        O: IntoIterator,
-        C: FromIterator<<O as IntoIterator>::Item>,
-    {
-        self.map(|items| C::from_iter(items.into_iter()))
-    }
-
-    /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
-    ///
-    /// The output type of this parser is `Vec<T>`, composed of the elements of the outputs of both parsers.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = just('-').or_not()
-    ///     .chain(any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>()))
-    ///     .or(just('0').map(|c| vec![c]))
-    ///     .then_ignore(end())
-    ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// assert_eq!(int.parse("0").into_result(), Ok(0));
-    /// assert_eq!(int.parse("415").into_result(), Ok(415));
-    /// assert_eq!(int.parse("-50").into_result(), Ok(-50));
-    /// assert!(int.parse("-0").has_errors());
-    /// assert!(int.parse("05").has_errors());
-    /// ```
-    fn chain<T, U, P>(
-        self,
-        other: P,
-    ) -> Map<Then<Self, P, O, U, E>, (O, U), fn((O, U)) -> Vec<T>>
-    where
-        Self: Sized,
-        O: Chain<T>,
-        U: Chain<T>,
-        P: Parser<'a, I, U, E>,
-    {
-        self.then(other).map(|(a, b)| {
-            let mut v = Vec::with_capacity(a.len() + b.len());
-            a.append_to(&mut v);
-            b.append_to(&mut v);
-            v
-        })
-    }
-
     /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
     ///
     /// Note that even if the function returns an [`Ok`], the input stream will still be 'stuck' at the input following
@@ -1676,6 +1610,174 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 }
 
+/// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
+pub struct ParserIter<
+    'a,
+    'iter,
+    P: IterParser<'a, I, O, E>,
+    I: Input + ?Sized,
+    O,
+    E: ParserExtra<'a, I>,
+> {
+    parser: P,
+    state: P::IterState<Emit>,
+    inp: InputRef<'a, 'iter, I, E>,
+    phantom: PhantomData<&'a O>,
+}
+
+impl<'a, 'iter, P, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Iterator
+    for ParserIter<'a, 'iter, P, I, O, E>
+where
+    P: IterParser<'a, I, O, E>,
+{
+    type Item = O;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parser
+            .next::<Emit>(&mut self.inp, &mut self.state)
+            .and_then(|res| res.ok())
+    }
+}
+
+/// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
+// TODO: Make sealed
+pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default> {
+    /// The state of the iterator during iteration.
+    type IterState<M: Mode>
+    where
+        I: 'a;
+
+    #[doc(hidden)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>, E::Error>;
+    #[doc(hidden)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> Option<PResult<M, O, E::Error>>;
+
+    /// Collect this iterable parser into a [`Container`].
+    ///
+    /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
+    /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
+    ///
+    /// The output type of this parser is `C`, the type being collected into.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
+    ///     .collect::<String>(); // We collect the `char`s into a `String`
+    ///
+    /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
+    /// ```
+    fn collect<C: Container<O>>(self) -> Collect<Self, O, C>
+    where
+        Self: Sized,
+    {
+        Collect {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Collect this iterable parser into a [`usize`], outputting the number of elements that were parsed.
+    ///
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    ///
+    /// // Counts how many chess squares are in the input.
+    /// let squares = one_of::<_, _, extra::Err<Simple<str>>>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
+    ///
+    /// assert_eq!(squares.parse("a1 b2 c3").into_result(), Ok(3));
+    /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
+    /// assert_eq!(squares.parse("").into_result(), Ok(0));
+    /// ```
+    fn count(self) -> Collect<Self, O, usize>
+    where
+        Self: Sized,
+    {
+        self.collect()
+    }
+
+    /// Create an iterator over the outputs generated by an iterable parser.
+    fn parse_iter(
+        self,
+        input: &'a I,
+    ) -> ParseResult<ParserIter<'a, 'static, Self, I, O, E>, E::Error>
+    where
+        Self: IterParser<'a, I, O, E> + Sized,
+        E::State: Default,
+    {
+        let mut inp = InputRef::new(input, Err(E::State::default()));
+        ParseResult::new(
+            Some(ParserIter {
+                state: match self.make_iter::<Emit>(&mut inp) {
+                    Ok(out) => out,
+                    Err(e) => return ParseResult::new(None, vec![e.err]),
+                },
+                parser: self,
+                inp,
+                phantom: PhantomData,
+            }),
+            Vec::new(),
+        )
+    }
+
+    /// Create an iterator over the outputs generated by an iterable parser with the given parser state.
+    fn parse_iter_with_state<'parse>(
+        self,
+        input: &'a I,
+        state: &'parse mut E::State,
+    ) -> ParseResult<ParserIter<'a, 'parse, Self, I, O, E>, E::Error>
+    where
+        Self: IterParser<'a, I, O, E> + Sized,
+    {
+        let mut inp = InputRef::new(input, Ok(state));
+        ParseResult::new(
+            Some(ParserIter {
+                state: match self.make_iter::<Emit>(&mut inp) {
+                    Ok(out) => out,
+                    Err(e) => return ParseResult::new(None, vec![e.err]),
+                },
+                parser: self,
+                inp,
+                phantom: PhantomData,
+            }),
+            Vec::new(),
+        )
+    }
+}
+
+/*
+impl<'a, I, O, E, P> IterParser<'a, I, O::Item, E> for P
+where
+    I: Input + ?Sized + 'a,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, O, E>,
+    O: IntoIterator,
+{
+    type IterState<M: Mode> = O::IntoIter;
+
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Self::IterState<M>, E::Error> {
+        Ok(M::map(self.go::<M>(inp)?, |xs: O| xs.into_iter()))
+    }
+
+    fn next(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<Emit>) -> Option<PResult<Emit, O, E::Error>> {
+        state.next().map(Ok)
+    }
+}
+*/
+
 /// See [`Parser::boxed`].
 ///
 /// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
@@ -1761,7 +1863,8 @@ fn zero_copy() {
     }
 
     assert_eq!(
-        parser().parse(&WithContext(42, r#"hello "world" these are "test" tokens"#))
+        parser()
+            .parse(&WithContext(42, r#"hello "world" these are "test" tokens"#))
             .into_result(),
         Ok([
             ((42, (0..5).into()), Token::Ident("hello")),
@@ -1774,8 +1877,8 @@ fn zero_copy() {
     );
 }
 
-use combinator::MapSlice;
 use crate::zero_copy::input::Emitter;
+use combinator::MapSlice;
 
 #[test]
 fn zero_copy_repetition() {
@@ -1889,9 +1992,25 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::<_, EmptyErr, _>::new(input, &mut state);
+    let mut input = InputRef::<_, extra::Default>::new(input, Ok(&mut state));
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);
     }
+}
+
+#[test]
+fn iter() {
+    use self::prelude::*;
+
+    fn parser<'a>() -> impl IterParser<'a, str, char> {
+        any().repeated()
+    }
+
+    let mut chars = String::new();
+    for c in parser().parse_iter("abcdefg").into_result().unwrap() {
+        chars.push(c);
+    }
+
+    assert_eq!(&chars, "abcdefg");
 }
