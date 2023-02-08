@@ -43,16 +43,14 @@ enum RecursiveInner<T: ?Sized> {
     Unowned(Weak<T>),
 }
 
-type OnceParser<'a, I, O, E> = OnceCell<Box<dyn Parser<'a, I, O, E> + 'a>>;
-
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
-pub type Direct<'a, I, O, Extra> = dyn Parser<'a, I, O, Extra> + 'a;
+pub type Direct<'a, I, O, Extra, Cfg> = dyn Parser<'a, I, O, Extra, Config = Cfg> + 'a;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'a, I: Input + ?Sized, O, Extra: ParserExtra<'a, I>> {
-    inner: OnceCell<Box<dyn Parser<'a, I, O, Extra> + 'a>>,
+pub struct Indirect<'a, I: Input + ?Sized, O, Extra: ParserExtra<'a, I>, Cfg> {
+    inner: OnceCell<Box<dyn Parser<'a, I, O, Extra, Config = Cfg> + 'a>>,
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -63,7 +61,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>> {
+impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>, Cfg> Recursive<Indirect<'a, I, O, E, Cfg>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -111,7 +109,7 @@ impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, 
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    pub fn define<P: Parser<'a, I, O, E> + 'a>(&mut self, parser: P) {
+    pub fn define<P: Parser<'a, I, O, E, Config = Cfg> + 'a>(&mut self, parser: P) {
         self.parser()
             .inner
             .set(Box::new(parser))
@@ -141,11 +139,14 @@ impl<P: ?Sized> Clone for Recursive<P> {
     }
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
+impl<'a, I, O, E, Cfg> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E, Cfg>>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
+    Cfg: Default,
 {
+    type Config = Cfg;
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(
             self.parser()
@@ -157,16 +158,35 @@ where
         )
     }
 
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error> {
+        M::invoke_cfg(
+            self.parser()
+                .inner
+                .get()
+                .expect("Recursive parser used before being defined")
+                .as_ref(),
+            inp,
+            cfg,
+        )
+    }
+
     go_extra!(O);
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
+impl<'a, I, O, E, Cfg> Parser<'a, I, O, E> for Recursive<Direct<'a, I, O, E, Cfg>>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
+    Cfg: Default,
 {
+    type Config = Cfg;
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(&*self.parser(), inp)
+    }
+
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error> {
+        M::invoke_cfg(&*self.parser(), inp, cfg)
     }
 
     go_extra!(O);
@@ -221,15 +241,15 @@ where
 ///     ]),
 /// ])));
 /// ```
-pub fn recursive<'a, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, I, O, E>>
+pub fn recursive<'a, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, I, O, E, A::Config>>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E> + 'a,
-    F: FnOnce(Recursive<Direct<'a, I, O, E>>) -> A,
+    F: FnOnce(Recursive<Direct<'a, I, O, E, A::Config>>) -> A,
 {
     let rc = Rc::new_cyclic(|rc| {
-        let rc: Weak<dyn Parser<'a, I, O, E>> = rc.clone() as _;
+        let rc: Weak<dyn Parser<'a, I, O, E, Config = A::Config>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };
