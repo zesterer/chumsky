@@ -85,7 +85,7 @@ mod chumsky_zero_copy {
 
             let exp = just(b'e')
                 .or(just(b'E'))
-                .then(just(b'+').or(just(b'-')).or_not())
+                .then(one_of(b"+-").or_not())
                 .then(digits.clone());
 
             let number = just(b'-')

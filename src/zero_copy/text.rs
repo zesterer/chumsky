@@ -171,7 +171,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Clone, (), I, E>
 where
     I::Token: Char,
 {
@@ -201,7 +201,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Clone, (), I, E>
 where
     I::Token: Char,
 {
@@ -243,7 +243,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E>
+pub fn newline<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E> + Clone
 where
     I::Token: Char,
 {
@@ -286,7 +286,7 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'a, C, I, E>(radix: u32) -> impl Parser<'a, I, &'a I::Slice, E>
+pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Clone, C, I, E>
 where
     C: Char,
     I: StrInput<C> + ?Sized,
@@ -296,7 +296,6 @@ where
         .filter(move |c: &C| c.is_digit(radix))
         .repeated()
         .at_least(1)
-        .slice()
 }
 
 /// A parser that accepts a non-negative integer.
