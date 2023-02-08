@@ -27,7 +27,7 @@ impl<A: Clone, F: Clone> Clone for Configure<A, F> {
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for Configure<A, F>
 where
     A: Parser<'a, I, O, E>,
-    F: Fn(A::Config, &E::Context) -> A::Config,
+    F: Fn(&mut A::Config, &E::Context),
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
@@ -37,7 +37,8 @@ where
         where
             Self: Sized,
     {
-        let cfg = (self.cfg)(A::Config::default(), inp.ctx());
+        let mut cfg = A::Config::default();
+        (self.cfg)(&mut cfg, inp.ctx());
         self.parser.go_cfg::<M>(inp, cfg)
     }
 
@@ -562,46 +563,111 @@ where
 }
 
 /// See [`Parser::then_with_ctx`].
-pub struct ThenWithCtx<A, B, OA, F, I: ?Sized, E> {
+pub struct ThenWithCtx<A, B, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
-    pub(crate) make_ctx: F,
     pub(crate) phantom: PhantomData<(B, OA, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, F: Copy, I: ?Sized, E> Copy for ThenWithCtx<A, B, OA, F, I, E> {}
-impl<A: Clone, B: Clone, OA, F: Clone, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, F, I, E> {
+impl<A: Copy, B: Copy, OA, I: ?Sized, E> Copy for ThenWithCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             then: self.then.clone(),
-            make_ctx: self.make_ctx.clone(),
             phantom: PhantomData,
         }
     }
 }
 
-impl<'a, I, E, CtxN, A, B, OA, OB, F> Parser<'a, I, OB, E> for ThenWithCtx<A, B, OA, F, I, extra::Full<E::Error, E::State, CtxN>>
+impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E> for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    B: Parser<'a, I, OB, extra::Full<E::Error, E::State, CtxN>>,
-    F: Fn(OA, &E::Context) -> CtxN,
-    CtxN: 'a,
+    B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
 {
     type Config = ();
 
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        let ctx = (self.make_ctx)(p1, inp.ctx());
         inp.with_ctx(
-            ctx,
+            p1,
             |inp| self.then.go::<M>(inp)
         )
     }
 
     go_extra!(OB);
+}
+
+/// See [`Parser::with_ctx`].
+pub struct WithCtx<A, Ctx> {
+    pub(crate) parser: A,
+    pub(crate) ctx: Ctx,
+}
+
+impl<A: Copy, Ctx: Copy> Copy for WithCtx<A, Ctx> {}
+impl<A: Clone, Ctx: Clone> Clone for WithCtx<A, Ctx> {
+    fn clone(&self) -> Self {
+        WithCtx {
+            parser: self.parser.clone(),
+            ctx: self.ctx.clone(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, Ctx> Parser<'a, I, O, E> for WithCtx<A, Ctx>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
+    Ctx: 'a + Clone,
+{
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        inp.with_ctx(self.ctx.clone(), |inp| {
+            self.parser.go::<M>(inp)
+        })
+    }
+
+    go_extra!(O);
+}
+
+/// See [`Parser::map_ctx`].
+pub struct MapCtx<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<A: Copy, F: Copy> Copy for MapCtx<A, F> {}
+impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
+    fn clone(&self) -> Self {
+        MapCtx {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, F, Ctx> Parser<'a, I, O, E> for MapCtx<A, F>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
+    F: Fn(&E::Context) -> Ctx,
+    Ctx: 'a,
+{
+    type Config = ();
+
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        inp.with_ctx((self.mapper)(inp.ctx()), |inp| {
+            self.parser.go::<M>(inp)
+        })
+    }
+
+    go_extra!(O);
 }
 
 /// See [`Parser::delimited_by`].
