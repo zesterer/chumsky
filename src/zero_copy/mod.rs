@@ -15,7 +15,6 @@ macro_rules! go_extra {
 }
 
 mod blanket;
-pub mod chain;
 pub mod combinator;
 pub mod container;
 pub mod error;
@@ -43,6 +42,7 @@ pub mod prelude {
         span::{SimpleSpan, Span as _},
         text,
         Boxed,
+        IterParser,
         ParseResult,
         Parser,
     };
@@ -60,7 +60,6 @@ use core::{
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
-    iter::FromIterator,
     marker::PhantomData,
     mem::MaybeUninit,
     ops::{Range, RangeFrom},
@@ -69,7 +68,6 @@ use core::{
 use hashbrown::HashMap;
 
 use self::{
-    chain::Chain,
     combinator::*,
     container::*,
     error::{EmptyErr, Error},
@@ -746,10 +744,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let zeroes = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
-    /// let digits = any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>();
+    /// let digits = any().filter(|c: &char| c.is_ascii_digit())
+    ///     .repeated()
+    ///     .collect::<String>();
     /// let integer = zeroes
     ///     .ignore_then(digits)
-    ///     .collect::<String>()
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1121,7 +1120,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
     /// ```
-    fn repeated(self) -> Repeated<Self, O, I, E, Empty>
+    fn repeated(self) -> Repeated<Self, O, I, E>
     where
         Self: Sized,
     {
@@ -1504,71 +1503,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         }
     }
 
-    /// Collect the output of this parser into a type implementing [`FromIterator`].
-    ///
-    /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
-    /// [`HashMap`] and is analagous to [`Iterator::collect`].
-    ///
-    /// The output type of this parser is `C`, the type being collected into.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
-    ///     .repeated() // This parser produces an output of `Vec<char>`
-    ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
-    ///
-    /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
-    /// ```
-    // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
-    fn collect<C>(self) -> Map<Self, O, fn(O) -> C>
-    where
-        Self: Sized,
-        O: IntoIterator,
-        C: FromIterator<<O as IntoIterator>::Item>,
-    {
-        self.map(|items| C::from_iter(items.into_iter()))
-    }
-
-    /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
-    ///
-    /// The output type of this parser is `Vec<T>`, composed of the elements of the outputs of both parsers.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// let int = just('-').or_not()
-    ///     .chain(any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(any().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<Vec<_>>()))
-    ///     .or(just('0').map(|c| vec![c]))
-    ///     .then_ignore(end())
-    ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// assert_eq!(int.parse("0").into_result(), Ok(0));
-    /// assert_eq!(int.parse("415").into_result(), Ok(415));
-    /// assert_eq!(int.parse("-50").into_result(), Ok(-50));
-    /// assert!(int.parse("-0").has_errors());
-    /// assert!(int.parse("05").has_errors());
-    /// ```
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P, O, U, E>, (O, U), fn((O, U)) -> Vec<T>>
-    where
-        Self: Sized,
-        O: Chain<T>,
-        U: Chain<T>,
-        P: Parser<'a, I, U, E>,
-    {
-        self.then(other).map(|(a, b)| {
-            let mut v = Vec::with_capacity(a.len() + b.len());
-            a.append_to(&mut v);
-            b.append_to(&mut v);
-            v
-        })
-    }
-
     /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
     ///
     /// Note that even if the function returns an [`Ok`], the input stream will still be 'stuck' at the input following
@@ -1700,12 +1634,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.parser
-            .next(&mut self.inp, &mut self.state)
+            .next::<Emit>(&mut self.inp, &mut self.state)
             .and_then(|res| res.ok())
     }
 }
 
-/// A parser that can be iterated.
+/// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
 // TODO: Make sealed
 pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default> {
     /// The state of the iterator during iteration.
@@ -1717,13 +1651,63 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     fn make_iter<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, Self::IterState<M>, E::Error>;
+    ) -> PResult<Emit, Self::IterState<M>, E::Error>;
     #[doc(hidden)]
-    fn next(
+    fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<Emit>,
-    ) -> Option<PResult<Emit, O, E::Error>>;
+        state: &mut Self::IterState<M>,
+    ) -> Option<PResult<M, O, E::Error>>;
+
+    /// Collect this iterable parser into a [`Container`].
+    ///
+    /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
+    /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analgous to [`Iterator::collect`].
+    ///
+    /// The output type of this parser is `C`, the type being collected into.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
+    ///     .collect::<String>(); // We collect the `char`s into a `String`
+    ///
+    /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
+    /// ```
+    fn collect<C: Container<O>>(self) -> Collect<Self, O, C>
+    where
+        Self: Sized,
+    {
+        Collect {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Collect this iterable parser into a [`usize`], outputting the number of elements that were parsed.
+    ///
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    ///
+    /// // Counts how many chess squares are in the input.
+    /// let squares = one_of::<_, _, extra::Err<Simple<str>>>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
+    ///
+    /// assert_eq!(squares.parse("a1 b2 c3").into_result(), Ok(3));
+    /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
+    /// assert_eq!(squares.parse("").into_result(), Ok(0));
+    /// ```
+    fn count(self) -> Collect<Self, O, usize>
+    where
+        Self: Sized,
+    {
+        self.collect()
+    }
 
     /// Create an iterator over the outputs generated by an iterable parser.
     fn parse_iter(
@@ -1771,50 +1755,6 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
             }),
             Vec::new(),
         )
-    }
-}
-
-impl<'a, A, O, I, E> IterParser<'a, I, O, E> for Repeated<A, O, I, E, Empty>
-where
-    I: Input + ?Sized + 'a,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-{
-    type IterState<M: Mode> = usize;
-
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, Self::IterState<M>, E::Error> {
-        Ok(M::bind(|| 0))
-    }
-
-    fn next(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        count: &mut Self::IterState<Emit>,
-    ) -> Option<PResult<Emit, O, E::Error>> {
-        if let Some(at_most) = self.at_most {
-            if *count >= at_most {
-                return None;
-            }
-        }
-
-        let before = inp.save();
-        match self.parser.go::<Emit>(inp) {
-            Ok(item) => {
-                *count += 1;
-                Some(Ok(item))
-            }
-            Err(e) => {
-                inp.rewind(before);
-                if *count >= self.at_least {
-                    None
-                } else {
-                    Some(Err(e))
-                }
-            }
-        }
     }
 }
 

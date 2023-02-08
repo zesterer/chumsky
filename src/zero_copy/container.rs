@@ -22,6 +22,7 @@ impl<T> Container<T> for () {
     fn push(&mut self, _: T) {}
 }
 
+/// A collection that counts items instead of containing them.
 impl<T> Container<T> for usize {
     fn push(&mut self, _: T) {
         *self += 1;

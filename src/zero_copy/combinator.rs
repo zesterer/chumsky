@@ -619,16 +619,15 @@ where
 }
 
 /// See [`Parser::repeated`].
-// FIXME: why C has default value?
-pub struct Repeated<A, OA, I: ?Sized, E, C = Empty> {
+pub struct Repeated<A, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
-    pub(crate) phantom: PhantomData<(OA, E, C, I)>,
+    pub(crate) phantom: PhantomData<(OA, E, I)>,
 }
 
-impl<A: Copy, OA, I: ?Sized, C, E> Copy for Repeated<A, OA, I, E, C> {}
-impl<A: Clone, OA, I: ?Sized, C, E> Clone for Repeated<A, OA, I, E, C> {
+impl<A: Copy, OA, I: ?Sized, E> Copy for Repeated<A, OA, I, E> {}
+impl<A: Clone, OA, I: ?Sized, E> Clone for Repeated<A, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -639,7 +638,7 @@ impl<A: Clone, OA, I: ?Sized, C, E> Clone for Repeated<A, OA, I, E, C> {
     }
 }
 
-impl<'a, A, OA, I, C, E> Repeated<A, OA, I, E, C>
+impl<'a, A, OA, I, E> Repeated<A, OA, I, E>
 where
     A: Parser<'a, I, OA, E>,
     I: Input + ?Sized,
@@ -706,83 +705,72 @@ where
             ..self
         }
     }
-
-    /// Set the type of [`Container`] to collect into.
-    pub fn collect<D: Container<OA>>(self) -> Repeated<A, OA, I, E, D>
-    where
-        A: Parser<'a, I, OA, E>,
-    {
-        Repeated {
-            parser: self.parser,
-            at_least: self.at_least,
-            at_most: self.at_most,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Output the number of items parsed.
-    ///
-    /// This is sugar for [`.collect::<usize>()`](Self::collect).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::prelude::*;
-    ///
-    /// // Counts how many chess squares are in the input.
-    /// let squares = one_of::<_, _, Simple<str>, ()>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
-    ///
-    /// assert_eq!(squares.parse("a1 b2 c3").into_result(), Ok(3));
-    /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
-    /// assert_eq!(squares.parse("").into_result(), Ok(0));
-    /// ```
-    pub fn count(self) -> Repeated<A, OA, I, E, usize>
-    where
-        A: Parser<'a, I, OA, E>,
-    {
-        self.collect()
-    }
 }
 
-impl<'a, I, E, A, OA, C> Parser<'a, I, C, E> for Repeated<A, OA, I, E, C>
+impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Repeated<A, OA, I, E>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    C: Container<OA>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
-        let mut count = 0;
-        let mut output = M::bind::<C, _>(|| C::default());
-        loop {
-            let before = inp.save();
-            match self.parser.go::<M>(inp) {
-                Ok(item) => {
-                    output = M::combine(output, item, |mut output: C, item| {
-                        output.push(item);
-                        output
-                    });
-                    count += 1;
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+        let mut state = self.make_iter::<Check>(inp)?;
 
-                    if let Some(at_most) = self.at_most {
-                        if count >= at_most {
-                            break Ok(output);
-                        }
-                    }
-                }
-                Err(e) => {
-                    inp.rewind(before);
-                    break if count >= self.at_least {
-                        Ok(output)
-                    } else {
-                        Err(e)
-                    };
-                }
+        // TODO: Implement this in terms of `IterParser`
+        let mut count = 0;
+        loop {
+            match self.next::<Check>(inp, &mut state) {
+                Some(res) => res?,
+                None => break Ok(M::bind(|| ())),
             }
         }
     }
 
-    go_extra!(C);
+    go_extra!(());
+}
+
+impl<'a, A, O, I, E> IterParser<'a, I, O, E> for Repeated<A, O, I, E>
+where
+    I: Input + ?Sized + 'a,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+{
+    type IterState<M: Mode> = usize;
+
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>, E::Error> {
+        Ok(0)
+    }
+
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        count: &mut Self::IterState<M>,
+    ) -> Option<PResult<M, O, E::Error>> {
+        if let Some(at_most) = self.at_most {
+            if *count >= at_most {
+                return None;
+            }
+        }
+
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(item) => {
+                *count += 1;
+                Some(Ok(item))
+            }
+            Err(e) => {
+                inp.rewind(before);
+                if *count >= self.at_least {
+                    None
+                } else {
+                    Some(Err(e))
+                }
+            }
+        }
+    }
 }
 
 /// See [`Parser::separated_by`].
@@ -976,7 +964,7 @@ where
     /// # use chumsky::zero_copy::prelude::*;
     ///
     /// // Counts how many chess squares are in the input.
-    /// let squares = one_of::<_, _, Simple<str>, ()>('a'..='z').then(one_of('1'..='8')).separated_by(just(',')).allow_trailing().count();
+    /// let squares = one_of::<_, _, extra::Err<Simple<str>>>('a'..='z').then(one_of('1'..='8')).separated_by(just(',')).allow_trailing().count();
     ///
     /// assert_eq!(squares.parse("a1,b2,c3,").into_result(), Ok(3));
     /// assert_eq!(squares.parse("e5,e7,c6,c7,f6,d5,e6,d7,e4,c5,d6,c4,b6,f5").into_result(), Ok(14));
@@ -1123,6 +1111,48 @@ where
 
         // Step 7
         Ok(output)
+    }
+
+    go_extra!(C);
+}
+
+/// See [`Parser::collect`].
+pub struct Collect<A, O, C> {
+    pub(crate) parser: A,
+    pub(crate) phantom: PhantomData<(O, C)>,
+}
+
+impl<A: Copy, O, C> Copy for Collect<A, O, C> {}
+impl<A: Clone, O, C> Clone for Collect<A, O, C> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, O, E, A, C> Parser<'a, I, C, E> for Collect<A, O, C>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, O, E>,
+    C: Container<O>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
+        let mut output = M::bind::<C, _>(|| C::default());
+        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        loop {
+            match self.parser.next::<M>(inp, &mut iter_state) {
+                Some(res) => {
+                    output = M::combine(output, res?, |mut output: C, item| {
+                        output.push(item);
+                        output
+                    });
+                }
+                None => break Ok(output),
+            }
+        }
     }
 
     go_extra!(C);
@@ -1790,10 +1820,10 @@ mod tests {
         let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .collect::<Vec<_>>()
-            .chain(just(','));
+            .then(just(','));
         assert_eq!(
             parser.parse("-,-,-,").into_result(),
-            Ok(vec!['-', '-', '-', ',']),
+            Ok((vec!['-', '-', '-'], ',')),
         )
     }
 }

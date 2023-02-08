@@ -171,7 +171,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, Empty>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
 where
     I::Token: Char,
 {
@@ -201,7 +201,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E>, (), I, E, Empty>
+) -> Repeated<impl Parser<'a, I, (), E>, (), I, E>
 where
     I::Token: Char,
 {
@@ -386,10 +386,7 @@ where
     let lines = line_ws
         .repeated()
         .slice()
-        .then(
-            line.collect::<Vec<_>>()
-                .map_with_span(|line, span| (line, span)),
-        )
+        .then(line.map_with_span(|line, span| (line, span)))
         .then_ignore(line_ws.repeated())
         .separated_by(newline())
         .collect();
