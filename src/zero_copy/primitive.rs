@@ -10,7 +10,9 @@
 //! ## The Important Ones
 //!
 //! - [`just`]: parses a specific input or sequence of inputs
-//! - [`filter`]: parses a single input, if the given filter function returns `true`
+//! - [`any`]: parses any single input
+//! - [`one_of`]: parses any one of a sequence of inputs
+//! - [`none_of`]: parses any input that does not appear in a sequence of inputs
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
 use super::*;
@@ -391,6 +393,7 @@ pub const fn any<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> Any<I, E> {
 }
 
 /// See [`take_until`].
+// TODO: Consider removing in favour of `not`/`and_is`
 pub struct TakeUntil<P, I: ?Sized, OP, E, C = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration

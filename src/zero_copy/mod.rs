@@ -1610,7 +1610,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 }
 
-/// An iterator that wraps an iterable parser. See [`Parser::parse_iter`].
+/// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
 pub struct ParserIter<
     'a,
     'iter,
@@ -1662,7 +1662,7 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     /// Collect this iterable parser into a [`Container`].
     ///
     /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
-    /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analgous to [`Iterator::collect`].
+    /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
     ///
     /// The output type of this parser is `C`, the type being collected into.
     ///

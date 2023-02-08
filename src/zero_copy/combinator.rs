@@ -938,6 +938,7 @@ where
     }
 
     /// Set the type of [`Container`] to collect into.
+    // TODO: Remove this in favour of `IterParser::collect`
     pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, I, E, D>
     where
         A: Parser<'a, I, OA, E>,
@@ -970,6 +971,7 @@ where
     /// assert_eq!(squares.parse("e5,e7,c6,c7,f6,d5,e6,d7,e4,c5,d6,c4,b6,f5").into_result(), Ok(14));
     /// assert_eq!(squares.parse("").into_result(), Ok(0));
     /// ```
+    // TODO: Remove this in favour of `IterParser::count`
     pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, E, usize>
     where
         A: Parser<'a, I, OA, E>,
@@ -979,6 +981,7 @@ where
     }
 }
 
+// TODO: Implement `IterParser` instead
 impl<'a, I, E, A, B, OA, OB, C> Parser<'a, I, C, E> for SeparatedBy<A, B, OA, OB, I, E, C>
 where
     I: Input + ?Sized,
@@ -1116,7 +1119,7 @@ where
     go_extra!(C);
 }
 
-/// See [`Parser::collect`].
+/// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<(O, C)>,
@@ -1164,6 +1167,7 @@ pub struct OrNot<A> {
     pub(crate) parser: A,
 }
 
+// TODO: Maybe implement `IterParser` too?
 impl<'a, I, O, E, A> Parser<'a, I, Option<O>, E> for OrNot<A>
 where
     I: Input + ?Sized,
@@ -1288,6 +1292,7 @@ impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     }
 }
 
+// TODO: Work out how this can properly integrate into `IterParser`
 impl<'a, I, E, A, OA, C, const N: usize> Parser<'a, I, C, E> for RepeatedExactly<A, OA, C, N>
 where
     I: Input + ?Sized,

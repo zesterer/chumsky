@@ -266,7 +266,7 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
 /// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
@@ -304,7 +304,7 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is [`&I::Slice`] (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
+/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
 /// when `I::Slice` is [`[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
