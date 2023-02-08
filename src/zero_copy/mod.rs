@@ -493,7 +493,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
         Self: Sized,
-        F: Fn(&mut Self::Config, &E::Context),
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
     {
         Configure {
             parser: self,

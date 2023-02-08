@@ -27,7 +27,7 @@ impl<A: Clone, F: Clone> Clone for Configure<A, F> {
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for Configure<A, F>
 where
     A: Parser<'a, I, O, E>,
-    F: Fn(&mut A::Config, &E::Context),
+    F: Fn(A::Config, &E::Context) -> A::Config,
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
@@ -37,8 +37,7 @@ where
         where
             Self: Sized,
     {
-        let mut cfg = A::Config::default();
-        (self.cfg)(&mut cfg, inp.ctx());
+        let cfg = (self.cfg)(A::Config::default(), inp.ctx());
         self.parser.go_cfg::<M>(inp, cfg)
     }
 

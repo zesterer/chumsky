@@ -25,11 +25,10 @@ fn parser<'a>() -> impl Parser<'a, str, Vec<Stmt>> {
         text::whitespace().count()
             .then_with_ctx(stmt
                 .separated_by(indent)
-                .collect::<Vec<_>>(), |a, b| a)
+                .collect())
     });
 
-    // empty().then_with_ctx(block, |_: (), _: &()| 0)
-    Parser::<_, _>::then_with_ctx(empty(), block, |_, _| 0)
+    block.with_ctx(0)
 }
 
 fn main() {
