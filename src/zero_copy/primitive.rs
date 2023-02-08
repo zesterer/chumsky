@@ -87,23 +87,23 @@ where
 }
 
 /// See [`empty`].
-pub struct Empty<I: ?Sized>(PhantomData<I>);
+pub struct Empty<I: ?Sized, E>(PhantomData<(E, I)>);
 
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
-pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
+pub const fn empty<I: Input + ?Sized, E>() -> Empty<I, E> {
     Empty(PhantomData)
 }
 
-impl<I: ?Sized> Copy for Empty<I> {}
-impl<I: ?Sized> Clone for Empty<I> {
+impl<I: ?Sized, E> Copy for Empty<I, E> {}
+impl<I: ?Sized, E> Clone for Empty<I, E> {
     fn clone(&self) -> Self {
         Empty(PhantomData)
     }
 }
 
-impl<'a, I, E> Parser<'a, I, (), E> for Empty<I>
+impl<'a, I, E> Parser<'a, I, (), E> for Empty<I, E>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
@@ -129,7 +129,7 @@ pub struct JustCfg<T> {
 
 impl<T> JustCfg<T> {
     /// TODO
-    pub fn set_seq(mut self, new_seq: T) -> Self {
+    pub fn seq(mut self, new_seq: T) -> Self {
         self.seq = Some(new_seq);
         self
     }

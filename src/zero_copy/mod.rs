@@ -493,7 +493,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
         Self: Sized,
-        F: Fn(Self::Config, &E::Context) -> Self::Config,
+        F: Fn(&mut Self::Config, &E::Context),
     {
         Configure {
             parser: self,
@@ -941,29 +941,58 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// // A parser that parses a single letter and then its successor
     /// let successive_letters = one_of::<_, _, extra::Err<Simple<[u8]>>>(b'a'..=b'z')
     ///     .then_with_ctx(
-    ///         just(b'\0').configure(|cfg, ctx: &u8| cfg.set_seq(*ctx + 1)),
+    ///         just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1)),
     ///         |letter, _| letter,
     ///     );
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
-    fn then_with_ctx<U, CtxN, P, F>(
+    fn then_with_ctx<U, CtxN, P>(
         self,
         then: P,
-        make_ctx: F,
-    ) -> ThenWithCtx<Self, P, O, F, I, extra::Full<E::Error, E::State, CtxN>>
+    ) -> ThenWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, CtxN>>
     where
         Self: Sized,
         CtxN: 'a,
         P: Parser<'a, I, U, extra::Full<E::Error, E::State, CtxN>>,
-        F: Fn(O, &E::Context) -> CtxN,
+
     {
         ThenWithCtx {
             parser: self,
             then,
-            make_ctx,
             phantom: PhantomData,
+        }
+    }
+
+    /// TODO
+    fn map_ctx<Ctx, F>(
+        self,
+        mapper: F,
+    ) -> MapCtx<Self, F>
+    where
+        Self: Sized,
+        F: Fn(O, &E::Context) -> Ctx,
+        Ctx: 'a,
+    {
+        MapCtx {
+            parser: self,
+            mapper,
+        }
+    }
+
+    /// TODO
+    fn with_ctx<Ctx>(
+        self,
+        ctx: Ctx,
+    ) -> WithCtx<Self, Ctx>
+    where
+        Self: Sized,
+        Ctx: 'a + Clone,
+    {
+        WithCtx {
+            parser: self,
+            ctx,
         }
     }
 
