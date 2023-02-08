@@ -40,6 +40,7 @@ pub mod error;
 pub mod extra;
 pub mod input;
 pub mod primitive;
+pub mod recovery;
 pub mod recursive;
 #[cfg(feature = "regex")]
 pub mod regex;
@@ -55,7 +56,7 @@ pub mod prelude {
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
         primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
-        // recovery::{nested_delimiters, skip_then_retry_until, skip_until},
+        recovery::skip_until,
         recursive::{recursive, Recursive},
         // select,
         span::{SimpleSpan, Span as _},
@@ -94,6 +95,8 @@ use self::{
     error::{EmptyErr, Error},
     extra::ParserExtra,
     input::{Input, InputRef, Marker, SliceInput, StrInput},
+    primitive::*,
+    recovery::*,
     span::{SimpleSpan, Span},
     text::*,
 };
@@ -1264,7 +1267,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
     ///
     /// The output type of this parser can be any [`ContainerExactly`].
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, Empty, N>
+    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
     where
         Self: Sized,
     {
