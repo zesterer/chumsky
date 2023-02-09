@@ -51,3 +51,50 @@ where
         .repeated()
         .ignore_then(pattern)
 }
+
+/// A recovery parser that searches for a start and end delimiter, respecting nesting.
+///
+/// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
+/// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesised expression as
+/// this can aid in detecting delimiter mismatches.
+///
+/// A function that generates a fallback output on recovery is also required.
+pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
+    start: I::Token,
+    end: I::Token,
+    others: [(I::Token, I::Token); N],
+    fallback: F,
+) -> impl Parser<'a, I, O, E> + Clone
+where
+    I: Input + ?Sized + 'a,
+    I::Token: PartialEq + Clone,
+    E: extra::ParserExtra<'a, I>,
+    F: Fn(I::Span) -> O + Clone,
+{
+    // TODO: Does this actually work? TESTS!
+    recursive({
+        let (start, end) = (start.clone(), end.clone());
+        |block| {
+            let mut many_block = block
+                .clone()
+                .delimited_by(just(start.clone()), just(end.clone()))
+                .boxed();
+            for (s, e) in &others {
+                many_block = many_block
+                    .or(block.clone().delimited_by(just(s.clone()), just(e.clone())))
+                    .boxed();
+            }
+
+            let mut skip = core::array::IntoIter::new([start, end])
+                .into_iter()
+                .chain(core::array::IntoIter::new(others).flat_map(|(s, e)| [s, e]))
+                .collect::<Vec<_>>();
+
+            many_block
+                .or(any().and_is(none_of(skip)).ignored())
+                .repeated()
+        }
+    })
+    .delimited_by(just(start), just(end))
+    .map_with_span(move |_, span| fallback(span))
+}

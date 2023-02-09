@@ -95,8 +95,8 @@ fn parser<'a>() -> impl Parser<'a, str, Json, extra::Err<Rich<str>>> {
             array.map(Json::Array),
             object.map(Json::Object),
         ))
-        // .recover_with(nested_delimiters('{', '}', [('[', ']')], |_| Json::Invalid))
-        // .recover_with(nested_delimiters('[', ']', [('{', '}')], |_| Json::Invalid))
+        .recover_with(nested_delimiters('{', '}', [('[', ']')], |_| Json::Invalid))
+        .recover_with(nested_delimiters('[', ']', [('{', '}')], |_| Json::Invalid))
         // .recover_with(skip_then_retry_until(['}', ']']))
         .padded()
     })
