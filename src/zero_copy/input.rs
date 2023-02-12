@@ -218,7 +218,10 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
         let mut new_ctx = InputRef {
             input: self.input,
             marker: self.marker,
-            state: self.state,
+            state: match &mut self.state {
+                Ok(state) => Ok(*state),
+                Err(state) => Ok(state),
+            },
             ctx: new_ctx,
             errors: mem::take(&mut self.errors),
         };

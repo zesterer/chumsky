@@ -10,7 +10,7 @@ fn parser<'a>() -> impl Parser<'a, str, Vec<Stmt>> {
     let expr = just("expr"); // TODO
 
     let block = recursive(|block| {
-        let indent = any().filter(|c| *c == ' ')
+        let indent = any().filter(|c: &char| *c == ' ')
             .repeated()
             .configure(|cfg, parent_indent| cfg.exactly(*parent_indent));
 

@@ -26,13 +26,11 @@ impl<A: Clone, F: Clone> Clone for Configure<A, F> {
 
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for Configure<A, F>
 where
-    A: Parser<'a, I, O, E>,
+    A: ConfigParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
         where
             Self: Sized,
@@ -42,6 +40,67 @@ where
     }
 
     go_extra!(O);
+}
+
+/// See [`ConfigIterParser::configure`]
+pub struct IterConfigure<A, F, OA> {
+    pub(crate) parser: A,
+    pub(crate) cfg: F,
+    pub(crate) phantom: PhantomData<OA>,
+}
+
+impl<A: Copy, F: Copy, OA> Copy for IterConfigure<A, F, OA> {}
+impl<A: Clone, F: Clone, OA> Clone for IterConfigure<A, F, OA> {
+    fn clone(&self) -> Self {
+        IterConfigure {
+            parser: self.parser.clone(),
+            cfg: self.cfg.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, OA, E, A, F> Parser<'a, I, (), E> for IterConfigure<A, F, OA>
+where
+    A: ConfigIterParser<'a, I, OA, E>,
+    F: Fn(A::Config, &E::Context) -> A::Config,
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+        let mut state = self.make_iter::<Check>(inp)?;
+        loop {
+            match self.next::<Check>(inp, &mut state) {
+                Some(res) => res?,
+                None => break Ok(M::bind(|| ())),
+            }
+        }
+    }
+
+    go_extra!(());
+}
+
+impl<'a, I, O, E, A, F> IterParser<'a, I, O, E> for IterConfigure<A, F, O>
+where
+    A: ConfigIterParser<'a, I, O, E>,
+    F: Fn(A::Config, &E::Context) -> A::Config,
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+{
+    type IterState<M: Mode> = (A::IterState<M>, A::Config)
+    where
+        I: 'a;
+
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>, E::Error> {
+        Ok((
+            A::make_iter(&self.parser, inp)?,
+            (self.cfg)(A::Config::default(), inp.ctx()),
+        ))
+    }
+
+    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> Option<PResult<M, O, E::Error>> {
+        self.parser.next_cfg(inp, &mut state.0, &state.1)
+    }
 }
 
 /// See [`Parser::map_slice`].
@@ -92,8 +151,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(&'a I::Slice) -> U,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U, E::Error> {
         let before = inp.save();
         self.parser.go::<Check>(inp)?;
@@ -127,8 +184,6 @@ where
     I: Input + SliceInput + ?Sized,
     E: ParserExtra<'a, I>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Slice, E::Error>
     where
         Self: Sized,
@@ -166,8 +221,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(&O) -> bool,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
@@ -201,8 +254,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA) -> O,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         self.parser
             .go::<M>(inp)
@@ -227,8 +278,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> O,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         self.parser.go::<M>(inp).map(|out| {
@@ -257,8 +306,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> O,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).map(|out| {
@@ -288,8 +335,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> Result<O, E::Error>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
@@ -319,8 +364,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> Result<O, E::Error>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         self.parser.go::<Emit>(inp).and_then(|out| {
@@ -361,8 +404,6 @@ where
     A: Parser<'a, I, OA, E>,
     O: Clone,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         self.parser
             .go::<Check>(inp)
@@ -394,8 +435,6 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         self.parser.go::<Check>(inp).map(|_| M::bind(|| ()))
     }
@@ -428,8 +467,6 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (OA, OB), E::Error> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
@@ -464,8 +501,6 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let _a = self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
@@ -500,8 +535,6 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<Check>(inp)?;
@@ -537,8 +570,6 @@ where
     B: Parser<'a, I, OB, E>,
     F: Fn(OA) -> B,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let before = inp.save();
         match self.parser.go::<Emit>(inp) {
@@ -590,8 +621,6 @@ where
     B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'a,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let p1 = self.parser.go::<Emit>(inp)?;
         inp.with_ctx(
@@ -626,8 +655,6 @@ where
     A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
     Ctx: 'a + Clone,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.with_ctx(self.ctx.clone(), |inp| {
             self.parser.go::<M>(inp)
@@ -661,8 +688,6 @@ where
     F: Fn(&E::Context) -> Ctx,
     Ctx: 'a,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.with_ctx((self.mapper)(inp.ctx()), |inp| {
             self.parser.go::<M>(inp)
@@ -689,8 +714,6 @@ where
     B: Parser<'a, I, OB, E>,
     C: Parser<'a, I, OC, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let _ = self.start.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
@@ -716,8 +739,6 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let _ = self.padding.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
@@ -742,8 +763,6 @@ where
     A: Parser<'a, I, O, E>,
     B: Parser<'a, I, O, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
@@ -776,8 +795,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Parser<'a, I, O, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
@@ -921,8 +938,6 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
-    type Config = RepeatedCfg;
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let mut state = self.make_iter::<Check>(inp)?;
 
@@ -954,7 +969,6 @@ where
         Ok(0)
     }
 
-    // TODO: Support config
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -975,6 +989,47 @@ where
             Err(e) => {
                 inp.rewind(before);
                 if *count >= self.at_least {
+                    None
+                } else {
+                    Some(Err(e))
+                }
+            }
+        }
+    }
+}
+
+impl<'a, A, O, I, E> ConfigIterParser<'a, I, O, E> for Repeated<A, O, I, E>
+where
+    I: Input + ?Sized + 'a,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+{
+    type Config = RepeatedCfg;
+
+    fn next_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        count: &mut Self::IterState<M>,
+        cfg: &Self::Config,
+    ) -> Option<PResult<M, O, E::Error>> {
+        let at_most = cfg.at_most.or(self.at_most);
+        let at_least = cfg.at_least.unwrap_or(self.at_least);
+
+        if let Some(at_most) = at_most {
+            if *count >= at_most {
+                return None;
+            }
+        }
+
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(item) => {
+                *count += 1;
+                Some(Ok(item))
+            }
+            Err(e) => {
+                inp.rewind(before);
+                if *count >= at_least {
                     None
                 } else {
                     Some(Err(e))
@@ -1201,8 +1256,6 @@ where
     B: Parser<'a, I, OB, E>,
     C: Container<OA>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
         // STEPS:
         // 1. If allow_leading -> Consume separator if there
@@ -1355,8 +1408,6 @@ where
     A: IterParser<'a, I, O, E>,
     C: Container<O>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
@@ -1389,8 +1440,6 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Option<O>, E::Error> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
@@ -1418,8 +1467,6 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.save();
 
@@ -1456,8 +1503,6 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
@@ -1521,8 +1566,6 @@ where
     A: Parser<'a, I, OA, E>,
     C: ContainerExactly<OA, N>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
         let mut i = 0;
         let mut output = M::bind(|| C::uninit());
@@ -1651,8 +1694,6 @@ where
     B: Parser<'a, I, OB, E>,
     C: ContainerExactly<OA, N>,
 {
-    type Config = ();
-
     // FIXME: why parse result output is not C ?
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [OA; N], E::Error> {
         if self.allow_leading {
@@ -1736,8 +1777,6 @@ where
     A::IntoIter: DoubleEndedIterator,
     F: Fn(A::Item, B) -> B,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, B, E::Error>
     where
         Self: Sized,
@@ -1778,8 +1817,6 @@ where
     B: IntoIterator,
     F: Fn(A, B::Item) -> A,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, A, E::Error>
     where
         Self: Sized,
@@ -1806,8 +1843,6 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
@@ -1836,8 +1871,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> E::Error,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
@@ -1865,8 +1898,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span) -> E::Error,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
@@ -1896,8 +1927,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
@@ -1938,8 +1967,6 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut Emitter<E::Error>) -> U,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U, E::Error>
     where
         Self: Sized,
@@ -1973,8 +2000,6 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> Result<O, E::Error>,
 {
-    type Config = ();
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,

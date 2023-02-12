@@ -11,11 +11,16 @@ macro_rules! go_extra {
         fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O, E::Error> {
             Parser::<I, $O, E>::go::<Check>(self, inp)
         }
+    };
+}
+
+macro_rules! go_cfg_extra {
+    ( $O :ty ) => {
         fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, $O, E::Error> {
-            Parser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
         fn go_check_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Check, $O, E::Error> {
-            Parser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
 }
@@ -49,8 +54,10 @@ pub mod prelude {
         text,
         Boxed,
         IterParser,
+        ConfigIterParser,
         ParseResult,
         Parser,
+        ConfigParser,
     };
 }
 
@@ -249,7 +256,7 @@ mod internal {
         where
             I: Input + ?Sized,
             E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized;
+            P: ConfigParser<'a, I, O, E> + ?Sized;
     }
 
     /// Emit mode - generates parser output
@@ -299,7 +306,7 @@ mod internal {
         where
             I: Input + ?Sized,
             E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
         {
             parser.go_emit_cfg(inp, cfg)
         }
@@ -341,11 +348,12 @@ mod internal {
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config) -> PResult<Self, O, E::Error>
-            where
-                I: Input + ?Sized,
-                E: ParserExtra<'a, I>,
-                P: Parser<'a, I, O, E> + ?Sized,
+            cfg: P::Config
+        ) -> PResult<Self, O, E::Error>
+        where
+            I: Input + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
         {
             parser.go_check_cfg(inp, cfg)
         }
@@ -374,10 +382,6 @@ pub use internal::{Check, Emit, Mode};
     )
 )]
 pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default> {
-    /// Type used to configure the parser. Not all parsers support runtime configuration, those
-    /// that don't will have this set to `()`.
-    type Config: Default;
-
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -473,33 +477,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O, E::Error>;
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O, E::Error>;
-
-    /// Parse a stream with the provided configured values. This can be used to control a parser's
-    /// behavior at parse-time.
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error>
-    where
-        Self: Sized,
-    {
-        #![allow(unused_variables)]
-        self.go::<M>(inp)
-    }
-
-    #[doc(hidden)]
-    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O, E::Error>;
-    #[doc(hidden)]
-    fn go_check_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Check, O, E::Error>;
-
-    /// TODO
-    fn configure<F>(self, cfg: F) -> Configure<Self, F>
-    where
-        Self: Sized,
-        F: Fn(Self::Config, &E::Context) -> Self::Config,
-    {
-        Configure {
-            parser: self,
-            cfg,
-        }
-    }
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
@@ -938,12 +915,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let successor = just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1));
+    ///
     /// // A parser that parses a single letter and then its successor
     /// let successive_letters = one_of::<_, _, extra::Err<Simple<[u8]>>>(b'a'..=b'z')
-    ///     .then_with_ctx(
-    ///         just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1)),
-    ///         |letter, _| letter,
-    ///     );
+    ///     .then_with_ctx(successor);
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
@@ -1752,12 +1728,45 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
-    fn boxed(self) -> Boxed<'a, I, O, E, Self::Config>
+    fn boxed(self) -> Boxed<'a, I, O, E>
     where
         Self: Sized + 'a,
     {
         Boxed {
             inner: Rc::new(self),
+        }
+    }
+}
+
+/// A parser that can be configured with runtime context
+pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
+where
+    I: ?Sized + Input,
+    E: ParserExtra<'a, I>,
+{
+    /// Type used to configure the parser
+    type Config: Default;
+
+    /// Parse a stream with the provided configured values. This can be used to control a parser's
+    /// behavior at parse-time.
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error>
+    where
+        Self: Sized;
+
+    #[doc(hidden)]
+    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O, E::Error>;
+    #[doc(hidden)]
+    fn go_check_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Check, O, E::Error>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> Configure<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        Configure {
+            parser: self,
+            cfg,
         }
     }
 }
@@ -1869,6 +1878,7 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     where
         Self: IterParser<'a, I, O, E> + Sized,
         E::State: Default,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Err(E::State::default()));
         ParseResult::new(
@@ -1893,6 +1903,7 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     ) -> ParseResult<ParserIter<'a, 'parse, Self, I, O, E>, E::Error>
     where
         Self: IterParser<'a, I, O, E> + Sized,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Ok(state));
         ParseResult::new(
@@ -1930,6 +1941,34 @@ where
 }
 */
 
+/// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
+/// can be configured at runtime.
+pub trait ConfigIterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default>: IterParser<'a, I, O, E> {
+    /// Type used to configure the parser
+    type Config: Default;
+
+    #[doc(hidden)]
+    fn next_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+        cfg: &Self::Config,
+    ) -> Option<PResult<M, O, E::Error>>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        IterConfigure {
+            parser: self,
+            cfg,
+            phantom: PhantomData,
+        }
+    }
+}
+
 /// See [`Parser::boxed`].
 ///
 /// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
@@ -1939,11 +1978,11 @@ where
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
-pub struct Boxed<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>, Cfg> {
-    inner: Rc<dyn Parser<'a, I, O, E, Config = Cfg> + 'a>,
+pub struct Boxed<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> {
+    inner: Rc<dyn Parser<'a, I, O, E> + 'a>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>, Cfg> Clone for Boxed<'a, I, O, E, Cfg> {
+impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -1951,20 +1990,13 @@ impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>, Cfg> Clone for Boxed<'a, I
     }
 }
 
-impl<'a, I, O, E, Cfg> Parser<'a, I, O, E> for Boxed<'a, I, O, E, Cfg>
+impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, I, O, E>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
-    Cfg: Default,
 {
-    type Config = Cfg;
-
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(&*self.inner, inp)
-    }
-
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error> {
-        M::invoke_cfg(&*self.inner, inp, cfg)
     }
 
     go_extra!(O);
