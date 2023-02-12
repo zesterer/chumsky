@@ -10,32 +10,29 @@ fn parser<'a>() -> impl Parser<'a, str, Vec<Stmt>> {
     let expr = just("expr"); // TODO
 
     let block = recursive(|block| {
-        let indent = any().filter(|c: &char| *c == ' ')
+        let indent = any()
+            .filter(|c: &char| *c == ' ')
             .repeated()
             .configure(|cfg, parent_indent| cfg.exactly(*parent_indent));
 
-        let expr_stmt = expr
-            .then_ignore(text::newline())
-            .to(Stmt::Expr);
+        let expr_stmt = expr.then_ignore(text::newline()).to(Stmt::Expr);
         let control_flow = just("loop:")
             .then(text::newline())
-            .ignore_then(block).map(Stmt::Loop);
+            .ignore_then(block)
+            .map(Stmt::Loop);
         let stmt = expr_stmt.or(control_flow);
 
-        text::whitespace().count()
-            .then_with_ctx(stmt
-                .separated_by(indent)
-                .collect())
+        text::whitespace()
+            .count()
+            .then_with_ctx(stmt.separated_by(indent).collect())
     });
 
     block.with_ctx(0)
 }
 
 fn main() {
-    let stmts = parser()
-        .padded()
-        .then_ignore(end())
-        .parse(r#"
+    let stmts = parser().padded().then_ignore(end()).parse(
+        r#"
 expr
 expr
 loop:
@@ -45,7 +42,8 @@ loop:
         expr
     expr
 expr
-"#);
+"#,
+    );
     println!("{:#?}", stmts.output());
     println!("{:?}", stmts.errors().collect::<Vec<_>>());
 }

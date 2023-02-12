@@ -16,10 +16,18 @@ macro_rules! go_extra {
 
 macro_rules! go_cfg_extra {
     ( $O :ty ) => {
-        fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, $O, E::Error> {
+        fn go_emit_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Emit, $O, E::Error> {
             ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
-        fn go_check_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Check, $O, E::Error> {
+        fn go_check_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Check, $O, E::Error> {
             ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
@@ -53,11 +61,11 @@ pub mod prelude {
         span::{SimpleSpan, Span as _},
         text,
         Boxed,
-        IterParser,
         ConfigIterParser,
+        ConfigParser,
+        IterParser,
         ParseResult,
         Parser,
-        ConfigParser,
     };
 }
 
@@ -300,7 +308,8 @@ mod internal {
 
         #[inline(always)]
         fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P, inp: &mut InputRef<'a, '_, I, E>,
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
             cfg: P::Config,
         ) -> PResult<Self, O, E::Error>
         where
@@ -348,7 +357,7 @@ mod internal {
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config
+            cfg: P::Config,
         ) -> PResult<Self, O, E::Error>
         where
             I: Input + ?Sized,
@@ -932,7 +941,6 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         Self: Sized,
         CtxN: 'a,
         P: Parser<'a, I, U, extra::Full<E::Error, E::State, CtxN>>,
-
     {
         ThenWithCtx {
             parser: self,
@@ -942,10 +950,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 
     /// TODO
-    fn map_ctx<Ctx, F>(
-        self,
-        mapper: F,
-    ) -> MapCtx<Self, F>
+    fn map_ctx<Ctx, F>(self, mapper: F) -> MapCtx<Self, F>
     where
         Self: Sized,
         F: Fn(O, &E::Context) -> Ctx,
@@ -958,18 +963,12 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 
     /// TODO
-    fn with_ctx<Ctx>(
-        self,
-        ctx: Ctx,
-    ) -> WithCtx<Self, Ctx>
+    fn with_ctx<Ctx>(self, ctx: Ctx) -> WithCtx<Self, Ctx>
     where
         Self: Sized,
         Ctx: 'a + Clone,
     {
-        WithCtx {
-            parser: self,
-            ctx,
-        }
+        WithCtx { parser: self, ctx }
     }
 
     /// ```
@@ -1749,14 +1748,26 @@ where
 
     /// Parse a stream with the provided configured values. This can be used to control a parser's
     /// behavior at parse-time.
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O, E::Error>
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, O, E::Error>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O, E::Error>;
+    fn go_emit_cfg(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Emit, O, E::Error>;
     #[doc(hidden)]
-    fn go_check_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Check, O, E::Error>;
+    fn go_check_cfg(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Check, O, E::Error>;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
@@ -1764,10 +1775,7 @@ where
         Self: Sized,
         F: Fn(Self::Config, &E::Context) -> Self::Config,
     {
-        Configure {
-            parser: self,
-            cfg,
-        }
+        Configure { parser: self, cfg }
     }
 }
 
@@ -1943,7 +1951,9 @@ where
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
-pub trait ConfigIterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default>: IterParser<'a, I, O, E> {
+pub trait ConfigIterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default>:
+    IterParser<'a, I, O, E>
+{
     /// Type used to configure the parser
     type Config: Default;
 

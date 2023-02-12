@@ -206,9 +206,12 @@ where
 {
     type Config = JustCfg<T>;
 
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, T, E::Error> {
-        let seq = cfg.seq.as_ref()
-            .unwrap_or(&self.seq);
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, T, E::Error> {
+        let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
 
         let mut items = seq.seq_iter();
         loop {

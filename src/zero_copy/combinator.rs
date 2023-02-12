@@ -32,8 +32,8 @@ where
     E: ParserExtra<'a, I>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         let cfg = (self.cfg)(A::Config::default(), inp.ctx());
         self.parser.go_cfg::<M>(inp, cfg)
@@ -91,14 +91,21 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>, E::Error> {
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>, E::Error> {
         Ok((
             A::make_iter(&self.parser, inp)?,
             (self.cfg)(A::Config::default(), inp.ctx()),
         ))
     }
 
-    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> Option<PResult<M, O, E::Error>> {
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> Option<PResult<M, O, E::Error>> {
         self.parser.next_cfg(inp, &mut state.0, &state.1)
     }
 }
@@ -613,7 +620,8 @@ impl<A: Clone, B: Clone, OA, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, I, E>
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E> for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E>
+    for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
@@ -623,10 +631,7 @@ where
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(
-            p1,
-            |inp| self.then.go::<M>(inp)
-        )
+        inp.with_ctx(p1, |inp| self.then.go::<M>(inp))
     }
 
     go_extra!(OB);
@@ -656,9 +661,7 @@ where
     Ctx: 'a + Clone,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        inp.with_ctx(self.ctx.clone(), |inp| {
-            self.parser.go::<M>(inp)
-        })
+        inp.with_ctx(self.ctx.clone(), |inp| self.parser.go::<M>(inp))
     }
 
     go_extra!(O);
@@ -689,9 +692,7 @@ where
     Ctx: 'a,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        inp.with_ctx((self.mapper)(inp.ctx()), |inp| {
-            self.parser.go::<M>(inp)
-        })
+        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
     }
 
     go_extra!(O);
