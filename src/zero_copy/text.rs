@@ -131,7 +131,7 @@ impl Char for u8 {
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Padded<A> {
     pub(crate) parser: A,
 }
@@ -171,7 +171,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E> + Clone, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
 {
@@ -201,7 +201,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E> + Clone, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
 {
@@ -243,7 +243,8 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E> + Clone
+pub fn newline<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>(
+) -> impl Parser<'a, I, (), E> + Copy + Clone
 where
     I::Token: Char,
 {
@@ -286,7 +287,7 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Clone, C, I, E>
+pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy + Clone, C, I, E>
 where
     C: Char,
     I: StrInput<C> + ?Sized,
@@ -333,7 +334,7 @@ where
 #[must_use]
 pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E> + Clone {
+) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -352,7 +353,7 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
 pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, &'a C::Slice, E> + Clone {
+) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
