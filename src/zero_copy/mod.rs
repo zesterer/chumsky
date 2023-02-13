@@ -14,6 +14,25 @@ macro_rules! go_extra {
     };
 }
 
+macro_rules! go_cfg_extra {
+    ( $O :ty ) => {
+        fn go_emit_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Emit, $O, E::Error> {
+            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+        }
+        fn go_check_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Check, $O, E::Error> {
+            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+        }
+    };
+}
+
 mod blanket;
 pub mod combinator;
 pub mod container;
@@ -42,6 +61,8 @@ pub mod prelude {
         span::{SimpleSpan, Span as _},
         text,
         Boxed,
+        ConfigIterParser,
+        ConfigParser,
         IterParser,
         ParseResult,
         Parser,
@@ -231,6 +252,19 @@ mod internal {
             I: Input + ?Sized,
             E: ParserExtra<'a, I>,
             P: Parser<'a, I, O, E> + ?Sized;
+
+        /// Invoke a parser with configuration using the current mode. This is normally equivalent
+        /// to [`parser.go::<M>(inp)`](Parser::go_cfg), but it can be called on unsized values
+        /// such as `dyn Parser`.
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O, E::Error>
+        where
+            I: Input + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized;
     }
 
     /// Emit mode - generates parser output
@@ -271,6 +305,20 @@ mod internal {
         {
             parser.go_emit(inp)
         }
+
+        #[inline(always)]
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O, E::Error>
+        where
+            I: Input + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_emit_cfg(inp, cfg)
+        }
     }
 
     /// Check mode - all output is discarded, and only uses parsers to check validity
@@ -303,6 +351,20 @@ mod internal {
             P: Parser<'a, I, O, E> + ?Sized,
         {
             parser.go_check(inp)
+        }
+
+        #[inline(always)]
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O, E::Error>
+        where
+            I: Input + ?Sized,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_check_cfg(inp, cfg)
         }
     }
 }
@@ -340,6 +402,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     where
         Self: Sized,
         E::State: Default,
+        E::Context: Default,
     {
         self.parse_with_state(input, &mut E::State::default())
     }
@@ -355,6 +418,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     fn parse_with_state(&self, input: &'a I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
         Self: Sized,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Emit>(&mut inp);
@@ -380,6 +444,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     where
         Self: Sized,
         E::State: Default,
+        E::Context: Default,
     {
         self.check_with_state(input, &mut E::State::default())
     }
@@ -394,6 +459,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     fn check_with_state(&self, input: &'a I, state: &mut E::State) -> ParseResult<(), E::Error>
     where
         Self: Sized,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Check>(&mut inp);
@@ -842,6 +908,67 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
             then,
             phantom: PhantomData,
         }
+    }
+
+    /// Parse one thing and then another thing, creating the second parser from the result of
+    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
+    ///
+    /// The output of this parser is `U`, the result of the second parser
+    ///
+    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
+    /// recovery then the second produces an error, the primary error will point to the location in
+    /// the second parser which failed, ignoring that the first parser may be the root cause. There
+    /// may be other pathological errors cases as well.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
+    /// let successor = just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1));
+    ///
+    /// // A parser that parses a single letter and then its successor
+    /// let successive_letters = one_of::<_, _, extra::Err<Simple<[u8]>>>(b'a'..=b'z')
+    ///     .then_with_ctx(successor);
+    ///
+    /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
+    /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
+    /// ```
+    fn then_with_ctx<U, CtxN, P>(
+        self,
+        then: P,
+    ) -> ThenWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, CtxN>>
+    where
+        Self: Sized,
+        CtxN: 'a,
+        P: Parser<'a, I, U, extra::Full<E::Error, E::State, CtxN>>,
+    {
+        ThenWithCtx {
+            parser: self,
+            then,
+            phantom: PhantomData,
+        }
+    }
+
+    /// TODO
+    fn map_ctx<Ctx, F>(self, mapper: F) -> MapCtx<Self, F>
+    where
+        Self: Sized,
+        F: Fn(O, &E::Context) -> Ctx,
+        Ctx: 'a,
+    {
+        MapCtx {
+            parser: self,
+            mapper,
+        }
+    }
+
+    /// TODO
+    fn with_ctx<Ctx>(self, ctx: Ctx) -> WithCtx<Self, Ctx>
+    where
+        Self: Sized,
+        Ctx: 'a + Clone,
+    {
+        WithCtx { parser: self, ctx }
     }
 
     /// ```
@@ -1610,6 +1737,48 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 }
 
+/// A parser that can be configured with runtime context
+pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
+where
+    I: ?Sized + Input,
+    E: ParserExtra<'a, I>,
+{
+    /// Type used to configure the parser
+    type Config: Default;
+
+    /// Parse a stream with the provided configured values. This can be used to control a parser's
+    /// behavior at parse-time.
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, O, E::Error>
+    where
+        Self: Sized;
+
+    #[doc(hidden)]
+    fn go_emit_cfg(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Emit, O, E::Error>;
+    #[doc(hidden)]
+    fn go_check_cfg(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Check, O, E::Error>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> Configure<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        Configure { parser: self, cfg }
+    }
+}
+
 /// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
 pub struct ParserIter<
     'a,
@@ -1717,6 +1886,7 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     where
         Self: IterParser<'a, I, O, E> + Sized,
         E::State: Default,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Err(E::State::default()));
         ParseResult::new(
@@ -1741,6 +1911,7 @@ pub trait IterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::De
     ) -> ParseResult<ParserIter<'a, 'parse, Self, I, O, E>, E::Error>
     where
         Self: IterParser<'a, I, O, E> + Sized,
+        E::Context: Default,
     {
         let mut inp = InputRef::new(input, Ok(state));
         ParseResult::new(
@@ -1777,6 +1948,36 @@ where
     }
 }
 */
+
+/// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
+/// can be configured at runtime.
+pub trait ConfigIterParser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Default>:
+    IterParser<'a, I, O, E>
+{
+    /// Type used to configure the parser
+    type Config: Default;
+
+    #[doc(hidden)]
+    fn next_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+        cfg: &Self::Config,
+    ) -> Option<PResult<M, O, E::Error>>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        IterConfigure {
+            parser: self,
+            cfg,
+            phantom: PhantomData,
+        }
+    }
+}
 
 /// See [`Parser::boxed`].
 ///

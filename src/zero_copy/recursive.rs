@@ -43,8 +43,6 @@ enum RecursiveInner<T: ?Sized> {
     Unowned(Weak<T>),
 }
 
-type OnceParser<'a, I, O, E> = OnceCell<Box<dyn Parser<'a, I, O, E> + 'a>>;
-
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
 pub type Direct<'a, I, O, Extra> = dyn Parser<'a, I, O, Extra> + 'a;

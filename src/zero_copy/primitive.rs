@@ -85,23 +85,23 @@ where
 }
 
 /// See [`empty`].
-pub struct Empty<I: ?Sized>(PhantomData<I>);
+pub struct Empty<I: ?Sized, E>(PhantomData<(E, I)>);
 
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
-pub const fn empty<I: Input + ?Sized>() -> Empty<I> {
+pub const fn empty<I: Input + ?Sized, E>() -> Empty<I, E> {
     Empty(PhantomData)
 }
 
-impl<I: ?Sized> Copy for Empty<I> {}
-impl<I: ?Sized> Clone for Empty<I> {
+impl<I: ?Sized, E> Copy for Empty<I, E> {}
+impl<I: ?Sized, E> Clone for Empty<I, E> {
     fn clone(&self) -> Self {
         Empty(PhantomData)
     }
 }
 
-impl<'a, I, E> Parser<'a, I, (), E> for Empty<I>
+impl<'a, I, E> Parser<'a, I, (), E> for Empty<I, E>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
@@ -117,6 +117,25 @@ where
 //     type Iter<'a> = C::Iter<'a>;
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
 // }
+
+/// TODO
+pub struct JustCfg<T> {
+    seq: Option<T>,
+}
+
+impl<T> JustCfg<T> {
+    /// TODO
+    pub fn seq(mut self, new_seq: T) -> Self {
+        self.seq = Some(new_seq);
+        self
+    }
+}
+
+impl<T> Default for JustCfg<T> {
+    fn default() -> Self {
+        JustCfg { seq: None }
+    }
+}
 
 /// See [`just`].
 pub struct Just<T, I: ?Sized, E = EmptyErr> {
@@ -172,7 +191,29 @@ where
     T: OrderedSeq<I::Token> + Clone,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T, E::Error> {
-        let mut items = self.seq.seq_iter();
+        Self::go_cfg::<M>(self, inp, JustCfg::default())
+    }
+
+    go_extra!(T);
+}
+
+impl<'a, I, E, T> ConfigParser<'a, I, T, E> for Just<T, I, E>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    I::Token: Clone + PartialEq,
+    T: OrderedSeq<I::Token> + Clone,
+{
+    type Config = JustCfg<T>;
+
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, T, E::Error> {
+        let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
+
+        let mut items = seq.seq_iter();
         loop {
             match items.next() {
                 Some(next) => {
@@ -192,12 +233,12 @@ where
                         }
                     }
                 }
-                None => break Ok(M::bind(|| self.seq.clone())),
+                None => break Ok(M::bind(|| seq.clone())),
             }
         }
     }
 
-    go_extra!(T);
+    go_cfg_extra!(T);
 }
 
 /// See [`one_of`].
