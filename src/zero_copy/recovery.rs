@@ -85,7 +85,7 @@ where
                     .boxed();
             }
 
-            let mut skip = core::array::IntoIter::new([start, end])
+            let skip = core::array::IntoIter::new([start, end])
                 .into_iter()
                 .chain(core::array::IntoIter::new(others).flat_map(|(s, e)| [s, e]))
                 .collect::<Vec<_>>();

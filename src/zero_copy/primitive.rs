@@ -37,7 +37,7 @@ pub struct End<I: ?Sized, E>(PhantomData<(E, I)>);
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<_, _, extra::Err<Simple<str>>>(10);
+/// let digits = text::digits::<_, _, extra::Err<Simple<str>>>(10).slice();
 ///
 /// // This parser parses digits!
 /// assert_eq!(digits.parse("1234").into_result(), Ok("1234"));
@@ -577,8 +577,8 @@ impl<I: ?Sized, O, E> Clone for Todo<I, O, E> {
 /// ```should_panic
 /// # use chumsky::zero_copy::prelude::*;
 /// let int = just::<_, _, extra::Err<Simple<str>>>("0x").ignore_then(todo())
-///     .or(just("0b").ignore_then(text::digits(2)))
-///     .or(text::int(10));
+///     .or(just("0b").ignore_then(text::digits(2).slice()))
+///     .or(text::int(10).slice());
 ///
 /// // Decimal numbers are parsed
 /// assert_eq!(int.parse("12").into_result(), Ok("12"));

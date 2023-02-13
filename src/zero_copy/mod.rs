@@ -1298,7 +1298,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, E, ()>
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, E>
     where
         Self: Sized,
         B: Parser<'a, I, U, E>,
@@ -1426,6 +1426,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
     /// let just_numbers = text::digits::<_, _, extra::Err<Simple<str>>>(10)
+    ///     .slice()
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
     ///     .separated_by(just(','))
@@ -2097,8 +2098,8 @@ fn zero_copy_repetition() {
             .map_slice(|b: &str| b.parse::<u64>().unwrap())
             .padded()
             .separated_by(just(',').padded())
-            .collect()
             .allow_trailing()
+            .collect()
             .delimited_by(just('['), just(']'))
     }
 

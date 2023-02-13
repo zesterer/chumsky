@@ -978,9 +978,6 @@ where
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let mut state = self.make_iter::<Check>(inp)?;
-
-        // TODO: Implement this in terms of `IterParser`
-        let mut count = 0;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Some(res) => res?,
@@ -1002,7 +999,7 @@ where
 
     fn make_iter<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        _inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<M>, E::Error> {
         Ok(0)
     }
@@ -1078,18 +1075,18 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E, C = ()> {
+pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
     pub(crate) at_most: Option<usize>,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(OA, OB, C, E, I)>,
+    pub(crate) phantom: PhantomData<(OA, OB, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, I: ?Sized, E, C> Copy for SeparatedBy<A, B, OA, OB, I, E, C> {}
-impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E, C> Clone for SeparatedBy<A, B, OA, OB, I, E, C> {
+impl<A: Copy, B: Copy, OA, OB, I: ?Sized, E> Copy for SeparatedBy<A, B, OA, OB, I, E> {}
+impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E> Clone for SeparatedBy<A, B, OA, OB, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1103,7 +1100,7 @@ impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E, C> Clone for SeparatedBy<A, B, OA
     }
 }
 
-impl<'a, A, B, OA, OB, I, C, E> SeparatedBy<A, B, OA, OB, I, E, C>
+impl<'a, A, B, OA, OB, I, E> SeparatedBy<A, B, OA, OB, I, E>
 where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -1240,187 +1237,97 @@ where
             ..self
         }
     }
-
-    /// Set the type of [`Container`] to collect into.
-    // TODO: Remove this in favour of `IterParser::collect`
-    pub fn collect<D: Container<OA>>(self) -> SeparatedBy<A, B, OA, OB, I, E, D>
-    where
-        A: Parser<'a, I, OA, E>,
-        B: Parser<'a, I, OB, E>,
-    {
-        SeparatedBy {
-            parser: self.parser,
-            separator: self.separator,
-            at_least: self.at_least,
-            at_most: self.at_most,
-            allow_leading: self.allow_leading,
-            allow_trailing: self.allow_trailing,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Output the number of items parsed.
-    ///
-    /// This is sugar for [`.collect::<usize>()`](Self::collect).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::prelude::*;
-    ///
-    /// // Counts how many chess squares are in the input.
-    /// let squares = one_of::<_, _, extra::Err<Simple<str>>>('a'..='z').then(one_of('1'..='8')).separated_by(just(',')).allow_trailing().count();
-    ///
-    /// assert_eq!(squares.parse("a1,b2,c3,").into_result(), Ok(3));
-    /// assert_eq!(squares.parse("e5,e7,c6,c7,f6,d5,e6,d7,e4,c5,d6,c4,b6,f5").into_result(), Ok(14));
-    /// assert_eq!(squares.parse("").into_result(), Ok(0));
-    /// ```
-    // TODO: Remove this in favour of `IterParser::count`
-    pub fn count(self) -> SeparatedBy<A, B, OA, OB, I, E, usize>
-    where
-        A: Parser<'a, I, OA, E>,
-        B: Parser<'a, I, OB, E>,
-    {
-        self.collect()
-    }
 }
 
-// TODO: Implement `IterParser` instead
-impl<'a, I, E, A, B, OA, OB, C> Parser<'a, I, C, E> for SeparatedBy<A, B, OA, OB, I, E, C>
+impl<'a, I, E, A, B, OA, OB> IterParser<'a, I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
 where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
-    C: Container<OA>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
-        // STEPS:
-        // 1. If allow_leading -> Consume separator if there
-        //    if Ok  -> continue
-        //    if Err -> rewind and continue
-        //
-        // 2. Consume item
-        //    if Ok -> add to output and continue
-        //    if Err && count >= self.at_least -> rewind and return output
-        //    if Err && count < self.at_least -> rewind and return Err
-        //
-        // 3. Consume separator
-        //    if Ok => continue
-        //    if Err && count >= self.at_least => rewind and break
-        //    if Err && count < self.at_least => rewind and return Err
-        //
-        // 4. Consume item
-        //    if Ok && count >= self.at_most -> add to output and break
-        //    if Ok && count < self.at_most -> add to output and continue
-        //    if Err && count >= self.at_least => rewind and break
-        //    if Err && count < self.at_least => rewind and return Err
-        //
-        // 5. Goto 3 until 'break'
-        //
-        // 6. If allow_trailing -> Consume separator
-        //    if Ok -> continue
-        //    if Err -> rewind and continue
-        //
-        // 7. Return output
+    type IterState<M: Mode> = usize
+    where
+        I: 'a;
 
-        // Setup
-        let mut count = 0;
-        let mut output = M::bind::<C, _>(|| C::default());
+    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>, E::Error> {
+        Ok(0)
+    }
 
-        // Step 1
-        if self.allow_leading {
-            let before_separator = inp.save();
+    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> Option<PResult<M, OA, E::Error>> {
+        if self.at_most.map_or(false, |max| *state >= max) {
+            return None;
+        }
+
+        let before_separator = inp.save();
+        if *state == 0 && self.allow_leading {
             if let Err(_) = self.separator.go::<Check>(inp) {
                 inp.rewind(before_separator);
             }
-        }
-
-        // Step 2
-        let before = inp.save();
-        match self.parser.go::<M>(inp) {
-            Ok(item) => {
-                output = M::combine(output, item, |mut output: C, item| {
-                    output.push(item);
-                    output
-                });
-                count += 1;
-            }
-            Err(..) if self.at_least == 0 => {
-                inp.rewind(before);
-                return Ok(output);
-            }
-            Err(err) => {
-                inp.rewind(before);
-                return Err(err);
-            }
-        }
-
-        loop {
-            // Step 3
-            let before_separator = inp.save();
+        } else if *state > 0 {
             match self.separator.go::<Check>(inp) {
                 Ok(..) => {
                     // Do nothing
                 }
-                Err(err) if count < self.at_least => {
+                Err(err) if *state < self.at_least => {
                     inp.rewind(before_separator);
-                    return Err(err);
+                    return Some(Err(err));
                 }
                 Err(..) => {
                     inp.rewind(before_separator);
-                    break;
+                    return None;
                 }
             }
-
-            // Step 4
-            match self.parser.go::<M>(inp) {
-                Ok(item) => {
-                    output = M::combine(output, item, |mut output: C, item| {
-                        output.push(item);
-                        output
-                    });
-                    count += 1;
-
-                    if self.at_most.map_or(false, |max| count >= max) {
-                        break;
-                    } else {
-                        continue;
-                    }
-                }
-                Err(err) if count < self.at_least => {
-                    // We have errored before we have reached the count,
-                    // and therefore should return this error, as we are
-                    // still expecting items
-                    inp.rewind(before_separator);
-                    return Err(err);
-                }
-                Err(..) => {
-                    // We are not expecting any more items, so it is okay
-                    // for it to fail, though if it does, we shouldn't have
-                    // consumed the separator, so we need to rewind to it.
-                    inp.rewind(before_separator);
-                    break;
-                }
-            }
-
-            // Step 5
-            // continue
         }
 
-        // Step 6
-        if self.allow_trailing {
-            let before_separator = inp.save();
-            if let Err(_) = self.separator.go::<Check>(inp) {
+        let before_item = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(item) => {
+                *state += 1;
+                Some(Ok(item))
+            }
+            Err(err) if *state < self.at_least => {
+                // We have errored before we have reached the count,
+                // and therefore should return this error, as we are
+                // still expecting items
                 inp.rewind(before_separator);
+                Some(Err(err))
+            }
+            Err(..) => {
+                // We are not expecting any more items, so it is okay
+                // for it to fail.
+
+                // though if we don't allow trailing, we shouldn't have
+                // consumed the separator, so we need to rewind it.
+                if self.allow_trailing {
+                    inp.rewind(before_item);
+                } else {
+                    inp.rewind(before_separator);
+                }
+                None
             }
         }
+    }
+}
 
-        // Step 7
-        Ok(output)
+impl<'a, I, E, A, B, OA, OB> Parser<'a, I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: Parser<'a, I, OB, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+        let mut state = self.make_iter::<Check>(inp)?;
+        loop {
+            match self.next::<Check>(inp, &mut state) {
+                Some(res) => res?,
+                None => break Ok(M::bind(|| ())),
+            }
+        }
     }
 
-    go_extra!(C);
+    go_extra!(());
 }
 
 /// See [`IterParser::collect`].

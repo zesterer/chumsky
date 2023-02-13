@@ -276,7 +276,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<'_, _, _, extra::Err<Simple<str>>>(10);
+/// let digits = text::digits::<'_, _, _, extra::Err<Simple<str>>>(10).slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
