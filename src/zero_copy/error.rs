@@ -91,6 +91,12 @@ impl<I: Input + ?Sized> Error<I> for EmptyErr {
     }
 }
 
+impl fmt::Display for EmptyErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error")
+    }
+}
+
 /// A minimal error type that tracks only the error span and found token. This type is most useful
 /// when you want fast parsing but do not particularly care about the quality of error messages.
 pub struct Simple<I: Input + ?Sized> {
@@ -131,6 +137,16 @@ where
     }
 }
 
+impl<I: Input + ?Sized> fmt::Display for Simple<I>
+where
+    I::Span: fmt::Debug,
+    I::Token: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
 /// The reason for a [`Rich`] error
 pub enum RichReason<I: Input + ?Sized> {
@@ -145,6 +161,16 @@ pub enum RichReason<I: Input + ?Sized> {
     Custom(String),
     /// Multiple unrelated reasons were merged
     Many(Vec<RichReason<I>>),
+}
+
+impl<I: Input + ?Sized> RichReason<I> {
+    fn found(&self) -> Option<&I::Token> {
+        match self {
+            RichReason::ExpectedFound { found, .. } => found.as_ref(),
+            RichReason::Custom(_) => None,
+            RichReason::Many(many) => many.iter().find_map(|r| r.found()),
+        }
+    }
 }
 
 impl<I: Input + ?Sized> RichReason<I>
@@ -264,11 +290,7 @@ impl<I: Input + ?Sized> Rich<I> {
     }
 }
 
-impl<I: Input + ?Sized> Rich<I>
-where
-    I::Span: Clone,
-    I::Token: Clone,
-{
+impl<I: Input + ?Sized> Rich<I> {
     /// Create an error with a custom message and span
     pub fn custom<M: ToString>(span: I::Span, msg: M) -> Rich<I> {
         Rich {
@@ -278,13 +300,40 @@ where
     }
 
     /// Get the span associated with this error
-    pub fn span(&self) -> I::Span {
+    pub fn span(&self) -> I::Span
+    where
+        I::Span: Clone,
+    {
         self.span.clone()
     }
 
     /// Get the reason fro this error
     pub fn reason(&self) -> &RichReason<I> {
         &self.reason
+    }
+
+    /// Get an iterator over the expected items associated with this error
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = Option<&I::Token>> + '_ {
+        fn push_expected<'a, I: Input + ?Sized>(
+            reason: &'a RichReason<I>,
+            v: &mut Vec<Option<&'a I::Token>>,
+        ) {
+            match reason {
+                RichReason::ExpectedFound { expected, .. } => {
+                    v.extend(expected.iter().map(|e| e.as_ref()))
+                }
+                RichReason::Custom(_) => {}
+                RichReason::Many(many) => many.iter().for_each(|r| push_expected(r, v)),
+            }
+        }
+        let mut v = Vec::new();
+        push_expected(&self.reason, &mut v);
+        v.into_iter()
+    }
+
+    /// Get an iterator over the items found by this error
+    pub fn found(&self) -> Option<&I::Token> {
+        self.reason.found()
     }
 }
 

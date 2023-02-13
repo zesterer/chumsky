@@ -1,38 +1,38 @@
 /// This is the parser and interpreter for the 'Foo' language. See `tutorial.md` in the repository's root to learn
 /// about it.
-use chumsky::prelude::*;
+use chumsky::zero_copy::prelude::*;
 
 #[derive(Debug)]
-enum Expr {
+enum Expr<'a> {
     Num(f64),
-    Var(String),
+    Var(&'a str),
 
-    Neg(Box<Expr>),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
+    Neg(Box<Expr<'a>>),
+    Add(Box<Expr<'a>>, Box<Expr<'a>>),
+    Sub(Box<Expr<'a>>, Box<Expr<'a>>),
+    Mul(Box<Expr<'a>>, Box<Expr<'a>>),
+    Div(Box<Expr<'a>>, Box<Expr<'a>>),
 
-    Call(String, Vec<Expr>),
+    Call(&'a str, Vec<Expr<'a>>),
     Let {
-        name: String,
-        rhs: Box<Expr>,
-        then: Box<Expr>,
+        name: &'a str,
+        rhs: Box<Expr<'a>>,
+        then: Box<Expr<'a>>,
     },
     Fn {
-        name: String,
-        args: Vec<String>,
-        body: Box<Expr>,
-        then: Box<Expr>,
+        name: &'a str,
+        args: Vec<&'a str>,
+        body: Box<Expr<'a>>,
+        then: Box<Expr<'a>>,
     },
 }
 
-fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
+fn parser<'a>() -> impl Parser<'a, str, Expr<'a>> {
     let ident = text::ident().padded();
 
     let expr = recursive(|expr| {
         let int = text::int(10)
-            .map(|s: String| Expr::Num(s.parse().unwrap()))
+            .map(|s: &str| Expr::Num(s.parse().unwrap()))
             .padded();
 
         let call = ident
@@ -40,6 +40,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                 expr.clone()
                     .separated_by(just(','))
                     .allow_trailing()
+                    .collect::<Vec<_>>()
                     .delimited_by(just('('), just(')')),
             )
             .map(|(f, args)| Expr::Call(f, args));
@@ -53,6 +54,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
 
         let unary = op('-')
             .repeated()
+            .collect::<Vec<_>>()
             .then(atom)
             .foldr(|_op, rhs| Expr::Neg(Box::new(rhs)));
 
@@ -63,7 +65,8 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                     .to(Expr::Mul as fn(_, _) -> _)
                     .or(op('/').to(Expr::Div as fn(_, _) -> _))
                     .then(unary)
-                    .repeated(),
+                    .repeated()
+                    .collect::<Vec<_>>(),
             )
             .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
@@ -74,7 +77,8 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
                     .to(Expr::Add as fn(_, _) -> _)
                     .or(op('-').to(Expr::Sub as fn(_, _) -> _))
                     .then(product)
-                    .repeated(),
+                    .repeated()
+                    .collect::<Vec<_>>(),
             )
             .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
 
@@ -96,7 +100,7 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
 
         let r#fn = text::keyword("fn")
             .ignore_then(ident)
-            .then(ident.repeated())
+            .then(ident.repeated().collect::<Vec<_>>())
             .then_ignore(just('='))
             .then(expr.clone())
             .then_ignore(just(';'))
@@ -115,9 +119,9 @@ fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
 }
 
 fn eval<'a>(
-    expr: &'a Expr,
-    vars: &mut Vec<(&'a String, f64)>,
-    funcs: &mut Vec<(&'a String, &'a [String], &'a Expr)>,
+    expr: &'a Expr<'a>,
+    vars: &mut Vec<(&'a str, f64)>,
+    funcs: &mut Vec<(&'a str, &'a [&'a str], &'a Expr<'a>)>,
 ) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),
@@ -127,7 +131,7 @@ fn eval<'a>(
         Expr::Mul(a, b) => Ok(eval(a, vars, funcs)? * eval(b, vars, funcs)?),
         Expr::Div(a, b) => Ok(eval(a, vars, funcs)? / eval(b, vars, funcs)?),
         Expr::Var(name) => {
-            if let Some((_, val)) = vars.iter().rev().find(|(var, _)| *var == name) {
+            if let Some((_, val)) = vars.iter().rev().find(|(var, _)| var == name) {
                 Ok(*val)
             } else {
                 Err(format!("Cannot find variable `{}` in scope", name))
@@ -135,21 +139,21 @@ fn eval<'a>(
         }
         Expr::Let { name, rhs, then } => {
             let rhs = eval(rhs, vars, funcs)?;
-            vars.push((name, rhs));
+            vars.push((*name, rhs));
             let output = eval(then, vars, funcs);
             vars.pop();
             output
         }
         Expr::Call(name, args) => {
             if let Some((_, arg_names, body)) =
-                funcs.iter().rev().find(|(var, _, _)| *var == name).copied()
+                funcs.iter().rev().find(|(var, _, _)| var == name).copied()
             {
                 if arg_names.len() == args.len() {
                     let mut args = args
                         .iter()
                         .map(|arg| eval(arg, vars, funcs))
                         .zip(arg_names.iter())
-                        .map(|(val, name)| Ok((name, val?)))
+                        .map(|(val, name)| Ok((*name, val?)))
                         .collect::<Result<_, String>>()?;
                     vars.append(&mut args);
                     let output = eval(body, vars, funcs);
@@ -184,7 +188,7 @@ fn eval<'a>(
 fn main() {
     let src = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
 
-    match parser().parse(src) {
+    match parser().parse(&src).into_result() {
         Ok(ast) => match eval(&ast, &mut Vec::new(), &mut Vec::new()) {
             Ok(output) => println!("{}", output),
             Err(eval_err) => println!("Evaluation error: {}", eval_err),
@@ -192,5 +196,5 @@ fn main() {
         Err(parse_errs) => parse_errs
             .into_iter()
             .for_each(|e| println!("Parse error: {}", e)),
-    }
+    };
 }
