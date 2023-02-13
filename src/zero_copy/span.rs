@@ -37,14 +37,21 @@ pub trait Span {
 /// an iterator. Also has a `Display` implementation
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SimpleSpan<T> {
-    start: T,
-    end: T,
+    /// The start offset of the span.
+    pub start: T,
+    /// The end (exclusive) offset of the span.
+    pub end: T,
 }
 
 impl<T> SimpleSpan<T> {
     /// Create a new `SimpleSpan` from a start and end offset
     pub fn new(start: T, end: T) -> SimpleSpan<T> {
         SimpleSpan { start, end }
+    }
+
+    /// Convert this span into a [`std::ops::Range`].
+    pub fn into_range(self) -> Range<T> {
+        self.into()
     }
 }
 

@@ -10,14 +10,6 @@ pub trait Container<T>: Default {
     fn push(&mut self, item: T);
 }
 
-/// A collection that does not collect any items.
-#[derive(Default)]
-pub struct Empty;
-
-impl<T> Container<T> for Empty {
-    fn push(&mut self, _: T) {}
-}
-
 impl<T> Container<T> for () {
     fn push(&mut self, _: T) {}
 }
