@@ -596,6 +596,7 @@ where
     F: Fn(&E::Context) -> Ctx,
     Ctx: 'a,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
     }
