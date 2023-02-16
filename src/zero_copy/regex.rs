@@ -1,10 +1,14 @@
+//! Implementations of regex-based parsers
+
 use super::*;
 
+/// See [`regex`].
 pub struct Regex<C: Char, I: ?Sized, E> {
     regex: C::Regex,
     phantom: PhantomData<(E, I)>,
 }
 
+/// Match input based on a provided regex pattern
 pub fn regex<C: Char, I: ?Sized, E>(pattern: &str) -> Regex<C, I, E> {
     Regex {
         regex: C::new_regex(pattern),
@@ -31,7 +35,7 @@ where
             // TODO: Make this error actually correct
             .ok_or_else(|| {
                 Located::at(
-                    inp.last_pos(),
+                    inp.save(),
                     E::Error::expected_found(None, None, inp.span_since(before)),
                 )
             })
