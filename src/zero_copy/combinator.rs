@@ -241,7 +241,7 @@ where
             } else {
                 let span = inp.span_since(before);
                 Err(Located::at(
-                    inp.save(),
+                    inp.offset().into(),
                     E::Error::expected_found(None, None, span),
                 ))
             }
@@ -397,7 +397,7 @@ where
             let span = inp.span_since(before);
             match (self.mapper)(out, span) {
                 Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.save(), e)),
+                Err(e) => Err(Located::at(inp.offset().into(), e)),
             }
         })
     }
@@ -438,7 +438,7 @@ where
             let state = inp.state();
             match (self.mapper)(out, span, state) {
                 Ok(out) => Ok(M::bind(|| out)),
-                Err(e) => Err(Located::at(inp.save(), e)),
+                Err(e) => Err(Located::at(inp.offset().into(), e)),
             }
         })
     }
@@ -875,7 +875,8 @@ impl RepeatedCfg {
 pub struct Repeated<A, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
-    pub(crate) at_most: Option<usize>,
+    // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
+    pub(crate) at_most: u64,
     pub(crate) phantom: PhantomData<(OA, E, I)>,
 }
 
@@ -905,7 +906,7 @@ where
     /// Require that the pattern appear at most a maximum number of times.
     pub fn at_most(self, at_most: usize) -> Self {
         Self {
-            at_most: Some(at_most),
+            at_most: at_most as u64,
             ..self
         }
     }
@@ -954,7 +955,7 @@ where
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
             at_least: exactly,
-            at_most: Some(exactly),
+            at_most: exactly as u64,
             ..self
         }
     }
@@ -1000,10 +1001,8 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         count: &mut Self::IterState<M>,
     ) -> Option<PResult<M, O, E::Error>> {
-        if let Some(at_most) = self.at_most {
-            if *count >= at_most {
-                return None;
-            }
+        if *count as u64 >= self.at_most {
+            return None;
         }
 
         let before = inp.save();
@@ -1038,13 +1037,11 @@ where
         count: &mut Self::IterState<M>,
         cfg: &Self::Config,
     ) -> Option<PResult<M, O, E::Error>> {
-        let at_most = cfg.at_most.or(self.at_most);
+        let at_most = cfg.at_most.map(|x| x as u64).unwrap_or(self.at_most);
         let at_least = cfg.at_least.unwrap_or(self.at_least);
 
-        if let Some(at_most) = at_most {
-            if *count >= at_most {
-                return None;
-            }
+        if *count as u64 >= at_most {
+            return None;
         }
 
         let before = inp.save();
@@ -1070,7 +1067,8 @@ pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
-    pub(crate) at_most: Option<usize>,
+    // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
+    pub(crate) at_most: u64,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
     pub(crate) phantom: PhantomData<(OA, OB, E, I)>,
@@ -1142,7 +1140,7 @@ where
     /// ````
     pub fn at_most(self, at_most: usize) -> Self {
         Self {
-            at_most: Some(at_most),
+            at_most: at_most as u64,
             ..self
         }
     }
@@ -1169,7 +1167,7 @@ where
     pub fn exactly(self, exactly: usize) -> Self {
         Self {
             at_least: exactly,
-            at_most: Some(exactly),
+            at_most: exactly as u64,
             ..self
         }
     }
@@ -1253,7 +1251,7 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         state: &mut Self::IterState<M>,
     ) -> Option<PResult<M, OA, E::Error>> {
-        if self.at_most.map_or(false, |max| *state >= max) {
+        if *state as u64 >= self.at_most {
             return None;
         }
 
@@ -1433,7 +1431,7 @@ where
             Ok(_) => {
                 let (at, tok) = inp.next();
                 Err(Located::at(
-                    at,
+                    at.into(),
                     E::Error::expected_found(None, tok, inp.span_since(before.offset)),
                 ))
             }

@@ -81,7 +81,7 @@ where
             Some(tok) => {
                 let at = inp.next().0;
                 Err(Located::at(
-                    at,
+                    at.into(),
                     E::Error::expected_found(None, Some(tok), inp.span_since(before)),
                 ))
             }
@@ -235,7 +235,7 @@ where
                     tok => {
                         let at = inp.next().0;
                         Some(Err(Located::at(
-                            at,
+                            at.into(),
                             E::Error::expected_found(
                                 Some(Some(I::Token::clone(next))),
                                 tok,
@@ -315,7 +315,7 @@ where
             found => {
                 let at = inp.next().0;
                 Err(Located::at(
-                    at,
+                    at.into(),
                     E::Error::expected_found(
                         self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
                         found,
@@ -388,7 +388,7 @@ where
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
-                at,
+                at.into(),
                 E::Error::expected_found(None, found, inp.span_since(before)),
             )),
         }
@@ -422,7 +422,7 @@ where
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => Err(Located::at(
-                at,
+                at.into(),
                 E::Error::expected_found(None, found, inp.span_since(before)),
             )),
         }
@@ -638,10 +638,7 @@ where
     P: Parser<'a, I, OP, E>,
     E: ParserExtra<'a, I>,
 {
-    MapCtx {
-        parser,
-        mapper,
-    }
+    MapCtx { parser, mapper }
 }
 
 /// See [`fn@todo`].
@@ -799,7 +796,7 @@ macro_rules! impl_choice_for_tuple {
                     }
                 )*
 
-                Err(err.unwrap_or_else(|| Located::at(inp.save(), E::Error::expected_found(None, None, inp.span_since(before.offset)))))
+                Err(err.unwrap_or_else(|| Located::at(inp.offset().into(), E::Error::expected_found(None, None, inp.span_since(before.offset)))))
             }
 
             go_extra!(O);

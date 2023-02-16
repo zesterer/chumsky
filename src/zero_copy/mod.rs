@@ -59,7 +59,9 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
-        primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo, map_ctx},
+        primitive::{
+            any, choice, empty, end, group, just, map_ctx, none_of, one_of, take_until, todo,
+        },
         recovery::{nested_delimiters, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -98,7 +100,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{Input, InputRef, Marker, SliceInput, StrInput},
+    input::{Input, InputRef, SliceInput, StrInput},
     prelude::*,
     recovery::RecoverWith,
     span::Span,
@@ -200,11 +202,8 @@ pub struct Located<E> {
 }
 
 impl<E> Located<E> {
-    pub fn at<I: Input + ?Sized>(mark: Marker<I>, err: E) -> Self {
-        Self {
-            pos: mark.offset.into(),
-            err,
-        }
+    pub fn at(pos: usize, err: E) -> Self {
+        Self { pos, err }
     }
 
     fn at_pos(pos: usize, err: E) -> Self {
@@ -1266,7 +1265,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         Repeated {
             parser: self,
             at_least: 0,
-            at_most: None,
+            at_most: !0,
             phantom: PhantomData,
         }
     }
@@ -1316,7 +1315,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
             parser: self,
             separator,
             at_least: 0,
-            at_most: None,
+            at_most: !0,
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
@@ -2183,12 +2182,16 @@ fn regex_parser() {
             .collect()
     }
     assert_eq!(
-        parser::<char>().parse("hello world this works").into_result(),
+        parser::<char>()
+            .parse("hello world this works")
+            .into_result(),
         Ok(vec!["hello", "world", "this", "works"]),
     );
 
     assert_eq!(
-        parser::<u8>().parse(b"hello world this works" as &[_]).into_result(),
+        parser::<u8>()
+            .parse(b"hello world this works" as &[_])
+            .into_result(),
         Ok(vec![
             b"hello" as &[_],
             b"world" as &[_],
