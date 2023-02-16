@@ -126,13 +126,13 @@ where
 //     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
 // }
 
-/// TODO
+/// Configuration for [`just`], used in [`ConfigParser::configure`]
 pub struct JustCfg<T> {
     seq: Option<T>,
 }
 
 impl<T> JustCfg<T> {
-    /// TODO
+    /// Set the sequence to be used while parsing
     pub fn seq(mut self, new_seq: T) -> Self {
         self.seq = Some(new_seq);
         self
@@ -570,6 +570,78 @@ where
     }
 
     go_extra!((C, OP));
+}
+
+/// See [`map_ctx`].
+pub struct MapCtx<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<A: Copy, F: Copy> Copy for MapCtx<A, F> {}
+impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
+    fn clone(&self) -> Self {
+        MapCtx {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, F, Ctx> Parser<'a, I, O, E> for MapCtx<A, F>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
+    F: Fn(&E::Context) -> Ctx,
+    Ctx: 'a,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
+    }
+
+    go_extra!(O);
+}
+
+/// Apply a mapping function to the context of this parser. Note that this combinator will
+/// behave differently from all other maps, in terms of which parsers it effects - while
+/// other maps apply to the output of the parser, and thus read left-to-right, this one
+/// applies to the _input_ of the parser, and as such applies right-to-left.
+///
+/// More technically, if all combinators form a 'tree' of parsers, where each node executes
+/// its children in turn, normal maps apply up the tree. This means a parent mapper gets the
+/// result of its children, applies the map, then passes the new result to its parent. This map,
+/// however, applies down the tree. Context is provided from the parent, such as [`Parser::then_with_ctx`],
+/// and gets altered before being provided to the children.
+///
+/// ```
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
+///
+/// let upper = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
+///
+/// let inc = one_of::<_, _, extra::Default>(b'a'..=b'z')
+///     .then_with_ctx(map_ctx(|c: &u8| c.to_ascii_uppercase(), upper))
+///     .slice()
+///     .repeated()
+///     .at_least(1)
+///     .collect::<Vec<_>>();
+///
+/// assert_eq!(inc.parse(b"aAbB" as &[_]).into_result(), Ok(vec![b"aA" as &[_], b"bB"]));
+/// assert!(inc.parse(b"aB").has_errors());
+/// ```
+pub fn map_ctx<'a, P, OP, I, E, F, Ctx>(mapper: F, parser: P) -> MapCtx<P, F>
+where
+    F: Fn(&E::Context) -> Ctx,
+    Ctx: 'a,
+    I: Input + ?Sized,
+    P: Parser<'a, I, OP, E>,
+    E: ParserExtra<'a, I>,
+{
+    MapCtx {
+        parser,
+        mapper,
+    }
 }
 
 /// See [`fn@todo`].

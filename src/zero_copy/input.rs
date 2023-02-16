@@ -122,7 +122,8 @@ impl<T: Clone> SliceInput for [T] {
     }
 }
 
-///
+/// An input wrapper contains a user-defined context in its span, in addition to the span of the
+/// wrapped input.
 pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
 
 impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {

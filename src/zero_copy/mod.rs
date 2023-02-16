@@ -59,7 +59,7 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
-        primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo},
+        primitive::{any, choice, empty, end, group, just, none_of, one_of, take_until, todo, map_ctx},
         recovery::{nested_delimiters, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -943,14 +943,14 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
-    fn then_with_ctx<U, CtxN, P>(
+    fn then_with_ctx<U, P>(
         self,
         then: P,
-    ) -> ThenWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, CtxN>>
+    ) -> ThenWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, O>>
     where
         Self: Sized,
-        CtxN: 'a,
-        P: Parser<'a, I, U, extra::Full<E::Error, E::State, CtxN>>,
+        O: 'a,
+        P: Parser<'a, I, U, extra::Full<E::Error, E::State, O>>,
     {
         ThenWithCtx {
             parser: self,
@@ -959,20 +959,22 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         }
     }
 
-    /// TODO
-    fn map_ctx<Ctx, F>(self, mapper: F) -> MapCtx<Self, F>
-    where
-        Self: Sized,
-        F: Fn(O, &E::Context) -> Ctx,
-        Ctx: 'a,
-    {
-        MapCtx {
-            parser: self,
-            mapper,
-        }
-    }
-
-    /// TODO
+    /// Run the previous contextual parser with the provided context
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// # use chumsky::zero_copy::primitive::JustCfg;
+    ///
+    /// let generic = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
+    ///
+    /// let parse_a = just::<_, _, extra::Default>(b'b').ignore_then(generic.with_ctx::<u8>(b'a'));
+    /// let parse_b = just::<_, _, extra::Default>(b'a').ignore_then(generic.with_ctx(b'b'));
+    ///
+    /// assert_eq!(parse_a.parse(b"ba" as &[_]).into_result(), Ok::<_, Vec<EmptyErr>>(b'a'));
+    /// assert!(parse_a.parse(b"bb").has_errors());
+    /// assert_eq!(parse_b.parse(b"ab" as &[_]).into_result(), Ok(b'b'));
+    /// assert!(parse_b.parse(b"aa").has_errors());
+    /// ```
     fn with_ctx<Ctx>(self, ctx: Ctx) -> WithCtx<Self, Ctx>
     where
         Self: Sized,
