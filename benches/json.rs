@@ -27,36 +27,48 @@ pub enum JsonZero<'a> {
 static JSON: &'static [u8] = include_bytes!("sample.json");
 
 fn bench_json(c: &mut Criterion) {
-    c.bench_function("nom", {
-        move |b| b.iter(|| black_box(nom::json(JSON).unwrap()))
+    c.bench_function("json_nom", {
+        move |b| b.iter(|| black_box(nom::json(black_box(JSON)).unwrap()))
     });
 
-    c.bench_function("pom", {
-        let json = pom::json();
-        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
+    c.bench_function("json_chumsky_zero_copy", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                black_box(json.parse(black_box(JSON)))
+                    .into_result()
+                    .unwrap()
+            })
+        }
     });
 
-    c.bench_function("serde_json", {
+    c.bench_function("json_chumsky_zero_copy_check", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                assert!(black_box(json.check(black_box(JSON)))
+                    .into_errors()
+                    .is_empty())
+            })
+        }
+    });
+
+    c.bench_function("json_serde_json", {
         use serde_json::{from_slice, Value};
-        move |b| b.iter(|| black_box(from_slice::<Value>(JSON).unwrap()))
+        move |b| b.iter(|| black_box(from_slice::<Value>(black_box(JSON)).unwrap()))
     });
 
-    c.bench_function("chumsky", {
+    c.bench_function("json_pom", {
+        let json = pom::json();
+        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
+    });
+
+    c.bench_function("json_chumsky", {
         use ::chumsky::prelude::*;
         let json = chumsky::json();
-        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
-    });
-
-    c.bench_function("chumsky_zero_copy", {
-        use ::chumsky::zero_copy::prelude::*;
-        let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| black_box(json.parse(JSON)).into_result().unwrap())
-    });
-
-    c.bench_function("chumsky_zero_copy_check", {
-        use ::chumsky::zero_copy::prelude::*;
-        let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| assert!(black_box(json.check(JSON)).into_errors().is_empty()))
+        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
     });
 }
 

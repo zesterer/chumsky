@@ -31,6 +31,7 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
@@ -67,6 +68,7 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
@@ -158,10 +160,11 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(&'a I::Slice) -> U,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Check>(inp)?;
-        let after = inp.save();
+        let after = inp.offset();
 
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
@@ -191,13 +194,14 @@ where
     I: Input + SliceInput + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Slice, E::Error>
     where
         Self: Sized,
     {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Check>(inp)?;
-        let after = inp.save();
+        let after = inp.offset();
 
         Ok(M::bind(|| inp.slice(before..after)))
     }
@@ -228,8 +232,9 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(&O) -> bool,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Emit>(inp).and_then(|out| {
             if (self.filter)(&out) {
                 Ok(M::bind(|| out))
@@ -271,6 +276,7 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA) -> O,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         self.parser
             .go::<M>(inp)
@@ -305,8 +311,9 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> O,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<M>(inp).map(|out| {
             M::map(out, |out| {
                 let span = inp.span_since(before);
@@ -343,8 +350,9 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> O,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Emit>(inp).map(|out| {
             M::bind(|| {
                 let span = inp.span_since(before);
@@ -382,8 +390,9 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> Result<O, E::Error>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
             match (self.mapper)(out, span) {
@@ -421,8 +430,9 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> Result<O, E::Error>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Emit>(inp).and_then(|out| {
             let span = inp.span_since(before);
             let state = inp.state();
@@ -461,6 +471,7 @@ where
     A: Parser<'a, I, OA, E>,
     O: Clone,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         self.parser
             .go::<Check>(inp)
@@ -492,6 +503,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         self.parser.go::<Check>(inp).map(|_| M::bind(|| ()))
     }
@@ -524,6 +536,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (OA, OB), E::Error> {
         let a = self.parser_a.go::<M>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
@@ -558,6 +571,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let _a = self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
@@ -592,6 +606,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let a = self.parser_a.go::<M>(inp)?;
         let _b = self.parser_b.go::<Check>(inp)?;
@@ -627,6 +642,7 @@ where
     B: Parser<'a, I, OB, E>,
     F: Fn(OA) -> B,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let before = inp.save();
         match self.parser.go::<Emit>(inp) {
@@ -679,6 +695,7 @@ where
     B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'a,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
         let p1 = self.parser.go::<Emit>(inp)?;
         inp.with_ctx(p1, |inp| self.then.go::<M>(inp))
@@ -710,6 +727,7 @@ where
     A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
     Ctx: 'a + Clone,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.with_ctx(self.ctx.clone(), |inp| self.parser.go::<M>(inp))
     }
@@ -741,6 +759,7 @@ where
     F: Fn(&E::Context) -> Ctx,
     Ctx: 'a,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
     }
@@ -776,6 +795,7 @@ where
     B: Parser<'a, I, OB, E>,
     C: Parser<'a, I, OC, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let _ = self.start.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
@@ -811,6 +831,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let _ = self.padding.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
@@ -835,6 +856,7 @@ where
     A: Parser<'a, I, O, E>,
     B: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
@@ -976,6 +998,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
@@ -1250,11 +1273,18 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>, E::Error> {
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>, E::Error> {
         Ok(0)
     }
 
-    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> Option<PResult<M, OA, E::Error>> {
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> Option<PResult<M, OA, E::Error>> {
         if self.at_most.map_or(false, |max| *state >= max) {
             return None;
         }
@@ -1317,6 +1347,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
@@ -1353,6 +1384,7 @@ where
     A: IterParser<'a, I, O, E>,
     C: Container<O>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
@@ -1385,6 +1417,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Option<O>, E::Error> {
         let before = inp.save();
         Ok(match self.parser.go::<M>(inp) {
@@ -1421,6 +1454,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.save();
 
@@ -1432,7 +1466,7 @@ where
                 let (at, tok) = inp.next();
                 Err(Located::at(
                     at,
-                    E::Error::expected_found(None, tok, inp.span_since(before)),
+                    E::Error::expected_found(None, tok, inp.span_since(before.offset)),
                 ))
             }
             Err(_) => Ok(M::bind(|| ())),
@@ -1467,6 +1501,7 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA, E::Error> {
         let before = inp.save();
         match self.parser_a.go::<M>(inp) {
@@ -1539,6 +1574,7 @@ where
     A: Parser<'a, I, OA, E>,
     C: ContainerExactly<OA, N>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C, E::Error> {
         let mut i = 0;
         let mut output = M::bind(|| C::uninit());
@@ -1680,6 +1716,7 @@ where
     C: ContainerExactly<OA, N>,
 {
     // FIXME: why parse result output is not C ?
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [OA; N], E::Error> {
         if self.allow_leading {
             let before_separator = inp.save();
@@ -1762,6 +1799,7 @@ where
     A::IntoIter: DoubleEndedIterator,
     F: Fn(A::Item, B) -> B,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, B, E::Error>
     where
         Self: Sized,
@@ -1802,6 +1840,7 @@ where
     B: IntoIterator,
     F: Fn(A, B::Item) -> A,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, A, E::Error>
     where
         Self: Sized,
@@ -1828,6 +1867,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
@@ -1856,6 +1896,7 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> E::Error,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
@@ -1883,11 +1924,12 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span) -> E::Error,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
     {
-        let start = inp.save();
+        let start = inp.offset();
         self.parser.go::<M>(inp).map_err(|mut e| {
             let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span);
@@ -1912,11 +1954,12 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
     {
-        let start = inp.save();
+        let start = inp.offset();
         self.parser.go::<M>(inp).map_err(|mut e| {
             let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span, inp.state());
@@ -1952,11 +1995,12 @@ where
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut Emitter<E::Error>) -> U,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U, E::Error>
     where
         Self: Sized,
     {
-        let before = inp.save();
+        let before = inp.offset();
         self.parser.go::<Emit>(inp).map(|out| {
             let span = inp.span_since(before);
             let mut emitter = Emitter::new();
@@ -1985,6 +2029,7 @@ where
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> Result<O, E::Error>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
