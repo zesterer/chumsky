@@ -31,13 +31,13 @@ where
                 let before = inp.save();
                 inp.skip_bytes(len);
                 let after = inp.save();
-                M::bind(|| inp.slice(before..after))
+                M::bind(|| inp.slice(before.offset..after.offset))
             })
             // TODO: Make this error actually correct
             .ok_or_else(|| {
                 Located::at(
                     inp.save(),
-                    E::Error::expected_found(None, None, inp.span_since(before)),
+                    E::Error::expected_found(None, None, inp.span_since(before.offset)),
                 )
             })
     }
