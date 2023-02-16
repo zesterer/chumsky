@@ -144,6 +144,7 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(
             self.parser()
@@ -163,6 +164,7 @@ where
     I: Input + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(&*self.parser(), inp)
     }

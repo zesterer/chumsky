@@ -5,9 +5,11 @@
 
 macro_rules! go_extra {
     ( $O :ty ) => {
+        #[inline(always)]
         fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O, E::Error> {
             Parser::<I, $O, E>::go::<Emit>(self, inp)
         }
+        #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O, E::Error> {
             Parser::<I, $O, E>::go::<Check>(self, inp)
         }
@@ -16,6 +18,7 @@ macro_rules! go_extra {
 
 macro_rules! go_cfg_extra {
     ( $O :ty ) => {
+        #[inline(always)]
         fn go_emit_cfg(
             &self,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -23,6 +26,7 @@ macro_rules! go_cfg_extra {
         ) -> PResult<Emit, $O, E::Error> {
             ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
+        #[inline(always)]
         fn go_check_cfg(
             &self,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -197,7 +201,10 @@ pub struct Located<E> {
 
 impl<E> Located<E> {
     pub fn at<I: Input + ?Sized>(mark: Marker<I>, err: E) -> Self {
-        Self { pos: mark.pos, err }
+        Self {
+            pos: mark.offset.into(),
+            err,
+        }
     }
 
     fn at_pos(pos: usize, err: E) -> Self {
@@ -275,15 +282,15 @@ mod internal {
 
     impl Mode for Emit {
         type Output<T> = T;
-        #[inline(always)]
+        #[inline]
         fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
             f()
         }
-        #[inline(always)]
+        #[inline]
         fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
             f(x)
         }
-        #[inline(always)]
+        #[inline]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             x: Self::Output<T>,
             y: Self::Output<U>,
@@ -291,12 +298,12 @@ mod internal {
         ) -> Self::Output<V> {
             f(x, y)
         }
-        #[inline(always)]
+        #[inline]
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
             x
         }
 
-        #[inline(always)]
+        #[inline]
         fn invoke<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -309,7 +316,7 @@ mod internal {
             parser.go_emit(inp)
         }
 
-        #[inline(always)]
+        #[inline]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -329,21 +336,21 @@ mod internal {
 
     impl Mode for Check {
         type Output<T> = ();
-        #[inline(always)]
+        #[inline]
         fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-        #[inline(always)]
+        #[inline]
         fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
-        #[inline(always)]
+        #[inline]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             _: Self::Output<T>,
             _: Self::Output<U>,
             _: F,
         ) -> Self::Output<V> {
         }
-        #[inline(always)]
+        #[inline]
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-        #[inline(always)]
+        #[inline]
         fn invoke<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -356,7 +363,7 @@ mod internal {
             parser.go_check(inp)
         }
 
-        #[inline(always)]
+        #[inline]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,

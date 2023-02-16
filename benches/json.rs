@@ -27,36 +27,53 @@ pub enum JsonZero<'a> {
 static JSON: &'static [u8] = include_bytes!("sample.json");
 
 fn bench_json(c: &mut Criterion) {
-    c.bench_function("nom", {
-        move |b| b.iter(|| black_box(nom::json(JSON).unwrap()))
+    c.bench_function("json_nom", {
+        move |b| b.iter(|| black_box(nom::json(black_box(JSON)).unwrap()))
     });
 
-    c.bench_function("pom", {
-        let json = pom::json();
-        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
+    c.bench_function("json_chumsky_zero_copy", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                black_box(json.parse(black_box(JSON)))
+                    .into_result()
+                    .unwrap()
+            })
+        }
     });
 
-    c.bench_function("serde_json", {
+    c.bench_function("json_chumsky_zero_copy_check", {
+        use ::chumsky::zero_copy::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                assert!(black_box(json.check(black_box(JSON)))
+                    .into_errors()
+                    .is_empty())
+            })
+        }
+    });
+
+    c.bench_function("json_serde_json", {
         use serde_json::{from_slice, Value};
-        move |b| b.iter(|| black_box(from_slice::<Value>(JSON).unwrap()))
+        move |b| b.iter(|| black_box(from_slice::<Value>(black_box(JSON)).unwrap()))
     });
 
-    c.bench_function("chumsky", {
+    c.bench_function("json_pom", {
+        let json = pom::json();
+        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
+    });
+
+    c.bench_function("json_pest", {
+        let json = black_box(std::str::from_utf8(JSON).unwrap());
+        move |b| b.iter(|| black_box(pest::parse(json).unwrap()))
+    });
+
+    c.bench_function("json_chumsky", {
         use ::chumsky::prelude::*;
         let json = chumsky::json();
-        move |b| b.iter(|| black_box(json.parse(JSON).unwrap()))
-    });
-
-    c.bench_function("chumsky_zero_copy", {
-        use ::chumsky::zero_copy::prelude::*;
-        let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| black_box(json.parse(JSON)).into_result().unwrap())
-    });
-
-    c.bench_function("chumsky_zero_copy_check", {
-        use ::chumsky::zero_copy::prelude::*;
-        let json = chumsky_zero_copy::json();
-        move |b| b.iter(|| assert!(black_box(json.check(JSON)).into_errors().is_empty()))
+        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
     });
 }
 
@@ -379,5 +396,58 @@ mod nom {
 
     pub fn json<'a>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, (&'a [u8], nom::error::ErrorKind)> {
         root(i)
+    }
+}
+
+mod pest {
+    use super::JsonZero;
+
+    use pest::{error::Error, Parser};
+
+    #[derive(pest_derive::Parser)]
+    #[grammar = "benches/json.pest"]
+    struct JsonParser;
+
+    pub fn parse(file: &str) -> Result<JsonZero, Error<Rule>> {
+        let json = JsonParser::parse(Rule::json, file)?.next().unwrap();
+
+        use pest::iterators::Pair;
+
+        fn parse_value(pair: Pair<Rule>) -> JsonZero {
+            match pair.as_rule() {
+                Rule::object => JsonZero::Object(
+                    pair.into_inner()
+                        .map(|pair| {
+                            let mut inner_rules = pair.into_inner();
+                            let name = inner_rules
+                                .next()
+                                .unwrap()
+                                .into_inner()
+                                .next()
+                                .unwrap()
+                                .as_str();
+                            let value = parse_value(inner_rules.next().unwrap());
+                            (name.as_bytes(), value)
+                        })
+                        .collect(),
+                ),
+                Rule::array => JsonZero::Array(pair.into_inner().map(parse_value).collect()),
+                Rule::string => {
+                    JsonZero::Str(pair.into_inner().next().unwrap().as_str().as_bytes())
+                }
+                Rule::number => JsonZero::Num(pair.as_str().parse().unwrap()),
+                Rule::boolean => JsonZero::Bool(pair.as_str().parse().unwrap()),
+                Rule::null => JsonZero::Null,
+                Rule::json
+                | Rule::EOI
+                | Rule::pair
+                | Rule::value
+                | Rule::inner
+                | Rule::char
+                | Rule::WHITESPACE => unreachable!(),
+            }
+        }
+
+        Ok(parse_value(json))
     }
 }

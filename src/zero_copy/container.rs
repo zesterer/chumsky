@@ -159,10 +159,12 @@ impl<T> Seq<T> for T {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         core::iter::once(self)
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -180,10 +182,12 @@ impl<'b, T> Seq<T> for &'b [T] {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         (self as &[T]).iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -201,10 +205,12 @@ impl<T, const N: usize> Seq<T> for [T; N] {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -222,10 +228,12 @@ impl<'b, T, const N: usize> Seq<T> for &'b [T; N] {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -243,10 +251,12 @@ impl<'b, T> Seq<T> for Vec<T> {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -264,10 +274,12 @@ impl<'b, T> Seq<T> for LinkedList<T> {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -285,10 +297,12 @@ impl<T: Eq + Hash> Seq<T> for HashSet<T> {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -307,10 +321,12 @@ impl<T: Eq + Hash> Seq<T> for std::collections::HashSet<T> {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -328,10 +344,12 @@ impl<T: Ord> Seq<T> for alloc::collections::BTreeSet<T> {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.iter()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq,
@@ -353,10 +371,12 @@ where
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         (*self).clone()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool {
         Range::contains(self, val)
     }
@@ -375,10 +395,12 @@ where
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.clone()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool {
         core::ops::RangeInclusive::contains(self, val)
     }
@@ -397,10 +419,12 @@ where
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.clone()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &T) -> bool {
         RangeFrom::contains(self, val)
     }
@@ -415,10 +439,12 @@ impl Seq<char> for str {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &char) -> bool {
         self.contains(*val)
     }
@@ -433,10 +459,12 @@ impl<'b> Seq<char> for &'b str {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &char) -> bool {
         str::contains(self, *val)
     }
@@ -451,10 +479,12 @@ impl Seq<char> for String {
     where
         Self: 'a;
 
+    #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
         self.chars()
     }
 
+    #[inline(always)]
     fn contains(&self, val: &char) -> bool {
         str::contains(self, *val)
     }

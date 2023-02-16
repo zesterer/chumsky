@@ -23,6 +23,7 @@ where
     I: Input + StrInput<C> + ?Sized,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Slice, E::Error> {
         let before = inp.save();
         C::match_regex(&self.regex, inp.slice_trailing())
