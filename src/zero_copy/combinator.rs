@@ -735,38 +735,6 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::map_ctx`].
-pub struct MapCtx<A, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-}
-
-impl<A: Copy, F: Copy> Copy for MapCtx<A, F> {}
-impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
-    fn clone(&self) -> Self {
-        MapCtx {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, F, Ctx> Parser<'a, I, O, E> for MapCtx<A, F>
-where
-    I: Input + ?Sized,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
-    F: Fn(&E::Context) -> Ctx,
-    Ctx: 'a,
-{
-    #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
-    }
-
-    go_extra!(O);
-}
-
 /// See [`Parser::delimited_by`].
 pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
@@ -875,7 +843,7 @@ where
     go_extra!(O);
 }
 
-/// TODO
+/// Configuration for [`Parser::repeated`], used in [`ConfigParser::configure`].
 #[derive(Default)]
 pub struct RepeatedCfg {
     at_least: Option<usize>,
@@ -883,19 +851,19 @@ pub struct RepeatedCfg {
 }
 
 impl RepeatedCfg {
-    /// TODO
+    /// Set the minimum number of repetitions accepted
     pub fn at_least(mut self, n: usize) -> Self {
         self.at_least = Some(n);
         self
     }
 
-    /// TODO
+    /// Set the maximum number of repetitions accepted
     pub fn at_most(mut self, n: usize) -> Self {
         self.at_most = Some(n);
         self
     }
 
-    /// TODO
+    /// Set an exact number of repetitions to accept
     pub fn exactly(mut self, n: usize) -> Self {
         self.at_least = Some(n);
         self.at_most = Some(n);
