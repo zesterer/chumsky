@@ -60,10 +60,71 @@ fn bench_lex(c: &mut Criterion) {
             })
         }
     });
+
+    c.bench_function("lex_logos", |b| {
+        b.iter(|| {
+            assert!(black_box(logos::lexer(black_box(SAMPLE)))
+                .all(|t| t != logos::Token::Error))
+        })
+    });
 }
 
 criterion_group!(benches, bench_lex);
 criterion_main!(benches);
+
+mod logos {
+    use logos::{Lexer, Logos};
+    use std::str;
+
+    fn to_bool<'a>(lex: &mut Lexer<'a, Token<'a>>) -> bool {
+        match lex.slice() {
+            b"true" => true,
+            b"false" => false,
+            _ => unreachable!(),
+        }
+    }
+
+    fn to_f64<'a>(lex: &mut Lexer<'a, Token<'a>>) -> f64 {
+        str::from_utf8(lex.slice()).unwrap().parse().unwrap()
+    }
+
+    #[derive(Logos)]
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Token<'a> {
+        #[token("null")]
+        Null,
+        #[regex("true|false", to_bool)]
+        Bool(bool),
+        #[regex(br#""([^\\"]|\\[\\"bfnrt/])*""#)]
+        Str(&'a [u8]),
+        #[regex(br"-?([1-9][0-9]*|0)(\.[0-9]*)?([eE][+-]?[0-9]*)?", to_f64)]
+        Num(f64),
+        #[regex(br"[a-zA-Z_][a-zA-Z0-9_]*")]
+        Ident(&'a [u8]),
+        #[token(b"<")]
+        Less,
+        #[token(b">")]
+        More,
+        #[token(b"<=")]
+        LessEq,
+        #[token(b">=")]
+        MoreEq,
+        #[token(b"(")]
+        OpenParen,
+        #[token(b")")]
+        CloseParen,
+        #[token(b",")]
+        Comma,
+
+        #[regex(br"\s", logos::skip)]
+        #[error]
+        Error,
+    }
+
+    pub fn lexer(src: &[u8]) -> Lexer<'_, Token<'_>> {
+        Token::lexer(src)
+    }
+}
 
 mod chumsky_zero_copy {
     use chumsky::zero_copy::prelude::*;
