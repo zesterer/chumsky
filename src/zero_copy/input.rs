@@ -164,7 +164,6 @@ where
 
 /// Represents the progress of a parser through the input
 pub struct Marker<I: Input + ?Sized> {
-    // pub(crate) pos: usize,
     pub(crate) offset: I::Offset,
     err_count: usize,
 }
@@ -194,7 +193,6 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
         Self {
             input,
             marker: Marker {
-                // pos: 0,
                 offset: input.start(),
                 err_count: 0,
             },
@@ -265,13 +263,14 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     #[inline(always)]
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
+        let mut offs = self.marker.offset;
         loop {
-            let (offset, token) = self.input.next(self.marker.offset);
+            let (offset, token) = self.input.next(offs);
             if token.filter(&mut f).is_none() {
+                self.marker.offset = offs;
                 break;
             } else {
-                self.marker.offset = offset;
-                // self.marker.pos += 1;
+                offs = offset;
             }
         }
     }
@@ -280,7 +279,6 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     pub(crate) fn next(&mut self) -> (Marker<I>, Option<I::Token>) {
         let (offset, token) = self.input.next(self.marker.offset);
         self.marker.offset = offset;
-        // self.marker.pos += 1;
         (self.marker, token)
     }
 
