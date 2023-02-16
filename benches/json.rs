@@ -100,8 +100,7 @@ mod chumsky_zero_copy {
 
             let frac = just(b'.').then(digits.clone());
 
-            let exp = just(b'e')
-                .or(just(b'E'))
+            let exp = one_of(b"eE")
                 .then(one_of(b"+-").or_not())
                 .then(digits.clone());
 
@@ -124,8 +123,7 @@ mod chumsky_zero_copy {
                     just(b'r').to(b'\r'),
                     just(b't').to(b'\t'),
                 )))
-                .ignored()
-                .boxed();
+                .ignored();
 
             let string = none_of(b"\\\"")
                 .ignored()

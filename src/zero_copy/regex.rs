@@ -25,19 +25,19 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Slice, E::Error> {
-        let before = inp.save();
+        let before = inp.offset();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
-                let before = inp.save();
+                let before = inp.offset();
                 inp.skip_bytes(len);
-                let after = inp.save();
-                M::bind(|| inp.slice(before.offset..after.offset))
+                let after = inp.offset();
+                M::bind(|| inp.slice(before..after))
             })
             // TODO: Make this error actually correct
             .ok_or_else(|| {
                 Located::at(
-                    inp.save(),
-                    E::Error::expected_found(None, None, inp.span_since(before.offset)),
+                    inp.offset().into(),
+                    E::Error::expected_found(None, None, inp.span_since(before)),
                 )
             })
     }

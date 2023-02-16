@@ -179,11 +179,11 @@ impl<I: Input + ?Sized> Clone for Marker<I> {
 /// Internal type representing an input as well as all the necessary context for parsing.
 pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     input: &'a I,
-    marker: Marker<I>,
+    offset: I::Offset,
+    errors: Vec<E::Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     state: Result<&'parse mut E::State, E::State>,
     ctx: E::Context,
-    errors: Vec<E::Error>,
 }
 
 impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
@@ -193,10 +193,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     {
         Self {
             input,
-            marker: Marker {
-                offset: input.start(),
-                err_count: 0,
-            },
+            offset: input.start(),
             state,
             ctx: E::Context::default(),
             errors: Vec::new(),
@@ -216,7 +213,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
         let mut new_ctx = InputRef {
             input: self.input,
-            marker: self.marker,
+            offset: self.offset,
             state: match &mut self.state {
                 Ok(state) => Ok(*state),
                 Err(state) => Ok(state),
@@ -225,7 +222,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
             errors: mem::take(&mut self.errors),
         };
         let res = f(&mut new_ctx);
-        self.marker = new_ctx.marker;
+        self.offset = new_ctx.offset;
         self.errors = mem::take(&mut new_ctx.errors);
         res
     }
@@ -233,20 +230,23 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     /// Get the input offset that is currently being pointed to.
     #[inline(always)]
     pub fn offset(&self) -> I::Offset {
-        self.marker.offset
+        self.offset
     }
 
     /// Save off a [`Marker`] to the current position in the input
     #[inline(always)]
     pub fn save(&self) -> Marker<I> {
-        self.marker
+        Marker {
+            offset: self.offset,
+            err_count: self.errors.len(),
+        }
     }
 
     /// Reset the input state to the provided [`Marker`]
     #[inline(always)]
     pub fn rewind(&mut self, marker: Marker<I>) {
         self.errors.truncate(marker.err_count);
-        self.marker = marker;
+        self.offset = marker.offset;
     }
 
     #[inline(always)]
@@ -264,11 +264,11 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     #[inline(always)]
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
-        let mut offs = self.marker.offset;
+        let mut offs = self.offset;
         loop {
             let (offset, token) = self.input.next(offs);
             if token.filter(&mut f).is_none() {
-                self.marker.offset = offs;
+                self.offset = offs;
                 break;
             } else {
                 offs = offset;
@@ -277,10 +277,10 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     }
 
     #[inline(always)]
-    pub(crate) fn next(&mut self) -> (Marker<I>, Option<I::Token>) {
-        let (offset, token) = self.input.next(self.marker.offset);
-        self.marker.offset = offset;
-        (self.marker, token)
+    pub(crate) fn next(&mut self) -> (I::Offset, Option<I::Token>) {
+        let (offset, token) = self.input.next(self.offset);
+        self.offset = offset;
+        (self.offset, token)
     }
 
     /// Get the next token in the input. Returns `None` for EOI
@@ -290,7 +290,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     /// Peek the next token in the input. Returns `None` for EOI
     pub fn peek(&self) -> Option<I::Token> {
-        self.input.next(self.marker.offset).1
+        self.input.next(self.offset).1
     }
 
     /// Skip the next token in the input.
@@ -320,13 +320,13 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     where
         I: SliceInput,
     {
-        self.input.slice_from(self.marker.offset..)
+        self.input.slice_from(self.offset..)
     }
 
     /// Return the span from the provided [`Marker`] to the current position
     #[inline(always)]
     pub fn span_since(&self, before: I::Offset) -> I::Span {
-        self.input.span(before..self.marker.offset)
+        self.input.span(before..self.offset)
     }
 
     #[inline(always)]
@@ -335,13 +335,12 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
         C: Char,
         I: StrInput<C>,
     {
-        self.marker.offset += skip;
+        self.offset += skip;
     }
 
     #[inline(always)]
     pub(crate) fn emit(&mut self, error: E::Error) {
         self.errors.push(error);
-        self.marker.err_count += 1;
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {

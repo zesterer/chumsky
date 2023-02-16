@@ -63,8 +63,7 @@ fn bench_lex(c: &mut Criterion) {
 
     c.bench_function("lex_logos", |b| {
         b.iter(|| {
-            assert!(black_box(logos::lexer(black_box(SAMPLE)))
-                .all(|t| t != logos::Token::Error))
+            assert!(black_box(logos::lexer(black_box(SAMPLE))).all(|t| t != logos::Token::Error))
         })
     });
 }
@@ -88,8 +87,7 @@ mod logos {
         str::from_utf8(lex.slice()).unwrap().parse().unwrap()
     }
 
-    #[derive(Logos)]
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Logos, Debug, Clone, PartialEq)]
     pub enum Token<'a> {
         #[token("null")]
         Null,
