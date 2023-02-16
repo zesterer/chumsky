@@ -34,5 +34,5 @@ jobs:
             toolchain: nightly
             override: true
             components: rustfmt, clippy
-      - name: Run cargo check
+      - name: Run cargo test
         run: cargo test --verbose --all-features
