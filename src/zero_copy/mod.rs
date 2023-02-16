@@ -2173,23 +2173,19 @@ fn regex_parser() {
             .repeated()
             .collect()
     }
-
     assert_eq!(
-        parser::<char>().parse("hello world this works"),
-        (Some(vec!["hello", "world", "this", "works"]), Vec::new()),
+        parser::<char>().parse("hello world this works").into_result(),
+        Ok(vec!["hello", "world", "this", "works"]),
     );
 
     assert_eq!(
-        parser::<u8>().parse(b"hello world this works" as &[_]),
-        (
-            Some(vec![
-                b"hello" as &[_],
-                b"world" as &[_],
-                b"this" as &[_],
-                b"works" as &[_],
-            ]),
-            Vec::new()
-        ),
+        parser::<u8>().parse(b"hello world this works" as &[_]).into_result(),
+        Ok(vec![
+            b"hello" as &[_],
+            b"world" as &[_],
+            b"this" as &[_],
+            b"works" as &[_],
+        ]),
     );
 }
 
