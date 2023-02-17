@@ -45,3 +45,7 @@ harness = false
 [[bench]]
 name = "lex"
 harness = false
+
+[[bench]]
+name = "parser"
+harness = false
