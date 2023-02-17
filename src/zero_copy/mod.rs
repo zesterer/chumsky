@@ -43,6 +43,7 @@ pub mod container;
 pub mod error;
 pub mod extra;
 pub mod input;
+pub mod pratt;
 pub mod primitive;
 pub mod recovery;
 pub mod recursive;
@@ -59,6 +60,7 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
+        pratt,
         primitive::{
             any, choice, empty, end, group, just, map_ctx, none_of, one_of, take_until, todo,
         },
