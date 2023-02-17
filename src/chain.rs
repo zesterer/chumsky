@@ -19,6 +19,7 @@ mod private {
     impl<T> Sealed<T> for Vec<T> {}
     impl<T> Sealed<T> for Option<Vec<T>> {}
     impl<T> Sealed<T> for Vec<Option<T>> {}
+    impl<T, A: Sealed<T>> Sealed<T> for Vec<(A, T)> {}
     impl Sealed<char> for String {}
     impl Sealed<char> for Option<String> {}
 }
@@ -106,6 +107,17 @@ impl Chain<char> for Option<String> {
 }
 
 impl<T> Chain<T> for Vec<Option<T>> {
+    fn len(&self) -> usize {
+        self.iter().map(Chain::<T>::len).sum()
+    }
+    fn append_to(self, v: &mut Vec<T>) {
+        self
+            .into_iter()
+            .for_each(|x| x.append_to(v));
+    }
+}
+
+impl<T, A: Chain<T>> Chain<T> for Vec<(A, T)> {
     fn len(&self) -> usize {
         self.iter().map(Chain::<T>::len).sum()
     }
