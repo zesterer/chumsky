@@ -2021,6 +2021,14 @@ where
         M::invoke(&*self.inner, inp)
     }
 
+    fn boxed(self) -> Boxed<'a, I, O, E>
+    where
+        Self: Sized + 'a,
+    {
+        // Never double-box parsers
+        self
+    }
+
     go_extra!(O);
 }
 
