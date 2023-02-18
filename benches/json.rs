@@ -88,11 +88,9 @@ mod chumsky_zero_copy {
 
     pub fn json<'a>() -> impl Parser<'a, [u8], JsonZero<'a>> {
         recursive(|value| {
-            let digits = one_of(b'0'..=b'9').repeated().slice();
+            let digits = one_of(b'0'..=b'9').repeated();
 
             let int = one_of(b'1'..=b'9')
-                .repeated()
-                .at_least(1)
                 .then(one_of(b'0'..=b'9').repeated())
                 .ignored()
                 .or(just(b'0').ignored())
@@ -112,21 +110,18 @@ mod chumsky_zero_copy {
                 .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
                 .boxed();
 
-            let escape = just(b'\\')
-                .then(choice((
-                    just(b'\\'),
-                    just(b'/'),
-                    just(b'"'),
-                    just(b'b').to(b'\x08'),
-                    just(b'f').to(b'\x0C'),
-                    just(b'n').to(b'\n'),
-                    just(b'r').to(b'\r'),
-                    just(b't').to(b'\t'),
-                )))
-                .ignored();
+            let escape = just(b'\\').ignore_then(choice((
+                just(b'\\'),
+                just(b'/'),
+                just(b'"'),
+                just(b'b').to(b'\x08'),
+                just(b'f').to(b'\x0C'),
+                just(b'n').to(b'\n'),
+                just(b'r').to(b'\r'),
+                just(b't').to(b'\t'),
+            )));
 
             let string = none_of(b"\\\"")
-                .ignored()
                 .or(escape)
                 .repeated()
                 .slice()
@@ -135,7 +130,7 @@ mod chumsky_zero_copy {
 
             let array = value
                 .clone()
-                .separated_by(just(b',').padded())
+                .separated_by(just(b','))
                 .collect()
                 .padded()
                 .delimited_by(just(b'['), just(b']'))

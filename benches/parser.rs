@@ -1,6 +1,5 @@
-
 use chumsky::zero_copy::prelude::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn bench_choice(c: &mut Criterion) {
     let alphabet_choice = choice((
@@ -36,19 +35,25 @@ fn bench_choice(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "A"), |b| {
         b.iter(|| {
-            black_box(Parser::parse(&alphabet_choice, black_box("A"))).into_result().unwrap();
+            black_box(Parser::parse(&alphabet_choice, black_box("A")))
+                .into_result()
+                .unwrap();
         })
     });
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "Z"), |b| {
         b.iter(|| {
-            black_box(alphabet_choice.parse(black_box("Z"))).into_result().unwrap();
+            black_box(alphabet_choice.parse(black_box("Z")))
+                .into_result()
+                .unwrap();
         })
     });
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "0"), |b| {
         b.iter(|| {
-            black_box(alphabet_choice.parse(black_box("0"))).into_result().unwrap_err();
+            black_box(alphabet_choice.parse(black_box("0")))
+                .into_result()
+                .unwrap_err();
         })
     });
 }

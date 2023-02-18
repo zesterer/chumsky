@@ -834,24 +834,26 @@ where
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
-        let res = self.parsers
-            .iter()
-            .try_fold(None::<Located<E::Error>>, |err, parser, | {
-                match parser.go::<M>(inp) {
-                    Ok(out) => Err(out),
-                    Err(e) => {
-                        Ok(Some(match err {
+        let res =
+            self.parsers
+                .iter()
+                .try_fold(None::<Located<E::Error>>, |err, parser| {
+                    match parser.go::<M>(inp) {
+                        Ok(out) => Err(out),
+                        Err(e) => Ok(Some(match err {
                             Some(err) => err.prioritize(e, |a, b| a.merge(b)),
                             None => e,
-                        }))
+                        })),
                     }
-                }
-            });
+                });
 
         match res {
-            Ok(err) => Err(err.unwrap_or_else(
-                || Located::at(inp.offset().into(), E::Error::expected_found(None, None, inp.span_since(before.offset)))
-            )),
+            Ok(err) => Err(err.unwrap_or_else(|| {
+                Located::at(
+                    inp.offset().into(),
+                    E::Error::expected_found(None, None, inp.span_since(before.offset)),
+                )
+            })),
             Err(out) => Ok(out),
         }
     }
