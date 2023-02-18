@@ -14,13 +14,15 @@ exclude = [
 ]
 
 [features]
-default = ["std", "spill-stack"]
+default = ["std", "spill-stack", "memoisation"]
 # Integrate with the standard library
 std = []
 # Enable nightly-only features like better compiler diagnostics
 nightly = []
 # Allows deeper recursion by dynamically spilling stack state on to the heap
 spill-stack = ["stacker", "std"]
+# Allows parser memoisation, speeding up heavily back-tracking parsers and allowing left recursion
+memoisation = []
 
 [dependencies]
 hashbrown = "0.13"

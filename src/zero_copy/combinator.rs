@@ -490,7 +490,7 @@ pub struct Ignored<A, OA> {
 impl<A: Copy, OA> Copy for Ignored<A, OA> {}
 impl<A: Clone, OA> Clone for Ignored<A, OA> {
     fn clone(&self) -> Self {
-        Ignored {
+        Self {
             parser: self.parser.clone(),
             phantom: PhantomData,
         }
@@ -509,6 +509,52 @@ where
     }
 
     go_extra!(());
+}
+
+/// See [`Parser::memoised`].
+#[cfg(feature = "memoisation")]
+#[derive(Copy, Clone)]
+pub struct Memoised<A> {
+    pub(crate) parser: A,
+}
+
+#[cfg(feature = "memoisation")]
+impl<'a, I, E, A, O> Parser<'a, I, O, E> for Memoised<A>
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+    E::Error: Clone,
+    A: Parser<'a, I, O, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        // TODO: Don't use address, since this might not be constant?
+        let key = (inp.offset(), &self.parser as *const _ as *const () as usize);
+
+        match inp.memos.entry(key) {
+            hashbrown::hash_map::Entry::Occupied(o) => {
+                if let Some(err) = o.get() {
+                    return Err(err.clone());
+                } else {
+                }
+            }
+            hashbrown::hash_map::Entry::Vacant(v) => {
+                v.insert(None);
+            }
+        }
+
+        let res = self.parser.go::<M>(inp);
+
+        if let Err(err) = &res {
+            inp.memos.insert(key, Some(err.clone()));
+        } else {
+            inp.memos.remove(&key);
+        }
+
+        res
+    }
+
+    go_extra!(O);
 }
 
 /// See [`Parser::then`].

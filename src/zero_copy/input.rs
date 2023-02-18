@@ -6,12 +6,13 @@
 //! ways: from strings, slices, arrays, etc.
 
 use super::*;
+use hashbrown::HashMap;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 pub trait Input {
     /// The type used to keep track of the current location in the stream
-    type Offset: Copy + Ord + Into<usize>;
+    type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
     type Token;
     /// The type of a span on this input - to provide custom span context see [`WithContext`]
@@ -198,6 +199,7 @@ pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     state: Result<&'parse mut E::State, E::State>,
     ctx: E::Context,
+    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
@@ -211,6 +213,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
             state,
             ctx: E::Context::default(),
             errors: Vec::new(),
+            memos: HashMap::default(),
         }
     }
 
@@ -234,6 +237,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
             },
             ctx: new_ctx,
             errors: mem::take(&mut self.errors),
+            memos: HashMap::default(), // TODO: Reuse memoisation state?
         };
         let res = f(&mut new_ctx);
         self.offset = new_ctx.offset;
