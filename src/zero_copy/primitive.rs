@@ -767,36 +767,56 @@ macro_rules! impl_choice_for_tuple {
         impl_choice_for_tuple!($($X)*);
         impl_choice_for_tuple!(~ $head $($X)*);
     };
-    (~ $($X:ident)*) => {
+    (~ $Head:ident $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $($X),*, O> Parser<'a, I, O, E> for Choice<($($X,)*), O>
+        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*), O>
         where
             I: Input + ?Sized,
             E: ParserExtra<'a, I>,
+            $Head:  Parser<'a, I, O, E>,
             $($X: Parser<'a, I, O, E>),*
         {
             #[inline]
             fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
                 let before = inp.save();
 
-                let Choice { parsers: ($($X,)*), .. } = self;
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                let mut err: Option<Located<E::Error>> = None;
+                let mut err = match $Head.go::<M>(inp) {
+                    Ok(out) => return Ok(out),
+                    Err(e) => {
+                        inp.rewind(before);
+                        e
+                    }
+                };
+
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
                         Err(e) => {
                             // TODO: prioritise errors
-                            err = Some(match err {
-                                Some(err) => err.prioritize(e, |a, b| a.merge(b)),
-                                None => e,
-                            });
+                            err = err.prioritize(e, |a, b| a.merge(b));
                             inp.rewind(before);
-                        },
+                        }
                     }
                 )*
 
-                Err(err.unwrap_or_else(|| Located::at(inp.offset().into(), E::Error::expected_found(None, None, inp.span_since(before.offset)))))
+                Err(err)
+            }
+
+            go_extra!(O);
+        }
+    };
+    (~ $Head:ident) => {
+        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,), O>
+        where
+            I: Input + ?Sized,
+            E: ParserExtra<'a, I>,
+            $Head:  Parser<'a, I, O, E>,
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+                self.parsers.0.go::<M>(inp)
             }
 
             go_extra!(O);
@@ -804,7 +824,40 @@ macro_rules! impl_choice_for_tuple {
     };
 }
 
-impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+
+impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N], O>
+where
+    A: Parser<'a, I, O, E>,
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        let before = inp.save();
+        let res = self.parsers
+            .iter()
+            .try_fold(None::<Located<E::Error>>, |err, parser, | {
+                match parser.go::<M>(inp) {
+                    Ok(out) => Err(out),
+                    Err(e) => {
+                        Ok(Some(match err {
+                            Some(err) => err.prioritize(e, |a, b| a.merge(b)),
+                            None => e,
+                        }))
+                    }
+                }
+            });
+
+        match res {
+            Ok(err) => Err(err.unwrap_or_else(
+                || Located::at(inp.offset().into(), E::Error::expected_found(None, None, inp.span_since(before.offset)))
+            )),
+            Err(out) => Ok(out),
+        }
+    }
+
+    go_extra!(O);
+}
 
 /// See [`group`].
 #[derive(Copy, Clone)]
