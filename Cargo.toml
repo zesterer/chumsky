@@ -17,7 +17,7 @@ exclude = [
 default = ["std", "spill-stack"]
 # Integrate with the standard library
 std = []
-# Enable nightly-only features like better compiler diagnostics
+# Enable nightly-only features like better compiler diagnostics and a Parser impl for ! (the never type)
 nightly = []
 # Allows deeper recursion by dynamically spilling stack state on to the heap
 spill-stack = ["stacker", "std"]
