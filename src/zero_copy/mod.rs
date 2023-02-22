@@ -2100,7 +2100,7 @@ where
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
+/// # use chumsky::zero_copy::{prelude::*, error::Simple};
 /// // The type of our parser's input (tokens like this might be emitted by your compiler's lexer)
 /// #[derive(Clone, Debug, PartialEq)]
 /// enum Token {
@@ -2120,21 +2120,22 @@ where
 ///
 /// // Our parser converts a stream of input tokens into an AST
 /// // `select!` is used to deconstruct some of the tokens and turn them into AST nodes
-/// let ast = recursive::<_, _, _, _, Cheap<Token>>(|ast| {
+/// let ast = recursive::<_, _, extra::Err<Simple<[Token]>>, _, _>(|ast| {
 ///     let literal = select! {
-///         Token::Num(x) => Ast::Num(x),
-///         Token::Bool(x) => Ast::Bool(x),
+///         Token::Num(x) => Ast::Num(*x),
+///         Token::Bool(x) => Ast::Bool(*x),
 ///     };
 ///
 ///     literal.or(ast
 ///         .repeated()
+///         .collect()
 ///         .delimited_by(just(Token::LParen), just(Token::RParen))
 ///         .map(Ast::List))
 /// });
 ///
 /// use Token::*;
 /// assert_eq!(
-///     ast.parse(vec![LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]),
+///     ast.parse(&[LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]).into_result(),
 ///     Ok(Ast::List(vec![
 ///         Ast::Num(5),
 ///         Ast::List(vec![
