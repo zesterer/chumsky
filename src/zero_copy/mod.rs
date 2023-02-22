@@ -74,6 +74,7 @@ pub mod prelude {
         ParseResult,
         Parser,
     };
+    pub use crate::select;
 }
 
 use alloc::{
@@ -100,7 +101,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{Input, InputRef, SliceInput, StrInput},
+    input::{BorrowInput, Input, InputRef, SliceInput, StrInput},
     prelude::*,
     recovery::RecoverWith,
     span::Span,
@@ -888,6 +889,19 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
         Self: Sized,
     {
         ThenIgnore {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
+    }
+
+    /// TODO (make sure to note that `self` should probably be terminated with `.then_ignore(end())`!)
+    fn nested_in<B: Parser<'a, I, &'a I, E>>(self, other: B) -> NestedIn<Self, B, O, E>
+    where
+        Self: Sized,
+        I: 'a,
+    {
+        NestedIn {
             parser_a: self,
             parser_b: other,
             phantom: PhantomData,
@@ -2053,6 +2067,93 @@ where
     }
 
     go_extra!(O);
+}
+
+/// Create a parser that selects one or more input patterns and map them to an output value.
+///
+/// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
+/// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
+/// input patterns will become syntax errors, just as with [`filter`].
+///
+/// The macro is semantically similar to a `match` expression and so supports
+/// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
+///
+/// ```ignore
+/// select! {
+///     Token::Bool(x) if x => Expr::True,
+///     Token::Bool(x) if !x => Expr::False,
+/// }
+/// ```
+///
+/// If you require access to the input's span, you may add an argument after the pattern to gain access to it.
+///
+/// ```ignore
+/// select! {
+///     Token::Num(x), span => Expr::Num(x).spanned(span),
+///     Token::Str(s), span => Expr::Str(s).spanned(span),
+/// }
+/// ```
+///
+/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
+/// confusing.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Cheap};
+/// // The type of our parser's input (tokens like this might be emitted by your compiler's lexer)
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     Num(u64),
+///     Bool(bool),
+///     LParen,
+///     RParen,
+/// }
+///
+/// // The type of our parser's output, a syntax tree
+/// #[derive(Debug, PartialEq)]
+/// enum Ast {
+///     Num(u64),
+///     Bool(bool),
+///     List(Vec<Ast>),
+/// }
+///
+/// // Our parser converts a stream of input tokens into an AST
+/// // `select!` is used to deconstruct some of the tokens and turn them into AST nodes
+/// let ast = recursive::<_, _, _, _, Cheap<Token>>(|ast| {
+///     let literal = select! {
+///         Token::Num(x) => Ast::Num(x),
+///         Token::Bool(x) => Ast::Bool(x),
+///     };
+///
+///     literal.or(ast
+///         .repeated()
+///         .delimited_by(just(Token::LParen), just(Token::RParen))
+///         .map(Ast::List))
+/// });
+///
+/// use Token::*;
+/// assert_eq!(
+///     ast.parse(vec![LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]),
+///     Ok(Ast::List(vec![
+///         Ast::Num(5),
+///         Ast::List(vec![
+///             Ast::Bool(false),
+///             Ast::Num(42),
+///         ]),
+///     ])),
+/// );
+/// ```
+#[macro_export]
+macro_rules! select {
+    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::zero_copy::primitive::select(
+            move |x, span| match x {
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                _ => ::core::option::Option::None,
+            }
+        )
+    });
 }
 
 #[test]

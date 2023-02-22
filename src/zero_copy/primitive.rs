@@ -379,6 +379,64 @@ where
     go_extra!(I::Token);
 }
 
+/// See [`select!`].
+pub struct Select<F, I: ?Sized, O, E> {
+    filter: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I: ?Sized, O, E> Copy for Select<F, I, O, E> {}
+impl<F: Clone, I: ?Sized, O, E> Clone for Select<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// TODO
+pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
+where
+    I: BorrowInput + ?Sized,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+{
+    Select {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
+where
+    I: BorrowInput + ?Sized,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        let before = inp.offset();
+        match inp.next_ref() {
+            (at, Some(tok)) => match (self.filter)(tok, inp.span_since(before)) {
+                Some(out) => Ok(M::bind(|| out)),
+                None => Err(Located::at(
+                    at.into(),
+                    E::Error::expected_found(None, Some(tok.clone()), inp.span_since(before)),
+                )),
+            },
+            (at, found) => Err(Located::at(
+                at.into(),
+                E::Error::expected_found(None, found.cloned(), inp.span_since(before)),
+            )),
+        }
+    }
+
+    go_extra!(O);
+}
+
 /// See [`any`].
 pub struct Any<I: ?Sized, E> {
     phantom: PhantomData<(E, I)>,

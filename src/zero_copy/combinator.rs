@@ -662,6 +662,48 @@ where
     go_extra!(OA);
 }
 
+/// See [`Parser::nested_in`].
+pub struct NestedIn<A, B, O, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+    pub(crate) phantom: PhantomData<(O, E)>,
+}
+
+impl<A: Copy, B: Copy, O, E> Copy for NestedIn<A, B, O, E> {}
+impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, A, B, O> Parser<'a, I, O, E> for NestedIn<A, B, O, E>
+where
+    I: Input + ?Sized + 'a,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    B: Parser<'a, I, &'a I, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+        let mut inp2 = self.parser_b.go::<Emit>(inp)?;
+        let mut offset2 = inp2.start();
+        // Swap in new
+        std::mem::swap(&mut inp.input, &mut inp2);
+        std::mem::swap(&mut inp.offset, &mut offset2);
+        let res = self.parser_a.go::<M>(inp);
+        // Swap out old
+        std::mem::swap(&mut inp.input, &mut inp2);
+        std::mem::swap(&mut inp.offset, &mut offset2);
+        res
+    }
+
+    go_extra!(O);
+}
+
 /// See [`Parser::then_with`].
 pub struct ThenWith<A, B, OA, F, I: ?Sized, E> {
     pub(crate) parser: A,

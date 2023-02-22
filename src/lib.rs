@@ -1339,6 +1339,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
     }
 }
 
+/*
 /// Create a parser that selects one or more input patterns and map them to an output value.
 ///
 /// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
@@ -1423,3 +1424,4 @@ macro_rules! select {
         })
     });
 }
+*/
