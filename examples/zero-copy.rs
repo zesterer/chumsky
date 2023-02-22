@@ -1,4 +1,5 @@
 use chumsky::prelude::*;
+use chumsky::problems::Problems;
 
 #[derive(PartialEq, Debug)]
 enum Token<'a> {
@@ -27,6 +28,17 @@ fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]>
         .collect_exactly()
 }
 
+fn bad_parser() -> impl for<'a> Parser<'a, str, Vec<()>, extra::Err<Rich<str>>> + Problems {
+    just("").or(just("b"))
+        .or_not()
+        .separated_by(just(""))
+        .ignored()
+        .then(just("").ignored())
+        .ignored()
+        .repeated()
+        .collect::<_>()
+}
+
 fn main() {
     assert_eq!(
         parser()
@@ -41,4 +53,9 @@ fn main() {
             ((31..37).into(), Token::Ident("tokens")),
         ]),
     );
+
+    let p = bad_parser();
+    for p in p.find_problems() {
+        println!("{p}");
+    }
 }

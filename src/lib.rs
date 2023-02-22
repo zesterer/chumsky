@@ -61,6 +61,7 @@ pub mod input;
 pub mod label;
 pub mod primitive;
 mod private;
+pub mod problems;
 pub mod recovery;
 pub mod recursive;
 #[cfg(feature = "regex")]
@@ -69,6 +70,7 @@ pub mod span;
 mod stream;
 pub mod text;
 pub mod util;
+pub(crate) mod visit;
 
 /// Commonly used functions, traits and types.
 ///

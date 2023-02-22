@@ -112,7 +112,7 @@ impl<T> Default for JustCfg<T> {
 
 /// See [`just`].
 pub struct Just<T, I, E = EmptyErr> {
-    seq: T,
+    pub(crate) seq: T,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(E, I)>,
 }
