@@ -199,7 +199,7 @@ pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     state: Result<&'parse mut E::State, E::State>,
     ctx: E::Context,
-    #[cfg(feature = "memoisation")]
+    #[cfg(feature = "memoization")]
     pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
@@ -214,7 +214,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
             state,
             ctx: E::Context::default(),
             errors: Vec::new(),
-            #[cfg(feature = "memoisation")]
+            #[cfg(feature = "memoization")]
             memos: HashMap::default(),
         }
     }
@@ -239,7 +239,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
             },
             ctx: new_ctx,
             errors: mem::take(&mut self.errors),
-            #[cfg(feature = "memoisation")]
+            #[cfg(feature = "memoization")]
             memos: HashMap::default(), // TODO: Reuse memoisation state?
         };
         let res = f(&mut new_ctx);

@@ -753,7 +753,7 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
     }
 
     /// TODO
-    #[cfg(feature = "memoisation")]
+    #[cfg(feature = "memoization")]
     fn memoised(self) -> Memoised<Self>
     where
         Self: Sized,
@@ -2247,7 +2247,7 @@ fn iter() {
 }
 
 #[test]
-#[cfg(feature = "memoisation")]
+#[cfg(feature = "memoization")]
 fn exponential() {
     use self::prelude::*;
 

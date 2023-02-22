@@ -512,13 +512,13 @@ where
 }
 
 /// See [`Parser::memoised`].
-#[cfg(feature = "memoisation")]
+#[cfg(feature = "memoization")]
 #[derive(Copy, Clone)]
 pub struct Memoised<A> {
     pub(crate) parser: A,
 }
 
-#[cfg(feature = "memoisation")]
+#[cfg(feature = "memoization")]
 impl<'a, I, E, A, O> Parser<'a, I, O, E> for Memoised<A>
 where
     I: Input + ?Sized,
