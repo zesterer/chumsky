@@ -73,18 +73,12 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.offset();
-        match inp.peek() {
-            None => {
-                inp.skip();
-                Ok(M::bind(|| ()))
-            }
-            Some(tok) => {
-                let at = inp.next().0;
-                Err(Located::at(
-                    at.into(),
-                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
-                ))
-            }
+        match inp.next() {
+            (_, None) => Ok(M::bind(|| ())),
+            (at, Some(tok)) => Err(Located::at(
+                at.into(),
+                E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+            )),
         }
     }
 
@@ -227,22 +221,16 @@ where
             .find_map(|next| {
                 let next = next.borrow();
                 let before = inp.offset();
-                match inp.peek() {
-                    Some(tok) if *next == tok => {
-                        inp.skip();
-                        None
-                    }
-                    tok => {
-                        let at = inp.next().0;
-                        Some(Err(Located::at(
-                            at.into(),
-                            E::Error::expected_found(
-                                Some(Some(I::Token::clone(next))),
-                                tok,
-                                inp.span_since(before),
-                            ),
-                        )))
-                    }
+                match inp.next() {
+                    (_, Some(tok)) if *next == tok => None,
+                    (at, tok) => Some(Err(Located::at(
+                        at.into(),
+                        E::Error::expected_found(
+                            Some(Some(I::Token::clone(next))),
+                            tok,
+                            inp.span_since(before),
+                        ),
+                    ))),
                 }
             })
             .unwrap_or_else(|| Ok(M::bind(|| seq.clone())))
@@ -307,22 +295,16 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.offset();
-        match inp.peek() {
-            Some(tok) if self.seq.contains(&tok) => {
-                inp.skip();
-                Ok(M::bind(|| tok))
-            }
-            found => {
-                let at = inp.next().0;
-                Err(Located::at(
-                    at.into(),
-                    E::Error::expected_found(
-                        self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
-                        found,
-                        inp.span_since(before),
-                    ),
-                ))
-            }
+        match inp.next() {
+            (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (at, found) => Err(Located::at(
+                at.into(),
+                E::Error::expected_found(
+                    self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
+                    found,
+                    inp.span_since(before),
+                ),
+            )),
         }
     }
 

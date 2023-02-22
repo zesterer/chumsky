@@ -1760,7 +1760,11 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, I, O, E> Parser<'a, I, O, E> for ! where I: Input + ?Sized, E: ParserExtra<'a, I> {
+impl<'a, I, O, E> Parser<'a, I, O, E> for !
+where
+    I: Input + ?Sized,
+    E: ParserExtra<'a, I>,
+{
     fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
         *self
     }
