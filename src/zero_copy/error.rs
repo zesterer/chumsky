@@ -78,7 +78,7 @@ pub trait Error<I: Input + ?Sized>: Sized {
 
 /// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
 /// you want maximum parse speed, at the cost of all error reporting.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
 pub struct EmptyErr(());
 
 impl<I: Input + ?Sized> Error<I> for EmptyErr {
@@ -244,6 +244,7 @@ where
 ///
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
+// TODO: Impl `Clone`
 pub struct Rich<I: Input + ?Sized> {
     span: I::Span,
     reason: RichReason<I>,

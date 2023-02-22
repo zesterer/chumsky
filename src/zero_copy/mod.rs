@@ -196,6 +196,7 @@ impl<T, E> ParseResult<T, E> {
 }
 
 #[doc(hidden)]
+#[derive(Clone)]
 pub struct Located<E> {
     pos: usize,
     err: E,
@@ -749,6 +750,15 @@ pub trait Parser<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I> = extra::Defaul
             parser: self,
             phantom: PhantomData,
         }
+    }
+
+    /// TODO
+    #[cfg(feature = "memoization")]
+    fn memoised(self) -> Memoised<Self>
+    where
+        Self: Sized,
+    {
+        Memoised { parser: self }
     }
 
     /// Transform all outputs of this parser to a pretermined value.
@@ -2243,4 +2253,34 @@ fn iter() {
     }
 
     assert_eq!(&chars, "abcdefg");
+}
+
+#[test]
+#[cfg(feature = "memoization")]
+fn exponential() {
+    use self::prelude::*;
+
+    fn parser<'a>() -> impl Parser<'a, str, String> {
+        recursive(|expr| {
+            let atom = any()
+                .filter(|c: &char| c.is_alphabetic())
+                .repeated()
+                .at_least(1)
+                .collect()
+                .or(expr.delimited_by(just('('), just(')')));
+
+            atom.clone()
+                .then_ignore(just('+'))
+                .then(atom.clone())
+                .map(|(a, b)| format!("{}{}", a, b))
+                .memoised()
+                .or(atom)
+        })
+        .then_ignore(end())
+    }
+
+    parser()
+        .parse("((((((((((((((((((((((a+b))))))))))))))))))))))")
+        .into_result()
+        .unwrap();
 }
