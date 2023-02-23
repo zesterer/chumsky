@@ -8,6 +8,10 @@
 use super::*;
 use core::mem::MaybeUninit;
 
+/// The type of a lazy parser.
+pub type Lazy<'a, A, I, E> =
+    ThenIgnore<A, Repeated<Any<I, E>, <I as Input<'a>>::Token, I, E>, (), E>;
+
 /// Alter the configuration of a struct using parse-time context
 pub struct Configure<A, F> {
     pub(crate) parser: A,
@@ -691,6 +695,7 @@ where
         core::mem::swap(&mut inp.input, &mut inp2);
         core::mem::swap(&mut inp.offset, &mut offset2);
         let res = self.parser_a.go::<M>(inp);
+        let res = res.and_then(|o| expect_end(inp).map(move |()| o));
         // Swap out old
         core::mem::swap(&mut inp.input, &mut inp2);
         core::mem::swap(&mut inp.offset, &mut offset2);
@@ -699,58 +704,6 @@ where
     }
 
     go_extra!(O);
-}
-
-/// See [`Parser::then_with`].
-pub struct ThenWith<A, B, OA, F, I: ?Sized, E> {
-    pub(crate) parser: A,
-    pub(crate) then: F,
-    pub(crate) phantom: PhantomData<(B, OA, E, I)>,
-}
-
-impl<A: Copy, B, OA, F: Copy, I: ?Sized, E> Copy for ThenWith<A, B, OA, F, I, E> {}
-impl<A: Clone, B, OA, F: Clone, I: ?Sized, E> Clone for ThenWith<A, B, OA, F, I, E> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            then: self.then.clone(),
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, I, E, A, B, OA, OB, F> Parser<'a, I, OB, E> for ThenWith<A, B, OA, F, I, E>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    B: Parser<'a, I, OB, E>,
-    F: Fn(OA) -> B,
-{
-    #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
-        let before = inp.save();
-        match self.parser.go::<Emit>(inp) {
-            Ok(output) => {
-                let then = (self.then)(output);
-
-                let before = inp.save();
-                match then.go::<M>(inp) {
-                    Ok(output) => Ok(output),
-                    Err(e) => {
-                        inp.rewind(before);
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                inp.rewind(before);
-                Err(e)
-            }
-        }
-    }
-
-    go_extra!(OB);
 }
 
 /// See [`Parser::then_with_ctx`].
@@ -1026,8 +979,7 @@ where
     /// let rings = for_the_elves
     ///     .then(for_the_dwarves)
     ///     .then(for_the_humans)
-    ///     .then(for_sauron)
-    ///     .then_ignore(end());
+    ///     .then(for_sauron);
     ///
     /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").has_errors()); // Too few rings!
     /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").has_errors()); // Too many rings!
@@ -1239,8 +1191,7 @@ where
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
-    ///     .collect::<Vec<_>>()
-    ///     .then_ignore(end());
+    ///     .collect::<Vec<_>>();
     ///
     /// // Not enough elements
     /// assert!(coordinate_3d.parse("4, 3").has_errors());
@@ -2152,8 +2103,7 @@ mod tests {
         let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .at_least(3)
-            .collect::<Vec<_>>()
-            .then(end());
+            .collect::<Vec<_>>();
 
         // Is empty means no errors
         assert!(parser.parse("-,-,-,").has_errors());

@@ -31,7 +31,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Stmt>> {
 }
 
 fn main() {
-    let stmts = parser().padded().then_ignore(end()).parse(
+    let stmts = parser().padded().parse(
         r#"
 expr
 expr

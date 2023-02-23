@@ -109,7 +109,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
         r#let.or(r#fn).or(expr).padded()
     });
 
-    decl.then_ignore(end())
+    decl
 }
 
 fn eval<'a>(

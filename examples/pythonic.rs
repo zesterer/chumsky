@@ -61,7 +61,6 @@ fn lexer<'a>() -> impl Parser<'a, str, Vec<Spanned<TokenTree>>> {
 
     // Whitespace indentation creates code block token trees
     text::semantic_indentation(tt, |tts, span| (TokenTree::Tree(Delim::Block, tts), span))
-        .then_ignore(end())
 }
 
 /// Flatten a series of token trees into a single token stream, ready for feeding into the main parser

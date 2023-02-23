@@ -37,7 +37,6 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>, extra::Err<Simple<'a, &'
         .repeated()
         .collect()
     })
-    .then_ignore(end())
 }
 
 const TAPE_LEN: usize = 10_000;

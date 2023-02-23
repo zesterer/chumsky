@@ -414,20 +414,18 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .map(|((name, args), body)| (name, Func { args, body }))
         .labelled("function");
 
-    func.repeated()
-        .try_map(|fs, _| {
-            let mut funcs = HashMap::new();
-            for ((name, name_span), f) in fs {
-                if funcs.insert(name.clone(), f).is_some() {
-                    return Err(Simple::custom(
-                        name_span.clone(),
-                        format!("Function '{}' already exists", name),
-                    ));
-                }
+    func.repeated().try_map(|fs, _| {
+        let mut funcs = HashMap::new();
+        for ((name, name_span), f) in fs {
+            if funcs.insert(name.clone(), f).is_some() {
+                return Err(Simple::custom(
+                    name_span.clone(),
+                    format!("Function '{}' already exists", name),
+                ));
             }
-            Ok(funcs)
-        })
-        .then_ignore(end())
+        }
+        Ok(funcs)
+    })
 }
 
 struct Error {

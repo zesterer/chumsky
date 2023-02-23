@@ -103,6 +103,7 @@ use self::{
     extra::ParserExtra,
     input::{BorrowInput, Input, InputRef, SliceInput, StrInput},
     prelude::*,
+    primitive::Any,
     recovery::RecoverWith,
     span::Span,
     text::*,
@@ -218,6 +219,19 @@ impl<E> Located<E> {
             Ordering::Greater => self,
             Ordering::Less => other,
         }
+    }
+}
+
+fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
+    inp: &mut InputRef<'a, '_, I, E>,
+) -> PResult<Check, (), E::Error> {
+    let before = inp.offset();
+    match inp.next() {
+        (_, None) => Ok(()),
+        (at, Some(tok)) => Err(Located::at(
+            at.into(),
+            E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+        )),
     }
 }
 
@@ -433,6 +447,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Emit>(&mut inp);
+        let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
         let mut errs = inp.into_errs();
         let out = match res {
             Ok(out) => Some(out),
@@ -474,6 +489,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Check>(&mut inp);
+        let res = res.and_then(|o| expect_end(&mut inp));
         let mut errs = inp.into_errs();
         let out = match res {
             Ok(_) => Some(()),
@@ -540,8 +556,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     .filter(char::is_ascii_lowercase)
     ///     .repeated()
     ///     .at_least(1)
-    ///     .collect::<String>()
-    ///     .then_ignore(end());
+    ///     .collect::<String>();
     ///
     /// assert_eq!(lowercase.parse("hello").into_result(), Ok("hello".to_string()));
     /// assert!(lowercase.parse("Hello").has_errors());
@@ -740,7 +755,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     .collect::<Vec<_>>();
     ///
     /// assert_eq!(whitespace.parse("    ").into_result(), Ok(vec![(); 4]));
-    /// assert_eq!(whitespace.parse("  hello").into_result(), Ok(vec![(); 2]));
+    /// assert!(whitespace.parse("  hello").has_errors());
     /// ```
     fn ignored(self) -> Ignored<Self, O>
     where
@@ -894,7 +909,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         }
     }
 
-    /// TODO (make sure to note that `self` should probably be terminated with `.then_ignore(end())`!)
+    /// TODO
     fn nested_in<B: Parser<'a, I, I, E>>(self, other: B) -> NestedIn<Self, B, O, E>
     where
         Self: Sized,
@@ -903,41 +918,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         NestedIn {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Parse one thing and then another thing, creating the second parser from the result of
-    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
-    ///
-    /// The output of this parser is `U`, the result of the second parser
-    ///
-    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
-    /// recovery then the second produces an error, the primary error will point to the location in
-    /// the second parser which failed, ignoring that the first parser may be the root cause. There
-    /// may be other pathological errors cases as well.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, extra::Err<Simple<&[u8]>>>((b'a'..=b'z').collect::<Vec<u8>>())
-    ///     .then_with(|letter: u8| just(letter + 1));
-    ///
-    /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
-    /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
-    /// ```
-    fn then_with<U, B: Parser<'a, I, U, E>, F: Fn(O) -> B>(
-        self,
-        then: F,
-    ) -> ThenWith<Self, B, O, F, I, E>
-    where
-        Self: Sized,
-    {
-        ThenWith {
-            parser: self,
-            then,
             phantom: PhantomData,
         }
     }
@@ -1008,27 +988,23 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     ///
-    /// // Lua-style multiline string literal
-    /// let string = just::<_, _, extra::Err<Simple<&str>>>('=')
+    /// let escape = just("\\n").to('\n');
+    ///
+    /// // C-style tring literal
+    /// let string = none_of::<_, _, extra::Err<Simple<&str>>>('"')
+    ///     .and_is(escape.not())
+    ///     .or(escape)
     ///     .repeated()
-    ///     .map_slice(str::len)
-    ///     .padded_by(just('['))
-    ///     .then_with(|n| {
-    ///         let close = just('=').repeated().exactly(n).padded_by(just(']'));
-    ///         any()
-    ///             .and_is(close.not())
-    ///             .repeated()
-    ///             .slice()
-    ///             .then_ignore(close)
-    ///     });
+    ///     .collect::<String>()
+    ///     .padded_by(just('"'));
     ///
     /// assert_eq!(
-    ///     string.parse("[[wxyz]]").into_result(),
+    ///     string.parse("\"wxyz\"").into_result().as_deref(),
     ///     Ok("wxyz"),
     /// );
     /// assert_eq!(
-    ///     string.parse("[==[abcd]=]efgh]===]ijkl]==]").into_result(),
-    ///     Ok("abcd]=]efgh]===]ijkl"),
+    ///     string.parse("\"a\nb\"").into_result().as_deref(),
+    ///     Ok("a\nb"),
     /// );
     /// ```
     fn and_is<U, B>(self, other: B) -> AndIs<Self, B, U>
@@ -1423,13 +1399,36 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
     /// // 3 is not parsed because it's followed by '+'.
-    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4").into_result(), Ok(vec!["1", "2"]));
+    /// assert_eq!(just_numbers.lazy().parse("1, 2, 3 + 4").into_result(), Ok(vec!["1", "2"]));
     /// ```
     fn rewind(self) -> Rewind<Self>
     where
         Self: Sized,
     {
         Rewind { parser: self }
+    }
+
+    /// Make the parser lazy, such that it parses as much as it validly can and then finished successfully, leaving
+    /// trailing input untouched.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::prelude::*;
+    /// let digits = one_of::<_, _, extra::Err<Simple<&str>>>('0'..='9')
+    ///     .repeated()
+    ///     .collect::<String>()
+    ///     .lazy();
+    ///
+    /// assert_eq!(digits.parse("12345abcde").into_result().as_deref(), Ok("12345"));
+    /// ```
+    fn lazy(self) -> Lazy<'a, Self, I, E>
+    where
+        Self: Sized,
+    {
+        self.then_ignore(any().repeated())
     }
 
     /// Parse a pattern, ignoring any amount of whitespace both before and after the pattern.
@@ -1919,6 +1918,8 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
     }
 
     /// Create an iterator over the outputs generated by an iterable parser.
+    ///
+    /// Warning: Trailing errors will be ignored
     fn parse_iter(self, input: I) -> ParseResult<ParserIter<'a, 'static, Self, I, O, E>, E::Error>
     where
         Self: IterParser<'a, I, O, E> + Sized,
@@ -1941,6 +1942,8 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
     }
 
     /// Create an iterator over the outputs generated by an iterable parser with the given parser state.
+    ///
+    /// Warning: Trailing errors will be ignored
     fn parse_iter_with_state<'parse>(
         self,
         input: I,
