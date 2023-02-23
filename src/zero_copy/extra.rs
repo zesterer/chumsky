@@ -18,10 +18,10 @@ type DefaultCtx = ();
 /// Sealed trait for parser extra information - error type, state type, etc.
 pub trait ParserExtra<'a, I>: 'a + ExtraSealed
 where
-    I: ?Sized + Input,
+    I: Input<'a>,
 {
     /// Error type to use for the parser
-    type Error: Error<I> + 'a;
+    type Error: Error<'a, I> + 'a;
     /// State type to use for the parser
     type State: 'a;
     /// Context used for parser configuration
@@ -45,8 +45,8 @@ pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 
 impl<'a, I, E, S, C> ParserExtra<'a, I> for Full<E, S, C>
 where
-    I: ?Sized + Input,
-    E: Error<I> + 'a,
+    I: Input<'a>,
+    E: Error<'a, I> + 'a,
     S: 'a,
     C: 'a,
 {

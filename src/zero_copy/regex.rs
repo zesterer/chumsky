@@ -16,15 +16,14 @@ pub fn regex<C: Char, I: ?Sized, E>(pattern: &str) -> Regex<C, I, E> {
     }
 }
 
-impl<'a, C, I, E> Parser<'a, I, &'a C::Slice, E> for Regex<C, I, E>
+impl<'a, C, I, E> Parser<'a, I, &'a C::Str, E> for Regex<C, I, E>
 where
     C: Char,
-    C::Slice: 'a,
-    I: Input + StrInput<C> + ?Sized,
+    I: StrInput<'a, C>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Slice, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str, E::Error> {
         let before = inp.offset();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {
@@ -42,5 +41,5 @@ where
             })
     }
 
-    go_extra!(&'a C::Slice);
+    go_extra!(&'a C::Str);
 }

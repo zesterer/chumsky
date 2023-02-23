@@ -49,7 +49,7 @@ pub type Direct<'a, I, O, Extra> = dyn Parser<'a, I, O, Extra> + 'a;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'a, I: Input + ?Sized, O, Extra: ParserExtra<'a, I>> {
+pub struct Indirect<'a, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
     inner: OnceCell<Box<dyn Parser<'a, I, O, Extra> + 'a>>,
 }
 
@@ -61,7 +61,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>> {
+impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -88,7 +88,7 @@ impl<'a, I: Input + ?Sized, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, 
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// chain.define(just::<_, _, extra::Err<Simple<str>>>('+')
+    /// chain.define(just::<_, _, extra::Err<Simple<&str>>>('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
@@ -141,7 +141,7 @@ impl<P: ?Sized> Clone for Recursive<P> {
 
 impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -161,7 +161,7 @@ where
 
 impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -191,7 +191,7 @@ where
 /// }
 ///
 /// // Parser that recursively parses nested lists
-/// let tree = recursive::<_, _, extra::Err<Simple<str>>, _, _>(|tree| tree
+/// let tree = recursive::<_, _, extra::Err<Simple<&str>>, _, _>(|tree| tree
 ///     .separated_by(just(','))
 ///     .collect::<Vec<_>>()
 ///     .delimited_by(just('['), just(']'))
@@ -223,7 +223,7 @@ where
 /// ```
 pub fn recursive<'a, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, I, O, E>>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E> + 'a,
     F: FnOnce(Recursive<Direct<'a, I, O, E>>) -> A,

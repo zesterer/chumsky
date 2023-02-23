@@ -130,7 +130,7 @@ mod chumsky_zero_copy {
     use super::Token;
     use std::str;
 
-    pub fn parser<'a>() -> impl Parser<'a, [u8], Vec<Token<'a>>> {
+    pub fn parser<'a>() -> impl Parser<'a, &'a [u8], Vec<Token<'a>>> {
         let digits = one_of(b'0'..=b'9').repeated().slice();
 
         let int = one_of(b'1'..=b'9')

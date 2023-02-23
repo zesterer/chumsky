@@ -6,7 +6,7 @@ enum Stmt {
     Loop(Vec<Stmt>),
 }
 
-fn parser<'a>() -> impl Parser<'a, str, Vec<Stmt>> {
+fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Stmt>> {
     let expr = just("expr"); // TODO
 
     let block = recursive(|block| {
