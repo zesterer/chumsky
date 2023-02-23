@@ -13,8 +13,6 @@ fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
     recursive(|expr| {
         let num = select! { Token::Num(x) => *x };
         let parens = expr
-            // Needed to ensure that we parse *all* of the nested tokens
-            .then_ignore(end())
             // Here we specify how the parser should come up with the nested tokens
             .nested_in(select! { Token::Parens(xs) => xs.as_slice() });
 
@@ -32,7 +30,6 @@ fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
 
         sum
     })
-    .then_ignore(end())
 }
 
 fn main() {

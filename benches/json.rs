@@ -156,8 +156,6 @@ mod chumsky_zero_copy {
             ))
             .padded()
         })
-        .then(end())
-        .map(|(json, _)| json)
     }
 }
 

@@ -100,7 +100,6 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
         // .recover_with(skip_then_retry_until(['}', ']']))
         .padded()
     })
-    .then_ignore(end())
 }
 
 fn main() {

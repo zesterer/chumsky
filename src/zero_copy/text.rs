@@ -230,8 +230,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let newline = text::newline::<_, extra::Err<Simple<&str>>>()
-///     .then_ignore(end());
+/// let newline = text::newline::<_, extra::Err<Simple<&str>>>();
 ///
 /// assert_eq!(newline.parse("\n").into_result(), Ok(()));
 /// assert_eq!(newline.parse("\r").into_result(), Ok(()));
@@ -312,8 +311,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let dec = text::int::<_, _, extra::Err<Simple<&str>>>(10)
-///     .then_ignore(end());
+/// let dec = text::int::<_, _, extra::Err<Simple<&str>>>(10);
 ///
 /// assert_eq!(dec.parse("0").into_result(), Ok("0"));
 /// assert_eq!(dec.parse("1").into_result(), Ok("1"));
@@ -321,8 +319,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
-/// let hex = text::int::<_, _, extra::Err<Simple<&str>>>(16)
-///     .then_ignore(end());
+/// let hex = text::int::<_, _, extra::Err<Simple<&str>>>(16);
 ///
 /// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
 /// assert_eq!(hex.parse("d").into_result(), Ok("d"));
@@ -430,7 +427,7 @@ where
     })
 }
 
-/// Like [`ident`], but only accepts an exact identifier while ignoring trailing identifier characters.
+/// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
 ///
 /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
 /// when `I::Slice` is [`&[u8]`]).
@@ -444,9 +441,10 @@ where
 /// // Exactly 'def' was found
 /// assert_eq!(def.parse("def").into_result(), Ok("def"));
 /// // Exactly 'def' was found, with non-identifier trailing characters
-/// assert_eq!(def.parse("def(foo, bar)").into_result(), Ok("def"));
+/// // This works because we made the parser lazy: it parses 'def' and ignores the rest
+/// assert_eq!(def.clone().lazy().parse("def(foo, bar)").into_result(), Ok("def"));
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
-/// assert!(def.parse("define").has_errors());
+/// assert!(def.lazy().parse("define").has_errors());
 /// ```
 pub fn keyword<
     'a,

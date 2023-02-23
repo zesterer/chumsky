@@ -22,38 +22,7 @@ pub struct End<I, E>(PhantomData<(E, I)>);
 
 /// A parser that accepts only the end of input.
 ///
-/// This parser is very useful when you wish to force a parser to consume *all* of the input. It is typically combined
-/// with [`Parser::then_ignore`].
-///
 /// The output type of this parser is `()`.
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::zero_copy::prelude::*;
-/// assert_eq!(end::<_, extra::Err<Simple<&str>>>().parse("").into_result(), Ok(()));
-/// assert!(end::<_, extra::Err<Simple<&str>>>().parse("hello").has_errors());
-/// ```
-///
-/// ```
-/// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<_, _, extra::Err<Simple<&str>>>(10).slice();
-///
-/// // This parser parses digits!
-/// assert_eq!(digits.parse("1234").into_result(), Ok("1234"));
-///
-/// // However, parsers are lazy and do not consume trailing input.
-/// // This can be inconvenient if we want to validate all of the input.
-/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK").into_result(), Ok("1234"));
-///
-/// // To fix this problem, we require that the end of input follows any successfully parsed input
-/// let only_digits = digits.then_ignore(end());
-///
-/// // Now our parser correctly produces an error if any trailing input is found...
-/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").has_errors());
-/// // ...while still behaving correctly for inputs that only consist of valid patterns
-/// assert_eq!(only_digits.parse("1234").into_result(), Ok("1234"));
-/// ```
 pub const fn end<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> End<I, E> {
     End(PhantomData)
 }
@@ -166,11 +135,10 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 /// let question = just::<_, _, extra::Err<Simple<&str>>>('?');
 ///
 /// assert_eq!(question.parse("?").into_result(), Ok('?'));
+/// // This fails because '?' was not found
 /// assert!(question.parse("!").has_errors());
-/// // This works because parsers do not eagerly consume input, so the '!' is not parsed
-/// assert_eq!(question.parse("?!").into_result(), Ok('?'));
 /// // This fails because the parser expects an end to the input after the '?'
-/// assert!(question.then(end()).parse("?!").has_errors());
+/// assert!(question.parse("?!").has_errors());
 /// ```
 pub const fn just<'a, T, I, E>(seq: T) -> Just<T, I, E>
 where
@@ -266,8 +234,7 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 /// let digits = one_of::<_, _, extra::Err<Simple<&str>>>("0123456789")
 ///     .repeated()
 ///     .at_least(1)
-///     .collect::<String>()
-///     .then_ignore(end());
+///     .collect::<String>();
 ///
 /// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
@@ -337,8 +304,7 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 /// # use chumsky::zero_copy::{prelude::*, error::Simple};
 /// let string = one_of::<_, _, extra::Err<Simple<&str>>>("\"'")
 ///     .ignore_then(none_of("\"'").repeated().collect::<String>())
-///     .then_ignore(one_of("\"'"))
-///     .then_ignore(end());
+///     .then_ignore(one_of("\"'"));
 ///
 /// assert_eq!(string.parse("'hello'").into_result(), Ok("hello".to_string()));
 /// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));

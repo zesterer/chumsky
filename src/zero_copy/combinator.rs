@@ -8,6 +8,10 @@
 use super::*;
 use core::mem::MaybeUninit;
 
+/// The type of a lazy parser.
+pub type Lazy<'a, A, I, E> =
+    ThenIgnore<A, Repeated<Any<I, E>, <I as Input<'a>>::Token, I, E>, (), E>;
+
 /// Alter the configuration of a struct using parse-time context
 pub struct Configure<A, F> {
     pub(crate) parser: A,
@@ -691,6 +695,7 @@ where
         core::mem::swap(&mut inp.input, &mut inp2);
         core::mem::swap(&mut inp.offset, &mut offset2);
         let res = self.parser_a.go::<M>(inp);
+        let res = res.and_then(|o| expect_end(inp).map(move |()| o));
         // Swap out old
         core::mem::swap(&mut inp.input, &mut inp2);
         core::mem::swap(&mut inp.offset, &mut offset2);
@@ -1026,8 +1031,7 @@ where
     /// let rings = for_the_elves
     ///     .then(for_the_dwarves)
     ///     .then(for_the_humans)
-    ///     .then(for_sauron)
-    ///     .then_ignore(end());
+    ///     .then(for_sauron);
     ///
     /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").has_errors()); // Too few rings!
     /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").has_errors()); // Too many rings!
@@ -1239,8 +1243,7 @@ where
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
-    ///     .collect::<Vec<_>>()
-    ///     .then_ignore(end());
+    ///     .collect::<Vec<_>>();
     ///
     /// // Not enough elements
     /// assert!(coordinate_3d.parse("4, 3").has_errors());
@@ -2152,8 +2155,7 @@ mod tests {
         let parser = just::<_, _, extra::Default>('-')
             .separated_by(just(','))
             .at_least(3)
-            .collect::<Vec<_>>()
-            .then(end());
+            .collect::<Vec<_>>();
 
         // Is empty means no errors
         assert!(parser.parse("-,-,-,").has_errors());
