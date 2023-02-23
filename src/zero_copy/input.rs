@@ -10,7 +10,8 @@ use hashbrown::HashMap;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
-pub trait Input {
+// TODO: Remove `Clone` bound
+pub trait Input<'a>: 'a + Clone {
     /// The type used to keep track of the current location in the stream
     type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
@@ -32,40 +33,31 @@ pub trait Input {
 }
 
 /// A trait for types that represent slice-like streams of input tokens.
-pub trait SliceInput: Input {
+pub trait SliceInput<'a>: Input<'a> {
     /// The unsized slice type of this input. For [`&str`] it's `str`, and for [`&[T]`] it will be
     /// `[T]`
-    type Slice: ?Sized;
+    type Slice;
 
     /// Get a slice from a start and end offset
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice;
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice;
     /// Get a slice from a start offset till the end of the input
-    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice;
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice;
 }
 
 // Implemented by inputs that reference a string slice and use byte indices as their offset.
 /// A trait for types that represent string-like streams of input tokens
-pub trait StrInput<C: Char>:
-    Input<Offset = usize, Token = C> + SliceInput<Slice = C::Slice>
+pub trait StrInput<'a, C: Char>:
+    Input<'a, Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
 {
 }
 
 /// Implemented by inputs that can have tokens borrowed from them.
-pub trait BorrowInput: Input {
+pub trait BorrowInput<'a>: Input<'a> {
     /// See [`Input::next`].
-    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&Self::Token>);
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>);
 }
 
-/// Implemented by inputs that contain other inputs nested within them (i.e: token trees).
-pub trait NestedInput: Input {
-    /// Attempt to denest an input, fetching its inner data
-    // TODO: What if an input has multiple nestings at each token, like a binary tree?
-    fn denest<F>(&self, offset: Self::Offset, denest: F) -> (Self::Offset, &Self)
-    where
-        F: for<'a> Fn(&'a Self::Token) -> Option<&'a Self>;
-}
-
-impl Input for str {
+impl<'a> Input<'a> for &'a str {
     type Offset = usize;
     type Token = char;
     type Span = SimpleSpan<usize>;
@@ -95,23 +87,23 @@ impl Input for str {
     }
 }
 
-impl StrInput<char> for str {}
+impl<'a> StrInput<'a, char> for &'a str {}
 
-impl SliceInput for str {
-    type Slice = str;
+impl<'a> SliceInput<'a> for &'a str {
+    type Slice = &'a str;
 
     #[inline]
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice {
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
 
     #[inline]
-    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice {
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         &self[from]
     }
 }
 
-impl<T: Clone> Input for [T] {
+impl<'a, T: Clone> Input<'a> for &'a [T] {
     type Offset = usize;
     type Token = T;
     type Span = SimpleSpan<usize>;
@@ -132,24 +124,24 @@ impl<T: Clone> Input for [T] {
     }
 }
 
-impl StrInput<u8> for [u8] {}
+impl<'a> StrInput<'a, u8> for &'a [u8] {}
 
-impl<T: Clone> SliceInput for [T] {
-    type Slice = [T];
+impl<'a, T: Clone> SliceInput<'a> for &'a [T] {
+    type Slice = &'a [T];
 
     #[inline]
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice {
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
 
     #[inline]
-    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice {
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         &self[from]
     }
 }
 
-impl<T: Clone> BorrowInput for [T] {
-    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&Self::Token>) {
+impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
         } else {
@@ -161,9 +153,17 @@ impl<T: Clone> BorrowInput for [T] {
 
 /// An input wrapper contains a user-defined context in its span, in addition to the span of the
 /// wrapped input.
-pub struct WithContext<'a, Ctx, I: ?Sized>(pub Ctx, pub &'a I);
+#[derive(Copy, Clone)]
+pub struct WithContext<Ctx, I>(pub Ctx, pub I);
 
-impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
+impl<Ctx, I> WithContext<Ctx, I> {
+    /// Create a new [`WithContext`].
+    pub fn new(ctx: Ctx, inp: I) -> Self {
+        Self(ctx, inp)
+    }
+}
+
+impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
     type Offset = I::Offset;
     type Token = I::Token;
     type Span = (Ctx, I::Span);
@@ -181,47 +181,47 @@ impl<'a, Ctx: Clone, I: Input + ?Sized> Input for WithContext<'a, Ctx, I> {
     }
 }
 
-impl<'a, Ctx: Clone, I: BorrowInput + ?Sized> BorrowInput for WithContext<'a, Ctx, I> {
-    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&Self::Token>) {
+impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ctx, I> {
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         self.1.next_ref(offset)
     }
 }
 
-impl<'a, Ctx: Clone, I: SliceInput + ?Sized> SliceInput for WithContext<'a, Ctx, I> {
+impl<'a, Ctx: Clone + 'a, I: SliceInput<'a>> SliceInput<'a> for WithContext<Ctx, I> {
     type Slice = I::Slice;
 
-    fn slice(&self, range: Range<Self::Offset>) -> &Self::Slice {
-        <I as SliceInput>::slice(&*self.1, range)
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice(&self.1, range)
     }
-    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> &Self::Slice {
-        <I as SliceInput>::slice_from(&*self.1, from)
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice_from(&self.1, from)
     }
 }
 
-impl<'a, Ctx, C, I> StrInput<C> for WithContext<'a, Ctx, I>
+impl<'a, Ctx, C, I> StrInput<'a, C> for WithContext<Ctx, I>
 where
-    Ctx: Clone,
+    Ctx: Clone + 'a,
     C: Char,
-    I: Input<Token = C, Offset = usize> + SliceInput<Slice = C::Slice>,
+    I: Input<'a, Token = C, Offset = usize> + SliceInput<'a, Slice = &'a C::Str>,
 {
 }
 
 /// Represents the progress of a parser through the input
-pub struct Marker<I: Input + ?Sized> {
+pub struct Marker<'a, I: Input<'a>> {
     pub(crate) offset: I::Offset,
     err_count: usize,
 }
 
-impl<I: Input + ?Sized> Copy for Marker<I> {}
-impl<I: Input + ?Sized> Clone for Marker<I> {
+impl<'a, I: Input<'a>> Copy for Marker<'a, I> {}
+impl<'a, I: Input<'a>> Clone for Marker<'a, I> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
 /// Internal type representing an input as well as all the necessary context for parsing.
-pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
-    pub(crate) input: &'a I,
+pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
+    pub(crate) input: I,
     pub(crate) offset: I::Offset,
     errors: Vec<E::Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
@@ -231,14 +231,14 @@ pub struct InputRef<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> {
     pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
-impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'a I, state: Result<&'parse mut E::State, E::State>) -> Self
+impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
+    pub(crate) fn new(input: I, state: Result<&'parse mut E::State, E::State>) -> Self
     where
         E::Context: Default,
     {
         Self {
-            input,
             offset: input.start(),
+            input,
             state,
             ctx: E::Context::default(),
             errors: Vec::new(),
@@ -259,7 +259,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
         use core::mem;
 
         let mut new_ctx = InputRef {
-            input: self.input,
+            input: self.input.clone(),
             offset: self.offset,
             state: match &mut self.state {
                 Ok(state) => Ok(*state),
@@ -284,7 +284,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     /// Save off a [`Marker`] to the current position in the input
     #[inline]
-    pub fn save(&self) -> Marker<I> {
+    pub fn save(&self) -> Marker<'a, I> {
         Marker {
             offset: self.offset,
             err_count: self.errors.len(),
@@ -293,7 +293,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
 
     /// Reset the input state to the provided [`Marker`]
     #[inline]
-    pub fn rewind(&mut self, marker: Marker<I>) {
+    pub fn rewind(&mut self, marker: Marker<'a, I>) {
         self.errors.truncate(marker.err_count);
         self.offset = marker.offset;
     }
@@ -337,7 +337,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     #[inline]
     pub(crate) fn next_ref(&mut self) -> (I::Offset, Option<&'a I::Token>)
     where
-        I: BorrowInput,
+        I: BorrowInput<'a>,
     {
         // SAFETY: offset was generated by previous call to `Input::next`
         let (offset, token) = unsafe { self.input.next_ref(self.offset) };
@@ -363,25 +363,25 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     }
 
     #[inline]
-    pub(crate) fn slice(&self, range: Range<I::Offset>) -> &'a I::Slice
+    pub(crate) fn slice(&self, range: Range<I::Offset>) -> I::Slice
     where
-        I: SliceInput,
+        I: SliceInput<'a>,
     {
         self.input.slice(range)
     }
 
     #[inline]
-    pub(crate) fn slice_from(&self, from: RangeFrom<I::Offset>) -> &'a I::Slice
+    pub(crate) fn slice_from(&self, from: RangeFrom<I::Offset>) -> I::Slice
     where
-        I: SliceInput,
+        I: SliceInput<'a>,
     {
         self.input.slice_from(from)
     }
 
     #[inline]
-    pub(crate) fn slice_trailing(&self) -> &'a I::Slice
+    pub(crate) fn slice_trailing(&self) -> I::Slice
     where
-        I: SliceInput,
+        I: SliceInput<'a>,
     {
         self.input.slice_from(self.offset..)
     }
@@ -396,7 +396,7 @@ impl<'a, 'parse, I: Input + ?Sized, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 
     pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
     where
         C: Char,
-        I: StrInput<C>,
+        I: StrInput<'a, C>,
     {
         self.offset += skip;
     }

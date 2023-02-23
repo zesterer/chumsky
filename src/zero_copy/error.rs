@@ -28,7 +28,7 @@ use alloc::string::ToString;
 ///     NotADigit(Span, char),
 /// }
 ///
-/// impl chumsky::zero_copy::error::Error<str> for MyError {
+/// impl<'a> chumsky::zero_copy::error::Error<'a, &'a str> for MyError {
 ///     fn expected_found<Iter: IntoIterator<Item = Option<char>>>(
 ///         expected: Iter,
 ///         found: Option<char>,
@@ -57,7 +57,7 @@ use alloc::string::ToString;
 /// assert_eq!(numeral.parse("7").into_result(), Ok(7));
 /// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
-pub trait Error<I: Input + ?Sized>: Sized {
+pub trait Error<'a, I: Input<'a>>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
@@ -81,7 +81,7 @@ pub trait Error<I: Input + ?Sized>: Sized {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
 pub struct EmptyErr(());
 
-impl<I: Input + ?Sized> Error<I> for EmptyErr {
+impl<'a, I: Input<'a>> Error<'a, I> for EmptyErr {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
         _: E,
         _: Option<I::Token>,
@@ -99,12 +99,12 @@ impl fmt::Display for EmptyErr {
 
 /// A minimal error type that tracks only the error span and found token. This type is most useful
 /// when you want fast parsing but do not particularly care about the quality of error messages.
-pub struct Simple<I: Input + ?Sized> {
+pub struct Simple<'a, I: Input<'a>> {
     span: I::Span,
     found: Option<I::Token>,
 }
 
-impl<I: Input + ?Sized> Error<I> for Simple<I> {
+impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I> {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
         _expected: E,
         found: Option<I::Token>,
@@ -114,7 +114,7 @@ impl<I: Input + ?Sized> Error<I> for Simple<I> {
     }
 }
 
-impl<I: Input + ?Sized> PartialEq for Simple<I>
+impl<'a, I: Input<'a>> PartialEq for Simple<'a, I>
 where
     I::Token: PartialEq,
     I::Span: PartialEq,
@@ -124,7 +124,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> fmt::Debug for Simple<I>
+impl<'a, I: Input<'a>> fmt::Debug for Simple<'a, I>
 where
     I::Span: fmt::Debug,
     I::Token: fmt::Debug,
@@ -137,7 +137,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> fmt::Display for Simple<I>
+impl<'a, I: Input<'a>> fmt::Display for Simple<'a, I>
 where
     I::Span: fmt::Debug,
     I::Token: fmt::Debug,
@@ -149,7 +149,7 @@ where
 
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
 /// The reason for a [`Rich`] error
-pub enum RichReason<I: Input + ?Sized> {
+pub enum RichReason<'a, I: Input<'a>> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
@@ -160,10 +160,10 @@ pub enum RichReason<I: Input + ?Sized> {
     /// An error with a custom message
     Custom(String),
     /// Multiple unrelated reasons were merged
-    Many(Vec<RichReason<I>>),
+    Many(Vec<RichReason<'a, I>>),
 }
 
-impl<I: Input + ?Sized> RichReason<I> {
+impl<'a, I: Input<'a>> RichReason<'a, I> {
     fn found(&self) -> Option<&I::Token> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.as_ref(),
@@ -173,11 +173,11 @@ impl<I: Input + ?Sized> RichReason<I> {
     }
 }
 
-impl<I: Input + ?Sized> RichReason<I>
+impl<'a, I: Input<'a>> RichReason<'a, I>
 where
     I::Token: PartialEq,
 {
-    fn flat_merge(self, other: RichReason<I>) -> RichReason<I> {
+    fn flat_merge(self, other: Self) -> Self {
         match (self, other) {
             (
                 RichReason::ExpectedFound {
@@ -216,7 +216,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> PartialEq for RichReason<I>
+impl<'a, I: Input<'a>> PartialEq for RichReason<'a, I>
 where
     I::Token: PartialEq,
     I::Span: PartialEq,
@@ -245,12 +245,12 @@ where
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 // TODO: Impl `Clone`
-pub struct Rich<I: Input + ?Sized> {
+pub struct Rich<'a, I: Input<'a>> {
     span: I::Span,
-    reason: RichReason<I>,
+    reason: RichReason<'a, I>,
 }
 
-impl<I: Input + ?Sized> Rich<I> {
+impl<'a, I: Input<'a>> Rich<'a, I> {
     fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -291,9 +291,9 @@ impl<I: Input + ?Sized> Rich<I> {
     }
 }
 
-impl<I: Input + ?Sized> Rich<I> {
+impl<'a, I: Input<'a>> Rich<'a, I> {
     /// Create an error with a custom message and span
-    pub fn custom<M: ToString>(span: I::Span, msg: M) -> Rich<I> {
+    pub fn custom<M: ToString>(span: I::Span, msg: M) -> Self {
         Rich {
             span,
             reason: RichReason::Custom(msg.to_string()),
@@ -309,14 +309,14 @@ impl<I: Input + ?Sized> Rich<I> {
     }
 
     /// Get the reason fro this error
-    pub fn reason(&self) -> &RichReason<I> {
+    pub fn reason(&self) -> &RichReason<'a, I> {
         &self.reason
     }
 
     /// Get an iterator over the expected items associated with this error
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = Option<&I::Token>> + '_ {
-        fn push_expected<'a, I: Input + ?Sized>(
-            reason: &'a RichReason<I>,
+    pub fn expected(&self) -> alloc::vec::IntoIter<Option<&I::Token>> {
+        fn push_expected<'a, 'b, I: Input<'b>>(
+            reason: &'a RichReason<'b, I>,
             v: &mut Vec<Option<&'a I::Token>>,
         ) {
             match reason {
@@ -338,7 +338,7 @@ impl<I: Input + ?Sized> Rich<I> {
     }
 }
 
-impl<I: Input + ?Sized> Error<I> for Rich<I>
+impl<'a, I: Input<'a>> Error<'a, I> for Rich<'a, I>
 where
     I::Token: PartialEq,
 {
@@ -365,7 +365,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> PartialEq for Rich<I>
+impl<'a, I: Input<'a>> PartialEq for Rich<'a, I>
 where
     I::Token: PartialEq,
     I::Span: PartialEq,
@@ -375,7 +375,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> fmt::Debug for Rich<I>
+impl<'a, I: Input<'a>> fmt::Debug for Rich<'a, I>
 where
     I::Span: fmt::Debug,
     I::Token: fmt::Debug,
@@ -385,7 +385,7 @@ where
     }
 }
 
-impl<I: Input + ?Sized> fmt::Display for Rich<I>
+impl<'a, I: Input<'a>> fmt::Display for Rich<'a, I>
 where
     I::Span: fmt::Display,
     I::Token: fmt::Display,

@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 
 fn bench_choice(c: &mut Criterion) {
     let alphabet_choice = choice((
-        just::<_, str, extra::Default>('A'),
+        just::<_, &str, extra::Default>('A'),
         just('B'),
         just('C'),
         just('D'),

@@ -28,7 +28,7 @@ impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for Configure<A, F>
 where
     A: ConfigParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -65,7 +65,7 @@ impl<'a, I, OA, E, A, F> Parser<'a, I, (), E> for IterConfigure<A, F, OA>
 where
     A: ConfigIterParser<'a, I, OA, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -86,7 +86,7 @@ impl<'a, I, O, E, A, F> IterParser<'a, I, O, E> for IterConfigure<A, F, O>
 where
     A: ConfigIterParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     type IterState<M: Mode> = (A::IterState<M>, A::Config)
@@ -115,33 +115,30 @@ where
 /// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input + SliceInput + ?Sized,
+    I: Input<'a> + SliceInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Slice: 'a,
     A: Parser<'a, I, O, E>,
-    F: Fn(&'a I::Slice) -> U,
+    F: Fn(I::Slice) -> U,
 {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<(&'a I::Slice, O, E)>,
+    pub(crate) phantom: PhantomData<(I::Slice, O, E)>,
 }
 
 impl<'a, A: Copy, I, O, E, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input + SliceInput + Sized,
+    I: Input<'a> + SliceInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Slice: 'a,
     A: Parser<'a, I, O, E>,
-    F: Fn(&'a I::Slice) -> U,
+    F: Fn(I::Slice) -> U,
 {
 }
 impl<'a, A: Clone, I, O, E, F: Clone, U> Clone for MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input + SliceInput + ?Sized,
+    I: Input<'a> + SliceInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Slice: 'a,
     A: Parser<'a, I, O, E>,
-    F: Fn(&'a I::Slice) -> U,
+    F: Fn(I::Slice) -> U,
 {
     fn clone(&self) -> Self {
         Self {
@@ -154,11 +151,10 @@ where
 
 impl<'a, I, O, E, A, F, U> Parser<'a, I, U, E> for MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input + SliceInput + ?Sized,
+    I: Input<'a> + SliceInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Slice: 'a,
     A: Parser<'a, I, O, E>,
-    F: Fn(&'a I::Slice) -> U,
+    F: Fn(I::Slice) -> U,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U, E::Error> {
@@ -188,14 +184,14 @@ impl<A: Clone, O> Clone for Slice<A, O> {
     }
 }
 
-impl<'a, A, I, O, E> Parser<'a, I, &'a I::Slice, E> for Slice<A, O>
+impl<'a, A, I, O, E> Parser<'a, I, I::Slice, E> for Slice<A, O>
 where
     A: Parser<'a, I, O, E>,
-    I: Input + SliceInput + ?Sized,
+    I: Input<'a> + SliceInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Slice, E::Error>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Slice, E::Error>
     where
         Self: Sized,
     {
@@ -206,7 +202,7 @@ where
         Ok(M::bind(|| inp.slice(before..after)))
     }
 
-    go_extra!(&'a I::Slice);
+    go_extra!(I::Slice);
 }
 
 /// See [`Parser::filter`].
@@ -215,7 +211,7 @@ pub struct Filter<A, F> {
     pub(crate) filter: F,
 }
 
-impl<A: Copy + ?Sized, F: Copy> Copy for Filter<A, F> {}
+impl<A: Copy, F: Copy> Copy for Filter<A, F> {}
 impl<A: Clone, F: Clone> Clone for Filter<A, F> {
     fn clone(&self) -> Self {
         Self {
@@ -227,7 +223,7 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
 
 impl<'a, A, I, O, E, F> Parser<'a, I, O, E> for Filter<A, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(&O) -> bool,
@@ -271,7 +267,7 @@ impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
 
 impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for Map<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA) -> O,
@@ -306,7 +302,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithSpan<A, OA, F> {
 
 impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for MapWithSpan<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> O,
@@ -345,7 +341,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithState<A, OA, F> {
 
 impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for MapWithState<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> O,
@@ -385,7 +381,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
 
 impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for TryMap<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span) -> Result<O, E::Error>,
@@ -425,7 +421,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMapWithState<A, OA, F> {
 
 impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for TryMapWithState<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut E::State) -> Result<O, E::Error>,
@@ -466,7 +462,7 @@ impl<A: Clone, OA, O: Clone, E> Clone for To<A, OA, O, E> {
 
 impl<'a, I, O, E, A, OA> Parser<'a, I, O, E> for To<A, OA, O, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     O: Clone,
@@ -499,7 +495,7 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
 
 impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Ignored<A, OA>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
@@ -521,7 +517,7 @@ pub struct Memoised<A> {
 #[cfg(feature = "memoization")]
 impl<'a, I, E, A, O> Parser<'a, I, O, E> for Memoised<A>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     E::Error: Clone,
     A: Parser<'a, I, O, E>,
@@ -577,7 +573,7 @@ impl<A: Clone, B: Clone, OA, OB, E> Clone for Then<A, B, OA, OB, E> {
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, (OA, OB), E> for Then<A, B, OA, OB, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -612,7 +608,7 @@ impl<A: Clone, B: Clone, OA, E> Clone for IgnoreThen<A, B, OA, E> {
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E> for IgnoreThen<A, B, OA, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -647,7 +643,7 @@ impl<A: Clone, B: Clone, OB, E> Clone for ThenIgnore<A, B, OB, E> {
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for ThenIgnore<A, B, OB, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -682,10 +678,10 @@ impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
 
 impl<'a, I, E, A, B, O> Parser<'a, I, O, E> for NestedIn<A, B, O, E>
 where
-    I: Input + ?Sized + 'a,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
-    B: Parser<'a, I, &'a I, E>,
+    B: Parser<'a, I, I, E>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
@@ -698,7 +694,8 @@ where
         // Swap out old
         std::mem::swap(&mut inp.input, &mut inp2);
         std::mem::swap(&mut inp.offset, &mut offset2);
-        res
+        // TODO: Translate secondary error offsets too
+        res.map_err(|err| Located::at(inp.offset().into(), err.err))
     }
 
     go_extra!(O);
@@ -724,7 +721,7 @@ impl<A: Clone, B, OA, F: Clone, I: ?Sized, E> Clone for ThenWith<A, B, OA, F, I,
 
 impl<'a, I, E, A, B, OA, OB, F> Parser<'a, I, OB, E> for ThenWith<A, B, OA, F, I, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -777,7 +774,7 @@ impl<A: Clone, B: Clone, OA, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, I, E>
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
@@ -810,7 +807,7 @@ impl<A: Clone, Ctx: Clone> Clone for WithCtx<A, Ctx> {
 
 impl<'a, I, O, E, A, Ctx> Parser<'a, I, O, E> for WithCtx<A, Ctx>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
     Ctx: 'a + Clone,
@@ -845,7 +842,7 @@ impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC
 
 impl<'a, I, E, A, B, C, OA, OB, OC> Parser<'a, I, OA, E> for DelimitedBy<A, B, C, OB, OC>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -882,7 +879,7 @@ impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for PaddedBy<A, B, OB>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -907,7 +904,7 @@ pub struct Or<A, B> {
 
 impl<'a, I, O, E, A, B> Parser<'a, I, O, E> for Or<A, B>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     B: Parser<'a, I, O, E>,
@@ -983,7 +980,7 @@ impl<A: Clone, OA, I: ?Sized, E> Clone for Repeated<A, OA, I, E> {
 impl<'a, A, OA, I, E> Repeated<A, OA, I, E>
 where
     A: Parser<'a, I, OA, E>,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     /// Require that the pattern appear at least a minimum number of times.
@@ -1004,7 +1001,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let ring = just::<_, _, extra::Err<Simple<str>>>('O');
+    /// let ring = just::<_, _, extra::Err<Simple<&str>>>('O');
     ///
     /// let for_the_elves = ring
     ///     .repeated()
@@ -1051,7 +1048,7 @@ where
 
 impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Repeated<A, OA, I, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
@@ -1071,7 +1068,7 @@ where
 
 impl<'a, A, O, I, E> IterParser<'a, I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input + ?Sized + 'a,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
@@ -1113,7 +1110,7 @@ where
 
 impl<'a, A, O, I, E> ConfigIterParser<'a, I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input + ?Sized + 'a,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
@@ -1181,14 +1178,14 @@ impl<'a, A, B, OA, OB, I, E> SeparatedBy<A, B, OA, OB, I, E>
 where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     /// Require that the pattern appear at least a minimum number of times.
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = just::<_, _, extra::Err<Simple<str>>>('-')
+    /// let numbers = just::<_, _, extra::Err<Simple<&str>>>('-')
     ///     .separated_by(just('.'))
     ///     .at_least(2)
     ///     .collect::<Vec<_>>();
@@ -1205,7 +1202,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let row_4 = text::int::<_, _, extra::Err<Simple<str>>>(10)
+    /// let row_4 = text::int::<_, _, extra::Err<Simple<&str>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .at_most(4)
@@ -1238,7 +1235,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let coordinate_3d = text::int::<_, _, extra::Err<Simple<str>>>(10)
+    /// let coordinate_3d = text::int::<_, _, extra::Err<Simple<&str>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
@@ -1268,7 +1265,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<str>>>("enum")
+    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1298,7 +1295,7 @@ where
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = text::int::<_, _, extra::Err<Simple<str>>>(10)
+    /// let numbers = text::int::<_, _, extra::Err<Simple<&str>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
@@ -1318,7 +1315,7 @@ where
 
 impl<'a, I, E, A, B, OA, OB> IterParser<'a, I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -1396,7 +1393,7 @@ where
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -1433,7 +1430,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
 
 impl<'a, I, O, E, A, C> Parser<'a, I, C, E> for Collect<A, O, C>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: IterParser<'a, I, O, E>,
     C: Container<O>,
@@ -1467,7 +1464,7 @@ pub struct OrNot<A> {
 // TODO: Maybe implement `IterParser` too?
 impl<'a, I, O, E, A> Parser<'a, I, Option<O>, E> for OrNot<A>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
@@ -1504,7 +1501,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
 
 impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Not<A, OA>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {
@@ -1550,7 +1547,7 @@ impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
 
 impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for AndIs<A, B, OB>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -1609,7 +1606,7 @@ impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
     pub fn collect<'a, I, E, D>(self) -> RepeatedExactly<A, OA, D, N>
     where
         A: Parser<'a, I, OA, E>,
-        I: Input + ?Sized,
+        I: Input<'a>,
         E: ParserExtra<'a, I>,
         D: ContainerExactly<OA, N>,
     {
@@ -1623,7 +1620,7 @@ impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
 // TODO: Work out how this can properly integrate into `IterParser`
 impl<'a, I, E, A, OA, C, const N: usize> Parser<'a, I, C, E> for RepeatedExactly<A, OA, C, N>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     C: ContainerExactly<OA, N>,
@@ -1694,7 +1691,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<str>>>("enum")
+    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1724,7 +1721,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::zero_copy::prelude::*;
-    /// let numbers = text::int::<_, _, extra::Err<Simple<str>>>(10)
+    /// let numbers = text::int::<_, _, extra::Err<Simple<&str>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
@@ -1745,7 +1742,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     pub fn collect<'a, I, OA, E, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
     where
         A: Parser<'a, I, OA, E>,
-        I: Input,
+        I: Input<'a>,
         E: ParserExtra<'a, I>,
         D: ContainerExactly<OA, N>,
     {
@@ -1763,7 +1760,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
 impl<'a, I, E, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E>
     for SeparatedByExactly<A, B, OB, C, N>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
@@ -1846,7 +1843,7 @@ impl<P: Clone, F: Clone, A, B, E> Clone for Foldr<P, F, A, B, E> {
 
 impl<'a, I, P, F, A, B, E> Parser<'a, I, B, E> for Foldr<P, F, A, B, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     P: Parser<'a, I, (A, B), E>,
     E: ParserExtra<'a, I>,
     A: IntoIterator,
@@ -1888,7 +1885,7 @@ impl<P: Clone, F: Clone, A, B, E> Clone for Foldl<P, F, A, B, E> {
 
 impl<'a, I, P, F, A, B, E> Parser<'a, I, A, E> for Foldl<P, F, A, B, E>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     P: Parser<'a, I, (A, B), E>,
     E: ParserExtra<'a, I>,
     B: IntoIterator,
@@ -1917,7 +1914,7 @@ pub struct Rewind<A> {
 
 impl<'a, I, O, E, A> Parser<'a, I, O, E> for Rewind<A>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
 {
@@ -1945,7 +1942,7 @@ pub struct MapErr<A, F> {
 
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErr<A, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> E::Error,
@@ -1973,7 +1970,7 @@ pub struct MapErrWithSpan<A, F> {
 
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErrWithSpan<A, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span) -> E::Error,
@@ -2003,7 +2000,7 @@ pub struct MapErrWithState<A, F> {
 
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErrWithState<A, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
@@ -2044,7 +2041,7 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
 
 impl<'a, I, OA, U, E, A, F> Parser<'a, I, U, E> for Validate<A, OA, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     F: Fn(OA, I::Span, &mut Emitter<E::Error>) -> U,
@@ -2078,7 +2075,7 @@ pub struct OrElse<A, F> {
 
 impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for OrElse<A, F>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(E::Error) -> Result<O, E::Error>,

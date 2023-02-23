@@ -86,7 +86,7 @@ mod chumsky_zero_copy {
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a>() -> impl Parser<'a, [u8], JsonZero<'a>> {
+    pub fn json<'a>() -> impl Parser<'a, &'a [u8], JsonZero<'a>> {
         recursive(|value| {
             let digits = one_of(b'0'..=b'9').repeated();
 

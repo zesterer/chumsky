@@ -20,7 +20,7 @@ pub trait Char: Sized + Copy + PartialEq {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
     ///
     /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-    type Slice: ?Sized + StrInput<Self> + 'static;
+    type Str: ?Sized + 'static;
 
     /// The type of a regex expression which can match on this type
     #[cfg(feature = "regex")]
@@ -31,7 +31,7 @@ pub trait Char: Sized + Copy + PartialEq {
     fn new_regex(pattern: &str) -> Self::Regex;
     #[cfg(feature = "regex")]
     #[doc(hidden)]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize>;
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize>;
 
     /// Convert the given ASCII character to this character type.
     fn from_ascii(c: u8) -> Self;
@@ -53,7 +53,7 @@ pub trait Char: Sized + Copy + PartialEq {
 }
 
 impl Char for char {
-    type Slice = str;
+    type Str = str;
 
     #[cfg(feature = "regex")]
     type Regex = ::regex::Regex;
@@ -64,7 +64,7 @@ impl Char for char {
     }
     #[cfg(feature = "regex")]
     #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize> {
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
         regex
             .find(trailing)
             .filter(|m| m.start() == 0)
@@ -92,7 +92,7 @@ impl Char for char {
 }
 
 impl Char for u8 {
-    type Slice = [u8];
+    type Str = [u8];
 
     #[cfg(feature = "regex")]
     type Regex = ::regex::bytes::Regex;
@@ -103,7 +103,7 @@ impl Char for u8 {
     }
     #[cfg(feature = "regex")]
     #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Slice) -> Option<usize> {
+    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
         regex
             .find(trailing)
             .filter(|m| m.start() == 0)
@@ -138,7 +138,7 @@ pub struct Padded<A> {
 
 impl<'a, I, O, E, A> Parser<'a, I, O, E> for Padded<A>
 where
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     I::Token: Char,
     A: Parser<'a, I, O, E>,
@@ -163,14 +163,14 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let whitespace = text::whitespace::<_, _, extra::Err<Simple<str>>>();
+/// let whitespace = text::whitespace::<_, _, extra::Err<Simple<&str>>>();
 ///
 /// // Any amount of whitespace is parsed...
 /// assert_eq!(whitespace.parse("\t \n  \r ").into_result(), Ok(()));
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
+pub fn whitespace<'a, C: Char, I: StrInput<'a, C>, E: ParserExtra<'a, I>>(
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
@@ -191,7 +191,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<Simple<str>>>();
+/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<Simple<&str>>>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  ").into_result(), Ok(()));
@@ -200,7 +200,7 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: StrInput<C> + ?Sized, E: ParserExtra<'a, I>>(
+pub fn inline_whitespace<'a, C: Char, I: StrInput<'a, C>, E: ParserExtra<'a, I>>(
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
@@ -230,7 +230,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let newline = text::newline::<str, extra::Err<Simple<str>>>()
+/// let newline = text::newline::<_, extra::Err<Simple<&str>>>()
 ///     .then_ignore(end());
 ///
 /// assert_eq!(newline.parse("\n").into_result(), Ok(()));
@@ -243,8 +243,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input + ?Sized, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, (), E> + Copy + Clone
+pub fn newline<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E> + Copy + Clone
 where
     I::Token: Char,
 {
@@ -267,8 +266,8 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
-/// when `I::Slice` is [`[u8]`]).
+/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `I::Slice` is [`&[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -276,7 +275,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<'_, _, _, extra::Err<Simple<str>>>(10).slice();
+/// let digits = text::digits::<'_, _, _, extra::Err<Simple<&str>>>(10).slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -290,7 +289,7 @@ where
 pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy + Clone, C, I, E>
 where
     C: Char,
-    I: StrInput<C> + ?Sized,
+    I: StrInput<'a, C>,
     E: ParserExtra<'a, I>,
 {
     any()
@@ -304,8 +303,8 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is `&I::Slice` (i.e: [`&str`] when `I` is [`str`], and [`&[u8]`]
-/// when `I::Slice` is [`[u8]`]).
+/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `I::Slice` is [`&[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -313,7 +312,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let dec = text::int::<_, _, extra::Err<Simple<str>>>(10)
+/// let dec = text::int::<_, _, extra::Err<Simple<&str>>>(10)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(dec.parse("0").into_result(), Ok("0"));
@@ -322,7 +321,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
-/// let hex = text::int::<_, _, extra::Err<Simple<str>>>(16)
+/// let hex = text::int::<_, _, extra::Err<Simple<&str>>>(16)
 ///     .then_ignore(end());
 ///
 /// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
@@ -332,9 +331,9 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
+pub fn int<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone {
+) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
         .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
         .map(Some)
@@ -352,8 +351,8 @@ pub fn int<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, &'a C::Slice, E> + Copy + Clone {
+pub fn ident<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
         .then(
@@ -368,15 +367,15 @@ pub fn ident<'a, I: StrInput<C> + ?Sized, C: Char, E: ParserExtra<'a, I>>(
 ///
 /// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
 #[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: ParserExtra<'a, str>>(
+pub fn semantic_indentation<'a, Tok, T, F, E: ParserExtra<'a, &'a str>>(
     token: T,
     make_group: F,
-) -> impl Parser<'a, str, Vec<Tok>, E>
+) -> impl Parser<'a, &'a str, Vec<Tok>, E>
 where
-    T: Parser<'a, str, Tok, E>,
+    T: Parser<'a, &'a str, Tok, E>,
     F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
 {
-    let line_ws = any::<str, E>().filter(|c: &char| c.is_inline_whitespace());
+    let line_ws = any::<&'a str, E>().filter(|c: &char| c.is_inline_whitespace());
 
     let line = token
         .padded_by(line_ws.repeated())
@@ -433,39 +432,42 @@ where
 
 /// Like [`ident`], but only accepts an exact identifier while ignoring trailing identifier characters.
 ///
-/// The output type of this parser is `()`.
+/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `I::Slice` is [`&[u8]`]).
 ///
 /// # Examples
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let def = text::keyword::<_, _, _, extra::Err<Simple<str>>>("def");
+/// let def = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("def");
 ///
 /// // Exactly 'def' was found
-/// assert_eq!(def.parse("def").into_result(), Ok(()));
+/// assert_eq!(def.parse("def").into_result(), Ok("def"));
 /// // Exactly 'def' was found, with non-identifier trailing characters
-/// assert_eq!(def.parse("def(foo, bar)").into_result(), Ok(()));
+/// assert_eq!(def.parse("def(foo, bar)").into_result(), Ok("def"));
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.parse("define").has_errors());
 /// ```
 pub fn keyword<
     'a,
-    I: StrInput<C> + ?Sized + 'a,
+    I: StrInput<'a, C>,
     C: Char + 'a,
-    Str: AsRef<C::Slice> + 'a + Clone,
+    Str: AsRef<C::Str> + 'a + Clone,
     E: ParserExtra<'a, I> + 'a,
 >(
     keyword: Str,
-) -> impl Parser<'a, I, (), E> + Clone + 'a
+) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
 where
-    C::Slice: PartialEq,
+    C::Str: PartialEq,
 {
     // TODO: use .filter(...), improve error messages
-    ident().try_map(move |s: &C::Slice, span| {
-        if s == keyword.as_ref() {
-            Ok(())
-        } else {
-            Err(E::Error::expected_found(None, None, span))
-        }
-    })
+    ident()
+        .try_map(move |s: &C::Str, span| {
+            if s == keyword.as_ref() {
+                Ok(())
+            } else {
+                Err(E::Error::expected_found(None, None, span))
+            }
+        })
+        .slice()
 }

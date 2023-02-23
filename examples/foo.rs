@@ -27,7 +27,7 @@ enum Expr<'a> {
     },
 }
 
-fn parser<'a>() -> impl Parser<'a, str, Expr<'a>> {
+fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     let ident = text::ident().padded();
 
     let expr = recursive(|expr| {

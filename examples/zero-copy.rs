@@ -7,7 +7,7 @@ enum Token<'a> {
 }
 
 // This parser is guaranteed to never allocate!
-fn parser<'a>() -> impl Parser<'a, str, [(SimpleSpan<usize>, Token<'a>); 6]> {
+fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]> {
     let ident = any()
         .filter(|c: &char| c.is_alphanumeric())
         .repeated()

@@ -3,7 +3,7 @@ use super::*;
 impl<'a, T, I, O, E> Parser<'a, I, O, E> for &'a T
 where
     T: Parser<'a, I, O, E>,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
@@ -19,7 +19,7 @@ where
 impl<'a, T, I, O, E> ConfigParser<'a, I, O, E> for &'a T
 where
     T: ConfigParser<'a, I, O, E>,
-    I: Input + ?Sized,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     type Config = T::Config;
