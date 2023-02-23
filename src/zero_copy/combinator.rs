@@ -688,12 +688,12 @@ where
         let mut inp2 = self.parser_b.go::<Emit>(inp)?;
         let mut offset2 = inp2.start();
         // Swap in new
-        std::mem::swap(&mut inp.input, &mut inp2);
-        std::mem::swap(&mut inp.offset, &mut offset2);
+        core::mem::swap(&mut inp.input, &mut inp2);
+        core::mem::swap(&mut inp.offset, &mut offset2);
         let res = self.parser_a.go::<M>(inp);
         // Swap out old
-        std::mem::swap(&mut inp.input, &mut inp2);
-        std::mem::swap(&mut inp.offset, &mut offset2);
+        core::mem::swap(&mut inp.input, &mut inp2);
+        core::mem::swap(&mut inp.offset, &mut offset2);
         // TODO: Translate secondary error offsets too
         res.map_err(|err| Located::at(inp.offset().into(), err.err))
     }
