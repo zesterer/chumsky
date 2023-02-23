@@ -1824,86 +1824,108 @@ where
 }
 
 /// See [`Parser::foldr`].
-pub struct Foldr<P, F, A, B, E> {
-    pub(crate) parser: P,
+pub struct Foldr<F, A, B, OA, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
     pub(crate) folder: F,
-    pub(crate) phantom: PhantomData<(A, B, E)>,
+    pub(crate) phantom: PhantomData<(OA, E)>,
 }
 
-impl<P: Copy, F: Copy, A, B, E> Copy for Foldr<P, F, A, B, E> {}
-impl<P: Clone, F: Clone, A, B, E> Clone for Foldr<P, F, A, B, E> {
+impl<F: Copy, A: Copy, B: Copy, OA, E> Copy for Foldr<F, A, B, OA, E> {}
+impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
     fn clone(&self) -> Self {
-        Foldr {
-            parser: self.parser.clone(),
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
             phantom: PhantomData,
         }
     }
 }
 
-impl<'a, I, P, F, A, B, E> Parser<'a, I, B, E> for Foldr<P, F, A, B, E>
+impl<'a, I, F, A, B, O, OA, E> Parser<'a, I, O, E> for Foldr<F, A, B, OA, E>
 where
     I: Input<'a>,
-    P: Parser<'a, I, (A, B), E>,
+    A: IterParser<'a, I, OA, E>,
+    B: Parser<'a, I, O, E>,
     E: ParserExtra<'a, I>,
-    A: IntoIterator,
-    A::IntoIter: DoubleEndedIterator,
-    F: Fn(A::Item, B) -> B,
+    F: Fn(OA, O) -> O,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, B, E::Error>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
     {
-        self.parser.go::<M>(inp).map(|out| {
-            M::map(out, |(init, end)| {
-                init.into_iter().rfold(end, |b, a| (self.folder)(a, b))
-            })
-        })
+        let mut a_out = M::bind(|| Vec::new());
+        let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
+        loop {
+            match self.parser_a.next::<M>(inp, &mut iter_state) {
+                Some(res) => {
+                    a_out = M::combine(a_out, res?, |mut a_out, item| {
+                        a_out.push(item);
+                        a_out
+                    });
+                }
+                None => break,
+            }
+        }
+
+        let b_out = self.parser_b.go::<M>(inp)?;
+
+        Ok(M::combine(a_out, b_out, |a_out, b_out| {
+            a_out.into_iter().rfold(b_out, |b, a| (self.folder)(a, b))
+        }))
     }
 
-    go_extra!(B);
+    go_extra!(O);
 }
 
 /// See [`Parser::foldl`].
-pub struct Foldl<P, F, A, B, E> {
-    pub(crate) parser: P,
+pub struct Foldl<F, A, B, OB, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
     pub(crate) folder: F,
-    pub(crate) phantom: PhantomData<(A, B, E)>,
+    pub(crate) phantom: PhantomData<(OB, E)>,
 }
 
-impl<P: Copy, F: Copy, A, B, E> Copy for Foldl<P, F, A, B, E> {}
-impl<P: Clone, F: Clone, A, B, E> Clone for Foldl<P, F, A, B, E> {
+impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for Foldl<F, A, B, OB, E> {}
+impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
     fn clone(&self) -> Self {
-        Foldl {
-            parser: self.parser.clone(),
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
             phantom: PhantomData,
         }
     }
 }
 
-impl<'a, I, P, F, A, B, E> Parser<'a, I, A, E> for Foldl<P, F, A, B, E>
+impl<'a, I, F, A, B, O, OB, E> Parser<'a, I, O, E> for Foldl<F, A, B, OB, E>
 where
     I: Input<'a>,
-    P: Parser<'a, I, (A, B), E>,
+    A: Parser<'a, I, O, E>,
+    B: IterParser<'a, I, OB, E>,
     E: ParserExtra<'a, I>,
-    B: IntoIterator,
-    F: Fn(A, B::Item) -> A,
+    F: Fn(O, OB) -> O,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, A, E::Error>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized,
     {
-        self.parser.go::<M>(inp).map(|out| {
-            M::map(out, |(head, tail)| {
-                tail.into_iter().fold(head, &self.folder)
-            })
-        })
+        let mut out = self.parser_a.go::<M>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
+        loop {
+            match self.parser_b.next::<M>(inp, &mut iter_state) {
+                Some(b_out) => {
+                    out = M::combine(out, b_out?, |out, b_out| (self.folder)(out, b_out));
+                }
+                None => break Ok(out),
+            }
+        }
     }
 
-    go_extra!(A);
+    go_extra!(O);
 }
 
 /// See [`Parser::rewind`].

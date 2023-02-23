@@ -22,23 +22,13 @@ fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
 
         let product = atom
             .clone()
-            .then(
-                just(Token::Mul)
-                    .ignore_then(atom)
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .foldl(|a, b| a * b);
+            .foldl(just(Token::Mul).ignore_then(atom).repeated(), |a, b| a * b);
 
         let sum = product
             .clone()
-            .then(
-                just(Token::Add)
-                    .ignore_then(product)
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .foldl(|a, b| a + b);
+            .foldl(just(Token::Add).ignore_then(product).repeated(), |a, b| {
+                a + b
+            });
 
         sum
     })
