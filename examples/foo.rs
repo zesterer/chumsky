@@ -54,33 +54,27 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
 
         let unary = op('-')
             .repeated()
-            .collect::<Vec<_>>()
-            .then(atom)
-            .foldr(|_op, rhs| Expr::Neg(Box::new(rhs)));
+            .foldr(atom, |_op, rhs| Expr::Neg(Box::new(rhs)));
 
-        let product = unary
-            .clone()
-            .then(
-                op('*')
-                    .to(Expr::Mul as fn(_, _) -> _)
-                    .or(op('/').to(Expr::Div as fn(_, _) -> _))
-                    .then(unary)
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+        let product = unary.clone().foldl(
+            choice((
+                op('*').to(Expr::Mul as fn(_, _) -> _),
+                op('/').to(Expr::Div as fn(_, _) -> _),
+            ))
+            .then(unary)
+            .repeated(),
+            |lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)),
+        );
 
-        let sum = product
-            .clone()
-            .then(
-                op('+')
-                    .to(Expr::Add as fn(_, _) -> _)
-                    .or(op('-').to(Expr::Sub as fn(_, _) -> _))
-                    .then(product)
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
+        let sum = product.clone().foldl(
+            choice((
+                op('+').to(Expr::Add as fn(_, _) -> _),
+                op('-').to(Expr::Sub as fn(_, _) -> _),
+            ))
+            .then(product)
+            .repeated(),
+            |lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)),
+        );
 
         sum.padded()
     });
