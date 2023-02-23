@@ -706,58 +706,6 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::then_with`].
-pub struct ThenWith<A, B, OA, F, I: ?Sized, E> {
-    pub(crate) parser: A,
-    pub(crate) then: F,
-    pub(crate) phantom: PhantomData<(B, OA, E, I)>,
-}
-
-impl<A: Copy, B, OA, F: Copy, I: ?Sized, E> Copy for ThenWith<A, B, OA, F, I, E> {}
-impl<A: Clone, B, OA, F: Clone, I: ?Sized, E> Clone for ThenWith<A, B, OA, F, I, E> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            then: self.then.clone(),
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, I, E, A, B, OA, OB, F> Parser<'a, I, OB, E> for ThenWith<A, B, OA, F, I, E>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    B: Parser<'a, I, OB, E>,
-    F: Fn(OA) -> B,
-{
-    #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB, E::Error> {
-        let before = inp.save();
-        match self.parser.go::<Emit>(inp) {
-            Ok(output) => {
-                let then = (self.then)(output);
-
-                let before = inp.save();
-                match then.go::<M>(inp) {
-                    Ok(output) => Ok(output),
-                    Err(e) => {
-                        inp.rewind(before);
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                inp.rewind(before);
-                Err(e)
-            }
-        }
-    }
-
-    go_extra!(OB);
-}
-
 /// See [`Parser::then_with_ctx`].
 pub struct ThenWithCtx<A, B, OA, I: ?Sized, E> {
     pub(crate) parser: A,

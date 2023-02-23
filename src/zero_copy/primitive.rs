@@ -636,7 +636,7 @@ where
 /// assert_eq!(inc.parse(b"aAbB" as &[_]).into_result(), Ok(vec![b"aA" as &[_], b"bB"]));
 /// assert!(inc.parse(b"aB").has_errors());
 /// ```
-pub fn map_ctx<'a, P, OP, I, E, F, Ctx>(mapper: F, parser: P) -> MapCtx<P, F>
+pub const fn map_ctx<'a, P, OP, I, E, F, Ctx>(mapper: F, parser: P) -> MapCtx<P, F>
 where
     F: Fn(&E::Context) -> Ctx,
     Ctx: 'a,

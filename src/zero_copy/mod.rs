@@ -936,41 +936,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
-    /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, extra::Err<Simple<&[u8]>>>((b'a'..=b'z').collect::<Vec<u8>>())
-    ///     .then_with(|letter: u8| just(letter + 1));
-    ///
-    /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
-    /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
-    /// ```
-    fn then_with<U, B: Parser<'a, I, U, E>, F: Fn(O) -> B>(
-        self,
-        then: F,
-    ) -> ThenWith<Self, B, O, F, I, E>
-    where
-        Self: Sized,
-    {
-        ThenWith {
-            parser: self,
-            then,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Parse one thing and then another thing, creating the second parser from the result of
-    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
-    ///
-    /// The output of this parser is `U`, the result of the second parser
-    ///
-    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
-    /// recovery then the second produces an error, the primary error will point to the location in
-    /// the second parser which failed, ignoring that the first parser may be the root cause. There
-    /// may be other pathological errors cases as well.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     /// let successor = just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1));
     ///
     /// // A parser that parses a single letter and then its successor
@@ -1023,27 +988,23 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// ```
     /// # use chumsky::zero_copy::{prelude::*, error::Simple};
     ///
-    /// // Lua-style multiline string literal
-    /// let string = just::<_, _, extra::Err<Simple<&str>>>('=')
+    /// let escape = just("\\n").to('\n');
+    ///
+    /// // C-style tring literal
+    /// let string = none_of::<_, _, extra::Err<Simple<&str>>>('"')
+    ///     .and_is(escape.not())
+    ///     .or(escape)
     ///     .repeated()
-    ///     .map_slice(str::len)
-    ///     .padded_by(just('['))
-    ///     .then_with(|n| {
-    ///         let close = just('=').repeated().exactly(n).padded_by(just(']'));
-    ///         any()
-    ///             .and_is(close.not())
-    ///             .repeated()
-    ///             .slice()
-    ///             .then_ignore(close)
-    ///     });
+    ///     .collect::<String>()
+    ///     .padded_by(just('"'));
     ///
     /// assert_eq!(
-    ///     string.parse("[[wxyz]]").into_result(),
+    ///     string.parse("\"wxyz\"").into_result().as_deref(),
     ///     Ok("wxyz"),
     /// );
     /// assert_eq!(
-    ///     string.parse("[==[abcd]=]efgh]===]ijkl]==]").into_result(),
-    ///     Ok("abcd]=]efgh]===]ijkl"),
+    ///     string.parse("\"a\nb\"").into_result().as_deref(),
+    ///     Ok("a\nb"),
     /// );
     /// ```
     fn and_is<U, B>(self, other: B) -> AndIs<Self, B, U>
