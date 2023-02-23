@@ -202,7 +202,7 @@ impl<'a, Ctx, C, I> StrInput<'a, C> for WithContext<Ctx, I>
 where
     Ctx: Clone + 'a,
     C: Char,
-    I: Input<'a, Token = C, Offset = usize> + SliceInput<'a, Slice = &'a C::Str>,
+    I: StrInput<'a, C>,
 {
 }
 

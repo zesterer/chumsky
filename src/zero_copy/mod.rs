@@ -2298,21 +2298,19 @@ fn regex_parser() {
     use self::prelude::*;
     use self::regex::*;
 
-    fn parser<'a, C: Char>() -> impl Parser<'a, C::Slice, Vec<&'a C::Slice>> {
+    fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
         regex("[a-zA-Z_][a-zA-Z0-9_]*")
             .padded()
             .repeated()
             .collect()
     }
     assert_eq!(
-        parser::<char>()
-            .parse("hello world this works")
-            .into_result(),
+        parser().parse("hello world this works").into_result(),
         Ok(vec!["hello", "world", "this", "works"]),
     );
 
     assert_eq!(
-        parser::<u8>()
+        parser()
             .parse(b"hello world this works" as &[_])
             .into_result(),
         Ok(vec![
@@ -2356,7 +2354,7 @@ fn iter() {
 fn exponential() {
     use self::prelude::*;
 
-    fn parser<'a>() -> impl Parser<'a, str, String> {
+    fn parser<'a>() -> impl Parser<'a, &'a str, String> {
         recursive(|expr| {
             let atom = any()
                 .filter(|c: &char| c.is_alphabetic())

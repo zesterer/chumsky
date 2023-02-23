@@ -115,7 +115,7 @@ where
 /// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input<'a> + SliceInput<'a>,
+    I: SliceInput<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(I::Slice) -> U,
@@ -127,7 +127,7 @@ where
 
 impl<'a, A: Copy, I, O, E, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input<'a> + SliceInput<'a>,
+    I: SliceInput<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(I::Slice) -> U,
@@ -151,7 +151,7 @@ where
 
 impl<'a, I, O, E, A, F, U> Parser<'a, I, U, E> for MapSlice<'a, A, I, O, E, F, U>
 where
-    I: Input<'a> + SliceInput<'a>,
+    I: SliceInput<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(I::Slice) -> U,
@@ -187,7 +187,7 @@ impl<A: Clone, O> Clone for Slice<A, O> {
 impl<'a, A, I, O, E> Parser<'a, I, I::Slice, E> for Slice<A, O>
 where
     A: Parser<'a, I, O, E>,
-    I: Input<'a> + SliceInput<'a>,
+    I: SliceInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
