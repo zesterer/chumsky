@@ -11,7 +11,7 @@ use hashbrown::HashMap;
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 // TODO: Remove `Clone` bound
-pub trait Input<'a>: 'a + Clone {
+pub trait Input<'a>: 'a {
     /// The type used to keep track of the current location in the stream
     type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
@@ -30,6 +30,9 @@ pub trait Input<'a>: 'a + Clone {
 
     /// Create a span from a start and end offset
     fn span(&self, range: Range<Self::Offset>) -> Self::Span;
+
+    #[doc(hidden)]
+    fn reborrow(&mut self) -> Self;
 }
 
 /// A trait for types that represent slice-like streams of input tokens.
@@ -85,6 +88,8 @@ impl<'a> Input<'a> for &'a str {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
+
+    fn reborrow(&mut self) -> Self { *self }
 }
 
 impl<'a> StrInput<'a, char> for &'a str {}
@@ -122,6 +127,8 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
+
+    fn reborrow(&mut self) -> Self { *self }
 }
 
 impl<'a> StrInput<'a, u8> for &'a [u8] {}
@@ -179,6 +186,8 @@ impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.0.clone(), self.1.span(range))
     }
+
+    fn reborrow(&mut self) -> Self { Self(self.0.clone(), self.1.reborrow()) }
 }
 
 impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ctx, I> {
@@ -206,6 +215,29 @@ where
 {
 }
 
+pub struct Stream<I: Iterator> {
+    tokens: Vec<I::Item>,
+    iter: I,
+}
+
+impl<'a, I: Iterator> Input<'a> for &'a mut Stream<I> {
+    type Offset = usize;
+    type Token = I::Item;
+    type Span = SimpleSpan<usize>;
+
+    fn start(&self) -> Self::Offset { 0 }
+
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        todo!()
+    }
+
+    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        todo!()
+    }
+
+    fn reborrow(&mut self) -> Self { *self }
+}
+
 /// Represents the progress of a parser through the input
 pub struct Marker<'a, I: Input<'a>> {
     pub(crate) offset: I::Offset,
@@ -219,88 +251,112 @@ impl<'a, I: Input<'a>> Clone for Marker<'a, I> {
     }
 }
 
-/// Internal type representing an input as well as all the necessary context for parsing.
-pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
-    pub(crate) input: I,
-    pub(crate) offset: I::Offset,
-    errors: Vec<E::Error>,
+pub(crate) struct Inner<'parse, Offset, State, Error> {
+    errors: Vec<Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
-    state: Result<&'parse mut E::State, E::State>,
-    ctx: E::Context,
+    state: Result<&'parse mut State, State>,
     #[cfg(feature = "memoization")]
-    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+    pub(crate) memos: HashMap<(Offset, usize), Option<Located<Error>>>,
 }
 
-impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: I, state: Result<&'parse mut E::State, E::State>) -> Self
-    where
-        E::Context: Default,
-    {
+impl<'parse, Offset, State, Error> Inner<'parse, Offset, State, Error> {
+    pub(crate) fn new(state: Result<&'parse mut State, State>) -> Self {
         Self {
-            offset: input.start(),
-            input,
-            state,
-            ctx: E::Context::default(),
             errors: Vec::new(),
+            state,
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
         }
     }
 
-    pub(crate) fn with_ctx<'sub_parse, CtxN, O>(
-        &'sub_parse mut self,
+    pub(crate) fn take_errs(&mut self) -> Vec<Error> {
+        core::mem::take(&mut self.errors)
+    }
+}
+
+/// Internal type representing an input as well as all the necessary context for parsing.
+pub struct InputRef<'a, 'parse, 'scope, I: Input<'a>, E: ParserExtra<'a, I>> {
+    pub(crate) input: I,
+    pub(crate) offset: &'scope mut I::Offset,
+    pub(crate) inner: &'scope mut Inner<'parse, I::Offset, E::State, E::Error>,
+    ctx: &'scope E::Context,
+}
+
+impl<'a, 'parse, 'scope, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, 'scope, I, E> {
+    pub(crate) fn new(
+        input: I,
+        offset: &'scope mut I::Offset,
+        inner: &'scope mut Inner<'parse, I::Offset, E::State, E::Error>,
+        ctx: &'scope E::Context,
+    ) -> Self
+    where
+        E::Context: Default,
+    {
+        Self {
+            offset,
+            input,
+            inner,
+            ctx,
+        }
+    }
+
+    pub(crate) fn with_ctx<CtxN, O>(
+        mut self,
         new_ctx: CtxN,
-        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, E::State, CtxN>>) -> O,
+        f: impl FnOnce(InputRef<'a, '_, '_, I, extra::Full<E::Error, E::State, CtxN>>) -> O,
     ) -> O
     where
-        'parse: 'sub_parse,
         CtxN: 'a,
     {
         use core::mem;
 
-        let mut new_ctx = InputRef {
-            input: self.input.clone(),
-            offset: self.offset,
-            state: match &mut self.state {
-                Ok(state) => Ok(*state),
-                Err(state) => Ok(state),
-            },
-            ctx: new_ctx,
-            errors: mem::take(&mut self.errors),
-            #[cfg(feature = "memoization")]
-            memos: HashMap::default(), // TODO: Reuse memoisation state?
+        let mut offset = *self.offset;
+        let mut new_inp = InputRef {
+            input: self.input,
+            offset: &mut offset,
+            inner: self.inner,
+            ctx: &new_ctx,
         };
-        let res = f(&mut new_ctx);
-        self.offset = new_ctx.offset;
-        self.errors = mem::take(&mut new_ctx.errors);
+        let res = f(new_inp.reborrow());
+        self.input = new_inp.input;
+        *self.offset = offset;
         res
+    }
+
+    pub(crate) fn reborrow<'scope2>(&'scope2 mut self) -> InputRef<'a, 'parse, 'scope2, I, E> {
+        InputRef {
+            input: self.input.reborrow(),
+            offset: self.offset,
+            inner: self.inner,
+            ctx: self.ctx,
+        }
     }
 
     /// Get the input offset that is currently being pointed to.
     #[inline]
     pub fn offset(&self) -> I::Offset {
-        self.offset
+        *self.offset
     }
 
     /// Save off a [`Marker`] to the current position in the input
     #[inline]
     pub fn save(&self) -> Marker<'a, I> {
         Marker {
-            offset: self.offset,
-            err_count: self.errors.len(),
+            offset: *self.offset,
+            err_count: self.inner.errors.len(),
         }
     }
 
     /// Reset the input state to the provided [`Marker`]
     #[inline]
     pub fn rewind(&mut self, marker: Marker<'a, I>) {
-        self.errors.truncate(marker.err_count);
-        self.offset = marker.offset;
+        self.inner.errors.truncate(marker.err_count);
+        *self.offset = marker.offset;
     }
 
     #[inline]
     pub(crate) fn state(&mut self) -> &mut E::State {
-        match &mut self.state {
+        match &mut self.inner.state {
             Ok(state) => *state,
             Err(state) => state,
         }
@@ -313,12 +369,12 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     #[inline]
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
-        let mut offs = self.offset;
+        let mut offs = *self.offset;
         loop {
             // SAFETY: offset was generated by previous call to `Input::next`
             let (offset, token) = unsafe { self.input.next(offs) };
             if token.filter(&mut f).is_none() {
-                self.offset = offs;
+                *self.offset = offs;
                 break;
             } else {
                 offs = offset;
@@ -329,9 +385,9 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     #[inline]
     pub(crate) fn next(&mut self) -> (I::Offset, Option<I::Token>) {
         // SAFETY: offset was generated by previous call to `Input::next`
-        let (offset, token) = unsafe { self.input.next(self.offset) };
-        self.offset = offset;
-        (self.offset, token)
+        let (offset, token) = unsafe { self.input.next(*self.offset) };
+        *self.offset = offset;
+        (*self.offset, token)
     }
 
     #[inline]
@@ -340,9 +396,9 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         I: BorrowInput<'a>,
     {
         // SAFETY: offset was generated by previous call to `Input::next`
-        let (offset, token) = unsafe { self.input.next_ref(self.offset) };
-        self.offset = offset;
-        (self.offset, token)
+        let (offset, token) = unsafe { self.input.next_ref(*self.offset) };
+        *self.offset = offset;
+        (*self.offset, token)
     }
 
     /// Get the next token in the input. Returns `None` for EOI
@@ -353,7 +409,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     /// Peek the next token in the input. Returns `None` for EOI
     pub fn peek(&self) -> Option<I::Token> {
         // SAFETY: offset was generated by previous call to `Input::next`
-        unsafe { self.input.next(self.offset).1 }
+        unsafe { self.input.next(*self.offset).1 }
     }
 
     /// Skip the next token in the input.
@@ -383,13 +439,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     where
         I: SliceInput<'a>,
     {
-        self.input.slice_from(self.offset..)
+        self.input.slice_from(*self.offset..)
     }
 
     /// Return the span from the provided [`Marker`] to the current position
     #[inline]
     pub fn span_since(&self, before: I::Offset) -> I::Span {
-        self.input.span(before..self.offset)
+        self.input.span(before..*self.offset)
     }
 
     #[inline]
@@ -398,16 +454,12 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         C: Char,
         I: StrInput<'a, C>,
     {
-        self.offset += skip;
+        *self.offset += skip;
     }
 
     #[inline]
     pub(crate) fn emit(&mut self, error: E::Error) {
-        self.errors.push(error);
-    }
-
-    pub(crate) fn into_errs(self) -> Vec<E::Error> {
-        self.errors
+        self.inner.errors.push(error);
     }
 }
 

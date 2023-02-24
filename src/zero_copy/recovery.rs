@@ -16,13 +16,13 @@ where
     A: Parser<'a, I, O, E>,
     F: Parser<'a, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<M>(inp.reborrow()) {
             Ok(out) => Ok(out),
             Err(e) => {
                 inp.rewind(before);
-                match self.fallback.go::<M>(inp) {
+                match self.fallback.go::<M>(inp.reborrow()) {
                     Ok(out) => {
                         inp.emit(e.err);
                         Ok(out)

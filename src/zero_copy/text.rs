@@ -143,9 +143,9 @@ where
     I::Token: Char,
     A: Parser<'a, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         inp.skip_while(|c| c.is_whitespace());
-        let out = self.parser.go::<M>(inp)?;
+        let out = self.parser.go::<M>(inp.reborrow())?;
         inp.skip_while(|c| c.is_whitespace());
         Ok(out)
     }

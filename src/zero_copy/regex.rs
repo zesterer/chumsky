@@ -23,7 +23,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, &'a C::Str, E::Error> {
         let before = inp.offset();
         C::match_regex(&self.regex, inp.slice_trailing())
             .map(|len| {

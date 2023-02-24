@@ -6,11 +6,11 @@
 macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
-        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O, E::Error> {
+        fn go_emit(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<Emit, $O, E::Error> {
             Parser::<I, $O, E>::go::<Emit>(self, inp)
         }
         #[inline(always)]
-        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O, E::Error> {
+        fn go_check(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<Check, $O, E::Error> {
             Parser::<I, $O, E>::go::<Check>(self, inp)
         }
     };
@@ -21,7 +21,7 @@ macro_rules! go_cfg_extra {
         #[inline(always)]
         fn go_emit_cfg(
             &self,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Emit, $O, E::Error> {
             ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
@@ -29,7 +29,7 @@ macro_rules! go_cfg_extra {
         #[inline(always)]
         fn go_check_cfg(
             &self,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Check, $O, E::Error> {
             ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
@@ -223,7 +223,7 @@ impl<E> Located<E> {
 }
 
 fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
-    inp: &mut InputRef<'a, '_, I, E>,
+    mut inp: InputRef<'a, '_, '_, I, E>,
 ) -> PResult<Check, (), E::Error> {
     let before = inp.offset();
     match inp.next() {
@@ -271,7 +271,7 @@ mod internal {
         /// `dyn Parser`.
         fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
         ) -> PResult<Self, O, E::Error>
         where
             I: Input<'a>,
@@ -283,7 +283,7 @@ mod internal {
         /// such as `dyn Parser`.
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
             cfg: P::Config,
         ) -> PResult<Self, O, E::Error>
         where
@@ -321,7 +321,7 @@ mod internal {
         #[inline]
         fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
         ) -> PResult<Self, O, E::Error>
         where
             I: Input<'a>,
@@ -334,7 +334,7 @@ mod internal {
         #[inline]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
             cfg: P::Config,
         ) -> PResult<Self, O, E::Error>
         where
@@ -368,7 +368,7 @@ mod internal {
         #[inline]
         fn invoke<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
         ) -> PResult<Self, O, E::Error>
         where
             I: Input<'a>,
@@ -381,7 +381,7 @@ mod internal {
         #[inline]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
+            inp: InputRef<'a, '_, '_, I, E>,
             cfg: P::Config,
         ) -> PResult<Self, O, E::Error>
         where
@@ -445,10 +445,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(input, Ok(state));
-        let res = self.go::<Emit>(&mut inp);
-        let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
-        let mut errs = inp.into_errs();
+        let mut inner = input::Inner::new(Ok(state));
+        let ctx = E::Context::default();
+        let mut offset = input.start();
+        let mut inp = InputRef::new(input, &mut offset, &mut inner, &ctx);
+        let res = self.go::<Emit>(inp.reborrow());
+        let res = res.and_then(|o| expect_end(inp.reborrow()).map(move |()| o));
+        let mut errs = inp.inner.take_errs();
         let out = match res {
             Ok(out) => Some(out),
             Err(e) => {
@@ -487,10 +490,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(input, Ok(state));
-        let res = self.go::<Check>(&mut inp);
-        let res = res.and_then(|o| expect_end(&mut inp));
-        let mut errs = inp.into_errs();
+        let mut inner = input::Inner::new(Ok(state));
+        let ctx = E::Context::default();
+        let mut offset = input.start();
+        let mut inp = InputRef::new(input, &mut offset, &mut inner, &ctx);
+        let res = self.go::<Check>(inp.reborrow());
+        let res = res.and_then(|o| expect_end(inp.reborrow()));
+        let mut errs = inp.inner.take_errs();
         let out = match res {
             Ok(_) => Some(()),
             Err(e) => {
@@ -505,14 +511,14 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
+    fn go<M: Mode>(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O, E::Error>;
+    fn go_emit(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<Emit, O, E::Error>;
     #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O, E::Error>;
+    fn go_check(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<Check, O, E::Error>;
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
@@ -1737,7 +1743,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, _inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         *self
     }
 
@@ -1757,7 +1763,7 @@ where
     /// behavior at parse-time.
     fn go_cfg<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<M, O, E::Error>
     where
@@ -1766,13 +1772,13 @@ where
     #[doc(hidden)]
     fn go_emit_cfg(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<Emit, O, E::Error>;
     #[doc(hidden)]
     fn go_check_cfg(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<Check, O, E::Error>;
 
@@ -1791,7 +1797,8 @@ pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E:
 {
     parser: P,
     state: P::IterState<Emit>,
-    inp: InputRef<'a, 'iter, I, E>,
+    // TODO: Don't put `InputRef` here, create it in `.next()`
+    inp: InputRef<'a, 'iter, 'iter, I, E>,
     phantom: PhantomData<&'a O>,
 }
 
@@ -1804,7 +1811,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.parser
-            .next::<Emit>(&mut self.inp, &mut self.state)
+            .next::<Emit>(self.inp.reborrow(), &mut self.state)
             .and_then(|res| res.ok())
     }
 }
@@ -1820,12 +1827,12 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
     #[doc(hidden)]
     fn make_iter<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<M>, E::Error>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
         state: &mut Self::IterState<M>,
     ) -> Option<PResult<M, O, E::Error>>;
 
@@ -1926,19 +1933,21 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         E::State: Default,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(input, Err(E::State::default()));
-        ParseResult::new(
-            Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
-                parser: self,
-                inp,
-                phantom: PhantomData,
-            }),
-            Vec::new(),
-        )
+        todo!()
+        // let mut inner = input::Inner::new(Err(E::State::default()));
+        // let mut inp = InputRef::new(input, Err(E::State::default()));
+        // ParseResult::new(
+        //     Some(ParserIter {
+        //         state: match self.make_iter::<Emit>(&mut inp) {
+        //             Ok(out) => out,
+        //             Err(e) => return ParseResult::new(None, vec![e.err]),
+        //         },
+        //         parser: self,
+        //         inp,
+        //         phantom: PhantomData,
+        //     }),
+        //     Vec::new(),
+        // )
     }
 
     /// Create an iterator over the outputs generated by an iterable parser with the given parser state.
@@ -1953,19 +1962,20 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         Self: IterParser<'a, I, O, E> + Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(input, Ok(state));
-        ParseResult::new(
-            Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
-                parser: self,
-                inp,
-                phantom: PhantomData,
-            }),
-            Vec::new(),
-        )
+        todo!()
+        // let mut inp = InputRef::new(input, Ok(state));
+        // ParseResult::new(
+        //     Some(ParserIter {
+        //         state: match self.make_iter::<Emit>(&mut inp) {
+        //             Ok(out) => out,
+        //             Err(e) => return ParseResult::new(None, vec![e.err]),
+        //         },
+        //         parser: self,
+        //         inp,
+        //         phantom: PhantomData,
+        //     }),
+        //     Vec::new(),
+        // )
     }
 }
 
@@ -1979,11 +1989,11 @@ where
 {
     type IterState<M: Mode> = O::IntoIter;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Self::IterState<M>, E::Error> {
+    fn make_iter<M: Mode>(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, Self::IterState<M>, E::Error> {
         Ok(M::map(self.go::<M>(inp)?, |xs: O| xs.into_iter()))
     }
 
-    fn next(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<Emit>) -> Option<PResult<Emit, O, E::Error>> {
+    fn next(&self, inp: InputRef<'a, '_, '_, I, E>, state: &mut Self::IterState<Emit>) -> Option<PResult<Emit, O, E::Error>> {
         state.next().map(Ok)
     }
 }
@@ -2000,7 +2010,7 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
     #[doc(hidden)]
     fn next_cfg<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: InputRef<'a, '_, '_, I, E>,
         state: &mut Self::IterState<M>,
         cfg: &Self::Config,
     ) -> Option<PResult<M, O, E::Error>>;
@@ -2045,7 +2055,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         M::invoke(&*self.inner, inp)
     }
 
@@ -2327,7 +2337,9 @@ fn regex_parser() {
 fn unicode_str() {
     let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
     let mut state = ();
-    let mut input = InputRef::<_, extra::Default>::new(input, Ok(&mut state));
+    let mut inner = input::Inner::new(Ok(&mut state));
+    let mut offset = input.start();
+    let mut input = InputRef::<_, extra::Default>::new(input, &mut offset, &mut inner, &());
 
     while let (_, Some(c)) = input.next() {
         std::hint::black_box(c);

@@ -40,7 +40,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, (), E::Error> {
         let before = inp.offset();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
@@ -77,7 +77,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+    fn go<M: Mode>(&self, _: InputRef<'a, '_, '_, I, E>) -> PResult<M, (), E::Error> {
         Ok(M::bind(|| ()))
     }
 
@@ -161,7 +161,7 @@ where
     T: OrderedSeq<I::Token> + Clone,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, T, E::Error> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
     }
 
@@ -180,7 +180,7 @@ where
     #[inline]
     fn go_cfg<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        mut inp: InputRef<'a, '_, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<M, T, E::Error> {
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
@@ -260,7 +260,7 @@ where
     T: Seq<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
@@ -331,7 +331,7 @@ where
     T: Seq<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
@@ -383,7 +383,7 @@ where
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.offset();
         match inp.next_ref() {
             (at, Some(tok)) => match (self.filter)(tok, inp.span_since(before)) {
@@ -423,7 +423,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, I::Token, E::Error> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
@@ -551,12 +551,12 @@ where
     C: Container<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP), E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, (C, OP), E::Error> {
         let mut output = M::bind(|| C::default());
 
         loop {
             let start = inp.save();
-            let e = match self.until.go::<M>(inp) {
+            let e = match self.until.go::<M>(inp.reborrow()) {
                 Ok(out) => break Ok(M::combine(output, out, |output, out| (output, out))),
                 Err(e) => e,
             };
@@ -603,8 +603,9 @@ where
     Ctx: 'a,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
+        let new_ctx = (self.mapper)(inp.ctx());
+        inp.with_ctx(new_ctx, |inp| self.parser.go::<M>(inp))
     }
 
     go_extra!(O);
@@ -692,7 +693,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, _inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         todo!("Attempted to use an unimplemented parser")
     }
 
@@ -783,12 +784,12 @@ macro_rules! impl_choice_for_tuple {
             $($X: Parser<'a, I, O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+            fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                let mut err = match $Head.go::<M>(inp) {
+                let mut err = match $Head.go::<M>(inp.reborrow()) {
                     Ok(out) => return Ok(out),
                     Err(e) => {
                         inp.rewind(before);
@@ -797,7 +798,7 @@ macro_rules! impl_choice_for_tuple {
                 };
 
                 $(
-                    match $X.go::<M>(inp) {
+                    match $X.go::<M>(inp.reborrow()) {
                         Ok(out) => return Ok(out),
                         Err(e) => {
                             // TODO: prioritise errors
@@ -821,7 +822,7 @@ macro_rules! impl_choice_for_tuple {
             $Head:  Parser<'a, I, O, E>,
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+            fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
                 self.parsers.0.go::<M>(inp)
             }
 
@@ -838,13 +839,13 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, O, E::Error> {
         let before = inp.save();
         let res =
             self.parsers
                 .iter()
                 .try_fold(None::<Located<E::Error>>, |err, parser| {
-                    match parser.go::<M>(inp) {
+                    match parser.go::<M>(inp.reborrow()) {
                         Ok(out) => Err(out),
                         Err(e) => Ok(Some(match err {
                             Some(err) => err.prioritize(e, |a, b| a.merge(b)),
@@ -925,11 +926,11 @@ macro_rules! impl_group_for_tuple {
             $($X: Parser<'a, I, $O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*), E::Error> {
+            fn go<M: Mode>(&self, mut inp: InputRef<'a, '_, '_, I, E>) -> PResult<M, ($($O,)*), E::Error> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
-                    let $X = $X.go::<M>(inp)?;
+                    let $X = $X.go::<M>(inp.reborrow())?;
                 )*
 
                 Ok(flatten_map!(<M> $($X)*))
