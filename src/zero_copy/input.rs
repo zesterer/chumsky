@@ -6,12 +6,13 @@
 //! ways: from strings, slices, arrays, etc.
 
 use super::*;
+use core::cell::Cell;
 use hashbrown::HashMap;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 // TODO: Remove `Clone` bound
-pub trait Input<'a>: 'a + Clone {
+pub trait Input<'a>: 'a {
     /// The type used to keep track of the current location in the stream
     type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
@@ -30,6 +31,9 @@ pub trait Input<'a>: 'a + Clone {
 
     /// Create a span from a start and end offset
     fn span(&self, range: Range<Self::Offset>) -> Self::Span;
+
+    #[doc(hidden)]
+    fn reborrow(&self) -> Self;
 }
 
 /// A trait for types that represent slice-like streams of input tokens.
@@ -85,6 +89,10 @@ impl<'a> Input<'a> for &'a str {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
+
+    fn reborrow(&self) -> Self {
+        *self
+    }
 }
 
 impl<'a> StrInput<'a, char> for &'a str {}
@@ -121,6 +129,10 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
     #[inline]
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
+    }
+
+    fn reborrow(&self) -> Self {
+        *self
     }
 }
 
@@ -179,6 +191,10 @@ impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
     fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.0.clone(), self.1.span(range))
     }
+
+    fn reborrow(&self) -> Self {
+        WithContext(self.0.clone(), self.1.reborrow())
+    }
 }
 
 impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ctx, I> {
@@ -204,6 +220,74 @@ where
     C: Char,
     I: StrInput<'a, C>,
 {
+}
+
+/// An input that dynamically pulls tokens from an [`Iterator`].
+///
+/// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is
+/// required.
+pub struct Stream<I: Iterator>(Cell<(Vec<I::Item>, Option<I>)>);
+
+impl<I: Iterator> Stream<I> {
+    /// Box this stream, turning it into a [BoxedStream]. This can be useful in cases where your parser accepts input
+    /// from several different sources and it needs to work with all of them.
+    pub fn boxed<'a>(self) -> BoxedStream<'a, I::Item>
+    where
+        I: 'a,
+    {
+        let (vec, iter) = self.0.into_inner();
+        Stream(Cell::new((
+            vec,
+            Some(Box::new(iter.expect("no iterator?!"))),
+        )))
+    }
+}
+
+/// A stream containing a boxed iterator. See [`Stream::boxed`].
+pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
+
+impl<'a, I: Iterator> Input<'a> for &'a Stream<I>
+where
+    I::Item: Clone,
+{
+    type Offset = usize;
+    type Token = I::Item;
+    type Span = SimpleSpan<usize>;
+
+    fn start(&self) -> Self::Offset {
+        0
+    }
+
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        let mut other = Cell::new((Vec::new(), None));
+        self.0.swap(&other);
+
+        let (vec, iter) = other.get_mut();
+
+        // Pull new items into the vector if we need them
+        if vec.len() < offset {
+            vec.extend(iter.as_mut().expect("no iterator?!").take(500));
+        }
+
+        // Get the token at the given offset
+        let tok = if let Some(tok) = vec.get(offset) {
+            Some(tok.clone())
+        } else {
+            None
+        };
+
+        self.0.swap(&other);
+
+        (offset + 1, tok)
+    }
+
+    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        range.into()
+    }
+
+    fn reborrow(&self) -> Self {
+        *self
+    }
 }
 
 /// Represents the progress of a parser through the input
@@ -259,7 +343,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         use core::mem;
 
         let mut new_ctx = InputRef {
-            input: self.input.clone(),
+            input: self.input.reborrow(),
             offset: self.offset,
             state: match &mut self.state {
                 Ok(state) => Ok(*state),
@@ -393,6 +477,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline]
+    #[cfg(feature = "regex")]
     pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
     where
         C: Char,
