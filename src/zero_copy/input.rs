@@ -229,6 +229,22 @@ where
 pub struct Stream<I: Iterator>(Cell<(Vec<I::Item>, Option<I>)>);
 
 impl<I: Iterator> Stream<I> {
+    /// Create a new stream from an [`Iterator`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use chumsky::zero_copy::{prelude::*, input::Stream};
+    /// let stream = Stream::from_iter((0..10).map(|i| char::from_digit(i, 10).unwrap()));
+    ///
+    /// let parser = text::digits::<_, _, extra::Err<Simple<_>>>(10).collect::<String>();
+    ///
+    /// assert_eq!(parser.parse(&stream).into_result().as_deref(), Ok("0123456789"));
+    /// ```
+    pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
+        Self(Cell::new((Vec::new(), Some(iter.into_iter()))))
+    }
+
     /// Box this stream, turning it into a [BoxedStream]. This can be useful in cases where your parser accepts input
     /// from several different sources and it needs to work with all of them.
     pub fn boxed<'a>(self) -> BoxedStream<'a, I::Item>
@@ -265,7 +281,7 @@ where
         let (vec, iter) = other.get_mut();
 
         // Pull new items into the vector if we need them
-        if vec.len() < offset {
+        if vec.len() <= offset {
             vec.extend(iter.as_mut().expect("no iterator?!").take(500));
         }
 
