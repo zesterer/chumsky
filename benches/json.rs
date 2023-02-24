@@ -70,6 +70,10 @@ fn bench_json(c: &mut Criterion) {
         move |b| b.iter(|| black_box(pest::parse(json).unwrap()))
     });
 
+    c.bench_function("json_sn", {
+        move |b| b.iter(|| black_box(sn::Parser::new(black_box(JSON)).parse().unwrap()))
+    });
+
     c.bench_function("json_chumsky", {
         use ::chumsky::prelude::*;
         let json = chumsky::json();
