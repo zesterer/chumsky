@@ -38,6 +38,7 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 criterion = "0.4.0"
 pest = "2.5"
 pest_derive = "2.5"
+sn = "0.1"
 logos = "0.12"
 
 [[bench]]

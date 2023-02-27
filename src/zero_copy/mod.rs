@@ -489,7 +489,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Check>(&mut inp);
-        let res = res.and_then(|o| expect_end(&mut inp));
+        let res = res.and_then(|()| expect_end(&mut inp));
         let mut errs = inp.into_errs();
         let out = match res {
             Ok(_) => Some(()),

@@ -274,7 +274,7 @@ where
 ///
 /// ```
 /// # use chumsky::zero_copy::prelude::*;
-/// let digits = text::digits::<'_, _, _, extra::Err<Simple<&str>>>(10).slice();
+/// let digits = text::digits::<_, _, extra::Err<Simple<&str>>>(10).slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -288,7 +288,7 @@ where
 pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy + Clone, C, I, E>
 where
     C: Char,
-    I: StrInput<'a, C>,
+    I: Input<'a, Token = C>,
     E: ParserExtra<'a, I>,
 {
     any()
