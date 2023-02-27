@@ -700,19 +700,9 @@ where
 }
 
 /// See [`choice`].
-pub struct Choice<T, O> {
+#[derive(Copy, Clone)]
+pub struct Choice<T> {
     parsers: T,
-    phantom: PhantomData<O>,
-}
-
-impl<T: Copy, O> Copy for Choice<T, O> {}
-impl<T: Clone, O> Clone for Choice<T, O> {
-    fn clone(&self) -> Self {
-        Self {
-            parsers: self.parsers.clone(),
-            phantom: PhantomData,
-        }
-    }
 }
 
 /// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
@@ -760,11 +750,8 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 ///     Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
 /// );
 /// ```
-pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {
-    Choice {
-        parsers,
-        phantom: PhantomData,
-    }
+pub const fn choice<T>(parsers: T) -> Choice<T> {
+    Choice { parsers }
 }
 
 macro_rules! impl_choice_for_tuple {
@@ -775,11 +762,11 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $Head:ident $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*), O>
+        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
-            $Head:  Parser<'a, I, O, E>,
+            $Head: Parser<'a, I, O, E>,
             $($X: Parser<'a, I, O, E>),*
         {
             #[inline]
@@ -788,8 +775,11 @@ macro_rules! impl_choice_for_tuple {
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                let mut err = match $Head.go::<M>(inp) {
-                    Ok(out) => return Ok(out),
+                let mut err = match $Head.go::<Check>(inp) {
+                    Ok(()) => return Ok(M::bind(|| match $Head.go::<Emit>(inp) {
+                        Ok(out) => out,
+                        Err(e) => unreachable!(),
+                    })),
                     Err(e) => {
                         inp.rewind(before);
                         e
@@ -814,7 +804,7 @@ macro_rules! impl_choice_for_tuple {
         }
     };
     (~ $Head:ident) => {
-        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,), O>
+        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -832,7 +822,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N], O>
+impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,

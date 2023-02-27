@@ -52,3 +52,7 @@ harness = false
 [[bench]]
 name = "parser"
 harness = false
+
+[[bench]]
+name = "backtrack"
+harness = false
