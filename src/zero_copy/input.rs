@@ -11,7 +11,6 @@ use hashbrown::HashMap;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
-// TODO: Remove `Clone` bound
 pub trait Input<'a>: 'a {
     /// The type used to keep track of the current location in the stream
     type Offset: Copy + Hash + Ord + Into<usize>;
