@@ -491,6 +491,7 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
     }
 }
 
+/*
 /// A parser that accepts any number of inputs until a terminating pattern is reached.
 ///
 /// The output type of this parser is `(Vec<I>, O)`, a combination of the preceding inputs and the output of the
@@ -505,7 +506,8 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
 ///     .ignored();
 ///
 /// let multi_line = just::<_, _, extra::Err<Simple<&str>>>("/*")
-///     .then(take_until(just("*/")))
+///     .then(take_until(just("*/
+")))
 ///     .ignored();
 ///
 /// let comment = single_line.or(multi_line);
@@ -577,6 +579,7 @@ where
 
     go_extra!((C, OP));
 }
+*/
 
 /// See [`map_ctx`].
 pub struct MapCtx<A, F> {

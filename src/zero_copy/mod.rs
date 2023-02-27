@@ -59,9 +59,7 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
-        primitive::{
-            any, choice, empty, end, group, just, map_ctx, none_of, one_of, take_until, todo,
-        },
+        primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},
         recovery::{nested_delimiters, skip_until},
         recursive::{recursive, Recursive},
         // select,
@@ -1818,10 +1816,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         I: 'a;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>, E::Error>;
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
@@ -1929,10 +1924,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         let mut inp = InputRef::new(input, Err(E::State::default()));
         ParseResult::new(
             Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
+                state: self.make_iter::<Emit>(&mut inp),
                 parser: self,
                 inp,
                 phantom: PhantomData,
@@ -1956,10 +1948,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         let mut inp = InputRef::new(input, Ok(state));
         ParseResult::new(
             Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
+                state: self.make_iter::<Emit>(&mut inp),
                 parser: self,
                 inp,
                 phantom: PhantomData,
@@ -1968,26 +1957,6 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         )
     }
 }
-
-/*
-impl<'a, I, O, E, P> IterParser<'a, I, O::Item, E> for P
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
-    O: IntoIterator,
-{
-    type IterState<M: Mode> = O::IntoIter;
-
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Self::IterState<M>, E::Error> {
-        Ok(M::map(self.go::<M>(inp)?, |xs: O| xs.into_iter()))
-    }
-
-    fn next(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<Emit>) -> Option<PResult<Emit, O, E::Error>> {
-        state.next().map(Ok)
-    }
-}
-*/
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
