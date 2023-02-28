@@ -143,7 +143,7 @@ where
     I::Token: Char,
     A: Parser<'a, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         inp.skip_while(|c| c.is_whitespace());
         let out = self.parser.go::<M>(inp)?;
         inp.skip_while(|c| c.is_whitespace());

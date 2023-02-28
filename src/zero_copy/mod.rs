@@ -6,11 +6,11 @@
 macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
-        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O, E::Error> {
+        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O> {
             Parser::<I, $O, E>::go::<Emit>(self, inp)
         }
         #[inline(always)]
-        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O, E::Error> {
+        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O> {
             Parser::<I, $O, E>::go::<Check>(self, inp)
         }
     };
@@ -23,7 +23,7 @@ macro_rules! go_cfg_extra {
             &self,
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
-        ) -> PResult<Emit, $O, E::Error> {
+        ) -> PResult<Emit, $O> {
             ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
         #[inline(always)]
@@ -31,7 +31,7 @@ macro_rules! go_cfg_extra {
             &self,
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
-        ) -> PResult<Check, $O, E::Error> {
+        ) -> PResult<Check, $O> {
             ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
@@ -59,10 +59,8 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
-        primitive::{
-            any, choice, empty, end, group, just, map_ctx, none_of, one_of, take_until, todo,
-        },
-        recovery::{nested_delimiters, skip_until},
+        primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},
+        recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
         // select,
         span::{SimpleSpan, Span as _},
@@ -104,7 +102,7 @@ use self::{
     input::{BorrowInput, Input, InputRef, SliceInput, StrInput},
     prelude::*,
     primitive::Any,
-    recovery::RecoverWith,
+    recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
 };
@@ -132,7 +130,9 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
 }
 
 /// The result of calling [`Parser::go`]
-pub type PResult<M, O, E> = Result<<M as Mode>::Output<O>, Located<E>>;
+pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
+/// The result of calling [`IterParser::next`]
+pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
@@ -224,14 +224,18 @@ impl<E> Located<E> {
 
 fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     inp: &mut InputRef<'a, '_, I, E>,
-) -> PResult<Check, (), E::Error> {
+) -> PResult<Check, ()> {
     let before = inp.offset();
     match inp.next() {
         (_, None) => Ok(()),
-        (at, Some(tok)) => Err(Located::at(
-            at.into(),
-            E::Error::expected_found(None, Some(tok), inp.span_since(before)),
-        )),
+        (_, Some(tok)) => {
+            inp.emit(E::Error::expected_found(
+                None,
+                Some(tok),
+                inp.span_since(before),
+            ));
+            Ok(())
+        }
     }
 }
 
@@ -269,10 +273,7 @@ mod internal {
         /// Invoke a parser user the current mode. This is normally equivalent to
         /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
         /// `dyn Parser`.
-        fn invoke<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-        ) -> PResult<Self, O, E::Error>
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -285,7 +286,7 @@ mod internal {
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: P::Config,
-        ) -> PResult<Self, O, E::Error>
+        ) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -319,10 +320,7 @@ mod internal {
         }
 
         #[inline]
-        fn invoke<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-        ) -> PResult<Self, O, E::Error>
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -336,7 +334,7 @@ mod internal {
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: P::Config,
-        ) -> PResult<Self, O, E::Error>
+        ) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -366,10 +364,7 @@ mod internal {
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
         #[inline]
-        fn invoke<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-        ) -> PResult<Self, O, E::Error>
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -383,7 +378,7 @@ mod internal {
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: P::Config,
-        ) -> PResult<Self, O, E::Error>
+        ) -> PResult<Self, O>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -448,11 +443,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Emit>(&mut inp);
         let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
+        let alt = inp.errors.alt.take();
         let mut errs = inp.into_errs();
         let out = match res {
             Ok(out) => Some(out),
-            Err(e) => {
-                errs.push(e.err);
+            Err(()) => {
+                errs.push(alt.expect("error but no alt?").err);
                 None
             }
         };
@@ -490,11 +486,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         let mut inp = InputRef::new(input, Ok(state));
         let res = self.go::<Check>(&mut inp);
         let res = res.and_then(|()| expect_end(&mut inp));
+        let alt = inp.errors.alt.take();
         let mut errs = inp.into_errs();
         let out = match res {
-            Ok(_) => Some(()),
-            Err(e) => {
-                errs.push(e.err);
+            Ok(()) => Some(()),
+            Err(()) => {
+                errs.push(alt.expect("error but no alt?").err);
                 None
             }
         };
@@ -505,14 +502,14 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
     /// own.
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O, E::Error>;
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
     #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O, E::Error>;
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
@@ -767,7 +764,16 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         }
     }
 
-    /// TODO
+    /// Memoise the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
+    ///
+    /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
+    /// memoisation to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
+    /// way to solve the problem. At the limit, applying memoisation to all combinators will turn any parser into one
+    /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
+    ///
+    /// Memoisation also works with recursion, so this can be used to write parsers using
+    /// [left recursion](https://en.wikipedia.org/wiki/Left_recursion).
+    // TODO: Example
     #[cfg(feature = "memoization")]
     fn memoised(self) -> Memoised<Self>
     where
@@ -1495,8 +1501,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     List(Vec<Expr<'a>>),
     /// }
     ///
-    /// let recover = just::<_, _, extra::Err<Simple<&str>>>('[')
-    ///         .ignore_then(take_until(just(']')).ignored());
+    /// let recovery = just::<_, _, extra::Err<Simple<&str>>>('[')
+    ///         .then(none_of(']').repeated().then(just(']')));
     ///
     /// let expr = recursive::<_, _, extra::Err<Simple<&str>>, _, _>(|expr| expr
     ///     .separated_by(just(','))
@@ -1504,7 +1510,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(recover.map(|_| Expr::Error))
+    ///     .recover_with(via_parser(recovery.map(|_| Expr::Error)))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///
@@ -1521,13 +1527,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// // Additionally, the AST we get back still has useful information.
     /// assert_eq!(res.output(), Some(&Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<F: Parser<'a, I, O, E>>(self, fallback: F) -> RecoverWith<Self, F>
+    fn recover_with<S: Strategy<'a, I, O, E>>(self, strategy: S) -> RecoverWith<Self, S>
     where
         Self: Sized,
     {
         RecoverWith {
             parser: self,
-            fallback,
+            strategy,
         }
     }
 
@@ -1626,9 +1632,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
 
     /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
     ///
-    /// Note that even if the function returns an [`Ok`], the input stream will still be 'stuck' at the input following
-    /// the input that triggered the error. You'll need to follow uses of this combinator with a parser that resets
-    /// the input stream to a known-good state (for example, [`take_until`]).
+    /// Note that, if the closure returns [`Err`], the parser will not consume any input.
     ///
     /// The output type of this parser is `U`, the [`Ok`] type of the result.
     fn or_else<F>(self, f: F) -> OrElse<Self, F>
@@ -1737,7 +1741,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         *self
     }
 
@@ -1755,26 +1759,18 @@ where
 
     /// Parse a stream with the provided configured values. This can be used to control a parser's
     /// behavior at parse-time.
-    fn go_cfg<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        cfg: Self::Config,
-    ) -> PResult<M, O, E::Error>
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
     where
         Self: Sized;
 
     #[doc(hidden)]
-    fn go_emit_cfg(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        cfg: Self::Config,
-    ) -> PResult<Emit, O, E::Error>;
+    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O>;
     #[doc(hidden)]
     fn go_check_cfg(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<Check, O, E::Error>;
+    ) -> PResult<Check, O>;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
@@ -1805,7 +1801,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.parser
             .next::<Emit>(&mut self.inp, &mut self.state)
-            .and_then(|res| res.ok())
+            .ok()
+            .and_then(|res| res)
     }
 }
 
@@ -1818,16 +1815,13 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         I: 'a;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>, E::Error>;
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
         state: &mut Self::IterState<M>,
-    ) -> Option<PResult<M, O, E::Error>>;
+    ) -> IPResult<M, O>;
 
     /// Collect this iterable parser into a [`Container`].
     ///
@@ -1929,10 +1923,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         let mut inp = InputRef::new(input, Err(E::State::default()));
         ParseResult::new(
             Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
+                state: self.make_iter::<Emit>(&mut inp),
                 parser: self,
                 inp,
                 phantom: PhantomData,
@@ -1956,10 +1947,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         let mut inp = InputRef::new(input, Ok(state));
         ParseResult::new(
             Some(ParserIter {
-                state: match self.make_iter::<Emit>(&mut inp) {
-                    Ok(out) => out,
-                    Err(e) => return ParseResult::new(None, vec![e.err]),
-                },
+                state: self.make_iter::<Emit>(&mut inp),
                 parser: self,
                 inp,
                 phantom: PhantomData,
@@ -1968,26 +1956,6 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         )
     }
 }
-
-/*
-impl<'a, I, O, E, P> IterParser<'a, I, O::Item, E> for P
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
-    O: IntoIterator,
-{
-    type IterState<M: Mode> = O::IntoIter;
-
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Self::IterState<M>, E::Error> {
-        Ok(M::map(self.go::<M>(inp)?, |xs: O| xs.into_iter()))
-    }
-
-    fn next(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<Emit>) -> Option<PResult<Emit, O, E::Error>> {
-        state.next().map(Ok)
-    }
-}
-*/
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
@@ -2003,7 +1971,7 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
         inp: &mut InputRef<'a, '_, I, E>,
         state: &mut Self::IterState<M>,
         cfg: &Self::Config,
-    ) -> Option<PResult<M, O, E::Error>>;
+    ) -> IPResult<M, O>;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
@@ -2045,7 +2013,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         M::invoke(&*self.inner, inp)
     }
 

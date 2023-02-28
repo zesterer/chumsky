@@ -109,7 +109,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    pub fn define<P: Parser<'a, I, O, E> + 'a>(&mut self, parser: P) {
+    pub fn define<P: Parser<'a, I, O, E> + Clone + 'a>(&mut self, parser: P) {
         self.parser()
             .inner
             .set(Box::new(parser))
@@ -145,7 +145,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         M::invoke(
             self.parser()
                 .inner
@@ -165,7 +165,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         M::invoke(&*self.parser(), inp)
     }
 
@@ -225,7 +225,7 @@ pub fn recursive<'a, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E> + 'a,
+    A: Parser<'a, I, O, E> + Clone + 'a,
     F: FnOnce(Recursive<Direct<'a, I, O, E>>) -> A,
 {
     let rc = Rc::new_cyclic(|rc| {

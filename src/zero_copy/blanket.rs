@@ -6,7 +6,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
     {
@@ -24,11 +24,7 @@ where
 {
     type Config = T::Config;
 
-    fn go_cfg<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        cfg: Self::Config,
-    ) -> PResult<M, O, E::Error>
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
     where
         Self: Sized,
     {

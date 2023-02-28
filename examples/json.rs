@@ -72,9 +72,13 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
         let array = value
             .clone()
             .separated_by(just(',').padded())
+            .allow_trailing()
             .collect()
             .padded()
-            .delimited_by(just('['), just(']'))
+            .delimited_by(
+                just('['),
+                just(']').ignored().recover_with(via_parser(end())),
+            )
             .boxed();
 
         let member = string.clone().then_ignore(just(':').padded()).then(value);
@@ -83,7 +87,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
             .separated_by(just(',').padded())
             .collect()
             .padded()
-            .delimited_by(just('{'), just('}'))
+            .delimited_by(
+                just('{'),
+                just('}').ignored().recover_with(via_parser(end())),
+            )
             .boxed();
 
         choice((
@@ -95,9 +102,19 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
             array.map(Json::Array),
             object.map(Json::Object),
         ))
-        .recover_with(nested_delimiters('{', '}', [('[', ']')], |_| Json::Invalid))
-        .recover_with(nested_delimiters('[', ']', [('{', '}')], |_| Json::Invalid))
-        // .recover_with(skip_then_retry_until(['}', ']']))
+        .recover_with(via_parser(nested_delimiters(
+            '{',
+            '}',
+            [('[', ']')],
+            |_| Json::Invalid,
+        )))
+        .recover_with(via_parser(nested_delimiters(
+            '[',
+            ']',
+            [('{', '}')],
+            |_| Json::Invalid,
+        )))
+        .recover_with(skip_then_retry_until(one_of(",]}").ignored()))
         .padded()
     })
 }

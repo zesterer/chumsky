@@ -2,32 +2,78 @@
 
 use super::*;
 
-/// See [`Parser::recover_with`].
-#[derive(Copy, Clone)]
-pub struct RecoverWith<A, F> {
-    pub(crate) parser: A,
-    pub(crate) fallback: F,
+/// A trait implemented by error recovery strategies. See [`Parser::recover_with`].
+pub trait Strategy<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+    // Attempt to recover from a parsing failure.
+    // The strategy should properly handle the alt error but is not required to handle rewinding.
+    #[doc(hidden)]
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        parser: &P,
+    ) -> PResult<M, O>;
 }
 
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for RecoverWith<A, F>
+/// See [`via_parser`].
+#[derive(Copy, Clone)]
+pub struct ViaParser<A>(A);
+
+/// Recover via the given recovery parser.
+pub fn via_parser<A>(parser: A) -> ViaParser<A> {
+    ViaParser(parser)
+}
+
+impl<'a, I, O, E, A> Strategy<'a, I, O, E> for ViaParser<A>
+where
+    I: Input<'a>,
+    A: Parser<'a, I, O, E>,
+    E: ParserExtra<'a, I>,
+{
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        _parser: &P,
+    ) -> PResult<M, O> {
+        let alt = inp.errors.alt.take().expect("error but no alt?");
+        let out = match self.0.go::<M>(inp) {
+            Ok(out) => out,
+            Err(()) => {
+                inp.errors.alt = Some(alt);
+                return Err(());
+            }
+        };
+        inp.emit(alt.err);
+        Ok(out)
+    }
+}
+
+/// See [`Parser::recover_with`].
+#[derive(Copy, Clone)]
+pub struct RecoverWith<A, S> {
+    pub(crate) parser: A,
+    pub(crate) strategy: S,
+}
+
+impl<'a, I, O, E, A, S> Parser<'a, I, O, E> for RecoverWith<A, S>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
-    F: Parser<'a, I, O, E>,
+    S: Strategy<'a, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(out) => Ok(out),
-            Err(e) => {
+            Err(()) => {
                 inp.rewind(before);
-                match self.fallback.go::<M>(inp) {
-                    Ok(out) => {
-                        inp.emit(e.err);
-                        Ok(out)
+                match self.strategy.recover::<M, _>(inp, &self.parser) {
+                    Ok(out) => Ok(out),
+                    Err(()) => {
+                        // Reset to before fallback attempt
+                        inp.rewind(before);
+                        Err(())
                     }
-                    Err(_) => Err(e),
                 }
             }
         }
@@ -36,20 +82,75 @@ where
     go_extra!(O);
 }
 
+/// See [`skip_then_retry_until`].
+#[derive(Copy, Clone)]
+pub struct SkipThenRetryUntil<A> {
+    until: A,
+}
+
+impl<'a, I, O, E, A> Strategy<'a, I, O, E> for SkipThenRetryUntil<A>
+where
+    I: Input<'a>,
+    A: Parser<'a, I, (), E>,
+    E: ParserExtra<'a, I>,
+{
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        parser: &P,
+    ) -> PResult<M, O> {
+        let alt = inp.errors.alt.take().expect("error but no alt?");
+        loop {
+            let before = inp.save();
+            if let Ok(()) = self.until.go::<Check>(inp) {
+                inp.errors.alt = Some(alt);
+                break Err(());
+            } else {
+                inp.rewind(before);
+            }
+
+            let before = inp.offset();
+            match inp.next() {
+                (_, None) => {
+                    inp.errors.alt = Some(alt);
+                    break Err(());
+                }
+                (at, Some(tok)) => {
+                    inp.emit(E::Error::expected_found(
+                        None,
+                        Some(tok),
+                        inp.span_since(before),
+                    ));
+                }
+            }
+
+            let before = inp.save();
+            if let Ok(out) = parser.go::<M>(inp) {
+                break Ok(out);
+            } else {
+                inp.rewind(before);
+            }
+        }
+    }
+}
+
+/// TODO
+pub fn skip_then_retry_until<A>(until: A) -> SkipThenRetryUntil<A> {
+    SkipThenRetryUntil { until }
+}
+
 /// A recovery parser that skips input until one of several inputs is found.
 ///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
-pub fn skip_until<'a, P, I, O, E>(pattern: P) -> impl Parser<'a, I, O, E> + Clone
+pub fn skip_until<'a, P, I, O, E>(pattern: P) -> impl Parser<'a, I, (), E> + Clone
 where
     I: Input<'a>,
     P: Parser<'a, I, O, E> + Clone,
     E: extra::ParserExtra<'a, I>,
 {
-    any()
-        .and_is(pattern.clone().not())
-        .repeated()
-        .ignore_then(pattern)
+    any().and_is(pattern.clone().not()).repeated()
+    // .ignore_then(pattern)
 }
 
 /// A recovery parser that searches for a start and end delimiter, respecting nesting.

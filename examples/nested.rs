@@ -40,5 +40,5 @@ fn main() {
         Token::Num(4),
     ];
 
-    assert_eq!(parser().parse(&tokens).into_result(), Ok(20),);
+    assert_eq!(parser().parse(&tokens).into_result(), Ok(20));
 }

@@ -318,11 +318,25 @@ impl<'a, I: Input<'a>> Clone for Marker<'a, I> {
     }
 }
 
+pub(crate) struct Errors<E> {
+    pub(crate) alt: Option<Located<E>>,
+    pub(crate) secondary: Vec<E>,
+}
+
+impl<E> Default for Errors<E> {
+    fn default() -> Self {
+        Self {
+            alt: None,
+            secondary: Vec::new(),
+        }
+    }
+}
+
 /// Internal type representing an input as well as all the necessary context for parsing.
 pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) input: I,
     pub(crate) offset: I::Offset,
-    errors: Vec<E::Error>,
+    pub(crate) errors: Errors<E::Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     state: Result<&'parse mut E::State, E::State>,
     ctx: E::Context,
@@ -340,7 +354,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             input,
             state,
             ctx: E::Context::default(),
-            errors: Vec::new(),
+            errors: Errors::default(),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
         }
@@ -365,13 +379,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
                 Err(state) => Ok(state),
             },
             ctx: new_ctx,
-            errors: mem::take(&mut self.errors),
+            errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(), // TODO: Reuse memoisation state?
         };
         let res = f(&mut new_ctx);
         self.offset = new_ctx.offset;
-        self.errors = mem::take(&mut new_ctx.errors);
+        self.errors = new_ctx.errors;
         res
     }
 
@@ -386,14 +400,14 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     pub fn save(&self) -> Marker<'a, I> {
         Marker {
             offset: self.offset,
-            err_count: self.errors.len(),
+            err_count: self.errors.secondary.len(),
         }
     }
 
     /// Reset the input state to the provided [`Marker`]
     #[inline]
     pub fn rewind(&mut self, marker: Marker<'a, I>) {
-        self.errors.truncate(marker.err_count);
+        self.errors.secondary.truncate(marker.err_count);
         self.offset = marker.offset;
     }
 
@@ -503,11 +517,19 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     #[inline]
     pub(crate) fn emit(&mut self, error: E::Error) {
-        self.errors.push(error);
+        self.errors.secondary.push(error);
+    }
+
+    #[inline]
+    pub(crate) fn add_alt(&mut self, error: impl Into<Option<Located<E::Error>>>) {
+        self.errors.alt = match (self.errors.alt.take(), error.into()) {
+            (Some(a), Some(b)) => Some(a.prioritize(b, |a, b| a.merge(b))),
+            (a, b) => a.or(b),
+        };
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {
-        self.errors
+        self.errors.secondary
     }
 }
 

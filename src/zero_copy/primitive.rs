@@ -40,14 +40,17 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let before = inp.offset();
         match inp.next() {
             (_, None) => Ok(M::bind(|| ())),
-            (at, Some(tok)) => Err(Located::at(
-                at.into(),
-                E::Error::expected_found(None, Some(tok), inp.span_since(before)),
-            )),
+            (at, Some(tok)) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+                ));
+                Err(())
+            }
         }
     }
 
@@ -77,7 +80,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, (), E::Error> {
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         Ok(M::bind(|| ()))
     }
 
@@ -161,7 +164,7 @@ where
     T: OrderedSeq<I::Token> + Clone,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
     }
 
@@ -182,26 +185,29 @@ where
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, T, E::Error> {
+    ) -> PResult<M, T> {
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
 
-        seq.seq_iter()
-            .find_map(|next| {
-                let next = next.borrow();
-                let before = inp.offset();
-                match inp.next() {
-                    (_, Some(tok)) if *next == tok => None,
-                    (at, tok) => Some(Err(Located::at(
-                        at.into(),
-                        E::Error::expected_found(
-                            Some(Some(I::Token::clone(next))),
-                            tok,
-                            inp.span_since(before),
-                        ),
-                    ))),
-                }
-            })
-            .unwrap_or_else(|| Ok(M::bind(|| seq.clone())))
+        if let Some(err) = seq.seq_iter().find_map(|next| {
+            let next = next.borrow();
+            let before = inp.offset();
+            match inp.next() {
+                (_, Some(tok)) if *next == tok => None,
+                (at, tok) => Some(Located::at(
+                    at.into(),
+                    E::Error::expected_found(
+                        Some(Some(I::Token::clone(next))),
+                        tok,
+                        inp.span_since(before),
+                    ),
+                )),
+            }
+        }) {
+            inp.add_alt(err);
+            Err(())
+        } else {
+            Ok(M::bind(|| seq.clone()))
+        }
     }
 
     go_cfg_extra!(T);
@@ -260,18 +266,21 @@ where
     T: Seq<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(Located::at(
-                at.into(),
-                E::Error::expected_found(
-                    self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
-                    found,
-                    inp.span_since(before),
-                ),
-            )),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    E::Error::expected_found(
+                        self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
+                        found,
+                        inp.span_since(before),
+                    ),
+                ));
+                Err(())
+            }
         }
     }
 
@@ -331,14 +340,17 @@ where
     T: Seq<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
-            (at, found) => Err(Located::at(
-                at.into(),
-                E::Error::expected_found(None, found, inp.span_since(before)),
-            )),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    E::Error::expected_found(None, found, inp.span_since(before)),
+                ));
+                Err(())
+            }
         }
     }
 
@@ -361,7 +373,7 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
     }
 }
 
-/// TODO
+/// See [`select!`].
 pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
 where
     I: BorrowInput<'a>,
@@ -383,21 +395,23 @@ where
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        match inp.next_ref() {
+        let err = match inp.next_ref() {
             (at, Some(tok)) => match (self.filter)(tok, inp.span_since(before)) {
-                Some(out) => Ok(M::bind(|| out)),
-                None => Err(Located::at(
+                Some(out) => return Ok(M::bind(|| out)),
+                None => Located::at(
                     at.into(),
                     E::Error::expected_found(None, Some(tok.clone()), inp.span_since(before)),
-                )),
+                ),
             },
-            (at, found) => Err(Located::at(
+            (at, found) => Located::at(
                 at.into(),
                 E::Error::expected_found(None, found.cloned(), inp.span_since(before)),
-            )),
-        }
+            ),
+        };
+        inp.add_alt(err);
+        Err(())
     }
 
     go_extra!(O);
@@ -423,14 +437,17 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
-            (at, found) => Err(Located::at(
-                at.into(),
-                E::Error::expected_found(None, found, inp.span_since(before)),
-            )),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    E::Error::expected_found(None, found, inp.span_since(before)),
+                ));
+                Err(())
+            }
         }
     }
 
@@ -459,7 +476,7 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
 }
 
 /// See [`take_until`].
-// TODO: Consider removing in favour of `not`/`and_is`
+// TODO: Consider removing in favour of `not`/`and_is`, or replace with a dedicated escape text parser
 pub struct TakeUntil<P, I, OP, E, C = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
@@ -491,6 +508,7 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
     }
 }
 
+/*
 /// A parser that accepts any number of inputs until a terminating pattern is reached.
 ///
 /// The output type of this parser is `(Vec<I>, O)`, a combination of the preceding inputs and the output of the
@@ -505,7 +523,8 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
 ///     .ignored();
 ///
 /// let multi_line = just::<_, _, extra::Err<Simple<&str>>>("/*")
-///     .then(take_until(just("*/")))
+///     .then(take_until(just("*/
+")))
 ///     .ignored();
 ///
 /// let comment = single_line.or(multi_line);
@@ -551,7 +570,7 @@ where
     C: Container<I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP), E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP)> {
         let mut output = M::bind(|| C::default());
 
         loop {
@@ -577,6 +596,7 @@ where
 
     go_extra!((C, OP));
 }
+*/
 
 /// See [`map_ctx`].
 pub struct MapCtx<A, F> {
@@ -603,7 +623,7 @@ where
     Ctx: 'a,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
     }
 
@@ -692,7 +712,7 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         todo!("Attempted to use an unimplemented parser")
     }
 
@@ -783,31 +803,24 @@ macro_rules! impl_choice_for_tuple {
             $($X: Parser<'a, I, O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                let mut err = match $Head.go::<M>(inp) {
+                match $Head.go::<M>(inp) {
                     Ok(out) => return Ok(out),
-                    Err(e) => {
-                        inp.rewind(before);
-                        e
-                    }
-                };
+                    Err(()) => inp.rewind(before),
+                }
 
                 $(
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
-                        Err(e) => {
-                            // TODO: prioritise errors
-                            err = err.prioritize(e, |a, b| a.merge(b));
-                            inp.rewind(before);
-                        }
+                        Err(()) => inp.rewind(before),
                     }
                 )*
 
-                Err(err)
+                Err(())
             }
 
             go_extra!(O);
@@ -821,7 +834,7 @@ macro_rules! impl_choice_for_tuple {
             $Head:  Parser<'a, I, O, E>,
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
                 self.parsers.0.go::<M>(inp)
             }
 
@@ -838,29 +851,26 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O, E::Error> {
-        let before = inp.save();
-        let res =
-            self.parsers
-                .iter()
-                .try_fold(None::<Located<E::Error>>, |err, parser| {
-                    match parser.go::<M>(inp) {
-                        Ok(out) => Err(out),
-                        Err(e) => Ok(Some(match err {
-                            Some(err) => err.prioritize(e, |a, b| a.merge(b)),
-                            None => e,
-                        })),
-                    }
-                });
-
-        match res {
-            Ok(err) => Err(err.unwrap_or_else(|| {
-                Located::at(
-                    inp.offset().into(),
-                    E::Error::expected_found(None, None, inp.span_since(before.offset)),
-                )
-            })),
-            Err(out) => Ok(out),
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        if N == 0 {
+            let offs = inp.offset();
+            inp.add_alt(Located::at(
+                offs.into(),
+                E::Error::expected_found(None, None, inp.span_since(offs)),
+            ));
+            Err(())
+        } else {
+            let before = inp.save();
+            match self.parsers.iter().find_map(|parser| {
+                inp.rewind(before);
+                match parser.go::<M>(inp) {
+                    Ok(out) => Some(out),
+                    Err(()) => None,
+                }
+            }) {
+                Some(out) => Ok(out),
+                None => Err(()),
+            }
         }
     }
 
@@ -925,7 +935,7 @@ macro_rules! impl_group_for_tuple {
             $($X: Parser<'a, I, $O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*), E::Error> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*)> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
