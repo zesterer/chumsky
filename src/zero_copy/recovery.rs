@@ -91,7 +91,7 @@ pub struct SkipThenRetryUntil<A> {
 impl<'a, I, O, E, A> Strategy<'a, I, O, E> for SkipThenRetryUntil<A>
 where
     I: Input<'a>,
-    A: Parser<'a, I, O, E>,
+    A: Parser<'a, I, (), E>,
     E: ParserExtra<'a, I>,
 {
     fn recover<M: Mode, P: Parser<'a, I, O, E>>(

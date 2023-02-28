@@ -228,12 +228,9 @@ fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     let before = inp.offset();
     match inp.next() {
         (_, None) => Ok(()),
-        (at, Some(tok)) => {
-            inp.add_alt(Located::at(
-                at.into(),
-                E::Error::expected_found(None, Some(tok), inp.span_since(before)),
-            ));
-            Err(())
+        (_, Some(tok)) => {
+            inp.emit(E::Error::expected_found(None, Some(tok), inp.span_since(before)));
+            Ok(())
         }
     }
 }
