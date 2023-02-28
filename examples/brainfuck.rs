@@ -32,7 +32,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>, extra::Err<Simple<'a, &'
             just('.').to(Write),
         ))
         .or(bf.delimited_by(just('['), just(']')).map(Loop))
-        .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
+        .recover_with(via_parser(nested_delimiters('[', ']', [], |_| Invalid)))
         // .recover_with(skip_then_retry_until([']']))
         .repeated()
         .collect()

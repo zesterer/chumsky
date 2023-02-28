@@ -229,7 +229,11 @@ fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     match inp.next() {
         (_, None) => Ok(()),
         (_, Some(tok)) => {
-            inp.emit(E::Error::expected_found(None, Some(tok), inp.span_since(before)));
+            inp.emit(E::Error::expected_found(
+                None,
+                Some(tok),
+                inp.span_since(before),
+            ));
             Ok(())
         }
     }
@@ -1506,7 +1510,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(recovery.map(|_| Expr::Error))
+    ///     .recover_with(via_parser(recovery.map(|_| Expr::Error)))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///

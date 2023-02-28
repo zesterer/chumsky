@@ -75,7 +75,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
             .allow_trailing()
             .collect()
             .padded()
-            .delimited_by(just('['), just(']').ignored().recover_with(via_parser(end())))
+            .delimited_by(
+                just('['),
+                just(']').ignored().recover_with(via_parser(end())),
+            )
             .boxed();
 
         let member = string.clone().then_ignore(just(':').padded()).then(value);
@@ -84,7 +87,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>>
             .separated_by(just(',').padded())
             .collect()
             .padded()
-            .delimited_by(just('{'), just('}').ignored().recover_with(via_parser(end())))
+            .delimited_by(
+                just('{'),
+                just('}').ignored().recover_with(via_parser(end())),
+            )
             .boxed();
 
         choice((
