@@ -319,14 +319,14 @@ impl<'a, I: Input<'a>> Clone for Marker<'a, I> {
 }
 
 pub(crate) struct Errors<E> {
-    pub(crate) alt_err: Option<Located<E>>,
+    pub(crate) alt: Option<Located<E>>,
     pub(crate) secondary: Vec<E>,
 }
 
 impl<E> Default for Errors<E> {
     fn default() -> Self {
         Self {
-            alt_err: None,
+            alt: None,
             secondary: Vec::new(),
         }
     }
@@ -336,7 +336,7 @@ impl<E> Default for Errors<E> {
 pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) input: I,
     pub(crate) offset: I::Offset,
-    errors: Errors<E::Error>,
+    pub(crate) errors: Errors<E::Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     state: Result<&'parse mut E::State, E::State>,
     ctx: E::Context,
@@ -518,6 +518,14 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     #[inline]
     pub(crate) fn emit(&mut self, error: E::Error) {
         self.errors.secondary.push(error);
+    }
+
+    #[inline]
+    pub(crate) fn add_alt(&mut self, error: impl Into<Option<Located<E::Error>>>) {
+        self.errors.alt = match (self.errors.alt.take(), error.into()) {
+            (Some(a), Some(b)) => Some(a.prioritize(b, |a, b| a.merge(b))),
+            (a, b) => a.or(b),
+        };
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {

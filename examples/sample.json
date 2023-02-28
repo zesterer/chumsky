@@ -1,24 +1,24 @@
 {
   "leaving": {
-    "tail": [{
+    "tail": [
       -2063823378.8597813,
-      !true,
-      false,
-      !null,!
+      true,
+      !false,
+      null,
       -153646.6402,
       "board"
     ],
     "fed": -283765067.9149623,
-    "cowboy": --355139449,
-    "although": 794127593.3922591,
+    "cowboy": -355139449,
+    "although": --794127593.3922591,
     "front": "college",
     "origin": 981339097
   },
-  "though": ~true,
+  "though": true,
   "invalid": "\uDFFF",
-  "activity": "value",
+  "activity": !"value",
   "office": -342325541.1937506,
-  "noise": fallse,
+  "noise": false,
   "acres": "home",
-  "foo": [}]
+  "foo": [!]
 }

@@ -23,22 +23,24 @@ where
     E: ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str, E::Error> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
         let before = inp.offset();
-        C::match_regex(&self.regex, inp.slice_trailing())
-            .map(|len| {
+        match C::match_regex(&self.regex, inp.slice_trailing()) {
+            Some(len) => {
                 let before = inp.offset();
                 inp.skip_bytes(len);
                 let after = inp.offset();
-                M::bind(|| inp.slice(before..after))
-            })
-            // TODO: Make this error actually correct
-            .ok_or_else(|| {
-                Located::at(
+                Ok(M::bind(|| inp.slice(before..after)))
+            }
+            None => {
+                // TODO: Improve error
+                inp.add_alt(Located::at(
                     inp.offset().into(),
                     E::Error::expected_found(None, None, inp.span_since(before)),
-                )
-            })
+                ));
+                Err(())
+            }
+        }
     }
 
     go_extra!(&'a C::Str);
