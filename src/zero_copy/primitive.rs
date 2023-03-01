@@ -47,7 +47,8 @@ where
             (at, Some(tok)) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok), unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -198,7 +199,8 @@ where
                     E::Error::expected_found(
                         Some(Some(I::Token::clone(next))),
                         tok,
-                        inp.span_since(before),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
                     ),
                 )),
             }
@@ -276,7 +278,8 @@ where
                     E::Error::expected_found(
                         self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
                         found,
-                        inp.span_since(before),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
                     ),
                 ));
                 Err(())
@@ -347,7 +350,8 @@ where
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, found, inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -355,6 +359,55 @@ where
     }
 
     go_extra!(I::Token);
+}
+
+/// See [`custom`].
+pub struct Custom<F, I, O, E> {
+    f: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I, O, E> Copy for Custom<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// TODO
+pub const fn custom<'a, F, I, O, E>(f: F) -> Custom<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+{
+    Custom {
+        f,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Custom<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        match (self.f)(inp) {
+            Ok(out) => Ok(M::bind(|| out)),
+            Err(err) => {
+                inp.add_alt(Located::at(inp.offset().into(), err));
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(O);
 }
 
 /// See [`select!`].
@@ -397,18 +450,22 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        let err = match inp.next() {
-            (at, Some(tok)) => match (self.filter)(tok.clone(), inp.span_since(before)) {
-                Some(out) => return Ok(M::bind(|| out)),
-                None => Located::at(
-                    at.into(),
-                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
-                ),
-            },
-            (at, found) => Located::at(
-                at.into(),
-                E::Error::expected_found(None, found, inp.span_since(before)),
-            ),
+        let next = inp.next();
+        // SAFETY: Using offsets derived from input
+        let err_span = unsafe { inp.span_since(before) };
+        let err = match next {
+            // SAFETY: Using offsets derived from input
+            (at, Some(tok)) => {
+                match (self.filter)(tok.clone(), unsafe { inp.span_since(before) }) {
+                    Some(out) => return Ok(M::bind(|| out)),
+                    None => Located::at(
+                        at.into(),
+                        // SAFETY: Using offsets derived from input
+                        E::Error::expected_found(None, Some(tok), err_span),
+                    ),
+                }
+            }
+            (at, found) => Located::at(at.into(), E::Error::expected_found(None, found, err_span)),
         };
         inp.add_alt(err);
         Err(())
@@ -458,16 +515,21 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let err = match inp.next_ref() {
-            (at, Some(tok)) => match (self.filter)(tok, inp.span_since(before)) {
+            // SAFETY: Using offsets derived from input
+            (at, Some(tok)) => match (self.filter)(tok, unsafe { inp.span_since(before) }) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => Located::at(
                     at.into(),
-                    E::Error::expected_found(None, Some(tok.clone()), inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok.clone()), unsafe {
+                        inp.span_since(before)
+                    }),
                 ),
             },
             (at, found) => Located::at(
                 at.into(),
-                E::Error::expected_found(None, found.cloned(), inp.span_since(before)),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, found.cloned(), unsafe { inp.span_since(before) }),
             ),
         };
         inp.add_alt(err);
@@ -504,7 +566,8 @@ where
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, found, inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -535,6 +598,7 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
     }
 }
 
+/*
 /// See [`take_until`].
 // TODO: Consider removing in favour of `not`/`and_is`, or replace with a dedicated escape text parser
 pub struct TakeUntil<P, I, OP, E, C = ()> {
@@ -568,7 +632,6 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
     }
 }
 
-/*
 /// A parser that accepts any number of inputs until a terminating pattern is reached.
 ///
 /// The output type of this parser is `(Vec<I>, O)`, a combination of the preceding inputs and the output of the
@@ -916,7 +979,8 @@ where
             let offs = inp.offset();
             inp.add_alt(Located::at(
                 offs.into(),
-                E::Error::expected_found(None, None, inp.span_since(offs)),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, None, unsafe { inp.span_since(offs) }),
             ));
             Err(())
         } else {
