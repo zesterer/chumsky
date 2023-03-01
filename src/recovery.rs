@@ -1,343 +1,202 @@
-//! Types and traits that facilitate error recovery.
-//!
-//! *“Do you find coming to terms with the mindless tedium of it all presents an interesting challenge?”*
+//! Types and functions that relate to error recovery.
 
 use super::*;
 
-/// A trait implemented by error recovery strategies.
-pub trait Strategy<I: Clone, O, E: Error<I>> {
-    /// Recover from a parsing failure.
-    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
+/// A trait implemented by error recovery strategies. See [`Parser::recover_with`].
+pub trait Strategy<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+    // Attempt to recover from a parsing failure.
+    // The strategy should properly handle the alt error but is not required to handle rewinding.
+    #[doc(hidden)]
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
         &self,
-        recovered_errors: Vec<Located<I, P::Error>>,
-        fatal_error: Located<I, P::Error>,
-        parser: P,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, P::Error>,
-    ) -> PResult<I, O, P::Error>;
+        inp: &mut InputRef<'a, '_, I, E>,
+        parser: &P,
+    ) -> PResult<M, O>;
+}
+
+/// See [`via_parser`].
+#[derive(Copy, Clone)]
+pub struct ViaParser<A>(A);
+
+/// Recover via the given recovery parser.
+pub fn via_parser<A>(parser: A) -> ViaParser<A> {
+    ViaParser(parser)
+}
+
+impl<'a, I, O, E, A> Strategy<'a, I, O, E> for ViaParser<A>
+where
+    I: Input<'a>,
+    A: Parser<'a, I, O, E>,
+    E: ParserExtra<'a, I>,
+{
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        _parser: &P,
+    ) -> PResult<M, O> {
+        let alt = inp.errors.alt.take().expect("error but no alt?");
+        let out = match self.0.go::<M>(inp) {
+            Ok(out) => out,
+            Err(()) => {
+                inp.errors.alt = Some(alt);
+                return Err(());
+            }
+        };
+        inp.emit(alt.err);
+        Ok(out)
+    }
+}
+
+/// See [`Parser::recover_with`].
+#[derive(Copy, Clone)]
+pub struct RecoverWith<A, S> {
+    pub(crate) parser: A,
+    pub(crate) strategy: S,
+}
+
+impl<'a, I, O, E, A, S> Parser<'a, I, O, E> for RecoverWith<A, S>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    S: Strategy<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(out) => Ok(out),
+            Err(()) => {
+                inp.rewind(before);
+                match self.strategy.recover::<M, _>(inp, &self.parser) {
+                    Ok(out) => Ok(out),
+                    Err(()) => {
+                        // Reset to before fallback attempt
+                        inp.rewind(before);
+                        Err(())
+                    }
+                }
+            }
+        }
+    }
+
+    go_extra!(O);
 }
 
 /// See [`skip_then_retry_until`].
 #[derive(Copy, Clone)]
-pub struct SkipThenRetryUntil<I, const N: usize>(
-    pub(crate) [I; N],
-    pub(crate) bool,
-    pub(crate) bool,
-);
-
-impl<I, const N: usize> SkipThenRetryUntil<I, N> {
-    /// Alters this recovery strategy so that the first token will always be skipped.
-    ///
-    /// This is useful when the input being searched for also appears at the beginning of the pattern that failed to
-    /// parse.
-    pub fn skip_start(self) -> Self {
-        Self(self.0, self.1, true)
-    }
-
-    /// Alters this recovery strategy so that the synchronisation token will be consumed during recovery.
-    ///
-    /// This is useful when the input being searched for is a delimiter of a prior pattern rather than the start of a
-    /// new pattern and hence is no longer important once recovery has occurred.
-    pub fn consume_end(self) -> Self {
-        Self(self.0, true, self.2)
-    }
+pub struct SkipThenRetryUntil<A> {
+    until: A,
 }
 
-impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
-    for SkipThenRetryUntil<I, N>
+impl<'a, I, O, E, A> Strategy<'a, I, O, E> for SkipThenRetryUntil<A>
+where
+    I: Input<'a>,
+    A: Parser<'a, I, (), E>,
+    E: ParserExtra<'a, I>,
 {
-    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
         &self,
-        a_errors: Vec<Located<I, P::Error>>,
-        a_err: Located<I, P::Error>,
-        parser: P,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, P::Error>,
-    ) -> PResult<I, O, P::Error> {
-        if self.2 {
-            let _ = stream.next();
-        }
+        inp: &mut InputRef<'a, '_, I, E>,
+        parser: &P,
+    ) -> PResult<M, O> {
+        let alt = inp.errors.alt.take().expect("error but no alt?");
         loop {
-            #[allow(clippy::blocks_in_if_conditions)]
-            if !stream.attempt(
-                |stream| match stream.next().2.map(|tok| self.0.contains(&tok)) {
-                    Some(true) => (self.1, false),
-                    Some(false) => (true, true),
-                    None => (false, false),
-                },
-            ) {
-                break (a_errors, Err(a_err));
+            let before = inp.save();
+            if let Ok(()) = self.until.go::<Check>(inp) {
+                inp.errors.alt = Some(alt);
+                break Err(());
+            } else {
+                inp.rewind(before);
             }
-            #[allow(deprecated)]
-            let (mut errors, res) = debugger.invoke(&parser, stream);
-            if let Ok(out) = res {
-                errors.push(a_err);
-                break (errors, Ok(out));
+
+            let before = inp.offset();
+            match inp.next() {
+                (_, None) => {
+                    inp.errors.alt = Some(alt);
+                    break Err(());
+                }
+                (_, Some(tok)) => {
+                    inp.emit(E::Error::expected_found(
+                        None,
+                        Some(tok),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
+                    ));
+                }
+            }
+
+            let before = inp.save();
+            if let Ok(out) = parser.go::<M>(inp) {
+                break Ok(out);
+            } else {
+                inp.rewind(before);
             }
         }
     }
 }
 
-/// A recovery mode that simply skips to the next input on parser failure and tries again, until reaching one of
-/// several inputs.
-///
-/// Also see [`SkipThenRetryUntil::consume_end`].
+/// TODO
+pub fn skip_then_retry_until<A>(until: A) -> SkipThenRetryUntil<A> {
+    SkipThenRetryUntil { until }
+}
+
+/// A recovery parser that skips input until one of several inputs is found.
 ///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
-pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryUntil<I, N> {
-    SkipThenRetryUntil(until, false, false)
-}
-
-/// See [`skip_until`].
-#[derive(Copy, Clone)]
-pub struct SkipUntil<I, F, const N: usize>(
-    pub(crate) [I; N],
-    pub(crate) F,
-    pub(crate) bool,
-    pub(crate) bool,
-);
-
-impl<I, F, const N: usize> SkipUntil<I, F, N> {
-    /// Alters this recovery strategy so that the first token will always be skipped.
-    ///
-    /// This is useful when the input being searched for also appears at the beginning of the pattern that failed to
-    /// parse.
-    pub fn skip_start(self) -> Self {
-        Self(self.0, self.1, self.2, true)
-    }
-
-    /// Alters this recovery strategy so that the synchronisation token will be consumed during recovery.
-    ///
-    /// This is useful when the input being searched for is a delimiter of a prior pattern rather than the start of a
-    /// new pattern and hence is no longer important once recovery has occurred.
-    pub fn consume_end(self) -> Self {
-        Self(self.0, self.1, true, self.3)
-    }
-}
-
-impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E>
-    for SkipUntil<I, F, N>
+pub fn skip_until<'a, P, I, O, E>(pattern: P) -> impl Parser<'a, I, (), E> + Clone
+where
+    I: Input<'a>,
+    P: Parser<'a, I, O, E> + Clone,
+    E: extra::ParserExtra<'a, I>,
 {
-    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
-        &self,
-        mut a_errors: Vec<Located<I, P::Error>>,
-        a_err: Located<I, P::Error>,
-        _parser: P,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, P::Error>,
-    ) -> PResult<I, O, P::Error> {
-        let pre_state = stream.save();
-        if self.3 {
-            let _ = stream.next();
-        }
-        a_errors.push(a_err);
-        loop {
-            match stream.attempt(|stream| {
-                let (at, span, tok) = stream.next();
-                match tok.map(|tok| self.0.contains(&tok)) {
-                    Some(true) => (self.2, Ok(true)),
-                    Some(false) => (true, Ok(false)),
-                    None => (true, Err((at, span))),
-                }
-            }) {
-                Ok(true) => break (a_errors, Ok(((self.1)(stream.span_since(pre_state)), None))),
-                Ok(false) => {}
-                Err(_) if stream.save() > pre_state => {
-                    break (a_errors, Ok(((self.1)(stream.span_since(pre_state)), None)))
-                }
-                Err((at, span)) => {
-                    break (
-                        a_errors,
-                        Err(Located::at(
-                            at,
-                            E::expected_input_found(span, self.0.iter().cloned().map(Some), None),
-                        )),
-                    )
-                }
-            }
-        }
-    }
+    any().and_is(pattern.clone().not()).repeated()
+    // .ignore_then(pattern)
 }
 
-/// A recovery mode that skips input until one of several inputs is found.
-///
-/// Also see [`SkipUntil::consume_end`].
-///
-/// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
-/// after others as a last resort, and be careful about over-using it.
-pub fn skip_until<I, F, const N: usize>(until: [I; N], fallback: F) -> SkipUntil<I, F, N> {
-    SkipUntil(until, fallback, false, false)
-}
-
-/// See [`nested_delimiters`].
-#[derive(Copy, Clone)]
-pub struct NestedDelimiters<I, F, const N: usize>(
-    pub(crate) I,
-    pub(crate) I,
-    pub(crate) [(I, I); N],
-    pub(crate) F,
-);
-
-impl<I: Clone + PartialEq, O, F: Fn(E::Span) -> O, E: Error<I>, const N: usize> Strategy<I, O, E>
-    for NestedDelimiters<I, F, N>
-{
-    // This looks like something weird with clippy, it warns in a weird spot and isn't fixed by
-    // marking it at the spot.
-    #[allow(clippy::blocks_in_if_conditions)]
-    fn recover<D: Debugger, P: Parser<I, O, Error = E>>(
-        &self,
-        mut a_errors: Vec<Located<I, P::Error>>,
-        a_err: Located<I, P::Error>,
-        _parser: P,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, P::Error>,
-    ) -> PResult<I, O, P::Error> {
-        let mut balance = 0;
-        let mut balance_others = [0; N];
-        let mut starts = Vec::new();
-        let mut error = None;
-        let pre_state = stream.save();
-        let recovered = loop {
-            if match stream.next() {
-                (_, span, Some(t)) if t == self.0 => {
-                    balance += 1;
-                    starts.push(span);
-                    true
-                }
-                (_, _, Some(t)) if t == self.1 => {
-                    balance -= 1;
-                    starts.pop();
-                    true
-                }
-                (at, span, Some(t)) => {
-                    for (balance_other, others) in balance_others.iter_mut().zip(self.2.iter()) {
-                        if t == others.0 {
-                            *balance_other += 1;
-                        } else if t == others.1 {
-                            *balance_other -= 1;
-
-                            if *balance_other < 0 && balance == 1 {
-                                // stream.revert(pre_state);
-                                error.get_or_insert_with(|| {
-                                    Located::at(
-                                        at,
-                                        P::Error::unclosed_delimiter(
-                                            starts.pop().unwrap(),
-                                            self.0.clone(),
-                                            span.clone(),
-                                            self.1.clone(),
-                                            Some(t.clone()),
-                                        ),
-                                    )
-                                });
-                            }
-                        }
-                    }
-                    false
-                }
-                (at, span, None) => {
-                    if balance > 0 && balance == 1 {
-                        error.get_or_insert_with(|| match starts.pop() {
-                            Some(start) => Located::at(
-                                at,
-                                P::Error::unclosed_delimiter(
-                                    start,
-                                    self.0.clone(),
-                                    span,
-                                    self.1.clone(),
-                                    None,
-                                ),
-                            ),
-                            None => Located::at(
-                                at,
-                                P::Error::expected_input_found(
-                                    span,
-                                    Some(Some(self.1.clone())),
-                                    None,
-                                ),
-                            ),
-                        });
-                    }
-                    break false;
-                }
-            } {
-                match balance.cmp(&0) {
-                    Ordering::Equal => break true,
-                    // The end of a delimited section is not a valid recovery pattern
-                    Ordering::Less => break false,
-                    Ordering::Greater => (),
-                }
-            } else if balance == 0 {
-                // A non-delimiter input before anything else is not a valid recovery pattern
-                break false;
-            }
-        };
-
-        if let Some(e) = error {
-            a_errors.push(e);
-        }
-
-        if recovered {
-            if a_errors.last().map_or(true, |e| a_err.at < e.at) {
-                a_errors.push(a_err);
-            }
-            (a_errors, Ok(((self.3)(stream.span_since(pre_state)), None)))
-        } else {
-            (a_errors, Err(a_err))
-        }
-    }
-}
-
-/// A recovery strategy that searches for a start and end delimiter, respecting nesting.
+/// A recovery parser that searches for a start and end delimiter, respecting nesting.
 ///
 /// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
 /// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesised expression as
 /// this can aid in detecting delimiter mismatches.
 ///
 /// A function that generates a fallback output on recovery is also required.
-pub fn nested_delimiters<I: PartialEq, F, const N: usize>(
-    start: I,
-    end: I,
-    others: [(I, I); N],
+pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
+    start: I::Token,
+    end: I::Token,
+    others: [(I::Token, I::Token); N],
     fallback: F,
-) -> NestedDelimiters<I, F, N> {
-    assert!(
-        start != end,
-        "Start and end delimiters cannot be the same when using `NestedDelimiters`"
-    );
-    NestedDelimiters(start, end, others, fallback)
-}
-
-/// A parser that includes a fallback recovery strategy should parsing result in an error.
-#[derive(Copy, Clone)]
-pub struct Recovery<A, S>(pub(crate) A, pub(crate) S);
-
-impl<I: Clone, O, A: Parser<I, O, Error = E>, S: Strategy<I, O, E>, E: Error<I>> Parser<I, O>
-    for Recovery<A, S>
+) -> impl Parser<'a, I, O, E> + Clone
+where
+    I: Input<'a> + 'a,
+    I::Token: PartialEq + Clone,
+    E: extra::ParserExtra<'a, I>,
+    F: Fn(I::Span) -> O + Clone,
 {
-    type Error = E;
+    // TODO: Does this actually work? TESTS!
+    recursive({
+        let (start, end) = (start.clone(), end.clone());
+        |block| {
+            let mut many_block = block
+                .clone()
+                .delimited_by(just(start.clone()), just(end.clone()))
+                .boxed();
+            for (s, e) in &others {
+                many_block = many_block
+                    .or(block.clone().delimited_by(just(s.clone()), just(e.clone())))
+                    .boxed();
+            }
 
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, O, E> {
-        match stream.try_parse(|stream| {
-            #[allow(deprecated)]
-            debugger.invoke(&self.0, stream)
-        }) {
-            (a_errors, Ok(a_out)) => (a_errors, Ok(a_out)),
-            (a_errors, Err(a_err)) => self.1.recover(a_errors, a_err, &self.0, debugger, stream),
+            let skip = IntoIterator::into_iter([start, end])
+                .into_iter()
+                .chain(IntoIterator::into_iter(others).flat_map(|(s, e)| [s, e]))
+                .collect::<Vec<_>>();
+
+            many_block
+                .or(any().and_is(none_of(skip)).ignored())
+                .repeated()
         }
-    }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
+    })
+    .delimited_by(just(start), just(end))
+    .map_with_span(move |_, span| fallback(span))
 }

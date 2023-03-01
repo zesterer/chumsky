@@ -1,4 +1,4 @@
-use chumsky::zero_copy::prelude::*;
+use chumsky::prelude::*;
 
 #[derive(PartialEq, Debug)]
 enum Token<'a> {

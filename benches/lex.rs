@@ -34,7 +34,7 @@ static SAMPLE: &'static [u8] = include_bytes!("tokens.txt");
 
 fn bench_lex(c: &mut Criterion) {
     c.bench_function("lex_chumsky_zero_copy", {
-        use ::chumsky::zero_copy::prelude::*;
+        use ::chumsky::prelude::*;
         let parser = chumsky_zero_copy::parser();
         move |b| {
             b.iter(|| {
@@ -50,7 +50,7 @@ fn bench_lex(c: &mut Criterion) {
     });
 
     c.bench_function("lex_chumsky_zero_copy_check", {
-        use ::chumsky::zero_copy::prelude::*;
+        use ::chumsky::prelude::*;
         let parser = chumsky_zero_copy::parser();
         move |b| {
             b.iter(|| {
@@ -125,7 +125,7 @@ mod logos {
 }
 
 mod chumsky_zero_copy {
-    use chumsky::zero_copy::prelude::*;
+    use chumsky::prelude::*;
 
     use super::Token;
     use std::str;

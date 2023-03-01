@@ -1,4 +1,4 @@
-use chumsky::zero_copy::prelude::*;
+use chumsky::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn bench_choice(c: &mut Criterion) {

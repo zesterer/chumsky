@@ -1,4 +1,4 @@
-use chumsky::zero_copy::prelude::*;
+use chumsky::prelude::*;
 
 // This token is a tree: it contains within it a sub-tree of tokens
 #[derive(Clone, PartialEq, Debug)]

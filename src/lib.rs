@@ -2,52 +2,57 @@
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
-#![allow(deprecated)] // TODO: Don't allow this
 
 extern crate alloc;
 
-pub mod chain;
+macro_rules! go_extra {
+    ( $O :ty ) => {
+        #[inline(always)]
+        fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O> {
+            Parser::<I, $O, E>::go::<Emit>(self, inp)
+        }
+        #[inline(always)]
+        fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O> {
+            Parser::<I, $O, E>::go::<Check>(self, inp)
+        }
+    };
+}
+
+macro_rules! go_cfg_extra {
+    ( $O :ty ) => {
+        #[inline(always)]
+        fn go_emit_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Emit, $O> {
+            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+        }
+        #[inline(always)]
+        fn go_check_cfg(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: Self::Config,
+        ) -> PResult<Check, $O> {
+            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+        }
+    };
+}
+
+mod blanket;
 pub mod combinator;
-pub mod debug;
+pub mod container;
 pub mod error;
+pub mod extra;
+pub mod input;
 pub mod primitive;
 pub mod recovery;
 pub mod recursive;
+#[cfg(feature = "regex")]
+pub mod regex;
 pub mod span;
-pub mod stream;
+mod stream;
 pub mod text;
-pub mod zero_copy;
-
-pub use crate::{error::Error, span::Span};
-
-pub use crate::stream::{BoxStream, Flat, Stream};
-
-use crate::{
-    chain::Chain,
-    combinator::*,
-    debug::*,
-    error::{merge_alts, Located},
-    primitive::*,
-    recovery::*,
-};
-
-use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec::Vec};
-use core::{
-    cmp::Ordering,
-    // TODO: Enable when stable
-    //lazy::OnceCell,
-    fmt,
-    marker::PhantomData,
-    ops::Range,
-    str::FromStr,
-};
-
-#[cfg(doc)]
-use std::{
-    collections::HashMap,
-    // TODO: Remove when switching to 2021 edition
-    iter::FromIterator,
-};
 
 /// Commonly used functions, traits and types.
 ///
@@ -55,67 +60,348 @@ use std::{
 /// cereal.”*
 pub mod prelude {
     pub use super::{
-        error::{Error as _, Simple},
-        primitive::{
-            any, choice, empty, end, filter, filter_map, just, none_of, one_of, seq, take_until,
-            todo,
-        },
-        recovery::{nested_delimiters, skip_then_retry_until, skip_until},
+        error::{EmptyErr, Error as _, Rich, Simple},
+        extra,
+        primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},
+        recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
-        select,
-        span::Span as _,
+        // select,
+        span::{SimpleSpan, Span as _},
         text,
-        text::TextParser as _,
-        BoxedParser, Parser,
+        Boxed,
+        ConfigIterParser,
+        ConfigParser,
+        IterParser,
+        ParseResult,
+        Parser,
     };
+    pub use crate::{select, select_ref};
 }
 
-// TODO: Replace with `std::ops::ControlFlow` when stable
-enum ControlFlow<C, B> {
-    Continue(C),
-    Break(B),
+use alloc::{
+    boxed::Box,
+    rc::{Rc, Weak},
+    string::String,
+    vec,
+    vec::Vec,
+};
+use core::{
+    borrow::Borrow,
+    cmp::{Eq, Ordering},
+    fmt,
+    hash::Hash,
+    marker::PhantomData,
+    mem::MaybeUninit,
+    ops::{Range, RangeFrom},
+    str::FromStr,
+};
+use hashbrown::HashMap;
+
+use self::{
+    combinator::*,
+    container::*,
+    error::Error,
+    extra::ParserExtra,
+    input::{BorrowInput, Emitter, Input, InputRef, SliceInput, StrInput},
+    prelude::*,
+    primitive::Any,
+    private::{Check, Emit, Mode},
+    recovery::{RecoverWith, Strategy},
+    span::Span,
+    text::*,
+};
+#[cfg(doc)]
+use self::{primitive::custom, stream::Stream};
+
+// TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
+trait MaybeUninitExt<T>: Sized {
+    /// Identical to the unstable [`MaybeUninit::uninit_array`]
+    fn uninit_array<const N: usize>() -> [Self; N];
+
+    /// Identical to the unstable [`MaybeUninit::array_assume_init`]
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N];
 }
 
-// ([], Ok((out, alt_err))) => parsing successful,
-// alt_err = potential alternative error should a different number of optional patterns be parsed
-// ([x, ...], Ok((out, alt_err)) => parsing failed, but recovery occurred so parsing may continue
-// ([...], Err(err)) => parsing failed, recovery failed, and one or more errors were produced
-// TODO: Change `alt_err` from `Option<Located<I, E>>` to `Vec<Located<I, E>>`
-type PResult<I, O, E> = (
-    Vec<Located<I, E>>,
-    Result<(O, Option<Located<I, E>>), Located<I, E>>,
-);
+impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
+    fn uninit_array<const N: usize>() -> [Self; N] {
+        // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
+        unsafe { MaybeUninit::uninit().assume_init() }
+    }
 
-// Shorthand for a stream with the given input and error type.
-type StreamOf<'a, I, E> = Stream<'a, I, <E as Error<I>>::Span>;
+    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
+        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
+        core::mem::forget(uninit);
+        out
+    }
+}
 
-// [`Parser::parse_recovery`], but generic across the debugger.
-fn parse_recovery_inner<
-    'a,
-    I: Clone,
-    O,
-    P: Parser<I, O>,
-    D: Debugger,
-    Iter: Iterator<Item = (I, <P::Error as Error<I>>::Span)> + 'a,
-    S: Into<Stream<'a, I, <P::Error as Error<I>>::Span, Iter>>,
->(
-    parser: &P,
-    debugger: &mut D,
-    stream: S,
-) -> (Option<O>, Vec<P::Error>)
-where
-    P: Sized,
-{
-    #[allow(deprecated)]
-    let (mut errors, res) = parser.parse_inner(debugger, &mut stream.into());
-    let out = match res {
-        Ok((out, _)) => Some(out),
-        Err(err) => {
-            errors.push(err);
-            None
+/// The result of calling [`Parser::go`]
+pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
+/// The result of calling [`IterParser::next`]
+pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
+
+/// The result of running a [`Parser`]. Can be converted into a [`Result`] via
+/// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
+/// error and output via [`ParseResult::into_output_errors`]
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseResult<T, E> {
+    output: Option<T>,
+    errs: Vec<E>,
+}
+
+impl<T, E> ParseResult<T, E> {
+    pub(crate) fn new(output: Option<T>, errs: Vec<E>) -> ParseResult<T, E> {
+        ParseResult { output, errs }
+    }
+
+    /// Whether this result contains output
+    pub fn has_output(&self) -> bool {
+        self.output.is_some()
+    }
+
+    /// Whether this result has any errors
+    pub fn has_errors(&self) -> bool {
+        !self.errs.is_empty()
+    }
+
+    /// Get a reference to the output of this result, if it exists
+    pub fn output(&self) -> Option<&T> {
+        self.output.as_ref()
+    }
+
+    /// Get a slice containing the parse errors for this result. The slice will be empty if there are no errors.
+    pub fn errors(&self) -> impl ExactSizeIterator<Item = &E> {
+        self.errs.iter()
+    }
+
+    /// Convert this `ParseResult` into an option containing the output, if any exists
+    pub fn into_output(self) -> Option<T> {
+        self.output
+    }
+
+    /// Convert this `ParseResult` into a vector containing any errors. The vector will be empty if there were no
+    /// errors.
+    pub fn into_errors(self) -> Vec<E> {
+        self.errs
+    }
+
+    /// Convert this `ParseResult` into a tuple containing the output, if any existed, and errors, if any were
+    /// encountered.
+    pub fn into_output_errors(self) -> (Option<T>, Vec<E>) {
+        (self.output, self.errs)
+    }
+
+    /// Convert this `ParseResult` into a standard `Result`. This discards output if parsing generated any errors,
+    /// matching the old behavior of [`Parser::parse`].
+    pub fn into_result(self) -> Result<T, Vec<E>> {
+        if self.errs.is_empty() {
+            self.output.ok_or(self.errs)
+        } else {
+            Err(self.errs)
         }
-    };
-    (out, errors.into_iter().map(|e| e.error).collect())
+    }
+}
+
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct Located<E> {
+    pos: usize,
+    err: E,
+}
+
+impl<E> Located<E> {
+    pub fn at(pos: usize, err: E) -> Self {
+        Self { pos, err }
+    }
+
+    fn at_pos(pos: usize, err: E) -> Self {
+        Self { pos, err }
+    }
+
+    fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
+        match self.pos.cmp(&other.pos) {
+            Ordering::Equal => Self::at_pos(self.pos, merge(self.err, other.err)),
+            Ordering::Greater => self,
+            Ordering::Less => other,
+        }
+    }
+}
+
+fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
+    inp: &mut InputRef<'a, '_, I, E>,
+) -> PResult<Check, ()> {
+    let before = inp.offset();
+    match inp.next() {
+        (_, None) => Ok(()),
+        (_, Some(tok)) => {
+            inp.emit(E::Error::expected_found(
+                None,
+                Some(tok),
+                // SAFETY: Using offsets derived from input
+                unsafe { inp.span_since(before) },
+            ));
+            Ok(())
+        }
+    }
+}
+
+mod private {
+    use super::*;
+
+    pub trait ModeSealed {}
+
+    impl ModeSealed for Emit {}
+    impl ModeSealed for Check {}
+
+    /// An abstract parse mode - can be [`Emit`] or [`Check`] in practice, and represents the
+    /// common interface for handling both in the same method.
+    pub trait Mode: ModeSealed {
+        /// The output of this mode for a given type
+        type Output<T>;
+
+        /// Bind the result of a closure into an output
+        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
+
+        /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
+        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
+
+        /// Given two [`Output`](Self::Output)s, take their values and combine them into a new
+        /// output value
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            x: Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) -> Self::Output<V>;
+
+        /// Given an array of outputs, bind them into an output of arrays
+        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
+
+        /// Invoke a parser user the current mode. This is normally equivalent to
+        /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
+        /// `dyn Parser`.
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized;
+
+        /// Invoke a parser with configuration using the current mode. This is normally equivalent
+        /// to [`parser.go::<M>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
+        /// such as `dyn Parser`.
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized;
+    }
+
+    /// Emit mode - generates parser output
+    pub struct Emit;
+
+    impl Mode for Emit {
+        type Output<T> = T;
+        #[inline]
+        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
+            f()
+        }
+        #[inline]
+        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
+            f(x)
+        }
+        #[inline]
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            x: Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) -> Self::Output<V> {
+            f(x, y)
+        }
+        #[inline]
+        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
+            x
+        }
+
+        #[inline]
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_emit(inp)
+        }
+
+        #[inline]
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_emit_cfg(inp, cfg)
+        }
+    }
+
+    /// Check mode - all output is discarded, and only uses parsers to check validity
+    pub struct Check;
+
+    impl Mode for Check {
+        type Output<T> = ();
+        #[inline]
+        fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
+        #[inline]
+        fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
+        #[inline]
+        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
+            _: Self::Output<T>,
+            _: Self::Output<U>,
+            _: F,
+        ) -> Self::Output<V> {
+        }
+        #[inline]
+        fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
+
+        #[inline]
+        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: Parser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_check(inp)
+        }
+
+        #[inline]
+        fn invoke_cfg<'a, I, O, E, P>(
+            parser: &P,
+            inp: &mut InputRef<'a, '_, I, E>,
+            cfg: P::Config,
+        ) -> PResult<Self, O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            P: ConfigParser<'a, I, O, E> + ?Sized,
+        {
+            parser.go_check_cfg(inp, cfg)
+        }
+    }
+}
+
+/// Internal API features not intended for general use.
+///
+/// **Please note that this module is exempt from the ordinary stability guarantees of the crate. You must not rely on
+/// API features within this module unless you are happy for your code to break with only a minor version increment.**
+pub mod internal {
+    use super::*;
+    pub use private::{Check, Emit, Mode};
 }
 
 /// A trait implemented by parsers.
@@ -137,131 +423,162 @@ where
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-#[allow(clippy::type_complexity)]
-pub trait Parser<I: Clone, O> {
-    /// The type of errors emitted by this parser.
-    type Error: Error<I>; // TODO when default associated types are stable: = Cheap<I>;
+pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
+    ///
+    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
+    /// If you want to include non-default state, use [`Parser::parse_with_state`] instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
+    fn parse(&self, input: I) -> ParseResult<O, E::Error>
+    where
+        Self: Sized,
+        E::State: Default,
+        E::Context: Default,
+    {
+        self.parse_with_state(input, &mut E::State::default())
+    }
+
+    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
+    /// The provided state will be passed on to parsers that expect it, such as [`map_with_state`](Parser::map_with_state).
+    ///
+    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
+    /// If you want to just use a default state value, use [`Parser::parse`] instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
+    fn parse_with_state(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
+    where
+        Self: Sized,
+        E::Context: Default,
+    {
+        let mut inp = InputRef::new(input, Ok(state));
+        let res = self.go::<Emit>(&mut inp);
+        let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
+        let alt = inp.errors.alt.take();
+        let mut errs = inp.into_errs();
+        let out = match res {
+            Ok(out) => Some(out),
+            Err(()) => {
+                errs.push(alt.expect("error but no alt?").err);
+                None
+            }
+        };
+        ParseResult::new(out, errs)
+    }
+
+    /// Parse a stream of tokens, ignoring any output, and returning any errors encountered along the way.
+    ///
+    /// If parsing failed, then there will *always* be at least one item in the returned `Vec`.
+    /// If you want to include non-default state, use [`Parser::check_with_state`] instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
+    fn check(&self, input: I) -> ParseResult<(), E::Error>
+    where
+        Self: Sized,
+        E::State: Default,
+        E::Context: Default,
+    {
+        self.check_with_state(input, &mut E::State::default())
+    }
+
+    /// Parse a stream of tokens, ignoring any output, and returning any errors encountered along the way.
+    ///
+    /// If parsing failed, then there will *always* be at least one item in the returned `Vec`.
+    /// If you want to just use a default state value, use [`Parser::check`] instead.
+    ///
+    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
+    fn check_with_state(&self, input: I, state: &mut E::State) -> ParseResult<(), E::Error>
+    where
+        Self: Sized,
+        E::Context: Default,
+    {
+        let mut inp = InputRef::new(input, Ok(state));
+        let res = self.go::<Check>(&mut inp);
+        let res = res.and_then(|()| expect_end(&mut inp));
+        let alt = inp.errors.alt.take();
+        let mut errs = inp.into_errs();
+        let out = match res {
+            Ok(()) => Some(()),
+            Err(()) => {
+                errs.push(alt.expect("error but no alt?").err);
+                None
+            }
+        };
+        ParseResult::new(out, errs)
+    }
 
     /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
     /// that both the signature and semantic requirements of this function are very likely to change in later versions.
     /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own. For example, [`custom`] provides a flexible, ergonomic way API for process input streams that likely
-    /// covers your use-case.
-    #[doc(hidden)]
-    #[deprecated(
-        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
-    )]
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error>
+    /// own.
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized;
 
-    /// [`Parser::parse_inner`], but specialised for verbose output. Do not call this method directly.
-    ///
-    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
     #[doc(hidden)]
-    #[deprecated(
-        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
-    )]
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error>;
-
-    /// [`Parser::parse_inner`], but specialised for silent output. Do not call this method directly.
-    ///
-    /// If you *really* need to implement this trait, this method should just directly invoke [`Parser::parse_inner`].
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
     #[doc(hidden)]
-    #[deprecated(
-        note = "This method is excluded from the semver guarantees of chumsky. If you decide to use it, broken builds are your fault."
-    )]
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error>;
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
 
-    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
+    /// Map from a slice of the input based on the current parser's span to a value.
     ///
-    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
-    /// If you don't care about producing an output if errors are encountered, use [`Parser::parse`] instead.
-    ///
-    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// `&[I]`, a [`&str`], or a [`Stream`] to it.
-    fn parse_recovery<'a, Iter, S>(&self, stream: S) -> (Option<O>, Vec<Self::Error>)
+    /// The returned value may borrow data from the input slice, making this function very useful
+    /// for creating zero-copy AST output values
+    fn map_slice<U, F: Fn(I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, F, U>
     where
         Self: Sized,
-        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
+        I: SliceInput<'a>,
     {
-        parse_recovery_inner(self, &mut Silent::new(), stream)
-    }
-
-    /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way. Unlike
-    /// [`Parser::parse_recovery`], this function will produce verbose debugging output as it executes.
-    ///
-    /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
-    /// If you don't care about producing an output if errors are encountered, use `Parser::parse` instead.
-    ///
-    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// `&[I]`, a [`&str`], or a [`Stream`] to it.
-    ///
-    /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
-    /// your parser. Additionally, its API is quite likely to change in future versions.
-    ///
-    /// This method will receive more extensive documentation as the crate's debugging features mature.
-    fn parse_recovery_verbose<'a, Iter, S>(&self, stream: S) -> (Option<O>, Vec<Self::Error>)
-    where
-        Self: Sized,
-        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    {
-        let mut debugger = Verbose::new();
-        let res = parse_recovery_inner(self, &mut debugger, stream);
-        debugger.print();
-        res
-    }
-
-    /// Parse a stream of tokens, yielding an output *or* any errors that were encountered along the way.
-    ///
-    /// If you wish to attempt to produce an output even if errors are encountered, use [`Parser::parse_recovery`].
-    ///
-    /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// [`&[I]`], a [`&str`], or a [`Stream`] to it.
-    fn parse<'a, Iter, S>(&self, stream: S) -> Result<O, Vec<Self::Error>>
-    where
-        Self: Sized,
-        Iter: Iterator<Item = (I, <Self::Error as Error<I>>::Span)> + 'a,
-        S: Into<Stream<'a, I, <Self::Error as Error<I>>::Span, Iter>>,
-    {
-        let (output, errors) = self.parse_recovery(stream);
-        if errors.is_empty() {
-            Ok(output.expect(
-                "Parsing failed, but no errors were emitted. This is troubling, to say the least.",
-            ))
-        } else {
-            Err(errors)
+        MapSlice {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
         }
     }
 
-    /// Include this parser in the debugging output produced by [`Parser::parse_recovery_verbose`].
+    /// Convert the output of this parser into a slice of the input, based on the current parser's
+    /// span.
     ///
-    /// You'll probably want to make sure that this doesn't end up in production code: it exists only to help you debug
-    /// your parser. Additionally, its API is quite likely to change in future versions.
-    /// Use this parser like a print statement, to display whatever you pass as the argument 'x'
-    ///
-    /// This method will receive more extensive documentation as the crate's debugging features mature.
-    #[track_caller]
-    fn debug<T>(self, x: T) -> Debug<Self>
+    /// This is effectively a special case of [`map_slice`](Parser::map_slice)`(|x| x)`
+    fn slice(self) -> Slice<Self, O>
     where
         Self: Sized,
-        T: fmt::Display + 'static,
     {
-        Debug(self, Rc::new(x), *core::panic::Location::caller())
+        Slice {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Filter the output of this parser, accepting only inputs that match the given predicate.
+    ///
+    /// The output type of this parser is `I`, the input that was found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let lowercase = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(char::is_ascii_lowercase)
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>();
+    ///
+    /// assert_eq!(lowercase.parse("hello").into_result(), Ok("hello".to_string()));
+    /// assert!(lowercase.parse("Hello").has_errors());
+    /// ```
+    fn filter<F: Fn(&O) -> bool>(self, f: F) -> Filter<Self, F>
+    where
+        Self: Sized,
+    {
+        Filter {
+            parser: self,
+            filter: f,
+        }
     }
 
     /// Map the output of this parser to another value.
@@ -271,31 +588,36 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::{prelude::*, error::Simple};
     /// #[derive(Debug, PartialEq)]
     /// enum Token { Word(String), Num(u64) }
     ///
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
+    /// let word = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
-    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
+    /// let num = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_ascii_digit())
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| Token::Num(s.parse().unwrap()));
     ///
     /// let token = word.or(num);
     ///
-    /// assert_eq!(token.parse("test"), Ok(Token::Word("test".to_string())));
-    /// assert_eq!(token.parse("42"), Ok(Token::Num(42)));
+    /// assert_eq!(token.parse("test").into_result(), Ok(Token::Word("test".to_string())));
+    /// assert_eq!(token.parse("42").into_result(), Ok(Token::Num(42)));
     /// ```
-    fn map<U, F>(self, f: F) -> Map<Self, F, O>
+    fn map<U, F: Fn(O) -> U>(self, f: F) -> Map<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O) -> U,
     {
-        Map(self, f, PhantomData)
+        Map {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
+        }
     }
 
     /// Map the output of this parser to another value, making use of the pattern's span when doing so.
@@ -312,68 +634,61 @@ pub trait Parser<I: Clone, O> {
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, Range<usize>);
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, Simple<char>>()
+    /// let ident = text::ident::<_, _, extra::Err<Simple<&str>>>()
     ///     .map_with_span(|ident, span| Spanned(ident, span))
     ///     .padded();
     ///
-    /// assert_eq!(ident.parse("hello"), Ok(Spanned("hello".to_string(), 0..5)));
-    /// assert_eq!(ident.parse("       hello   "), Ok(Spanned("hello".to_string(), 7..12)));
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
-    fn map_with_span<U, F>(self, f: F) -> MapWithSpan<Self, F, O>
+    fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, <Self::Error as Error<I>>::Span) -> U,
     {
-        MapWithSpan(self, f, PhantomData)
+        MapWithSpan {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
+        }
     }
 
-    /// Map the primary error of this parser to another value.
+    /// Map the output of this parser to another value, making use of the parser's state when doing so.
     ///
-    /// This function is most useful when using a custom error type, allowing you to augment errors according to
-    /// context.
+    /// This is very useful for parsing non context-free grammars.
     ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    // TODO: Map E -> D, not E -> E
-    fn map_err<F>(self, f: F) -> MapErr<Self, F>
+    /// The output type of this parser is `U`, the same as the function's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// use std::ops::Range;
+    ///
+    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
+    /// #[derive(Debug, PartialEq)]
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
+    ///
+    /// let ident = text::ident::<_, _, extra::Err<Simple<&str>>>()
+    ///     .map_with_span(|ident, span| Spanned(ident, span))
+    ///     .padded();
+    ///
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
+    /// ```
+    fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
+        self,
+        f: F,
+    ) -> MapWithState<Self, O, F>
     where
         Self: Sized,
-        F: Fn(Self::Error) -> Self::Error,
     {
-        MapErr(self, f)
-    }
-
-    /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
-    ///
-    /// Note that even if the function returns an [`Ok`], the input stream will still be 'stuck' at the input following
-    /// the input that triggered the error. You'll need to follow uses of this combinator with a parser that resets
-    /// the input stream to a known-good state (for example, [`take_until`]).
-    ///
-    /// The output type of this parser is `U`, the [`Ok`] type of the result.
-    fn or_else<F>(self, f: F) -> OrElse<Self, F>
-    where
-        Self: Sized,
-        F: Fn(Self::Error) -> Result<O, Self::Error>,
-    {
-        OrElse(self, f)
-    }
-
-    /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
-    /// to the point at which the error was encountered.
-    ///
-    /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
-    /// pattern, for example to add a "while parsing" clause to your error messages.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    // TODO: Map E -> D, not E -> E
-    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
-    where
-        Self: Sized,
-        F: Fn(Self::Error, <Self::Error as Error<I>>::Span) -> Self::Error,
-    {
-        MapErrWithSpan(self, f)
+        MapWithState {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
+        }
     }
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
@@ -388,183 +703,45 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let byte = text::int::<_, Simple<char>>(10)
+    /// let byte = text::int::<_, _, extra::Err<Rich<&str>>>(10)
     ///     .try_map(|s, span| s
     ///         .parse::<u8>()
-    ///         .map_err(|e| Simple::custom(span, format!("{}", e))));
+    ///         .map_err(|e| Rich::custom(span, e)));
     ///
-    /// assert!(byte.parse("255").is_ok());
-    /// assert!(byte.parse("256").is_err()); // Out of range
+    /// assert!(byte.parse("255").has_output());
+    /// assert!(byte.parse("256").has_errors()); // Out of range
     /// ```
-    fn try_map<U, F>(self, f: F) -> TryMap<Self, F, O>
+    #[doc(alias = "filter_map")]
+    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E::Error>>(self, f: F) -> TryMap<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, <Self::Error as Error<I>>::Span) -> Result<U, Self::Error>,
     {
-        TryMap(self, f, PhantomData)
+        TryMap {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
+        }
     }
 
-    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    /// After a successful parse, apply a fallible function to the output, making use of the parser's state when
+    /// doing so. If the function produces an error, treat it as a parsing error.
     ///
-    /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
+    /// If you wish parsing of this pattern to continue when an error is generated instead of halting, consider using
+    /// [`Parser::validate`] instead.
     ///
-    /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
-    /// [`Parser::try_map`] instead.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    /// let large_int = text::int::<char, _>(10)
-    ///     .from_str()
-    ///     .unwrapped()
-    ///     .validate(|x: u32, span, emit| {
-    ///         if x < 256 { emit(Simple::custom(span, format!("{} must be 256 or higher.", x))) }
-    ///         x
-    ///     });
-    ///
-    /// assert_eq!(large_int.parse("537"), Ok(537));
-    /// assert!(large_int.parse("243").is_err());
-    /// ```
-    fn validate<F, U>(self, f: F) -> Validate<Self, O, F>
+    /// The output type of this parser is `U`, the [`Ok`] return value of the function.
+    fn try_map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> Result<U, E::Error>>(
+        self,
+        f: F,
+    ) -> TryMapWithState<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, <Self::Error as Error<I>>::Span, &mut dyn FnMut(Self::Error)) -> U,
     {
-        Validate(self, f, PhantomData)
-    }
-
-    /// Label the pattern parsed by this parser for more useful error messages.
-    ///
-    /// This is useful when you want to give users a more useful description of an expected pattern than simply a list
-    /// of possible initial tokens. For example, it's common to use the term "expression" at a catch-all for a number
-    /// of different constructs in many languages.
-    ///
-    /// This does not label recovered errors generated by sub-patterns within the parser, only error *directly* emitted
-    /// by the parser.
-    ///
-    /// This does not label errors where the labelled pattern consumed input (i.e: in unambiguous cases).
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    /// *Note: There is a chance that this method will be deprecated in favour of a more general solution in later
-    /// versions of the crate.*
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let frac = text::digits(10)
-    ///     .chain(just('.'))
-    ///     .chain::<char, _, _>(text::digits(10))
-    ///     .collect::<String>()
-    ///     .then_ignore(end())
-    ///     .labelled("number");
-    ///
-    /// assert_eq!(frac.parse("42.3"), Ok("42.3".to_string()));
-    /// assert_eq!(frac.parse("hello"), Err(vec![Cheap::expected_input_found(0..1, Vec::new(), Some('h')).with_label("number")]));
-    /// assert_eq!(frac.parse("42!"), Err(vec![Cheap::expected_input_found(2..3, vec![Some('.')], Some('!')).with_label("number")]));
-    /// ```
-    fn labelled<L>(self, label: L) -> Label<Self, L>
-    where
-        Self: Sized,
-        L: Into<<Self::Error as Error<I>>::Label> + Clone,
-    {
-        Label(self, label)
-    }
-
-    /// Transform all outputs of this parser to a pretermined value.
-    ///
-    /// The output type of this parser is `U`, the type of the predetermined value.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// #[derive(Clone, Debug, PartialEq)]
-    /// enum Op { Add, Sub, Mul, Div }
-    ///
-    /// let op = just::<_, _, Cheap<char>>('+').to(Op::Add)
-    ///     .or(just('-').to(Op::Sub))
-    ///     .or(just('*').to(Op::Mul))
-    ///     .or(just('/').to(Op::Div));
-    ///
-    /// assert_eq!(op.parse("+"), Ok(Op::Add));
-    /// assert_eq!(op.parse("/"), Ok(Op::Div));
-    /// ```
-    fn to<U>(self, x: U) -> To<Self, O, U>
-    where
-        Self: Sized,
-        U: Clone,
-    {
-        To(self, x, PhantomData)
-    }
-
-    /// Left-fold the output of the parser into a single value.
-    ///
-    /// The output of the original parser must be of type `(A, impl IntoIterator<Item = B>)`.
-    ///
-    /// The output type of this parser is `A`, the left-hand component of the original parser's output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// let sum = int
-    ///     .then(just('+').ignore_then(int).repeated())
-    ///     .foldl(|a, b| a + b);
-    ///
-    /// assert_eq!(sum.parse("1+12+3+9"), Ok(25));
-    /// assert_eq!(sum.parse("6"), Ok(6));
-    /// ```
-    fn foldl<A, B, F>(self, f: F) -> Foldl<Self, F, A, B>
-    where
-        Self: Parser<I, (A, B)> + Sized,
-        B: IntoIterator,
-        F: Fn(A, B::Item) -> A,
-    {
-        Foldl(self, f, PhantomData)
-    }
-
-    /// Right-fold the output of the parser into a single value.
-    ///
-    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
-    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
-    ///
-    /// The output type of this parser is `B`, the right-hand component of the original parser's output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let int = text::int::<char, Cheap<char>>(10)
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// let signed = just('+').to(1)
-    ///     .or(just('-').to(-1))
-    ///     .repeated()
-    ///     .then(int)
-    ///     .foldr(|a, b| a * b);
-    ///
-    /// assert_eq!(signed.parse("3"), Ok(3));
-    /// assert_eq!(signed.parse("-17"), Ok(-17));
-    /// assert_eq!(signed.parse("--+-+-5"), Ok(5));
-    /// ```
-    fn foldr<'a, A, B, F>(self, f: F) -> Foldr<Self, F, A, B>
-    where
-        Self: Parser<I, (A, B)> + Sized,
-        A: IntoIterator,
-        A::IntoIter: DoubleEndedIterator,
-        F: Fn(A::Item, B) -> B + 'a,
-    {
-        Foldr(self, f, PhantomData)
+        TryMapWithState {
+            parser: self,
+            mapper: f,
+            phantom: PhantomData,
+        }
     }
 
     /// Ignore the output of this parser, yielding `()` as an output instead.
@@ -579,47 +756,73 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
-    /// let whitespace = filter::<_, _, Cheap<char>>(|c: &char| c.is_whitespace())
+    /// let whitespace = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_whitespace())
     ///     .ignored()
-    ///     .repeated();
+    ///     .repeated()
+    ///     .collect::<Vec<_>>();
     ///
-    /// assert_eq!(whitespace.parse("    "), Ok(vec![(); 4]));
-    /// assert_eq!(whitespace.parse("  hello"), Ok(vec![(); 2]));
+    /// assert_eq!(whitespace.parse("    ").into_result(), Ok(vec![(); 4]));
+    /// assert!(whitespace.parse("  hello").has_errors());
     /// ```
     fn ignored(self) -> Ignored<Self, O>
     where
         Self: Sized,
     {
-        To(self, (), PhantomData)
+        Ignored {
+            parser: self,
+            phantom: PhantomData,
+        }
     }
 
-    /// Collect the output of this parser into a type implementing [`FromIterator`].
+    /// Memoise the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
     ///
-    /// This is commonly useful for collecting [`Vec<char>`] outputs into [`String`]s, or [`(T, U)`] into a
-    /// [`HashMap`] and is analagous to [`Iterator::collect`].
+    /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
+    /// memoisation to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
+    /// way to solve the problem. At the limit, applying memoisation to all combinators will turn any parser into one
+    /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
     ///
-    /// The output type of this parser is `C`, the type being collected into.
+    /// Memoisation also works with recursion, so this can be used to write parsers using
+    /// [left recursion](https://en.wikipedia.org/wiki/Left_recursion).
+    // TODO: Example
+    #[cfg(feature = "memoization")]
+    fn memoised(self) -> Memoised<Self>
+    where
+        Self: Sized,
+    {
+        Memoised { parser: self }
+    }
+
+    /// Transform all outputs of this parser to a pretermined value.
+    ///
+    /// The output type of this parser is `U`, the type of the predetermined value.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
-    ///     .repeated() // This parser produces an output of `Vec<char>`
-    ///     .collect::<String>(); // But `Vec<char>` is less useful than `String`, so convert to the latter
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// #[derive(Clone, Debug, PartialEq)]
+    /// enum Op { Add, Sub, Mul, Div }
     ///
-    /// assert_eq!(word.parse("hello"), Ok("hello".to_string()));
+    /// let op = just::<_, _, extra::Err<Simple<&str>>>('+').to(Op::Add)
+    ///     .or(just('-').to(Op::Sub))
+    ///     .or(just('*').to(Op::Mul))
+    ///     .or(just('/').to(Op::Div));
+    ///
+    /// assert_eq!(op.parse("+").into_result(), Ok(Op::Add));
+    /// assert_eq!(op.parse("/").into_result(), Ok(Op::Div));
     /// ```
-    // TODO: Make `Parser::repeated` generic over an `impl FromIterator` to reduce required allocations
-    fn collect<C>(self) -> Map<Self, fn(O) -> C, O>
+    fn to<U: Clone>(self, to: U) -> To<Self, O, U, E>
     where
         Self: Sized,
-        O: IntoIterator,
-        C: core::iter::FromIterator<O::Item>,
     {
-        self.map(|items| C::from_iter(items.into_iter()))
+        To {
+            parser: self,
+            to,
+            phantom: PhantomData,
+        }
     }
 
     /// Parse one thing and then another thing, yielding a tuple of the two outputs.
@@ -629,21 +832,113 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     /// let two_words = word.then_ignore(just(' ')).then(word);
     ///
-    /// assert_eq!(two_words.parse("dog cat"), Ok(("dog".to_string(), "cat".to_string())));
-    /// assert!(two_words.parse("hedgehog").is_err());
+    /// assert_eq!(two_words.parse("dog cat").into_result(), Ok(("dog".to_string(), "cat".to_string())));
+    /// assert!(two_words.parse("hedgehog").has_errors());
     /// ```
-    fn then<U, P>(self, other: P) -> Then<Self, P>
+    fn then<U, B: Parser<'a, I, U, E>>(self, other: B) -> Then<Self, B, O, U, E>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
     {
-        Then(self, other)
+        Then {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse one thing and then another thing, yielding only the output of the latter.
+    ///
+    /// The output type of this parser is `U`, the same as the second parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let zeroes = any::<_, extra::Err<Simple<&str>>>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
+    /// let digits = any().filter(|c: &char| c.is_ascii_digit())
+    ///     .repeated()
+    ///     .collect::<String>();
+    /// let integer = zeroes
+    ///     .ignore_then(digits)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// assert_eq!(integer.parse("00064").into_result(), Ok(64));
+    /// assert_eq!(integer.parse("32").into_result(), Ok(32));
+    /// ```
+    fn ignore_then<U, B: Parser<'a, I, U, E>>(self, other: B) -> IgnoreThen<Self, B, O, E>
+    where
+        Self: Sized,
+    {
+        IgnoreThen {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse one thing and then another thing, yielding only the output of the former.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>();
+    ///
+    /// let punctuated = word
+    ///     .then_ignore(just('!').or(just('?')).or_not());
+    ///
+    /// let sentence = punctuated
+    ///     .padded() // Allow for whitespace gaps
+    ///     .repeated()
+    ///     .collect::<Vec<_>>();
+    ///
+    /// assert_eq!(
+    ///     sentence.parse("hello! how are you?").into_result(),
+    ///     Ok(vec![
+    ///         "hello".to_string(),
+    ///         "how".to_string(),
+    ///         "are".to_string(),
+    ///         "you".to_string(),
+    ///     ]),
+    /// );
+    /// ```
+    fn then_ignore<U, B: Parser<'a, I, U, E>>(self, other: B) -> ThenIgnore<Self, B, U, E>
+    where
+        Self: Sized,
+    {
+        ThenIgnore {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
+    }
+
+    /// TODO
+    fn nested_in<B: Parser<'a, I, I, E>>(self, other: B) -> NestedIn<Self, B, O, E>
+    where
+        Self: Sized,
+        I: 'a,
+    {
+        NestedIn {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
     }
 
     /// Parse one thing and then another thing, creating the second parser from the result of
@@ -659,161 +954,88 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let successor = just(b'\0').configure(|cfg, ctx: &u8| cfg.seq(*ctx + 1));
+    ///
     /// // A parser that parses a single letter and then its successor
-    /// let successive_letters = one_of::<_, _, Cheap<u8>>((b'a'..=b'z').collect::<Vec<u8>>())
-    ///     .then_with(|letter: u8| just(letter + 1));
+    /// let successive_letters = one_of::<_, _, extra::Err<Simple<&[u8]>>>(b'a'..=b'z')
+    ///     .then_with_ctx(successor);
     ///
-    /// assert_eq!(successive_letters.parse(*b"ab"), Ok(b'b')); // 'b' follows 'a'
-    /// assert!(successive_letters.parse(*b"ac").is_err()); // 'c' does not follow 'a'
+    /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
+    /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
-    fn then_with<U, P, F: Fn(O) -> P>(self, other: F) -> ThenWith<I, O, U, Self, P, F>
+    fn then_with_ctx<U, P>(
+        self,
+        then: P,
+    ) -> ThenWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, O>>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        O: 'a,
+        P: Parser<'a, I, U, extra::Full<E::Error, E::State, O>>,
     {
-        ThenWith(self, other, PhantomData)
+        ThenWithCtx {
+            parser: self,
+            then,
+            phantom: PhantomData,
+        }
     }
 
-    /// Parse one thing and then another thing, attempting to chain the two outputs into a [`Vec`].
-    ///
-    /// The output type of this parser is `Vec<T>`, composed of the elements of the outputs of both parsers.
-    ///
-    /// # Examples
+    /// Run the previous contextual parser with the provided context
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let int = just('-').or_not()
-    ///     .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit() && *c != '0')
-    ///         .chain(filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit()).repeated()))
-    ///     .or(just('0').map(|c| vec![c]))
-    ///     .then_ignore(end())
+    /// # use chumsky::prelude::*;
+    /// # use chumsky::primitive::JustCfg;
+    ///
+    /// let generic = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
+    ///
+    /// let parse_a = just::<_, _, extra::Default>(b'b').ignore_then(generic.with_ctx::<u8>(b'a'));
+    /// let parse_b = just::<_, _, extra::Default>(b'a').ignore_then(generic.with_ctx(b'b'));
+    ///
+    /// assert_eq!(parse_a.parse(b"ba" as &[_]).into_result(), Ok::<_, Vec<EmptyErr>>(b'a'));
+    /// assert!(parse_a.parse(b"bb").has_errors());
+    /// assert_eq!(parse_b.parse(b"ab" as &[_]).into_result(), Ok(b'b'));
+    /// assert!(parse_b.parse(b"aa").has_errors());
+    /// ```
+    fn with_ctx<Ctx>(self, ctx: Ctx) -> WithCtx<Self, Ctx>
+    where
+        Self: Sized,
+        Ctx: 'a + Clone,
+    {
+        WithCtx { parser: self, ctx }
+    }
+
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    ///
+    /// let escape = just("\\n").to('\n');
+    ///
+    /// // C-style tring literal
+    /// let string = none_of::<_, _, extra::Err<Simple<&str>>>('"')
+    ///     .and_is(escape.not())
+    ///     .or(escape)
+    ///     .repeated()
     ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// assert_eq!(int.parse("0"), Ok(0));
-    /// assert_eq!(int.parse("415"), Ok(415));
-    /// assert_eq!(int.parse("-50"), Ok(-50));
-    /// assert!(int.parse("-0").is_err());
-    /// assert!(int.parse("05").is_err());
-    /// ```
-    fn chain<T, U, P>(self, other: P) -> Map<Then<Self, P>, fn((O, U)) -> Vec<T>, (O, U)>
-    where
-        Self: Sized,
-        U: Chain<T>,
-        O: Chain<T>,
-        P: Parser<I, U, Error = Self::Error>,
-    {
-        self.then(other).map(|(a, b)| {
-            let mut v = Vec::with_capacity(a.len() + b.len());
-            a.append_to(&mut v);
-            b.append_to(&mut v);
-            v
-        })
-    }
-
-    /// Flatten a nested collection.
-    ///
-    /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
-    ///
-    /// The output type of this parser is `Vec<T>`, where the original parser output was
-    /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
-    fn flatten<T, Inner>(self) -> Map<Self, fn(O) -> Vec<T>, O>
-    where
-        Self: Sized,
-        O: IntoIterator<Item = Inner>,
-        Inner: IntoIterator<Item = T>,
-    {
-        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
-    }
-
-    /// Parse one thing and then another thing, yielding only the output of the latter.
-    ///
-    /// The output type of this parser is `U`, the same as the second parser.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let zeroes = filter::<_, _, Cheap<char>>(|c: &char| *c == '0').ignored().repeated();
-    /// let digits = filter(|c: &char| c.is_ascii_digit()).repeated();
-    /// let integer = zeroes
-    ///     .ignore_then(digits)
-    ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// assert_eq!(integer.parse("00064"), Ok(64));
-    /// assert_eq!(integer.parse("32"), Ok(32));
-    /// ```
-    fn ignore_then<U, P>(self, other: P) -> IgnoreThen<Self, P, O, U>
-    where
-        Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
-    {
-        Map(Then(self, other), |(_, u)| u, PhantomData)
-    }
-
-    /// Parse one thing and then another thing, yielding only the output of the former.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
-    ///     .collect::<String>();
-    ///
-    /// let punctuated = word
-    ///     .then_ignore(just('!').or(just('?')).or_not());
-    ///
-    /// let sentence = punctuated
-    ///     .padded() // Allow for whitespace gaps
-    ///     .repeated();
+    ///     .padded_by(just('"'));
     ///
     /// assert_eq!(
-    ///     sentence.parse("hello! how are you?"),
-    ///     Ok(vec![
-    ///         "hello".to_string(),
-    ///         "how".to_string(),
-    ///         "are".to_string(),
-    ///         "you".to_string(),
-    ///     ]),
+    ///     string.parse("\"wxyz\"").into_result().as_deref(),
+    ///     Ok("wxyz"),
+    /// );
+    /// assert_eq!(
+    ///     string.parse("\"a\nb\"").into_result().as_deref(),
+    ///     Ok("a\nb"),
     /// );
     /// ```
-    fn then_ignore<U, P>(self, other: P) -> ThenIgnore<Self, P, O, U>
+    fn and_is<U, B>(self, other: B) -> AndIs<Self, B, U>
     where
         Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
+        B: Parser<'a, I, U, E>,
     {
-        Map(Then(self, other), |(o, _)| o, PhantomData)
-    }
-
-    /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let ident = text::ident::<_, Simple<char>>()
-    ///     .padded_by(just('!'));
-    ///
-    /// assert_eq!(ident.parse("!hello!"), Ok("hello".to_string()));
-    /// assert!(ident.parse("hello!").is_err());
-    /// assert!(ident.parse("!hello").is_err());
-    /// assert!(ident.parse("hello").is_err());
-    /// ```
-    fn padded_by<U, P>(self, other: P) -> ThenIgnore<IgnoreThen<P, Self, U, O>, P, O, U>
-    where
-        Self: Sized,
-        P: Parser<I, U, Error = Self::Error> + Clone,
-    {
-        other.clone().ignore_then(self).then_ignore(other)
+        AndIs {
+            parser_a: self,
+            parser_b: other,
+            phantom: PhantomData,
+        }
     }
 
     /// Parse the pattern surrounded by the given delimiters.
@@ -823,7 +1045,7 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::{prelude::*, error::Simple};
     /// // A LISP-style S-expression
     /// #[derive(Debug, PartialEq)]
     /// enum SExpr {
@@ -832,8 +1054,9 @@ pub trait Parser<I: Clone, O> {
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
+    /// let ident = any::<_, extra::Err<Simple<&str>>>().filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
     ///     .collect::<String>();
     ///
     /// let num = text::int(10)
@@ -843,6 +1066,7 @@ pub trait Parser<I: Clone, O> {
     /// let s_expr = recursive(|s_expr| s_expr
     ///     .padded()
     ///     .repeated()
+    ///     .collect::<Vec<_>>()
     ///     .map(SExpr::List)
     ///     .delimited_by(just('('), just(')'))
     ///     .or(ident.map(SExpr::Ident))
@@ -850,31 +1074,56 @@ pub trait Parser<I: Clone, O> {
     ///
     /// // A valid input
     /// assert_eq!(
-    ///     s_expr.parse_recovery("(add (mul 42 3) 15)"),
-    ///     (
-    ///         Some(SExpr::List(vec![
-    ///             SExpr::Ident("add".to_string()),
-    ///             SExpr::List(vec![
-    ///                 SExpr::Ident("mul".to_string()),
-    ///                 SExpr::Num(42),
-    ///                 SExpr::Num(3),
-    ///             ]),
-    ///             SExpr::Num(15),
-    ///         ])),
-    ///         Vec::new(), // No errors!
-    ///     ),
+    ///     s_expr.parse("(add (mul 42 3) 15)").into_result(),
+    ///     Ok(SExpr::List(vec![
+    ///         SExpr::Ident("add".to_string()),
+    ///         SExpr::List(vec![
+    ///             SExpr::Ident("mul".to_string()),
+    ///             SExpr::Num(42),
+    ///             SExpr::Num(3),
+    ///         ]),
+    ///         SExpr::Num(15),
+    ///     ])),
     /// );
     /// ```
-    fn delimited_by<U, V, L, R>(self, start: L, end: R) -> DelimitedBy<Self, L, R, U, V>
+    fn delimited_by<U, V, B, C>(self, start: B, end: C) -> DelimitedBy<Self, B, C, U, V>
     where
         Self: Sized,
-        L: Parser<I, U, Error = Self::Error>,
-        R: Parser<I, V, Error = Self::Error>,
+        B: Parser<'a, I, U, E>,
+        C: Parser<'a, I, V, E>,
     {
         DelimitedBy {
-            item: self,
+            parser: self,
             start,
             end,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern, but with an instance of another pattern on either end, yielding the output of the inner.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let ident = text::ident::<_, _, extra::Err<Simple<&str>>>()
+    ///     .padded_by(just('!'));
+    ///
+    /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
+    /// assert!(ident.parse("hello!").has_errors());
+    /// assert!(ident.parse("!hello").has_errors());
+    /// assert!(ident.parse("hello").has_errors());
+    /// ```
+    fn padded_by<U, B>(self, padding: B) -> PaddedBy<Self, B, U>
+    where
+        Self: Sized,
+        B: Parser<'a, I, U, E>,
+    {
+        PaddedBy {
+            parser: self,
+            padding,
             phantom: PhantomData,
         }
     }
@@ -899,22 +1148,345 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let op = just::<_, _, Cheap<char>>('+')
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let op = just::<_, _, extra::Err<Simple<&str>>>('+')
     ///     .or(just('-'))
     ///     .or(just('*'))
     ///     .or(just('/'));
     ///
-    /// assert_eq!(op.parse("+"), Ok('+'));
-    /// assert_eq!(op.parse("/"), Ok('/'));
-    /// assert!(op.parse("!").is_err());
+    /// assert_eq!(op.parse("+").into_result(), Ok('+'));
+    /// assert_eq!(op.parse("/").into_result(), Ok('/'));
+    /// assert!(op.parse("!").has_errors());
     /// ```
-    fn or<P>(self, other: P) -> Or<Self, P>
+    fn or<B>(self, other: B) -> Or<Self, B>
     where
         Self: Sized,
-        P: Parser<I, O, Error = Self::Error>,
+        B: Parser<'a, I, O, E>,
     {
-        Or(self, other)
+        Or {
+            parser_a: self,
+            parser_b: other,
+        }
+    }
+
+    /// Attempt to parse something, but only if it exists.
+    ///
+    /// If parsing of the pattern is successful, the output is `Some(_)`. Otherwise, the output is `None`.
+    ///
+    /// The output type of this parser is `Option<O>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<&str>>>().filter(|c: &char| c.is_alphabetic())
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>();
+    ///
+    /// let word_or_question = word
+    ///     .then(just('?').or_not());
+    ///
+    /// assert_eq!(word_or_question.parse("hello?").into_result(), Ok(("hello".to_string(), Some('?'))));
+    /// assert_eq!(word_or_question.parse("wednesday").into_result(), Ok(("wednesday".to_string(), None)));
+    /// ```
+    fn or_not(self) -> OrNot<Self>
+    where
+        Self: Sized,
+    {
+        OrNot { parser: self }
+    }
+
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    ///
+    /// #[derive(Debug, PartialEq)]
+    /// enum Tree<'a> {
+    ///     Text(&'a str),
+    ///     Group(Vec<Self>),
+    /// }
+    ///
+    /// // Arbitrary text, nested in a tree with { ... } delimiters
+    /// let tree = recursive::<_, _, extra::Err<Simple<&str>>, _, _>(|tree| {
+    ///     let text = any()
+    ///         .and_is(one_of("{}").not())
+    ///         .repeated()
+    ///         .at_least(1)
+    ///         .map_slice(Tree::Text);
+    ///
+    ///     let group = tree
+    ///         .repeated()
+    ///         .collect()
+    ///         .delimited_by(just('{'), just('}'))
+    ///         .map(Tree::Group);
+    ///
+    ///     text.or(group)
+    /// });
+    ///
+    /// assert_eq!(
+    ///     tree.parse("{abcd{efg{hijk}lmn{opq}rs}tuvwxyz}").into_result(),
+    ///     Ok(Tree::Group(vec![
+    ///         Tree::Text("abcd"),
+    ///         Tree::Group(vec![
+    ///             Tree::Text("efg"),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("hijk"),
+    ///             ]),
+    ///             Tree::Text("lmn"),
+    ///             Tree::Group(vec![
+    ///                 Tree::Text("opq"),
+    ///             ]),
+    ///             Tree::Text("rs"),
+    ///         ]),
+    ///         Tree::Text("tuvwxyz"),
+    ///     ])),
+    /// );
+    /// ```
+    fn not(self) -> Not<Self, O>
+    where
+        Self: Sized,
+    {
+        Not {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern any number of times (including zero times).
+    ///
+    /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
+    /// [`Repeated::at_least`] instead if it better suits your use-case.
+    ///
+    /// The output type of this parser can be any [`Container`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let num = any::<_, extra::Err<Simple<&str>>>()
+    ///     .filter(|c: &char| c.is_ascii_digit())
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<String>()
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// let sum = num.clone()
+    ///     .foldl(just('+').ignore_then(num).repeated(), |a, b| a + b);
+    ///
+    /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
+    /// ```
+    fn repeated(self) -> Repeated<Self, O, I, E>
+    where
+        Self: Sized,
+    {
+        Repeated {
+            parser: self,
+            at_least: 0,
+            at_most: !0,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern a specific number of times.
+    ///
+    /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
+    ///
+    /// The output type of this parser can be any [`ContainerExactly`].
+    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
+    where
+        Self: Sized,
+    {
+        RepeatedExactly {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern, separated by another, any number of times.
+    ///
+    /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
+    /// separators.
+    ///
+    /// The output type of this parser can be any [`Container`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let shopping = text::ident::<_, _, extra::Err<Simple<&str>>>()
+    ///     .padded()
+    ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>();
+    ///
+    /// assert_eq!(shopping.parse("eggs").into_result(), Ok(vec!["eggs"]));
+    /// assert_eq!(shopping.parse("eggs, flour, milk").into_result(), Ok(vec!["eggs", "flour", "milk"]));
+    /// ```
+    ///
+    /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
+    fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, E>
+    where
+        Self: Sized,
+        B: Parser<'a, I, U, E>,
+    {
+        SeparatedBy {
+            parser: self,
+            separator,
+            at_least: 0,
+            at_most: !0,
+            allow_leading: false,
+            allow_trailing: false,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern, separated by another, a specific number of times.
+    ///
+    /// You can use [`SeparatedByExactly::allow_leading`] or [`SeparatedByExactly::allow_trailing`] to
+    /// allow leading or trailing separators.
+    ///
+    /// The output type of this parser can be any [`ContainerExactly`].
+    fn separated_by_exactly<U, B, const N: usize>(
+        self,
+        separator: B,
+    ) -> SeparatedByExactly<Self, B, U, (), N>
+    where
+        Self: Sized,
+        B: Parser<'a, I, U, E>,
+    {
+        SeparatedByExactly {
+            parser: self,
+            separator,
+            allow_leading: false,
+            allow_trailing: false,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Left-fold the output of the parser into a single value.
+    ///
+    /// The output of the original parser must be of type `(A, impl IntoIterator<Item = B>)`.
+    ///
+    /// The output type of this parser is `A`, the left-hand component of the original parser's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// let sum = int
+    ///     .clone()
+    ///     .foldl(just('+').ignore_then(int).repeated(), |a, b| a + b);
+    ///
+    /// assert_eq!(sum.parse("1+12+3+9").into_result(), Ok(25));
+    /// assert_eq!(sum.parse("6").into_result(), Ok(6));
+    /// ```
+    fn foldl<B, F, OB>(self, other: B, f: F) -> Foldl<F, Self, B, OB, E>
+    where
+        F: Fn(O, OB) -> O,
+        B: IterParser<'a, I, OB, E>,
+        Self: Sized,
+    {
+        Foldl {
+            parser_a: self,
+            parser_b: other,
+            folder: f,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Parse a pattern. Afterwards, the input stream will be rewound to its original state, as if parsing had not
+    /// occurred.
+    ///
+    /// This combinator is useful for cases in which you wish to avoid a parser accidentally consuming too much input,
+    /// causing later parsers to fail as a result. A typical use-case of this is that you want to parse something that
+    /// is not followed by something else.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let just_numbers = text::digits::<_, _, extra::Err<Simple<&str>>>(10)
+    ///     .slice()
+    ///     .padded()
+    ///     .then_ignore(none_of("+-*/").rewind())
+    ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>();
+    /// // 3 is not parsed because it's followed by '+'.
+    /// assert_eq!(just_numbers.lazy().parse("1, 2, 3 + 4").into_result(), Ok(vec!["1", "2"]));
+    /// ```
+    fn rewind(self) -> Rewind<Self>
+    where
+        Self: Sized,
+    {
+        Rewind { parser: self }
+    }
+
+    /// Make the parser lazy, such that it parses as much as it validly can and then finished successfully, leaving
+    /// trailing input untouched.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let digits = one_of::<_, _, extra::Err<Simple<&str>>>('0'..='9')
+    ///     .repeated()
+    ///     .collect::<String>()
+    ///     .lazy();
+    ///
+    /// assert_eq!(digits.parse("12345abcde").into_result().as_deref(), Ok("12345"));
+    /// ```
+    fn lazy(self) -> Lazy<'a, Self, I, E>
+    where
+        Self: Sized,
+    {
+        self.then_ignore(any().repeated())
+    }
+
+    /// Parse a pattern, ignoring any amount of whitespace both before and after the pattern.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let ident = text::ident::<_, _, extra::Err<Simple<&str>>>().padded();
+    ///
+    /// // A pattern with no whitespace surrounding it is accepted
+    /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
+    /// // A pattern with arbitrary whitespace surrounding it is also accepted
+    /// assert_eq!(ident.parse(" \t \n  \t   world  \t  ").into_result(), Ok("world"));
+    /// ```
+    fn padded(self) -> Padded<Self>
+    where
+        Self: Sized,
+        I: Input<'a>,
+        I::Token: Char,
+    {
+        Padded { parser: self }
+    }
+
+    /// Flatten a nested collection.
+    ///
+    /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
+    ///
+    /// The output type of this parser is `Vec<T>`, where the original parser output was
+    /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
+    fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
+    where
+        Self: Sized,
+        O: IntoIterator<Item = Inner>,
+        Inner: IntoIterator<Item = T>,
+    {
+        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
     }
 
     /// Apply a fallback recovery strategy to this parser should it fail.
@@ -934,183 +1506,157 @@ pub trait Parser<I: Clone, O> {
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
+    /// # use chumsky::{prelude::*, error::Simple};
     /// #[derive(Debug, PartialEq)]
-    /// enum Expr {
+    /// enum Expr<'a> {
     ///     Error,
-    ///     Int(String),
-    ///     List(Vec<Expr>),
+    ///     Int(&'a str),
+    ///     List(Vec<Expr<'a>>),
     /// }
     ///
-    /// let expr = recursive::<_, _, _, _, Simple<char>>(|expr| expr
+    /// let recovery = just::<_, _, extra::Err<Simple<&str>>>('[')
+    ///         .then(none_of(']').repeated().then(just(']')));
+    ///
+    /// let expr = recursive::<_, _, extra::Err<Simple<&str>>, _, _>(|expr| expr
     ///     .separated_by(just(','))
+    ///     .collect::<Vec<_>>()
     ///     .delimited_by(just('['), just(']'))
     ///     .map(Expr::List)
     ///     // If parsing a list expression fails, recover at the next delimiter, generating an error AST node
-    ///     .recover_with(nested_delimiters('[', ']', [], |_| Expr::Error))
+    ///     .recover_with(via_parser(recovery.map(|_| Expr::Error)))
     ///     .or(text::int(10).map(Expr::Int))
     ///     .padded());
     ///
-    /// assert!(expr.parse("five").is_err()); // Text is not a valid expression in this language...
-    /// assert!(expr.parse("[1, 2, 3]").is_ok()); // ...but lists and numbers are!
+    /// assert!(expr.parse("five").has_errors()); // Text is not a valid expression in this language...
+    /// assert_eq!(
+    ///     expr.parse("[1, 2, 3]").into_result(),
+    ///     Ok(Expr::List(vec![Expr::Int("1"), Expr::Int("2"), Expr::Int("3")])),
+    /// ); // ...but lists and numbers are!
     ///
     /// // This input has two syntax errors...
-    /// let (ast, errors) = expr.parse_recovery("[[1, two], [3, four]]");
+    /// let res = expr.parse("[[1, two], [3, four]]");
     /// // ...and error recovery allows us to catch both of them!
-    /// assert_eq!(errors.len(), 2);
+    /// assert_eq!(res.errors().len(), 2);
     /// // Additionally, the AST we get back still has useful information.
-    /// assert_eq!(ast, Some(Expr::List(vec![Expr::Error, Expr::Error])));
+    /// assert_eq!(res.output(), Some(&Expr::List(vec![Expr::Error, Expr::Error])));
     /// ```
-    fn recover_with<S>(self, strategy: S) -> Recovery<Self, S>
-    where
-        Self: Sized,
-        S: Strategy<I, O, Self::Error>,
-    {
-        Recovery(self, strategy)
-    }
-
-    /// Attempt to parse something, but only if it exists.
-    ///
-    /// If parsing of the pattern is successful, the output is `Some(_)`. Otherwise, the output is `None`.
-    ///
-    /// The output type of this parser is `Option<O>`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let word = filter::<_, _, Cheap<char>>(|c: &char| c.is_alphabetic())
-    ///     .repeated().at_least(1)
-    ///     .collect::<String>();
-    ///
-    /// let word_or_question = word
-    ///     .then(just('?').or_not());
-    ///
-    /// assert_eq!(word_or_question.parse("hello?"), Ok(("hello".to_string(), Some('?'))));
-    /// assert_eq!(word_or_question.parse("wednesday"), Ok(("wednesday".to_string(), None)));
-    /// ```
-    fn or_not(self) -> OrNot<Self>
+    fn recover_with<S: Strategy<'a, I, O, E>>(self, strategy: S) -> RecoverWith<Self, S>
     where
         Self: Sized,
     {
-        OrNot(self)
-    }
-
-    /// Parse a pattern any number of times (including zero times).
-    ///
-    /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
-    /// [`Repeated::at_least`] instead if it better suits your use-case.
-    ///
-    /// The output type of this parser is `Vec<O>`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let num = filter::<_, _, Cheap<char>>(|c: &char| c.is_ascii_digit())
-    ///     .repeated().at_least(1)
-    ///     .collect::<String>()
-    ///     .from_str()
-    ///     .unwrapped();
-    ///
-    /// let sum = num.then(just('+').ignore_then(num).repeated())
-    ///     .foldl(|a, b| a + b);
-    ///
-    /// assert_eq!(sum.parse("2+13+4+0+5"), Ok(24));
-    /// ```
-    fn repeated(self) -> Repeated<Self>
-    where
-        Self: Sized,
-    {
-        Repeated(self, 0, None)
-    }
-
-    /// Parse a pattern, separated by another, any number of times.
-    ///
-    /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
-    /// separators.
-    ///
-    /// The output type of this parser is `Vec<O>`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Cheap};
-    /// let shopping = text::ident::<_, Simple<char>>()
-    ///     .padded()
-    ///     .separated_by(just(','));
-    ///
-    /// assert_eq!(shopping.parse("eggs"), Ok(vec!["eggs".to_string()]));
-    /// assert_eq!(shopping.parse("eggs, flour, milk"), Ok(vec!["eggs".to_string(), "flour".to_string(), "milk".to_string()]));
-    /// ```
-    ///
-    /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
-    fn separated_by<U, P>(self, other: P) -> SeparatedBy<Self, P, U>
-    where
-        Self: Sized,
-        P: Parser<I, U, Error = Self::Error>,
-    {
-        SeparatedBy {
-            item: self,
-            delimiter: other,
-            at_least: 0,
-            at_most: None,
-            allow_leading: false,
-            allow_trailing: false,
-            phantom: PhantomData,
+        RecoverWith {
+            parser: self,
+            strategy,
         }
     }
 
-    /// Parse a pattern. Afterwards, the input stream will be rewound to its original state, as if parsing had not
-    /// occurred.
+    /// Map the primary error of this parser to another value.
     ///
-    /// This combinator is useful for cases in which you wish to avoid a parser accidentally consuming too much input,
-    /// causing later parsers to fail as a result. A typical use-case of this is that you want to parse something that
-    /// is not followed by something else.
+    /// This function is most useful when using a custom error type, allowing you to augment errors according to
+    /// context.
     ///
     /// The output type of this parser is `O`, the same as the original parser.
+    // TODO: Map E -> D, not E -> E
+    fn map_err<F>(self, f: F) -> MapErr<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E::Error) -> E::Error,
+    {
+        MapErr {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
+    /// to the point at which the error was encountered.
+    ///
+    /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
+    /// pattern, for example to add a "while parsing" clause to your error messages.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    // TODO: Map E -> D, not E -> E
+    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E::Error, I::Span) -> E::Error,
+    {
+        MapErrWithSpan {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    /// Map the primary error of this parser to another value, making use of the parser state.
+    ///
+    /// This function is useful for augmenting errors to allow them to include context in non context-free
+    /// languages, or provide contextual notes on possible causes.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    // TODO: Map E -> D, not E -> E
+    fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
+    {
+        MapErrWithState {
+            parser: self,
+            mapper: f,
+        }
+    }
+
+    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    ///
+    /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
+    ///
+    /// If you wish parsing of this pattern to halt when an error is generated instead of continuing, consider using
+    /// [`Parser::try_map`] instead.
+    ///
+    /// The output type of this parser is `U`, the result of the validation closure.
     ///
     /// # Examples
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let just_numbers = text::digits::<_, Simple<char>>(10)
-    ///     .padded()
-    ///     .then_ignore(none_of("+-*/").rewind())
-    ///     .separated_by(just(','));
-    /// // 3 is not parsed because it's followed by '+'.
-    /// assert_eq!(just_numbers.parse("1, 2, 3 + 4"), Ok(vec!["1".to_string(), "2".to_string()]));
+    /// let large_int = text::int::<_, _, extra::Err<Rich<&str>>>(10)
+    ///     .from_str()
+    ///     .unwrapped()
+    ///     .validate(|x: u32, span, emitter| {
+    ///         if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///         x
+    ///     });
+    ///
+    /// assert_eq!(large_int.parse("537").into_result(), Ok(537));
+    /// assert!(large_int.parse("243").into_result().is_err());
     /// ```
-    fn rewind(self) -> Rewind<Self>
+    fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
+        F: Fn(O, I::Span, &mut Emitter<E::Error>) -> U,
     {
-        Rewind(self)
+        Validate {
+            parser: self,
+            validator: f,
+            phantom: PhantomData,
+        }
     }
 
-    /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
+    /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
     ///
-    /// Boxing a parser might be useful for:
+    /// Note that, if the closure returns [`Err`], the parser will not consume any input.
     ///
-    /// - Dynamically building up parsers at run-time
-    ///
-    /// - Improving compilation times (Rust can struggle to compile code containing very long types)
-    ///
-    /// - Passing a parser over an FFI boundary
-    ///
-    /// - Getting around compiler implementation problems with long types such as
-    ///   [this](https://github.com/rust-lang/rust/issues/54540).
-    ///
-    /// - Places where you need to name the type of a parser
-    ///
-    /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    fn boxed<'a>(self) -> BoxedParser<'a, I, O, Self::Error>
+    /// The output type of this parser is `U`, the [`Ok`] type of the result.
+    fn or_else<F>(self, f: F) -> OrElse<Self, F>
     where
-        Self: Sized + 'a,
+        Self: Sized,
+        F: Fn(E::Error) -> Result<O, E::Error>,
     {
-        BoxedParser(Rc::new(self))
+        OrElse {
+            parser: self,
+            or_else: f,
+        }
     }
 
     /// Attempt to convert the output of this parser into something else using Rust's [`FromStr`] trait.
@@ -1125,15 +1671,15 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let uint64 = text::int::<_, Simple<char>>(10)
+    /// let uint64 = text::int::<_, _, extra::Err<Simple<&str>>>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
-    /// assert_eq!(uint64.parse("7"), Ok(7));
-    /// assert_eq!(uint64.parse("42"), Ok(42));
+    /// assert_eq!(uint64.parse("7").into_result(), Ok(7));
+    /// assert_eq!(uint64.parse("42").into_result(), Ok(42));
     /// ```
     #[allow(clippy::wrong_self_convention)]
-    fn from_str<U>(self) -> Map<Self, fn(O) -> Result<U, U::Err>, O>
+    fn from_str<U>(self) -> Map<Self, O, fn(O) -> Result<U, U::Err>>
     where
         Self: Sized,
         U: FromStr,
@@ -1156,138 +1702,301 @@ pub trait Parser<I: Clone, O> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let boolean = just::<_, _, Simple<char>>("true")
+    /// let boolean = just::<_, _, extra::Err<Simple<&str>>>("true")
     ///     .or(just("false"))
     ///     .from_str::<bool>()
     ///     .unwrapped(); // Cannot panic: the only possible outputs generated by the parser are "true" or "false"
     ///
-    /// assert_eq!(boolean.parse("true"), Ok(true));
-    /// assert_eq!(boolean.parse("false"), Ok(false));
+    /// assert_eq!(boolean.parse("true").into_result(), Ok(true));
+    /// assert_eq!(boolean.parse("false").into_result(), Ok(false));
     /// // Does not panic, because the original parser only accepts "true" or "false"
-    /// assert!(boolean.parse("42").is_err());
+    /// assert!(boolean.parse("42").has_errors());
     /// ```
-    fn unwrapped<U, E>(self) -> Map<Self, fn(Result<U, E>) -> U, Result<U, E>>
+    fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where
-        Self: Sized + Parser<I, Result<U, E>>,
-        E: fmt::Debug,
+        Self: Sized + Parser<'a, I, Result<U, E1>, E>,
+        E1: fmt::Debug,
     {
         self.map(|o| o.unwrap())
     }
-}
 
-impl<'a, I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for &'a T {
-    type Error = T::Error;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(*self, stream)
-    }
-
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
+    ///
+    /// Boxing a parser might be useful for:
+    ///
+    /// - Dynamically building up parsers at run-time
+    ///
+    /// - Improving compilation times (Rust can struggle to compile code containing very long types)
+    ///
+    /// - Passing a parser over an FFI boundary
+    ///
+    /// - Getting around compiler implementation problems with long types such as
+    ///   [this](https://github.com/rust-lang/rust/issues/54540).
+    ///
+    /// - Places where you need to name the type of a parser
+    ///
+    /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    fn boxed(self) -> Boxed<'a, I, O, E>
+    where
+        Self: Sized + 'a,
+    {
+        Boxed {
+            inner: Rc::new(self),
+        }
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Box<T> {
-    type Error = T::Error;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+#[cfg(feature = "nightly")]
+impl<'a, I, O, E> Parser<'a, I, O, E> for !
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        *self
     }
 
-    fn parse_inner_verbose(
+    go_extra!(O);
+}
+
+/// A parser that can be configured with runtime context
+pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    /// Type used to configure the parser
+    type Config: Default;
+
+    /// Parse a stream with the provided configured values. This can be used to control a parser's
+    /// behavior at parse-time.
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
+    where
+        Self: Sized;
+
+    #[doc(hidden)]
+    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O>;
+    #[doc(hidden)]
+    fn go_check_cfg(
         &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Check, O>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> Configure<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        Configure { parser: self, cfg }
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Rc<T> {
-    type Error = T::Error;
+/// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
+pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E: ParserExtra<'a, I>>
+{
+    parser: P,
+    state: P::IterState<Emit>,
+    inp: InputRef<'a, 'iter, I, E>,
+    phantom: PhantomData<&'a O>,
+}
 
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
-    }
+impl<'a, 'iter, P, I: Input<'a>, O, E: ParserExtra<'a, I>> Iterator
+    for ParserIter<'a, 'iter, P, I, O, E>
+where
+    P: IterParser<'a, I, O, E>,
+{
+    type Item = O;
 
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parser
+            .next::<Emit>(&mut self.inp, &mut self.state)
+            .ok()
+            .and_then(|res| res)
     }
 }
 
-impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
-    type Error = T::Error;
+/// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
+// TODO: Make sealed
+pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+    /// The state of the iterator during iteration.
+    type IterState<M: Mode>
+    where
+        I: 'a;
 
-    fn parse_inner<D: Debugger>(
+    #[doc(hidden)]
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M>;
+    #[doc(hidden)]
+    fn next<M: Mode>(
         &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        debugger.invoke::<_, _, T>(&*self, stream)
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O>;
+
+    /// Collect this iterable parser into a [`Container`].
+    ///
+    /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
+    /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
+    ///
+    /// The output type of this parser is `C`, the type being collected into.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let word = any::<_, extra::Err<Simple<&str>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
+    ///     .collect::<String>(); // We collect the `char`s into a `String`
+    ///
+    /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
+    /// ```
+    fn collect<C: Container<O>>(self) -> Collect<Self, O, C>
+    where
+        Self: Sized,
+    {
+        Collect {
+            parser: self,
+            phantom: PhantomData,
+        }
     }
 
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    /// Collect this iterable parser into a [`usize`], outputting the number of elements that were parsed.
+    ///
+    /// This is sugar for [`.collect::<usize>()`](Self::collect).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// // Counts how many chess squares are in the input.
+    /// let squares = one_of::<_, _, extra::Err<Simple<&str>>>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
+    ///
+    /// assert_eq!(squares.parse("a1 b2 c3").into_result(), Ok(3));
+    /// assert_eq!(squares.parse("e5 e7 c6 c7 f6 d5 e6 d7 e4 c5 d6 c4 b6 f5").into_result(), Ok(14));
+    /// assert_eq!(squares.parse("").into_result(), Ok(0));
+    /// ```
+    fn count(self) -> Collect<Self, O, usize>
+    where
+        Self: Sized,
+    {
+        self.collect()
     }
-    fn parse_inner_silent(
+
+    /// Right-fold the output of the parser into a single value.
+    ///
+    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
+    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
+    ///
+    /// The output type of this parser is `B`, the right-hand component of the original parser's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// let signed = just('+').to(1)
+    ///     .or(just('-').to(-1))
+    ///     .repeated()
+    ///     .foldr(int, |a, b| a * b);
+    ///
+    /// assert_eq!(signed.parse("3").into_result(), Ok(3));
+    /// assert_eq!(signed.parse("-17").into_result(), Ok(-17));
+    /// assert_eq!(signed.parse("--+-+-5").into_result(), Ok(5));
+    /// ```
+    fn foldr<B, F, OA>(self, other: B, f: F) -> Foldr<F, Self, B, O, E>
+    where
+        F: Fn(O, OA) -> OA,
+        B: Parser<'a, I, OA, E>,
+        Self: Sized,
+    {
+        Foldr {
+            parser_a: self,
+            parser_b: other,
+            folder: f,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Create an iterator over the outputs generated by an iterable parser.
+    ///
+    /// Warning: Trailing errors will be ignored
+    fn parse_iter(self, input: I) -> ParseResult<ParserIter<'a, 'static, Self, I, O, E>, E::Error>
+    where
+        Self: IterParser<'a, I, O, E> + Sized,
+        E::State: Default,
+        E::Context: Default,
+    {
+        let mut inp = InputRef::new(input, Err(E::State::default()));
+        ParseResult::new(
+            Some(ParserIter {
+                state: self.make_iter::<Emit>(&mut inp),
+                parser: self,
+                inp,
+                phantom: PhantomData,
+            }),
+            Vec::new(),
+        )
+    }
+
+    /// Create an iterator over the outputs generated by an iterable parser with the given parser state.
+    ///
+    /// Warning: Trailing errors will be ignored
+    fn parse_iter_with_state<'parse>(
+        self,
+        input: I,
+        state: &'parse mut E::State,
+    ) -> ParseResult<ParserIter<'a, 'parse, Self, I, O, E>, E::Error>
+    where
+        Self: IterParser<'a, I, O, E> + Sized,
+        E::Context: Default,
+    {
+        let mut inp = InputRef::new(input, Ok(state));
+        ParseResult::new(
+            Some(ParserIter {
+                state: self.make_iter::<Emit>(&mut inp),
+                parser: self,
+                inp,
+                phantom: PhantomData,
+            }),
+            Vec::new(),
+        )
+    }
+}
+
+/// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
+/// can be configured at runtime.
+pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
+    IterParser<'a, I, O, E>
+{
+    /// Type used to configure the parser
+    type Config: Default;
+
+    #[doc(hidden)]
+    fn next_cfg<M: Mode>(
         &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+        cfg: &Self::Config,
+    ) -> IPResult<M, O>;
+
+    /// A combinator that allows configuration of the parser from the current context
+    fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context) -> Self::Config,
+    {
+        IterConfigure {
+            parser: self,
+            cfg,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -1300,51 +2009,43 @@ impl<I: Clone, O, T: Parser<I, O> + ?Sized> Parser<I, O> for Arc<T> {
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
-#[repr(transparent)]
-pub struct BoxedParser<'a, I, O, E: Error<I>>(Rc<dyn Parser<I, O, Error = E> + 'a>);
+pub struct Boxed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
+    inner: Rc<dyn Parser<'a, I, O, E> + 'a>,
+}
 
-impl<'a, I, O, E: Error<I>> Clone for BoxedParser<'a, I, O, E> {
+impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
-impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        debugger.invoke(&self.0, stream)
+impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        M::invoke(&*self.inner, inp)
     }
 
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    fn boxed(self) -> Boxed<'a, I, O, E>
+    where
+        Self: Sized + 'a,
+    {
+        // Never double-box parsers
+        self
     }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
+
+    go_extra!(O);
 }
 
-/*
 /// Create a parser that selects one or more input patterns and map them to an output value.
 ///
 /// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
 /// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
-/// input patterns will become syntax errors, just as with [`filter`].
+/// input patterns will become syntax errors, just as with [`Parser::filter`].
 ///
 /// The macro is semantically similar to a `match` expression and so supports
 /// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
@@ -1365,13 +2066,13 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 /// }
 /// ```
 ///
-/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
+/// Internally, [`select!`] is very similar to [`Parser::filter`] and thinking of it as such might make it less
 /// confusing.
 ///
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
+/// # use chumsky::{prelude::*, error::Simple};
 /// // The type of our parser's input (tokens like this might be emitted by your compiler's lexer)
 /// #[derive(Clone, Debug, PartialEq)]
 /// enum Token {
@@ -1391,7 +2092,7 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 ///
 /// // Our parser converts a stream of input tokens into an AST
 /// // `select!` is used to deconstruct some of the tokens and turn them into AST nodes
-/// let ast = recursive::<_, _, _, _, Cheap<Token>>(|ast| {
+/// let ast = recursive::<_, _, extra::Err<Simple<&[Token]>>, _, _>(|ast| {
 ///     let literal = select! {
 ///         Token::Num(x) => Ast::Num(x),
 ///         Token::Bool(x) => Ast::Bool(x),
@@ -1399,13 +2100,14 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 ///
 ///     literal.or(ast
 ///         .repeated()
+///         .collect()
 ///         .delimited_by(just(Token::LParen), just(Token::RParen))
 ///         .map(Ast::List))
 /// });
 ///
 /// use Token::*;
 /// assert_eq!(
-///     ast.parse(vec![LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]),
+///     ast.parse(&[LParen, Num(5), LParen, Bool(false), Num(42), RParen, RParen]).into_result(),
 ///     Ok(Ast::List(vec![
 ///         Ast::Num(5),
 ///         Ast::List(vec![
@@ -1418,10 +2120,261 @@ impl<'a, I: Clone, O, E: Error<I>> Parser<I, O> for BoxedParser<'a, I, O, E> {
 #[macro_export]
 macro_rules! select {
     ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
-        $crate::primitive::filter_map(move |span, x| match x {
-            $($p $(if $guard)? => ::core::result::Result::Ok({ $(let $span = span;)? $out })),+,
-            _ => ::core::result::Result::Err($crate::error::Error::expected_input_found(span, ::core::option::Option::None, ::core::option::Option::Some(x))),
-        })
+        $crate::primitive::select(
+            move |x, span| match x {
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                _ => ::core::option::Option::None,
+            }
+        )
     });
 }
-*/
+
+/// A version of [`select!`] that selects on token by reference instead of by value.
+///
+/// Useful if you want to extract elements from a token in a zero-copy manner.
+// TODO: Remove this, somehow unify with `select`?
+#[macro_export]
+macro_rules! select_ref {
+    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::primitive::select_ref(
+            move |x, span| match x {
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                _ => ::core::option::Option::None,
+            }
+        )
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_copy() {
+        use self::input::WithContext;
+        use self::prelude::*;
+
+        // #[derive(Clone)]
+        // enum TokenTest {
+        //     Root,
+        //     Branch(Box<Self>),
+        // }
+
+        // fn parser2() -> impl Parser<'static, str, TokenTest> {
+        //     recursive(|token| {
+        //         token
+        //             .delimited_by(just('c'), just('c'))
+        //             .map(Box::new)
+        //             .map(TokenTest::Branch)
+        //             .or(just('!').to(TokenTest::Root))
+        //     })
+        // }
+
+        #[derive(PartialEq, Debug)]
+        enum Token<'a> {
+            Ident(&'a str),
+            String(&'a str),
+        }
+
+        type FileId = u32;
+
+        type Span = (FileId, SimpleSpan<usize>);
+
+        fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
+            let ident = any()
+                .filter(|c: &char| c.is_alphanumeric())
+                .repeated()
+                .at_least(1)
+                .map_slice(Token::Ident);
+
+            let string = just('"')
+                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(just('"'))
+                .map_slice(Token::String);
+
+            ident
+                .or(string)
+                .map_with_span(|token, span| (span, token))
+                .padded()
+                .repeated_exactly()
+                .collect()
+        }
+
+        assert_eq!(
+            parser()
+                .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
+                .into_result(),
+            Ok([
+                ((42, (0..5).into()), Token::Ident("hello")),
+                ((42, (6..13).into()), Token::String("\"world\"")),
+                ((42, (14..19).into()), Token::Ident("these")),
+                ((42, (20..23).into()), Token::Ident("are")),
+                ((42, (24..30).into()), Token::String("\"test\"")),
+                ((42, (31..37).into()), Token::Ident("tokens")),
+            ]),
+        );
+    }
+
+    #[test]
+    fn zero_copy_repetition() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            any()
+                .filter(|c: &char| c.is_ascii_digit())
+                .repeated()
+                .at_least(1)
+                .at_most(3)
+                .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                .padded()
+                .separated_by(just(',').padded())
+                .allow_trailing()
+                .collect()
+                .delimited_by(just('['), just(']'))
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+
+        assert!(parser().parse("[1234,123,12,1]").has_errors());
+        assert!(parser().parse("[,0, 1, 456]").has_errors());
+        assert!(parser().parse("[3, 4, 5, 67 89,]").has_errors());
+    }
+
+    #[test]
+    fn zero_copy_group() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
+            group((
+                any()
+                    .filter(|c: &char| c.is_ascii_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .slice()
+                    .padded(),
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .map_slice(|s: &str| s.parse::<u64>().unwrap())
+                    .padded(),
+                any().filter(|c: &char| !c.is_whitespace()).padded(),
+            ))
+        }
+
+        assert_eq!(
+            parser().parse("abc 123 [").into_result(),
+            Ok(("abc", 123, '[')),
+        );
+        assert_eq!(
+            parser().parse("among3d").into_result(),
+            Ok(("among", 3, 'd')),
+        );
+        assert_eq!(
+            parser().parse("cba321,").into_result(),
+            Ok(("cba", 321, ',')),
+        );
+
+        assert!(parser().parse("abc 123  ").has_errors());
+        assert!(parser().parse("123abc ]").has_errors());
+        assert!(parser().parse("and one &").has_errors());
+    }
+
+    #[cfg(feature = "regex")]
+    #[test]
+    fn regex_parser() {
+        use self::prelude::*;
+        use self::regex::*;
+
+        fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
+            regex("[a-zA-Z_][a-zA-Z0-9_]*")
+                .padded()
+                .repeated()
+                .collect()
+        }
+        assert_eq!(
+            parser().parse("hello world this works").into_result(),
+            Ok(vec!["hello", "world", "this", "works"]),
+        );
+
+        assert_eq!(
+            parser()
+                .parse(b"hello world this works" as &[_])
+                .into_result(),
+            Ok(vec![
+                b"hello" as &[_],
+                b"world" as &[_],
+                b"this" as &[_],
+                b"works" as &[_],
+            ]),
+        );
+    }
+
+    #[test]
+    fn unicode_str() {
+        let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
+        let mut state = ();
+        let mut input = InputRef::<_, extra::Default>::new(input, Ok(&mut state));
+
+        while let (_, Some(c)) = input.next() {
+            std::hint::black_box(c);
+        }
+    }
+
+    #[test]
+    fn iter() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl IterParser<'a, &'a str, char> {
+            any().repeated()
+        }
+
+        let mut chars = String::new();
+        for c in parser().parse_iter("abcdefg").into_result().unwrap() {
+            chars.push(c);
+        }
+
+        assert_eq!(&chars, "abcdefg");
+    }
+
+    #[test]
+    #[cfg(feature = "memoization")]
+    fn exponential() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, String> {
+            recursive(|expr| {
+                let atom = any()
+                    .filter(|c: &char| c.is_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .collect()
+                    .or(expr.delimited_by(just('('), just(')')));
+
+                atom.clone()
+                    .then_ignore(just('+'))
+                    .then(atom.clone())
+                    .map(|(a, b)| format!("{}{}", a, b))
+                    .memoised()
+                    .or(atom)
+            })
+            .then_ignore(end())
+        }
+
+        parser()
+            .parse("((((((((((((((((((((((a+b))))))))))))))))))))))")
+            .into_result()
+            .unwrap();
+    }
+}

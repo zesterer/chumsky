@@ -3,7 +3,7 @@
 //! cargo run --example json -- examples/sample.json
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::zero_copy::{error::RichReason, prelude::*};
+use chumsky::{error::RichReason, prelude::*};
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]
