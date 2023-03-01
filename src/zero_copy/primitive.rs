@@ -47,7 +47,8 @@ where
             (at, Some(tok)) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok), unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -198,7 +199,8 @@ where
                     E::Error::expected_found(
                         Some(Some(I::Token::clone(next))),
                         tok,
-                        inp.span_since(before),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
                     ),
                 )),
             }
@@ -276,7 +278,8 @@ where
                     E::Error::expected_found(
                         self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
                         found,
-                        inp.span_since(before),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
                     ),
                 ));
                 Err(())
@@ -347,7 +350,8 @@ where
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, found, inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -458,16 +462,21 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let err = match inp.next_ref() {
-            (at, Some(tok)) => match (self.filter)(tok, inp.span_since(before)) {
+            // SAFETY: Using offsets derived from input
+            (at, Some(tok)) => match (self.filter)(tok, unsafe { inp.span_since(before) }) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => Located::at(
                     at.into(),
-                    E::Error::expected_found(None, Some(tok.clone()), inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok.clone()), unsafe {
+                        inp.span_since(before)
+                    }),
                 ),
             },
             (at, found) => Located::at(
                 at.into(),
-                E::Error::expected_found(None, found.cloned(), inp.span_since(before)),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, found.cloned(), unsafe { inp.span_since(before) }),
             ),
         };
         inp.add_alt(err);
@@ -504,7 +513,8 @@ where
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, found, inp.span_since(before)),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
                 ));
                 Err(())
             }
@@ -916,7 +926,8 @@ where
             let offs = inp.offset();
             inp.add_alt(Located::at(
                 offs.into(),
-                E::Error::expected_found(None, None, inp.span_since(offs)),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, None, unsafe { inp.span_since(offs) }),
             ));
             Err(())
         } else {

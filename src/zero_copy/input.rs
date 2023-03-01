@@ -5,8 +5,9 @@
 //! [`Input`] is the primary trait used to feed input data into a chumsky parser. You can create them in a number of
 //! ways: from strings, slices, arrays, etc.
 
+pub use crate::zero_copy::stream::{BoxedStream, Stream};
+
 use super::*;
-use core::cell::Cell;
 use hashbrown::HashMap;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
@@ -16,7 +17,7 @@ pub trait Input<'a>: 'a {
     type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
     type Token;
-    /// The type of a span on this input - to provide custom span context see [`WithContext`]
+    /// The type of a span on this input - to provide custom span context see [`Spanned`] and [`WithContext`].
     type Span: Span;
 
     /// Get the offset representing the start of this stream
@@ -29,10 +30,24 @@ pub trait Input<'a>: 'a {
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
 
     /// Create a span from a start and end offset
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span;
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span;
 
     #[doc(hidden)]
     fn reborrow(&self) -> Self;
+
+    /// TODO
+    fn spanned<T, S>(self, eoi: S) -> Spanned<T, S, Self>
+    where
+        Self: Input<'a, Token = (T, S), Offset = usize> + Sized,
+        T: 'a,
+        S: Span + Clone + 'a,
+    {
+        Spanned {
+            input: self,
+            eoi,
+            phantom: PhantomData,
+        }
+    }
 }
 
 /// A trait for types that represent slice-like streams of input tokens.
@@ -85,7 +100,7 @@ impl<'a> Input<'a> for &'a str {
     }
 
     #[inline]
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
@@ -126,7 +141,7 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
     }
 
     #[inline]
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
@@ -162,6 +177,70 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
     }
 }
 
+/// A wrapper around an input that splits an input into spans and tokens.
+#[derive(Copy, Clone)]
+pub struct Spanned<T, S, I> {
+    input: I,
+    eoi: S,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T, S, I> Input<'a> for Spanned<T, S, I>
+where
+    // TODO: Remove Offset = usize bound?
+    I: Input<'a, Token = (T, S), Offset = usize>,
+    T: 'a,
+    S: Span + Clone + 'a,
+{
+    type Offset = I::Offset;
+    type Token = T;
+    type Span = S;
+
+    fn start(&self) -> Self::Offset {
+        self.input.start()
+    }
+
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        let (offs, tok) = self.input.next(offset);
+        (offs, tok.map(|(tok, _)| tok))
+    }
+
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        let start = self
+            .input
+            .next(range.start)
+            .1
+            .map_or(self.eoi.start(), |(_, s)| s.start());
+        let end = self
+            .input
+            .next(range.end.saturating_sub(1))
+            .1
+            .map_or(self.eoi.start(), |(_, s)| s.end());
+        S::new(self.eoi.context(), start..end)
+    }
+
+    fn reborrow(&self) -> Self {
+        Spanned {
+            input: self.input.reborrow(),
+            eoi: self.eoi.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, T, S, I> BorrowInput<'a> for Spanned<T, S, I>
+where
+    // TODO: Remove Offset = usize bound?
+    I: BorrowInput<'a, Token = (T, S), Offset = usize>,
+    T: 'a,
+    S: Span + Clone + 'a,
+{
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
+        let (offs, tok) = self.input.next_ref(offset);
+        (offs, tok.map(|(tok, _)| tok))
+    }
+}
+
 /// An input wrapper contains a user-defined context in its span, in addition to the span of the
 /// wrapped input.
 #[derive(Copy, Clone)]
@@ -174,7 +253,10 @@ impl<Ctx, I> WithContext<Ctx, I> {
     }
 }
 
-impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
+impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I>
+where
+    I::Span: Span<Context = ()>,
+{
     type Offset = I::Offset;
     type Token = I::Token;
     type Span = (Ctx, I::Span);
@@ -187,7 +269,7 @@ impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
         self.1.next(offset)
     }
 
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.0.clone(), self.1.span(range))
     }
 
@@ -196,13 +278,19 @@ impl<'a, Ctx: Clone + 'a, I: Input<'a>> Input<'a> for WithContext<Ctx, I> {
     }
 }
 
-impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ctx, I> {
+impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ctx, I>
+where
+    I::Span: Span<Context = ()>,
+{
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         self.1.next_ref(offset)
     }
 }
 
-impl<'a, Ctx: Clone + 'a, I: SliceInput<'a>> SliceInput<'a> for WithContext<Ctx, I> {
+impl<'a, Ctx: Clone + 'a, I: SliceInput<'a>> SliceInput<'a> for WithContext<Ctx, I>
+where
+    I::Span: Span<Context = ()>,
+{
     type Slice = I::Slice;
 
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
@@ -218,91 +306,8 @@ where
     Ctx: Clone + 'a,
     C: Char,
     I: StrInput<'a, C>,
+    I::Span: Span<Context = ()>,
 {
-}
-
-/// An input that dynamically pulls tokens from an [`Iterator`].
-///
-/// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is
-/// required.
-pub struct Stream<I: Iterator>(Cell<(Vec<I::Item>, Option<I>)>);
-
-impl<I: Iterator> Stream<I> {
-    /// Create a new stream from an [`Iterator`].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use chumsky::zero_copy::{prelude::*, input::Stream};
-    /// let stream = Stream::from_iter((0..10).map(|i| char::from_digit(i, 10).unwrap()));
-    ///
-    /// let parser = text::digits::<_, _, extra::Err<Simple<_>>>(10).collect::<String>();
-    ///
-    /// assert_eq!(parser.parse(&stream).into_result().as_deref(), Ok("0123456789"));
-    /// ```
-    pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
-        Self(Cell::new((Vec::new(), Some(iter.into_iter()))))
-    }
-
-    /// Box this stream, turning it into a [BoxedStream]. This can be useful in cases where your parser accepts input
-    /// from several different sources and it needs to work with all of them.
-    pub fn boxed<'a>(self) -> BoxedStream<'a, I::Item>
-    where
-        I: 'a,
-    {
-        let (vec, iter) = self.0.into_inner();
-        Stream(Cell::new((
-            vec,
-            Some(Box::new(iter.expect("no iterator?!"))),
-        )))
-    }
-}
-
-/// A stream containing a boxed iterator. See [`Stream::boxed`].
-pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
-
-impl<'a, I: Iterator> Input<'a> for &'a Stream<I>
-where
-    I::Item: Clone,
-{
-    type Offset = usize;
-    type Token = I::Item;
-    type Span = SimpleSpan<usize>;
-
-    fn start(&self) -> Self::Offset {
-        0
-    }
-
-    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let mut other = Cell::new((Vec::new(), None));
-        self.0.swap(&other);
-
-        let (vec, iter) = other.get_mut();
-
-        // Pull new items into the vector if we need them
-        if vec.len() <= offset {
-            vec.extend(iter.as_mut().expect("no iterator?!").take(500));
-        }
-
-        // Get the token at the given offset
-        let tok = if let Some(tok) = vec.get(offset) {
-            Some(tok.clone())
-        } else {
-            None
-        };
-
-        self.0.swap(&other);
-
-        (offset + 1, tok)
-    }
-
-    fn span(&self, range: Range<Self::Offset>) -> Self::Span {
-        range.into()
-    }
-
-    fn reborrow(&self) -> Self {
-        *self
-    }
 }
 
 /// Represents the progress of a parser through the input
@@ -501,7 +506,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     /// Return the span from the provided [`Marker`] to the current position
     #[inline]
-    pub fn span_since(&self, before: I::Offset) -> I::Span {
+    pub unsafe fn span_since(&self, before: I::Offset) -> I::Span {
         self.input.span(before..self.offset)
     }
 

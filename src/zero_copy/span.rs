@@ -31,22 +31,39 @@ pub trait Span {
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.
     type Offset;
+
+    /// Create a new span given a context and an offset range.
+    fn new(context: Self::Context, range: Range<Self::Offset>) -> Self;
+
+    /// Return the span's context.
+    fn context(&self) -> Self::Context;
+
+    /// Return the start offset of the span.
+    fn start(&self) -> Self::Offset;
+
+    /// Return the end offset of the span.
+    fn end(&self) -> Self::Offset;
 }
 
-/// The most basic implementor of `Span` - equivalent to `Range`, but `Copy` since it's not also
+/// The most basic implementor of `Span` - akin to `Range`, but `Copy` since it's not also
 /// an iterator. Also has a `Display` implementation
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SimpleSpan<T> {
+pub struct SimpleSpan<T, C = ()> {
     /// The start offset of the span.
     pub start: T,
     /// The end (exclusive) offset of the span.
     pub end: T,
+    context: C,
 }
 
 impl<T> SimpleSpan<T> {
     /// Create a new `SimpleSpan` from a start and end offset
     pub fn new(start: T, end: T) -> SimpleSpan<T> {
-        SimpleSpan { start, end }
+        SimpleSpan {
+            start,
+            end,
+            context: (),
+        }
     }
 
     /// Convert this span into a [`std::ops::Range`].
@@ -60,6 +77,7 @@ impl<T> From<Range<T>> for SimpleSpan<T> {
         SimpleSpan {
             start: range.start,
             end: range.end,
+            context: (),
         }
     }
 }
@@ -103,12 +121,42 @@ where
     }
 }
 
-impl<T> Span for SimpleSpan<T> {
-    type Context = ();
+impl<T: Clone, C: Clone> Span for SimpleSpan<T, C> {
+    type Context = C;
     type Offset = T;
+
+    fn new(context: Self::Context, range: Range<Self::Offset>) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+            context,
+        }
+    }
+    fn context(&self) -> Self::Context {
+        self.context.clone()
+    }
+    fn start(&self) -> Self::Offset {
+        self.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.end.clone()
+    }
 }
 
-impl<Ctx, S: Span> Span for (Ctx, S) {
-    type Context = Ctx;
+impl<C: Clone, S: Span<Context = ()>> Span for (C, S) {
+    type Context = C;
     type Offset = S::Offset;
+
+    fn new(context: Self::Context, range: Range<Self::Offset>) -> Self {
+        (context, S::new((), range))
+    }
+    fn context(&self) -> Self::Context {
+        self.0.clone()
+    }
+    fn start(&self) -> Self::Offset {
+        self.1.start()
+    }
+    fn end(&self) -> Self::Offset {
+        self.1.end()
+    }
 }

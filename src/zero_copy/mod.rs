@@ -49,6 +49,7 @@ pub mod recursive;
 #[cfg(feature = "regex")]
 pub mod regex;
 pub mod span;
+mod stream;
 pub mod text;
 
 /// Commonly used functions, traits and types.
@@ -232,7 +233,8 @@ fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
             inp.emit(E::Error::expected_found(
                 None,
                 Some(tok),
-                inp.span_since(before),
+                // SAFETY: Using offsets derived from input
+                unsafe { inp.span_since(before) },
             ));
             Ok(())
         }

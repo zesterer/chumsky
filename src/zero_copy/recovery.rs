@@ -115,11 +115,12 @@ where
                     inp.errors.alt = Some(alt);
                     break Err(());
                 }
-                (at, Some(tok)) => {
+                (_, Some(tok)) => {
                     inp.emit(E::Error::expected_found(
                         None,
                         Some(tok),
-                        inp.span_since(before),
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
                     ));
                 }
             }
