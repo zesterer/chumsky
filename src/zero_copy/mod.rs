@@ -1,7 +1,4 @@
-//! A zero-copy implementation of [`Parser`](super::Parser)
-//!
-//! This will likely be moving to the crate root at some point and entirely replacing the current
-//! parser implementation.
+#![doc = include_str!("../../README.md")]
 
 macro_rules! go_extra {
     ( $O :ty ) => {
@@ -100,13 +97,16 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Input, InputRef, SliceInput, StrInput},
+    input::{BorrowInput, Emitter, Input, InputRef, SliceInput, StrInput},
     prelude::*,
     primitive::Any,
+    private::{Check, Emit, Mode},
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
 };
+#[cfg(doc)]
+use self::{primitive::custom, stream::Stream};
 
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 trait MaybeUninitExt<T>: Sized {
@@ -164,8 +164,7 @@ impl<T, E> ParseResult<T, E> {
         self.output.as_ref()
     }
 
-    /// Get a slice containing the parse errors for this result. The slice will be empty
-    /// if there are no errors.
+    /// Get a slice containing the parse errors for this result. The slice will be empty if there are no errors.
     pub fn errors(&self) -> impl ExactSizeIterator<Item = &E> {
         self.errs.iter()
     }
@@ -175,20 +174,20 @@ impl<T, E> ParseResult<T, E> {
         self.output
     }
 
-    /// Convert this `ParseResult` into a vector containing any errors. The vector will be empty
-    /// if there were no errors.
+    /// Convert this `ParseResult` into a vector containing any errors. The vector will be empty if there were no
+    /// errors.
     pub fn into_errors(self) -> Vec<E> {
         self.errs
     }
 
-    /// Convert this `ParseResult` into a tuple containing the output, if any existed, and errors,
-    /// if any were encountered. This matches the output of the old [`Parser::parse_recovery`].
+    /// Convert this `ParseResult` into a tuple containing the output, if any existed, and errors, if any were
+    /// encountered.
     pub fn into_output_errors(self) -> (Option<T>, Vec<E>) {
         (self.output, self.errs)
     }
 
-    /// Convert this `ParseResult` into a standard `Result`. This discards output if parsing
-    /// generated any errors, matching the old behavior of [`Parser::parse`].
+    /// Convert this `ParseResult` into a standard `Result`. This discards output if parsing generated any errors,
+    /// matching the old behavior of [`Parser::parse`].
     pub fn into_result(self) -> Result<T, Vec<E>> {
         if self.errs.is_empty() {
             self.output.ok_or(self.errs)
@@ -241,7 +240,7 @@ fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     }
 }
 
-mod internal {
+mod private {
     use super::*;
 
     pub trait ModeSealed {}
@@ -282,7 +281,7 @@ mod internal {
             P: Parser<'a, I, O, E> + ?Sized;
 
         /// Invoke a parser with configuration using the current mode. This is normally equivalent
-        /// to [`parser.go::<M>(inp)`](Parser::go_cfg), but it can be called on unsized values
+        /// to [`parser.go::<M>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
         /// such as `dyn Parser`.
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
@@ -391,7 +390,14 @@ mod internal {
     }
 }
 
-pub use internal::{Check, Emit, Mode};
+/// Internal API features not intended for general use.
+///
+/// **Please note that this module is exempt from the ordinary stability guarantees of the crate. You must not rely on
+/// API features within this module unless you are happy for your code to break with only a minor version increment.**
+pub mod internal {
+    use super::*;
+    pub use private::{Check, Emit, Mode};
+}
 
 /// A trait implemented by parsers.
 ///
@@ -419,7 +425,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// If you want to include non-default state, use [`Parser::parse_with_state`] instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse(&self, input: I) -> ParseResult<O, E::Error>
     where
         Self: Sized,
@@ -436,7 +442,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// If you want to just use a default state value, use [`Parser::parse`] instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse_with_state(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
         Self: Sized,
@@ -463,7 +469,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// If you want to include non-default state, use [`Parser::check_with_state`] instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn check(&self, input: I) -> ParseResult<(), E::Error>
     where
         Self: Sized,
@@ -479,7 +485,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// If you want to just use a default state value, use [`Parser::check`] instead.
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
-    /// [`&[I]`], a [`&str`], or anything implementing [`Stream`] to it.
+    /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn check_with_state(&self, input: I, state: &mut E::State) -> ParseResult<(), E::Error>
     where
         Self: Sized,
@@ -2034,7 +2040,7 @@ where
 ///
 /// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
 /// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
-/// input patterns will become syntax errors, just as with [`filter`].
+/// input patterns will become syntax errors, just as with [`Parser::filter`].
 ///
 /// The macro is semantically similar to a `match` expression and so supports
 /// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
@@ -2055,7 +2061,7 @@ where
 /// }
 /// ```
 ///
-/// Internally, [`select!`] is a loose wrapper around [`filter_map`] and thinking of it as such might make it less
+/// Internally, [`select!`] is very similar to [`Parser::filter`] and thinking of it as such might make it less
 /// confusing.
 ///
 /// # Examples
@@ -2083,8 +2089,8 @@ where
 /// // `select!` is used to deconstruct some of the tokens and turn them into AST nodes
 /// let ast = recursive::<_, _, extra::Err<Simple<&[Token]>>, _, _>(|ast| {
 ///     let literal = select! {
-///         Token::Num(x) => Ast::Num(*x),
-///         Token::Bool(x) => Ast::Bool(*x),
+///         Token::Num(x) => Ast::Num(x),
+///         Token::Bool(x) => Ast::Bool(x),
 ///     };
 ///
 ///     literal.or(ast
@@ -2134,234 +2140,236 @@ macro_rules! select_ref {
     });
 }
 
-#[test]
-fn zero_copy() {
-    use self::input::WithContext;
-    use self::prelude::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // #[derive(Clone)]
-    // enum TokenTest {
-    //     Root,
-    //     Branch(Box<Self>),
-    // }
+    #[test]
+    fn zero_copy() {
+        use self::input::WithContext;
+        use self::prelude::*;
 
-    // fn parser2() -> impl Parser<'static, str, TokenTest> {
-    //     recursive(|token| {
-    //         token
-    //             .delimited_by(just('c'), just('c'))
-    //             .map(Box::new)
-    //             .map(TokenTest::Branch)
-    //             .or(just('!').to(TokenTest::Root))
-    //     })
-    // }
+        // #[derive(Clone)]
+        // enum TokenTest {
+        //     Root,
+        //     Branch(Box<Self>),
+        // }
 
-    #[derive(PartialEq, Debug)]
-    enum Token<'a> {
-        Ident(&'a str),
-        String(&'a str),
-    }
+        // fn parser2() -> impl Parser<'static, str, TokenTest> {
+        //     recursive(|token| {
+        //         token
+        //             .delimited_by(just('c'), just('c'))
+        //             .map(Box::new)
+        //             .map(TokenTest::Branch)
+        //             .or(just('!').to(TokenTest::Root))
+        //     })
+        // }
 
-    type FileId = u32;
+        #[derive(PartialEq, Debug)]
+        enum Token<'a> {
+            Ident(&'a str),
+            String(&'a str),
+        }
 
-    type Span = (FileId, SimpleSpan<usize>);
+        type FileId = u32;
 
-    fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
-        let ident = any()
-            .filter(|c: &char| c.is_alphanumeric())
-            .repeated()
-            .at_least(1)
-            .map_slice(Token::Ident);
+        type Span = (FileId, SimpleSpan<usize>);
 
-        let string = just('"')
-            .then(any().filter(|c: &char| *c != '"').repeated())
-            .then(just('"'))
-            .map_slice(Token::String);
-
-        ident
-            .or(string)
-            .map_with_span(|token, span| (span, token))
-            .padded()
-            .repeated_exactly()
-            .collect()
-    }
-
-    assert_eq!(
-        parser()
-            .parse(WithContext(42, r#"hello "world" these are "test" tokens"#))
-            .into_result(),
-        Ok([
-            ((42, (0..5).into()), Token::Ident("hello")),
-            ((42, (6..13).into()), Token::String("\"world\"")),
-            ((42, (14..19).into()), Token::Ident("these")),
-            ((42, (20..23).into()), Token::Ident("are")),
-            ((42, (24..30).into()), Token::String("\"test\"")),
-            ((42, (31..37).into()), Token::Ident("tokens")),
-        ]),
-    );
-}
-
-use crate::zero_copy::input::Emitter;
-use combinator::MapSlice;
-
-#[test]
-fn zero_copy_repetition() {
-    use self::prelude::*;
-
-    fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
-        any()
-            .filter(|c: &char| c.is_ascii_digit())
-            .repeated()
-            .at_least(1)
-            .at_most(3)
-            .map_slice(|b: &str| b.parse::<u64>().unwrap())
-            .padded()
-            .separated_by(just(',').padded())
-            .allow_trailing()
-            .collect()
-            .delimited_by(just('['), just(']'))
-    }
-
-    assert_eq!(
-        parser().parse("[122 , 23,43,    4, ]").into_result(),
-        Ok(vec![122, 23, 43, 4]),
-    );
-    assert_eq!(
-        parser().parse("[0, 3, 6, 900,120]").into_result(),
-        Ok(vec![0, 3, 6, 900, 120]),
-    );
-    assert_eq!(
-        parser().parse("[200,400,50  ,0,0, ]").into_result(),
-        Ok(vec![200, 400, 50, 0, 0]),
-    );
-
-    assert!(parser().parse("[1234,123,12,1]").has_errors());
-    assert!(parser().parse("[,0, 1, 456]").has_errors());
-    assert!(parser().parse("[3, 4, 5, 67 89,]").has_errors());
-}
-
-#[test]
-fn zero_copy_group() {
-    use self::prelude::*;
-
-    fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
-        group((
-            any()
-                .filter(|c: &char| c.is_ascii_alphabetic())
+        fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
+            let ident = any()
+                .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
                 .at_least(1)
-                .slice()
-                .padded(),
+                .map_slice(Token::Ident);
+
+            let string = just('"')
+                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(just('"'))
+                .map_slice(Token::String);
+
+            ident
+                .or(string)
+                .map_with_span(|token, span| (span, token))
+                .padded()
+                .repeated_exactly()
+                .collect()
+        }
+
+        assert_eq!(
+            parser()
+                .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
+                .into_result(),
+            Ok([
+                ((42, (0..5).into()), Token::Ident("hello")),
+                ((42, (6..13).into()), Token::String("\"world\"")),
+                ((42, (14..19).into()), Token::Ident("these")),
+                ((42, (20..23).into()), Token::Ident("are")),
+                ((42, (24..30).into()), Token::String("\"test\"")),
+                ((42, (31..37).into()), Token::Ident("tokens")),
+            ]),
+        );
+    }
+
+    #[test]
+    fn zero_copy_repetition() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             any()
                 .filter(|c: &char| c.is_ascii_digit())
                 .repeated()
                 .at_least(1)
-                .map_slice(|s: &str| s.parse::<u64>().unwrap())
-                .padded(),
-            any().filter(|c: &char| !c.is_whitespace()).padded(),
-        ))
-    }
-
-    assert_eq!(
-        parser().parse("abc 123 [").into_result(),
-        Ok(("abc", 123, '[')),
-    );
-    assert_eq!(
-        parser().parse("among3d").into_result(),
-        Ok(("among", 3, 'd')),
-    );
-    assert_eq!(
-        parser().parse("cba321,").into_result(),
-        Ok(("cba", 321, ',')),
-    );
-
-    assert!(parser().parse("abc 123  ").has_errors());
-    assert!(parser().parse("123abc ]").has_errors());
-    assert!(parser().parse("and one &").has_errors());
-}
-
-#[cfg(feature = "regex")]
-#[test]
-fn regex_parser() {
-    use self::prelude::*;
-    use self::regex::*;
-
-    fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
-        regex("[a-zA-Z_][a-zA-Z0-9_]*")
-            .padded()
-            .repeated()
-            .collect()
-    }
-    assert_eq!(
-        parser().parse("hello world this works").into_result(),
-        Ok(vec!["hello", "world", "this", "works"]),
-    );
-
-    assert_eq!(
-        parser()
-            .parse(b"hello world this works" as &[_])
-            .into_result(),
-        Ok(vec![
-            b"hello" as &[_],
-            b"world" as &[_],
-            b"this" as &[_],
-            b"works" as &[_],
-        ]),
-    );
-}
-
-#[test]
-fn unicode_str() {
-    let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
-    let mut state = ();
-    let mut input = InputRef::<_, extra::Default>::new(input, Ok(&mut state));
-
-    while let (_, Some(c)) = input.next() {
-        std::hint::black_box(c);
-    }
-}
-
-#[test]
-fn iter() {
-    use self::prelude::*;
-
-    fn parser<'a>() -> impl IterParser<'a, &'a str, char> {
-        any().repeated()
-    }
-
-    let mut chars = String::new();
-    for c in parser().parse_iter("abcdefg").into_result().unwrap() {
-        chars.push(c);
-    }
-
-    assert_eq!(&chars, "abcdefg");
-}
-
-#[test]
-#[cfg(feature = "memoization")]
-fn exponential() {
-    use self::prelude::*;
-
-    fn parser<'a>() -> impl Parser<'a, &'a str, String> {
-        recursive(|expr| {
-            let atom = any()
-                .filter(|c: &char| c.is_alphabetic())
-                .repeated()
-                .at_least(1)
+                .at_most(3)
+                .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                .padded()
+                .separated_by(just(',').padded())
+                .allow_trailing()
                 .collect()
-                .or(expr.delimited_by(just('('), just(')')));
+                .delimited_by(just('['), just(']'))
+        }
 
-            atom.clone()
-                .then_ignore(just('+'))
-                .then(atom.clone())
-                .map(|(a, b)| format!("{}{}", a, b))
-                .memoised()
-                .or(atom)
-        })
-        .then_ignore(end())
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+
+        assert!(parser().parse("[1234,123,12,1]").has_errors());
+        assert!(parser().parse("[,0, 1, 456]").has_errors());
+        assert!(parser().parse("[3, 4, 5, 67 89,]").has_errors());
     }
 
-    parser()
-        .parse("((((((((((((((((((((((a+b))))))))))))))))))))))")
-        .into_result()
-        .unwrap();
+    #[test]
+    fn zero_copy_group() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
+            group((
+                any()
+                    .filter(|c: &char| c.is_ascii_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .slice()
+                    .padded(),
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .map_slice(|s: &str| s.parse::<u64>().unwrap())
+                    .padded(),
+                any().filter(|c: &char| !c.is_whitespace()).padded(),
+            ))
+        }
+
+        assert_eq!(
+            parser().parse("abc 123 [").into_result(),
+            Ok(("abc", 123, '[')),
+        );
+        assert_eq!(
+            parser().parse("among3d").into_result(),
+            Ok(("among", 3, 'd')),
+        );
+        assert_eq!(
+            parser().parse("cba321,").into_result(),
+            Ok(("cba", 321, ',')),
+        );
+
+        assert!(parser().parse("abc 123  ").has_errors());
+        assert!(parser().parse("123abc ]").has_errors());
+        assert!(parser().parse("and one &").has_errors());
+    }
+
+    #[cfg(feature = "regex")]
+    #[test]
+    fn regex_parser() {
+        use self::prelude::*;
+        use self::regex::*;
+
+        fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
+            regex("[a-zA-Z_][a-zA-Z0-9_]*")
+                .padded()
+                .repeated()
+                .collect()
+        }
+        assert_eq!(
+            parser().parse("hello world this works").into_result(),
+            Ok(vec!["hello", "world", "this", "works"]),
+        );
+
+        assert_eq!(
+            parser()
+                .parse(b"hello world this works" as &[_])
+                .into_result(),
+            Ok(vec![
+                b"hello" as &[_],
+                b"world" as &[_],
+                b"this" as &[_],
+                b"works" as &[_],
+            ]),
+        );
+    }
+
+    #[test]
+    fn unicode_str() {
+        let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
+        let mut state = ();
+        let mut input = InputRef::<_, extra::Default>::new(input, Ok(&mut state));
+
+        while let (_, Some(c)) = input.next() {
+            std::hint::black_box(c);
+        }
+    }
+
+    #[test]
+    fn iter() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl IterParser<'a, &'a str, char> {
+            any().repeated()
+        }
+
+        let mut chars = String::new();
+        for c in parser().parse_iter("abcdefg").into_result().unwrap() {
+            chars.push(c);
+        }
+
+        assert_eq!(&chars, "abcdefg");
+    }
+
+    #[test]
+    #[cfg(feature = "memoization")]
+    fn exponential() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, String> {
+            recursive(|expr| {
+                let atom = any()
+                    .filter(|c: &char| c.is_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .collect()
+                    .or(expr.delimited_by(just('('), just(')')));
+
+                atom.clone()
+                    .then_ignore(just('+'))
+                    .then(atom.clone())
+                    .map(|(a, b)| format!("{}{}", a, b))
+                    .memoised()
+                    .or(atom)
+            })
+            .then_ignore(end())
+        }
+
+        parser()
+            .parse("((((((((((((((((((((((a+b))))))))))))))))))))))")
+            .into_result()
+            .unwrap();
+    }
 }

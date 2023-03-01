@@ -160,3 +160,19 @@ impl<C: Clone, S: Span<Context = ()>> Span for (C, S) {
         self.1.end()
     }
 }
+
+impl<T: Clone> Span for Range<T> {
+    type Context = ();
+    type Offset = T;
+
+    fn new(_context: Self::Context, range: Range<Self::Offset>) -> Self {
+        range
+    }
+    fn context(&self) -> Self::Context {}
+    fn start(&self) -> Self::Offset {
+        self.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.end.clone()
+    }
+}

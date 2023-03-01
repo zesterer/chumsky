@@ -1797,7 +1797,7 @@ where
     go_extra!([OA; N]);
 }
 
-/// See [`Parser::foldr`].
+/// See [`IterParser::foldr`].
 pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,

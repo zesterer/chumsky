@@ -5,9 +5,10 @@
 //!
 //! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
 //! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
-//!
-//! The [`TextParser`] trait is an extension on top of the main [`Parser`] trait that adds combinators unique to the
-//! parsing of text.
+
+// TODO
+// The [`TextParser`] trait is an extension on top of the main [`Parser`] trait that adds combinators unique to the
+// parsing of text.
 
 use crate::zero_copy::prelude::*;
 
@@ -342,8 +343,8 @@ pub fn int<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
 
 /// A parser that accepts a C-style identifier.
 ///
-/// The output type of this parser is [`Character::Collection`] (i.e: [`String`] when `C` is [`char`], and [`Vec<u8>`]
-/// when `C` is [`u8`]).
+/// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
+/// [`u8`]).
 ///
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.

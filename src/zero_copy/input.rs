@@ -553,6 +553,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.input.slice(range)
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub(crate) fn slice_from(&self, from: RangeFrom<I::Offset>) -> I::Slice
     where
@@ -561,6 +562,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.input.slice_from(from)
     }
 
+    #[cfg_attr(not(feature = "regex"), allow(dead_code))]
     #[inline]
     pub(crate) fn slice_trailing(&self) -> I::Slice
     where
