@@ -41,7 +41,7 @@ enum Instr {
     Loop(Vec<Self>),
 }
 
-fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
+fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>> {
     recursive(|bf| choice((
         just('<').to(Instr::Left),
         just('>').to(Instr::Right),
@@ -51,7 +51,8 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
         just('.').to(Instr::Write),
         bf.delimited_by(just('['), just(']')).map(Instr::Loop),
     ))
-        .repeated())
+        .repeated()
+        .collect())
 }
 ```
 

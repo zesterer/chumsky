@@ -3,6 +3,7 @@
 //! Run it with the following command:
 //! cargo run --example nano_rust -- examples/sample.nrs
 
+/*
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::{prelude::*, stream::Stream};
 use std::{collections::HashMap, env, fmt, fs};
@@ -59,7 +60,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Str);
 
     // A parser for operators
-    let op = one_of("+-*/!=")
+    let op = one_of("+*-/!=")
         .repeated()
         .at_least(1)
         .collect::<String>()
@@ -638,3 +639,6 @@ fn main() {
             report.finish().print(Source::from(&src)).unwrap();
         });
 }
+*/
+
+fn main() {}
