@@ -376,10 +376,10 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
 /// See [`select!`].
 pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
 where
-    I: BorrowInput<'a>,
+    I: Input<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+    F: Fn(I::Token, I::Span) -> Option<O>,
 {
     Select {
         filter,
@@ -388,6 +388,66 @@ where
 }
 
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
+where
+    I: Input<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(I::Token, I::Span) -> Option<O>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
+        let err = match inp.next() {
+            (at, Some(tok)) => match (self.filter)(tok.clone(), inp.span_since(before)) {
+                Some(out) => return Ok(M::bind(|| out)),
+                None => Located::at(
+                    at.into(),
+                    E::Error::expected_found(None, Some(tok), inp.span_since(before)),
+                ),
+            },
+            (at, found) => Located::at(
+                at.into(),
+                E::Error::expected_found(None, found, inp.span_since(before)),
+            ),
+        };
+        inp.add_alt(err);
+        Err(())
+    }
+
+    go_extra!(O);
+}
+
+/// See [`select_ref!`].
+pub struct SelectRef<F, I, O, E> {
+    filter: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I, O, E> Copy for SelectRef<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// See [`select_ref!`].
+pub const fn select_ref<'a, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+{
+    SelectRef {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
     I::Token: Clone + 'a,
