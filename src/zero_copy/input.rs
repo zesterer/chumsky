@@ -38,7 +38,22 @@ pub trait Input<'a>: 'a {
     #[doc(hidden)]
     fn reborrow(&self) -> Self;
 
-    /// TODO
+    /// Split an input that produces tokens of type `(T, S)` into one that produces tokens of type `T` and spans of
+    /// type `S`.
+    ///
+    /// This is commonly required for lexers that generate token-span tuples. For example, `logos`'
+    /// [`SpannedIter`](https://docs.rs/logos/0.12.0/logos/struct.Lexer.html#method.spanned) lexer generates such
+    /// pairs.
+    ///
+    /// Also required is an 'End Of Input' (EoI) span. This span is arbitrary, but is used by the input to produce
+    /// sensible spans that extend to the end of the input or are zero-width. Most implementations simply use some
+    /// equivalent of `len..len` (i.e: a span where both the start and end offsets are set to the end of the input).
+    /// However, what you choose for this span is up to you: but consider that the context, start, and end of the span
+    /// will be recombined to create new spans as required by the parser.
+    ///
+    /// Although `Spanned` does implement [`BorrowInput`], please be aware that, as you might anticipate, the slices
+    /// will be those of the original input (usually `&[(T, S)]`) and not `&[T]` so as to avoid the need to copy
+    /// around sections of the input.
     fn spanned<T, S>(self, eoi: S) -> Spanned<T, S, Self>
     where
         Self: Input<'a, Token = (T, S), Offset = usize> + Sized,
@@ -55,8 +70,7 @@ pub trait Input<'a>: 'a {
 
 /// A trait for types that represent slice-like streams of input tokens.
 pub trait SliceInput<'a>: Input<'a> {
-    /// The unsized slice type of this input. For [`&str`] it's `str`, and for [`&[T]`] it will be
-    /// `[T]`
+    /// The unsized slice type of this input. For [`&str`] it's `&str`, and for [`&[T]`] it will be `&[T]`.
     type Slice;
 
     /// Get a slice from a start and end offset
@@ -180,7 +194,7 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
     }
 }
 
-/// A wrapper around an input that splits an input into spans and tokens.
+/// A wrapper around an input that splits an input into spans and tokens. See [`Input::spanned`].
 #[derive(Copy, Clone)]
 pub struct Spanned<T, S, I> {
     input: I,
@@ -241,6 +255,23 @@ where
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         let (offs, tok) = self.input.next_ref(offset);
         (offs, tok.map(|(tok, _)| tok))
+    }
+}
+
+impl<'a, T, S, I> SliceInput<'a> for Spanned<T, S, I>
+where
+    // TODO: Remove Offset = usize bound?
+    I: SliceInput<'a, Token = (T, S), Offset = usize>,
+    T: 'a,
+    S: Span + Clone + 'a,
+{
+    type Slice = I::Slice;
+
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice(&self.input, range)
+    }
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice_from(&self.input, from)
     }
 }
 
