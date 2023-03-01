@@ -87,4 +87,8 @@ where
     fn reborrow(&self) -> Self {
         *self
     }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
 }

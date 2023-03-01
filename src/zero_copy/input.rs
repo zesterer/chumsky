@@ -38,6 +38,10 @@ pub trait Input<'a>: 'a {
     #[doc(hidden)]
     fn reborrow(&self) -> Self;
 
+    // Get the previous offset, saturating at zero
+    #[doc(hidden)]
+    fn prev(offs: Self::Offset) -> Self::Offset;
+
     /// Split an input that produces tokens of type `(T, S)` into one that produces tokens of type `T` and spans of
     /// type `S`.
     ///
@@ -56,7 +60,7 @@ pub trait Input<'a>: 'a {
     /// around sections of the input.
     fn spanned<T, S>(self, eoi: S) -> Spanned<T, S, Self>
     where
-        Self: Input<'a, Token = (T, S), Offset = usize> + Sized,
+        Self: Input<'a, Token = (T, S)> + Sized,
         T: 'a,
         S: Span + Clone + 'a,
     {
@@ -124,6 +128,10 @@ impl<'a> Input<'a> for &'a str {
     fn reborrow(&self) -> Self {
         *self
     }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
 }
 
 impl<'a> StrInput<'a, char> for &'a str {}
@@ -165,6 +173,10 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
     fn reborrow(&self) -> Self {
         *self
     }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
 }
 
 impl<'a> StrInput<'a, u8> for &'a [u8] {}
@@ -188,7 +200,6 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
         } else {
-            // We actually don't care if the offset goes beyond the end of the slice, and this seems to be *slightly* faster
             (offset, None)
         }
     }
@@ -204,8 +215,7 @@ pub struct Spanned<T, S, I> {
 
 impl<'a, T, S, I> Input<'a> for Spanned<T, S, I>
 where
-    // TODO: Remove Offset = usize bound?
-    I: Input<'a, Token = (T, S), Offset = usize>,
+    I: Input<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
@@ -230,7 +240,7 @@ where
             .map_or(self.eoi.start(), |(_, s)| s.start());
         let end = self
             .input
-            .next(range.end.saturating_sub(1))
+            .next(I::prev(range.end))
             .1
             .map_or(self.eoi.start(), |(_, s)| s.end());
         S::new(self.eoi.context(), start..end)
@@ -243,12 +253,15 @@ where
             phantom: PhantomData,
         }
     }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        I::prev(offs)
+    }
 }
 
 impl<'a, T, S, I> BorrowInput<'a> for Spanned<T, S, I>
 where
-    // TODO: Remove Offset = usize bound?
-    I: BorrowInput<'a, Token = (T, S), Offset = usize>,
+    I: BorrowInput<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
@@ -260,8 +273,7 @@ where
 
 impl<'a, T, S, I> SliceInput<'a> for Spanned<T, S, I>
 where
-    // TODO: Remove Offset = usize bound?
-    I: SliceInput<'a, Token = (T, S), Offset = usize>,
+    I: SliceInput<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
@@ -309,6 +321,10 @@ where
 
     fn reborrow(&self) -> Self {
         WithContext(self.0.clone(), self.1.reborrow())
+    }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        I::prev(offs)
     }
 }
 
