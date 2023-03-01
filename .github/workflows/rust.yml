@@ -16,10 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
             toolchain: stable
-            override: true
             components: rustfmt, clippy
       - name: Run cargo check
         run: cargo check --verbose --no-default-features
@@ -29,10 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
             toolchain: nightly
-            override: true
             components: rustfmt, clippy
       - name: Run cargo check
         run: cargo test --verbose --all-features
