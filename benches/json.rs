@@ -327,10 +327,10 @@ mod nom {
 
 mod winnow {
     use winnow::{
-        branch::alt,
-        bytes::{none_of, one_of, tag, take_while0},
+        branch::{alt, dispatch},
+        bytes::{any, none_of, one_of, tag, take_while0},
         character::{digit0, digit1, escaped},
-        combinator::{cut_err, opt},
+        combinator::{cut_err, fail, opt, peek},
         error::{Error, ParseError},
         multi::separated0,
         prelude::*,
@@ -401,15 +401,16 @@ mod winnow {
     fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
         preceded(
             space,
-            alt((
-                tag("null").value(JsonZero::Null),
-                tag("true").value(JsonZero::Bool(true)),
-                tag("false").value(JsonZero::Bool(false)),
-                number.map(JsonZero::Num),
-                string.map(JsonZero::Str),
-                array.map(JsonZero::Array),
-                object.map(JsonZero::Object),
-            )),
+            dispatch!(peek(any);
+                b'n' => tag("null").value(JsonZero::Null),
+                b't' => tag("true").value(JsonZero::Bool(true)),
+                b'f' => tag("false").value(JsonZero::Bool(false)),
+                b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
+                b'"' => string.map(JsonZero::Str),
+                b'[' => array.map(JsonZero::Array),
+                b'{' => object.map(JsonZero::Object),
+                _ => fail,
+            ),
         )(i)
     }
 
