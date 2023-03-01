@@ -11,10 +11,10 @@ enum Token {
 
 fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
     recursive(|expr| {
-        let num = select! { Token::Num(x) => *x };
+        let num = select! { Token::Num(x) => x };
         let parens = expr
             // Here we specify how the parser should come up with the nested tokens
-            .nested_in(select! { Token::Parens(xs) => xs.as_slice() });
+            .nested_in(select_ref! { Token::Parens(xs) => xs.as_slice() });
 
         let atom = num.or(parens);
 

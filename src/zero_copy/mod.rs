@@ -72,7 +72,7 @@ pub mod prelude {
         ParseResult,
         Parser,
     };
-    pub use crate::select;
+    pub use crate::{select, select_ref};
 }
 
 use alloc::{
@@ -2108,6 +2108,22 @@ where
 macro_rules! select {
     ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
         $crate::zero_copy::primitive::select(
+            move |x, span| match x {
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                _ => ::core::option::Option::None,
+            }
+        )
+    });
+}
+
+/// A version of [`select!`] that selects on token by reference instead of by value.
+///
+/// Useful if you want to extract elements from a token in a zero-copy manner.
+// TODO: Remove this, somehow unify with `select`?
+#[macro_export]
+macro_rules! select_ref {
+    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+        $crate::zero_copy::primitive::select_ref(
             move |x, span| match x {
                 $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
                 _ => ::core::option::Option::None,
