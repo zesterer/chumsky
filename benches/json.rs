@@ -32,7 +32,7 @@ fn bench_json(c: &mut Criterion) {
     });
 
     c.bench_function("json_chumsky_zero_copy", {
-        use ::chumsky::zero_copy::prelude::*;
+        use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json();
         move |b| {
             b.iter(|| {
@@ -44,7 +44,7 @@ fn bench_json(c: &mut Criterion) {
     });
 
     c.bench_function("json_chumsky_zero_copy_check", {
-        use ::chumsky::zero_copy::prelude::*;
+        use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json();
         move |b| {
             b.iter(|| {
@@ -73,19 +73,13 @@ fn bench_json(c: &mut Criterion) {
     c.bench_function("json_sn", {
         move |b| b.iter(|| black_box(sn::Parser::new(black_box(JSON)).parse().unwrap()))
     });
-
-    c.bench_function("json_chumsky", {
-        use ::chumsky::prelude::*;
-        let json = chumsky::json();
-        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
-    });
 }
 
 criterion_group!(benches, bench_json);
 criterion_main!(benches);
 
 mod chumsky_zero_copy {
-    use chumsky::zero_copy::prelude::*;
+    use chumsky::prelude::*;
 
     use super::JsonZero;
     use std::str;
@@ -160,73 +154,6 @@ mod chumsky_zero_copy {
             ))
             .padded()
         })
-    }
-}
-
-mod chumsky {
-    use chumsky::{error::Cheap, prelude::*};
-
-    use super::Json;
-    use std::str;
-
-    pub fn json() -> impl Parser<u8, Json, Error = Cheap<u8>> {
-        recursive(|value| {
-            let frac = just(b'.').chain(text::digits(10));
-
-            let exp = one_of(b"eE")
-                .ignore_then(just(b'+').or(just(b'-')).or_not())
-                .chain(text::digits(10));
-
-            let number = just(b'-')
-                .or_not()
-                .chain(text::int(10))
-                .chain(frac.or_not().flatten())
-                .chain::<u8, _, _>(exp.or_not().flatten())
-                .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
-
-            let escape = just(b'\\').ignore_then(choice((
-                just(b'\\'),
-                just(b'/'),
-                just(b'"'),
-                just(b'b').to(b'\x08'),
-                just(b'f').to(b'\x0C'),
-                just(b'n').to(b'\n'),
-                just(b'r').to(b'\r'),
-                just(b't').to(b'\t'),
-            )));
-
-            let string = just(b'"')
-                .ignore_then(filter(|c| *c != b'\\' && *c != b'"').or(escape).repeated())
-                .then_ignore(just(b'"'))
-                .map(|bytes| String::from_utf8(bytes).unwrap());
-
-            let array = value
-                .clone()
-                .separated_by(just(b',').padded())
-                .padded()
-                .delimited_by(just(b'['), just(b']'))
-                .map(Json::Array);
-
-            let member = string.then_ignore(just(b':').padded()).then(value);
-            let object = member
-                .separated_by(just(b',').padded())
-                .padded()
-                .delimited_by(just(b'{'), just(b'}'))
-                .collect::<Vec<(String, Json)>>()
-                .map(Json::Object);
-
-            choice((
-                just(b"null").to(Json::Null),
-                just(b"true").to(Json::Bool(true)),
-                just(b"false").to(Json::Bool(false)),
-                number.map(Json::Num),
-                string.map(Json::Str),
-                array,
-                object,
-            ))
-            .padded()
-        })
-        .then_ignore(end())
     }
 }
 

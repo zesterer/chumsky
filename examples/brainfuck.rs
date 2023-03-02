@@ -2,7 +2,7 @@
 //! Run it with the following command:
 //! cargo run --example brainfuck -- examples/sample.bf
 
-use chumsky::zero_copy::prelude::*;
+use chumsky::prelude::*;
 use std::{
     env, fs,
     io::{self, Read},
