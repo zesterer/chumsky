@@ -540,9 +540,14 @@ where
                 if let Some(err) = o.get() {
                     let err = err.clone();
                     inp.add_alt(err);
-                    return Err(());
                 } else {
+                    inp.add_alt(Located::at(
+                        key.0.into(),
+                        // SAFETY: Using offsets derived from input
+                        Error::expected_found(None, None, unsafe { inp.span_since(key.0) }),
+                    ));
                 }
+                return Err(());
             }
             hashbrown::hash_map::Entry::Vacant(v) => {
                 v.insert(None);
@@ -867,8 +872,7 @@ where
 /// See [`Parser::or`].
 #[derive(Copy, Clone)]
 pub struct Or<A, B> {
-    pub(crate) parser_a: A,
-    pub(crate) parser_b: B,
+    pub(crate) choice: crate::primitive::Choice<(A, B)>,
 }
 
 impl<'a, I, O, E, A, B> Parser<'a, I, O, E> for Or<A, B>
@@ -880,14 +884,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.save();
-        match self.parser_a.go::<M>(inp) {
-            Ok(out) => Ok(out),
-            Err(()) => {
-                inp.rewind(before);
-                self.parser_b.go::<M>(inp)
-            }
-        }
+        self.choice.go::<M>(inp)
     }
 
     go_extra!(O);

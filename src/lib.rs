@@ -214,13 +214,9 @@ impl<E> Located<E> {
         Self { pos, err }
     }
 
-    fn at_pos(pos: usize, err: E) -> Self {
-        Self { pos, err }
-    }
-
     fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
         match self.pos.cmp(&other.pos) {
-            Ordering::Equal => Self::at_pos(self.pos, merge(self.err, other.err)),
+            Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
             Ordering::Greater => self,
             Ordering::Less => other,
         }
@@ -1164,8 +1160,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         B: Parser<'a, I, O, E>,
     {
         Or {
-            parser_a: self,
-            parser_b: other,
+            choice: choice((self, other)),
         }
     }
 
@@ -2379,8 +2374,36 @@ mod tests {
         }
 
         parser()
-            .parse("((((((((((((((((((((((a+b))))))))))))))))))))))")
+            .parse("((((((((((((((((((((((((((((((a+b))))))))))))))))))))))))))))))")
             .into_result()
             .unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "memoization")]
+    fn left_recursive() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, String> {
+            recursive(|expr| {
+                let atom = any()
+                    .filter(|c: &char| c.is_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .collect();
+
+                let sum = expr
+                    .clone()
+                    .then_ignore(just('+'))
+                    .then(expr)
+                    .map(|(a, b)| format!("{}{}", a, b))
+                    .memoised();
+
+                sum.or(atom)
+            })
+            .then_ignore(end())
+        }
+
+        assert_eq!(parser().parse("a+b+c").into_result().unwrap(), "abc");
     }
 }
