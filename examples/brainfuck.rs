@@ -20,7 +20,7 @@ enum Instr {
     Loop(Vec<Self>),
 }
 
-fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
+fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>, extra::Err<Simple<'a, &'a str>>> {
     use Instr::*;
     recursive(|bf| {
         choice((
@@ -32,11 +32,11 @@ fn parser() -> impl Parser<char, Vec<Instr>, Error = Simple<char>> {
             just('.').to(Write),
         ))
         .or(bf.delimited_by(just('['), just(']')).map(Loop))
-        .recover_with(nested_delimiters('[', ']', [], |_| Invalid))
-        .recover_with(skip_then_retry_until([']']))
+        .recover_with(via_parser(nested_delimiters('[', ']', [], |_| Invalid)))
+        // .recover_with(skip_then_retry_until([']']))
         .repeated()
+        .collect()
     })
-    .then_ignore(end())
 }
 
 const TAPE_LEN: usize = 10_000;
@@ -65,9 +65,8 @@ fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument"))
         .expect("Failed to read file");
 
-    // let src = "[!]+";
-    match parser().parse(src.trim()) {
+    match parser().parse(src.trim()).into_result() {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
         Err(errs) => errs.into_iter().for_each(|e| println!("{:?}", e)),
-    }
+    };
 }

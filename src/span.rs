@@ -4,7 +4,7 @@
 //!
 //! You can use the [`Span`] trait to connect up chumsky to your compiler's knowledge of the input source.
 
-use core::ops::Range;
+use super::*;
 
 /// A trait that describes a span over a particular range of inputs.
 ///
@@ -12,7 +12,7 @@ use core::ops::Range;
 /// permitted to overlap one-another. The end offset must always be greater than or equal to the start offset.
 ///
 /// Span is automatically implemented for [`Range<T>`] and [`(C, Range<T>)`].
-pub trait Span: Clone {
+pub trait Span {
     /// Extra context used in a span.
     ///
     /// This is usually some way to uniquely identity the source file that a span originated in such as the file's
@@ -20,7 +20,7 @@ pub trait Span: Clone {
     ///
     /// NOTE: Span contexts have no inherent meaning to Chumsky and can be anything. For example, [`Range<usize>`]'s
     /// implementation of [`Span`] simply uses [`()`] as its context.
-    type Context: Clone;
+    type Context;
 
     /// A type representing a span's start or end offset from the start of the input.
     ///
@@ -30,7 +30,7 @@ pub trait Span: Clone {
     /// means that it's perfectly fine for tokens to have non-continuous spans that bear no relation to their actual
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.
-    type Offset: Clone;
+    type Offset;
 
     /// Create a new span given a context and an offset range.
     fn new(context: Self::Context, range: Range<Self::Offset>) -> Self;
@@ -45,14 +45,96 @@ pub trait Span: Clone {
     fn end(&self) -> Self::Offset;
 }
 
-impl<T: Clone + Ord> Span for Range<T> {
-    type Context = ();
+/// The most basic implementor of `Span` - akin to `Range`, but `Copy` since it's not also
+/// an iterator. Also has a `Display` implementation
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct SimpleSpan<T, C = ()> {
+    /// The start offset of the span.
+    pub start: T,
+    /// The end (exclusive) offset of the span.
+    pub end: T,
+    context: C,
+}
+
+impl<T> SimpleSpan<T> {
+    /// Create a new `SimpleSpan` from a start and end offset
+    pub fn new(start: T, end: T) -> SimpleSpan<T> {
+        SimpleSpan {
+            start,
+            end,
+            context: (),
+        }
+    }
+
+    /// Convert this span into a [`std::ops::Range`].
+    pub fn into_range(self) -> Range<T> {
+        self.into()
+    }
+}
+
+impl<T> From<Range<T>> for SimpleSpan<T> {
+    fn from(range: Range<T>) -> Self {
+        SimpleSpan {
+            start: range.start,
+            end: range.end,
+            context: (),
+        }
+    }
+}
+
+impl<T> From<SimpleSpan<T>> for Range<T> {
+    fn from(span: SimpleSpan<T>) -> Self {
+        Range {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
+impl<T> fmt::Debug for SimpleSpan<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}..{:?}", self.start, self.end)
+    }
+}
+
+impl<T> fmt::Display for SimpleSpan<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
+    }
+}
+
+impl<T> IntoIterator for SimpleSpan<T>
+where
+    Range<T>: Iterator<Item = T>,
+{
+    type IntoIter = Range<T>;
+    type Item = T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into()
+    }
+}
+
+impl<T: Clone, C: Clone> Span for SimpleSpan<T, C> {
+    type Context = C;
     type Offset = T;
 
-    fn new((): Self::Context, range: Self) -> Self {
-        range
+    fn new(context: Self::Context, range: Range<Self::Offset>) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+            context,
+        }
     }
-    fn context(&self) -> Self::Context {}
+    fn context(&self) -> Self::Context {
+        self.context.clone()
+    }
     fn start(&self) -> Self::Offset {
         self.start.clone()
     }
@@ -61,20 +143,36 @@ impl<T: Clone + Ord> Span for Range<T> {
     }
 }
 
-impl<C: Clone, T: Clone> Span for (C, Range<T>) {
+impl<C: Clone, S: Span<Context = ()>> Span for (C, S) {
     type Context = C;
-    type Offset = T;
+    type Offset = S::Offset;
 
-    fn new(context: Self::Context, range: Range<T>) -> Self {
-        (context, range)
+    fn new(context: Self::Context, range: Range<Self::Offset>) -> Self {
+        (context, S::new((), range))
     }
     fn context(&self) -> Self::Context {
         self.0.clone()
     }
     fn start(&self) -> Self::Offset {
-        self.1.start.clone()
+        self.1.start()
     }
     fn end(&self) -> Self::Offset {
-        self.1.end.clone()
+        self.1.end()
+    }
+}
+
+impl<T: Clone> Span for Range<T> {
+    type Context = ();
+    type Offset = T;
+
+    fn new(_context: Self::Context, range: Range<Self::Offset>) -> Self {
+        range
+    }
+    fn context(&self) -> Self::Context {}
+    fn start(&self) -> Self::Offset {
+        self.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.end.clone()
     }
 }

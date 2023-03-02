@@ -10,320 +10,122 @@
 //! ## The Important Ones
 //!
 //! - [`just`]: parses a specific input or sequence of inputs
-//! - [`filter`]: parses a single input, if the given filter function returns `true`
+//! - [`any`]: parses any single input
+//! - [`one_of`]: parses any one of a sequence of inputs
+//! - [`none_of`]: parses any input that does not appear in a sequence of inputs
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
 use super::*;
 use core::panic::Location;
 
-/// See [`custom`].
-#[must_use]
-pub struct Custom<F, E>(F, PhantomData<E>);
-
-impl<F: Copy, E> Copy for Custom<F, E> {}
-impl<F: Clone, E> Clone for Custom<F, E> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<I: Clone, O, F: Fn(&mut StreamOf<I, E>) -> PResult<I, O, E>, E: Error<I>> Parser<I, O>
-    for Custom<F, E>
-{
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, O, E> {
-        (self.0)(stream)
-    }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-}
-
-/// A parser primitive that allows you to define your own custom parsers.
-///
-/// In theory you shouldn't need to use this unless you have particularly bizarre requirements, but it's a cleaner and
-/// more sustainable alternative to implementing [`Parser`] by hand.
-///
-/// The output type of this parser is determined by the parse result of the function.
-pub fn custom<F, E>(f: F) -> Custom<F, E> {
-    Custom(f, PhantomData)
-}
-
 /// See [`end`].
-#[must_use]
-pub struct End<E>(PhantomData<E>);
-
-impl<E> Clone for End<E> {
-    fn clone(&self) -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<I: Clone, E: Error<I>> Parser<I, ()> for End<E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, (), E> {
-        match stream.next() {
-            (_, _, None) => (Vec::new(), Ok(((), None))),
-            (at, span, found) => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, Some(None), found),
-                )),
-            ),
-        }
-    }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-}
+pub struct End<I, E>(PhantomData<(E, I)>);
 
 /// A parser that accepts only the end of input.
 ///
-/// This parser is very useful when you wish to force a parser to consume *all* of the input. It is typically combined
-/// with [`Parser::then_ignore`].
-///
 /// The output type of this parser is `()`.
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::prelude::*;
-/// assert_eq!(end::<Simple<char>>().parse(""), Ok(()));
-/// assert!(end::<Simple<char>>().parse("hello").is_err());
-/// ```
-///
-/// ```
-/// # use chumsky::prelude::*;
-/// let digits = text::digits::<_, Simple<char>>(10);
-///
-/// // This parser parses digits!
-/// assert_eq!(digits.parse("1234"), Ok("1234".to_string()));
-///
-/// // However, parsers are lazy and do not consume trailing input.
-/// // This can be inconvenient if we want to validate all of the input.
-/// assert_eq!(digits.parse("1234AhasjADSJAlaDJKSDAK"), Ok("1234".to_string()));
-///
-/// // To fix this problem, we require that the end of input follows any successfully parsed input
-/// let only_digits = digits.then_ignore(end());
-///
-/// // Now our parser correctly produces an error if any trailing input is found...
-/// assert!(only_digits.parse("1234AhasjADSJAlaDJKSDAK").is_err());
-/// // ...while still behaving correctly for inputs that only consist of valid patterns
-/// assert_eq!(only_digits.parse("1234"), Ok("1234".to_string()));
-/// ```
-pub fn end<E>() -> End<E> {
+pub const fn end<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> End<I, E> {
     End(PhantomData)
 }
 
-mod private {
-    pub trait Sealed<T> {}
-
-    impl<T> Sealed<T> for T {}
-    impl Sealed<char> for alloc::string::String {}
-    impl<'a> Sealed<char> for &'a str {}
-    impl<'a, T> Sealed<T> for &'a [T] {}
-    impl<T, const N: usize> Sealed<T> for [T; N] {}
-    impl<'a, T, const N: usize> Sealed<T> for &'a [T; N] {}
-    impl<T> Sealed<T> for alloc::vec::Vec<T> {}
-    impl<T> Sealed<T> for alloc::collections::LinkedList<T> {}
-    impl<T> Sealed<T> for alloc::collections::VecDeque<T> {}
-    impl<T> Sealed<T> for alloc::collections::BTreeSet<T> {}
-    impl<T> Sealed<T> for alloc::collections::BinaryHeap<T> {}
-
-    #[cfg(feature = "std")]
-    impl<T> Sealed<T> for std::collections::HashSet<T> {}
-    #[cfg(not(feature = "std"))]
-    impl<T> Sealed<T> for hashbrown::HashSet<T> {}
-}
-
-/// A utility trait to abstract over container-like things.
-///
-/// This trait is sealed and an implementation detail - its internals should not be relied on by users.
-pub trait Container<T>: private::Sealed<T> {
-    /// An iterator over the items within this container, by value.
-    type Iter: Iterator<Item = T>;
-    /// Iterate over the elements of the container (using internal iteration because GATs are unstable).
-    fn get_iter(&self) -> Self::Iter;
-}
-
-impl<T: Clone> Container<T> for T {
-    type Iter = core::iter::Once<T>;
-    fn get_iter(&self) -> Self::Iter {
-        core::iter::once(self.clone())
-    }
-}
-
-impl Container<char> for String {
-    type Iter = alloc::vec::IntoIter<char>;
-    fn get_iter(&self) -> Self::Iter {
-        self.chars().collect::<Vec<_>>().into_iter()
-    }
-}
-
-impl<'a> Container<char> for &'a str {
-    type Iter = alloc::str::Chars<'a>;
-    fn get_iter(&self) -> Self::Iter {
-        self.chars()
-    }
-}
-
-impl<'a, T: Clone> Container<T> for &'a [T] {
-    type Iter = core::iter::Cloned<core::slice::Iter<'a, T>>;
-    fn get_iter(&self) -> Self::Iter {
-        self.iter().cloned()
-    }
-}
-
-impl<'a, T: Clone, const N: usize> Container<T> for &'a [T; N] {
-    type Iter = core::iter::Cloned<core::slice::Iter<'a, T>>;
-    fn get_iter(&self) -> Self::Iter {
-        self.iter().cloned()
-    }
-}
-
-impl<T: Clone, const N: usize> Container<T> for [T; N] {
-    type Iter = core::array::IntoIter<T, N>;
-    fn get_iter(&self) -> Self::Iter {
-        core::array::IntoIter::new(self.clone())
-    }
-}
-
-impl<T: Clone> Container<T> for Vec<T> {
-    type Iter = alloc::vec::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-impl<T: Clone> Container<T> for alloc::collections::LinkedList<T> {
-    type Iter = alloc::collections::linked_list::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-impl<T: Clone> Container<T> for alloc::collections::VecDeque<T> {
-    type Iter = alloc::collections::vec_deque::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T: Clone> Container<T> for std::collections::HashSet<T> {
-    type Iter = std::collections::hash_set::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: Clone> Container<T> for hashbrown::HashSet<T> {
-    type Iter = hashbrown::hash_set::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-impl<T: Clone> Container<T> for alloc::collections::BTreeSet<T> {
-    type Iter = alloc::collections::btree_set::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-impl<T: Clone> Container<T> for alloc::collections::BinaryHeap<T> {
-    type Iter = alloc::collections::binary_heap::IntoIter<T>;
-    fn get_iter(&self) -> Self::Iter {
-        self.clone().into_iter()
-    }
-}
-
-/// A utility trait to abstract over linear and ordered container-like things, excluding things such
-/// as sets and heaps.
-///
-/// This trait is sealed and an implementation detail - its internals should not be relied on by users.
-pub trait OrderedContainer<T>: Container<T> {}
-
-impl<T: Clone> OrderedContainer<T> for T {}
-impl OrderedContainer<char> for String {}
-impl<'a> OrderedContainer<char> for &'a str {}
-impl<'a, T: Clone> OrderedContainer<T> for &'a [T] {}
-impl<'a, T: Clone, const N: usize> OrderedContainer<T> for &'a [T; N] {}
-impl<T: Clone, const N: usize> OrderedContainer<T> for [T; N] {}
-impl<T: Clone> OrderedContainer<T> for Vec<T> {}
-impl<T: Clone> OrderedContainer<T> for alloc::collections::LinkedList<T> {}
-impl<T: Clone> OrderedContainer<T> for alloc::collections::VecDeque<T> {}
-
-/// See [`just`].
-#[must_use]
-pub struct Just<I, C: OrderedContainer<I>, E>(C, PhantomData<(I, E)>);
-
-impl<I, C: Copy + OrderedContainer<I>, E> Copy for Just<I, C, E> {}
-impl<I, C: Clone + OrderedContainer<I>, E> Clone for Just<I, C, E> {
+impl<I, E> Copy for End<I, E> {}
+impl<I, E> Clone for End<I, E> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
+        End(PhantomData)
     }
 }
 
-impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I, C>
-    for Just<I, C, E>
+impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
 {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, C, E> {
-        for expected in self.0.get_iter() {
-            match stream.next() {
-                (_, _, Some(tok)) if tok == expected => {}
-                (at, span, found) => {
-                    return (
-                        Vec::new(),
-                        Err(Located::at(
-                            at,
-                            E::expected_input_found(span, Some(Some(expected)), found),
-                        )),
-                    )
-                }
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+        let before = inp.offset();
+        match inp.next() {
+            (_, None) => Ok(M::bind(|| ())),
+            (at, Some(tok)) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok), unsafe { inp.span_since(before) }),
+                ));
+                Err(())
             }
         }
-
-        (Vec::new(), Ok((self.0.clone(), None)))
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, C, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    go_extra!(());
+}
+
+/// See [`empty`].
+pub struct Empty<I, E>(PhantomData<(E, I)>);
+
+/// A parser that parses no inputs.
+///
+/// The output type of this parser is `()`.
+pub const fn empty<I, E>() -> Empty<I, E> {
+    Empty(PhantomData)
+}
+
+impl<I, E> Copy for Empty<I, E> {}
+impl<I, E> Clone for Empty<I, E> {
+    fn clone(&self) -> Self {
+        Empty(PhantomData)
     }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, C, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+}
+
+impl<'a, I, E> Parser<'a, I, (), E> for Empty<I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+        Ok(M::bind(|| ()))
+    }
+
+    go_extra!(());
+}
+
+// impl<'b, T, C: Container<T>> Container<T> for &'b C {
+//     type Iter<'a> = C::Iter<'a>;
+//     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
+// }
+
+/// Configuration for [`just`], used in [`ConfigParser::configure`]
+pub struct JustCfg<T> {
+    seq: Option<T>,
+}
+
+impl<T> JustCfg<T> {
+    /// Set the sequence to be used while parsing
+    pub fn seq(mut self, new_seq: T) -> Self {
+        self.seq = Some(new_seq);
+        self
+    }
+}
+
+impl<T> Default for JustCfg<T> {
+    fn default() -> Self {
+        JustCfg { seq: None }
+    }
+}
+
+/// See [`just`].
+pub struct Just<T, I, E = EmptyErr> {
+    seq: T,
+    phantom: PhantomData<(E, I)>,
+}
+
+impl<T: Copy, I, E> Copy for Just<T, I, E> {}
+impl<T: Clone, I, E> Clone for Just<T, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -334,133 +136,99 @@ impl<I: Clone + PartialEq, C: OrderedContainer<I> + Clone, E: Error<I>> Parser<I
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let question = just::<_, _, Cheap<char>>('?');
+/// # use chumsky::{prelude::*, error::Simple};
+/// let question = just::<_, _, extra::Err<Simple<&str>>>('?');
 ///
-/// assert_eq!(question.parse("?"), Ok('?'));
-/// assert!(question.parse("!").is_err());
-/// // This works because parsers do not eagerly consume input, so the '!' is not parsed
-/// assert_eq!(question.parse("?!"), Ok('?'));
+/// assert_eq!(question.parse("?").into_result(), Ok('?'));
+/// // This fails because '?' was not found
+/// assert!(question.parse("!").has_errors());
 /// // This fails because the parser expects an end to the input after the '?'
-/// assert!(question.then(end()).parse("?!").is_err());
+/// assert!(question.parse("?!").has_errors());
 /// ```
-pub fn just<I, C: OrderedContainer<I>, E: Error<I>>(inputs: C) -> Just<I, C, E> {
-    Just(inputs, PhantomData)
-}
-
-/// See [`seq`].
-#[must_use]
-pub struct Seq<I, E>(Vec<I>, PhantomData<E>);
-
-impl<I: Clone, E> Clone for Seq<I, E> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
+pub const fn just<'a, T, I, E>(seq: T) -> Just<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: PartialEq,
+    T: OrderedSeq<I::Token> + Clone,
+{
+    Just {
+        seq,
+        phantom: PhantomData,
     }
 }
 
-impl<I: Clone + PartialEq, E: Error<I>> Parser<I, ()> for Seq<I, E> {
-    type Error = E;
+impl<'a, I, E, T> Parser<'a, I, T, E> for Just<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: Clone + PartialEq,
+    T: OrderedSeq<I::Token> + Clone,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T> {
+        Self::go_cfg::<M>(self, inp, JustCfg::default())
+    }
 
-    fn parse_inner<D: Debugger>(
+    go_extra!(T);
+}
+
+impl<'a, I, E, T> ConfigParser<'a, I, T, E> for Just<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: Clone + PartialEq,
+    T: OrderedSeq<I::Token> + Clone,
+{
+    type Config = JustCfg<T>;
+
+    #[inline]
+    fn go_cfg<M: Mode>(
         &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, (), E> {
-        for expected in &self.0 {
-            match stream.next() {
-                (_, _, Some(tok)) if &tok == expected => {}
-                (at, span, found) => {
-                    return (
-                        Vec::new(),
-                        Err(Located::at(
-                            at,
-                            E::expected_input_found(span, Some(Some(expected.clone())), found),
-                        )),
-                    )
-                }
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, T> {
+        let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
+
+        if let Some(err) = seq.seq_iter().find_map(|next| {
+            let next = next.borrow();
+            let before = inp.offset();
+            match inp.next() {
+                (_, Some(tok)) if *next == tok => None,
+                (at, tok) => Some(Located::at(
+                    at.into(),
+                    E::Error::expected_found(
+                        Some(Some(I::Token::clone(next))),
+                        tok,
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
+                    ),
+                )),
             }
+        }) {
+            inp.add_alt(err);
+            Err(())
+        } else {
+            Ok(M::bind(|| seq.clone()))
         }
-
-        (Vec::new(), Ok(((), None)))
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-}
-
-/// A parser that accepts only a sequence of specific inputs.
-///
-/// The output type of this parser is `()`.
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let hello = seq::<_, _, Cheap<char>>("Hello".chars());
-///
-/// assert_eq!(hello.parse("Hello"), Ok(()));
-/// assert_eq!(hello.parse("Hello, world!"), Ok(()));
-/// assert!(hello.parse("Goodbye").is_err());
-///
-/// let onetwothree = seq::<_, _, Cheap<i32>>([1, 2, 3]);
-///
-/// assert_eq!(onetwothree.parse([1, 2, 3]), Ok(()));
-/// assert_eq!(onetwothree.parse([1, 2, 3, 4, 5]), Ok(()));
-/// assert!(onetwothree.parse([2, 1, 3]).is_err());
-/// ```
-#[deprecated(
-    since = "0.7.0",
-    note = "Use `just` instead: it now works for many sequence-like types!"
-)]
-pub fn seq<I: Clone + PartialEq, Iter: IntoIterator<Item = I>, E>(xs: Iter) -> Seq<I, E> {
-    Seq(xs.into_iter().collect(), PhantomData)
+    go_cfg_extra!(T);
 }
 
 /// See [`one_of`].
-#[must_use]
-pub struct OneOf<I, C, E>(C, PhantomData<(I, E)>);
-
-impl<I, C: Clone, E> Clone for OneOf<I, C, E> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
+pub struct OneOf<T, I, E> {
+    seq: T,
+    phantom: PhantomData<(E, I)>,
 }
 
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<I, C, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, I, E> {
-        match stream.next() {
-            (_, _, Some(tok)) if self.0.get_iter().any(|not| not == tok) => {
-                (Vec::new(), Ok((tok, None)))
-            }
-            (at, span, found) => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, self.0.get_iter().map(Some), found),
-                )),
-            ),
+impl<T: Copy, I, E> Copy for OneOf<T, I, E> {}
+impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: PhantomData,
         }
-    }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
     }
 }
 
@@ -471,96 +239,71 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for OneOf<
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let digits = one_of::<_, _, Cheap<char>>("0123456789")
-///     .repeated().at_least(1)
-///     .then_ignore(end())
+/// # use chumsky::{prelude::*, error::Simple};
+/// let digits = one_of::<_, _, extra::Err<Simple<&str>>>("0123456789")
+///     .repeated()
+///     .at_least(1)
 ///     .collect::<String>();
 ///
-/// assert_eq!(digits.parse("48791"), Ok("48791".to_string()));
-/// assert!(digits.parse("421!53").is_err());
+/// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
+/// assert!(digits.parse("421!53").has_errors());
 /// ```
-pub fn one_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> OneOf<I, C, E> {
-    OneOf(inputs, PhantomData)
-}
-
-/// See [`empty`].
-#[must_use]
-pub struct Empty<E>(PhantomData<E>);
-
-impl<E> Clone for Empty<E> {
-    fn clone(&self) -> Self {
-        Self(PhantomData)
+pub const fn one_of<'a, T, I, E>(seq: T) -> OneOf<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: Clone + PartialEq,
+    T: Seq<I::Token>,
+{
+    OneOf {
+        seq,
+        phantom: PhantomData,
     }
 }
 
-impl<I: Clone, E: Error<I>> Parser<I, ()> for Empty<E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        _: &mut StreamOf<I, E>,
-    ) -> PResult<I, (), E> {
-        (Vec::new(), Ok(((), None)))
-    }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, (), E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-}
-
-/// A parser that parses no inputs.
-///
-/// The output type of this parser is `()`.
-pub fn empty<E>() -> Empty<E> {
-    Empty(PhantomData)
-}
-
-/// See [`none_of`].
-#[must_use]
-pub struct NoneOf<I, C, E>(C, PhantomData<(I, E)>);
-
-impl<I, C: Clone, E> Clone for NoneOf<I, C, E> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf<I, C, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, I, E> {
-        match stream.next() {
-            (_, _, Some(tok)) if self.0.get_iter().all(|not| not != tok) => {
-                (Vec::new(), Ok((tok, None)))
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: Clone + PartialEq,
+    T: Seq<I::Token>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+        let before = inp.offset();
+        match inp.next() {
+            (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    E::Error::expected_found(
+                        self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
+                        found,
+                        // SAFETY: Using offsets derived from input
+                        unsafe { inp.span_since(before) },
+                    ),
+                ));
+                Err(())
             }
-            (at, span, found) => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, Vec::new(), found),
-                )),
-            ),
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    go_extra!(I::Token);
+}
+
+/// See [`none_of`].
+pub struct NoneOf<T, I, E> {
+    seq: T,
+    phantom: PhantomData<(E, I)>,
+}
+
+impl<T: Copy, I, E> Copy for NoneOf<T, I, E> {}
+impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -571,72 +314,322 @@ impl<I: Clone + PartialEq, C: Container<I>, E: Error<I>> Parser<I, I> for NoneOf
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let string = one_of::<_, _, Cheap<char>>("\"'")
-///     .ignore_then(none_of("\"'").repeated())
-///     .then_ignore(one_of("\"'"))
-///     .then_ignore(end())
-///     .collect::<String>();
+/// # use chumsky::{prelude::*, error::Simple};
+/// let string = one_of::<_, _, extra::Err<Simple<&str>>>("\"'")
+///     .ignore_then(none_of("\"'").repeated().collect::<String>())
+///     .then_ignore(one_of("\"'"));
 ///
-/// assert_eq!(string.parse("'hello'"), Ok("hello".to_string()));
-/// assert_eq!(string.parse("\"world\""), Ok("world".to_string()));
-/// assert!(string.parse("\"421!53").is_err());
+/// assert_eq!(string.parse("'hello'").into_result(), Ok("hello".to_string()));
+/// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
+/// assert!(string.parse("\"421!53").has_errors());
 /// ```
-pub fn none_of<I, C: Container<I>, E: Error<I>>(inputs: C) -> NoneOf<I, C, E> {
-    NoneOf(inputs, PhantomData)
+pub const fn none_of<'a, T, I, E>(seq: T) -> NoneOf<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: PartialEq,
+    T: Seq<I::Token>,
+{
+    NoneOf {
+        seq,
+        phantom: PhantomData,
+    }
 }
 
-/// See [`take_until`].
-#[must_use]
-#[derive(Copy, Clone)]
-pub struct TakeUntil<A>(A);
-
-impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
-    type Error = A::Error;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, A::Error>,
-    ) -> PResult<I, (Vec<I>, O), A::Error> {
-        let mut outputs = Vec::new();
-        let mut alt = None;
-
-        loop {
-            let (errors, err) = match stream.try_parse(|stream| {
-                #[allow(deprecated)]
-                self.0.parse_inner(debugger, stream)
-            }) {
-                (errors, Ok((out, a_alt))) => {
-                    break (errors, Ok(((outputs, out), merge_alts(alt, a_alt))))
-                }
-                (errors, Err(err)) => (errors, err),
-            };
-
-            match stream.next() {
-                (_, _, Some(tok)) => outputs.push(tok),
-                (_, _, None) => break (errors, Err(err)),
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: PartialEq,
+    T: Seq<I::Token>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+        let before = inp.offset();
+        match inp.next() {
+            (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
+                ));
+                Err(())
             }
-
-            alt = merge_alts(alt.take(), Some(err));
         }
     }
 
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, A::Error>,
-    ) -> PResult<I, (Vec<I>, O), A::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+    go_extra!(I::Token);
+}
+
+/// See [`custom`].
+pub struct Custom<F, I, O, E> {
+    f: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I, O, E> Copy for Custom<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            phantom: PhantomData,
+        }
     }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, A::Error>,
-    ) -> PResult<I, (Vec<I>, O), A::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
+}
+
+/// TODO
+pub const fn custom<'a, F, I, O, E>(f: F) -> Custom<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+{
+    Custom {
+        f,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Custom<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        match (self.f)(inp) {
+            Ok(out) => Ok(M::bind(|| out)),
+            Err(err) => {
+                inp.add_alt(Located::at(inp.offset().into(), err));
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(O);
+}
+
+/// See [`select!`].
+pub struct Select<F, I, O, E> {
+    filter: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I, O, E> Copy for Select<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// See [`select!`].
+pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
+where
+    I: Input<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(I::Token, I::Span) -> Option<O>,
+{
+    Select {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
+where
+    I: Input<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(I::Token, I::Span) -> Option<O>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
+        let next = inp.next();
+        // SAFETY: Using offsets derived from input
+        let err_span = unsafe { inp.span_since(before) };
+        let err = match next {
+            // SAFETY: Using offsets derived from input
+            (at, Some(tok)) => {
+                match (self.filter)(tok.clone(), unsafe { inp.span_since(before) }) {
+                    Some(out) => return Ok(M::bind(|| out)),
+                    None => Located::at(
+                        at.into(),
+                        // SAFETY: Using offsets derived from input
+                        E::Error::expected_found(None, Some(tok), err_span),
+                    ),
+                }
+            }
+            (at, found) => Located::at(at.into(), E::Error::expected_found(None, found, err_span)),
+        };
+        inp.add_alt(err);
+        Err(())
+    }
+
+    go_extra!(O);
+}
+
+/// See [`select_ref!`].
+pub struct SelectRef<F, I, O, E> {
+    filter: F,
+    phantom: PhantomData<(E, O, I)>,
+}
+
+impl<F: Copy, I, O, E> Copy for SelectRef<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            filter: self.filter.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// See [`select_ref!`].
+pub const fn select_ref<'a, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+{
+    SelectRef {
+        filter,
+        phantom: PhantomData,
+    }
+}
+
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
+where
+    I: BorrowInput<'a>,
+    I::Token: Clone + 'a,
+    E: ParserExtra<'a, I>,
+    F: Fn(&'a I::Token, I::Span) -> Option<O>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
+        let err = match inp.next_ref() {
+            // SAFETY: Using offsets derived from input
+            (at, Some(tok)) => match (self.filter)(tok, unsafe { inp.span_since(before) }) {
+                Some(out) => return Ok(M::bind(|| out)),
+                None => Located::at(
+                    at.into(),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, Some(tok.clone()), unsafe {
+                        inp.span_since(before)
+                    }),
+                ),
+            },
+            (at, found) => Located::at(
+                at.into(),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, found.cloned(), unsafe { inp.span_since(before) }),
+            ),
+        };
+        inp.add_alt(err);
+        Err(())
+    }
+
+    go_extra!(O);
+}
+
+/// See [`any`].
+pub struct Any<I, E> {
+    phantom: PhantomData<(E, I)>,
+}
+
+impl<I, E> Copy for Any<I, E> {}
+impl<I, E> Clone for Any<I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+        let before = inp.offset();
+        match inp.next() {
+            (_, Some(tok)) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                inp.add_alt(Located::at(
+                    at.into(),
+                    // SAFETY: Using offsets derived from input
+                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
+                ));
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(I::Token);
+}
+
+/// A parser that accepts any input (but not the end of input).
+///
+/// The output type of this parser is `I`, the input that was found.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// let any = any::<_, extra::Err<Simple<&str>>>();
+///
+/// assert_eq!(any.parse("a").into_result(), Ok('a'));
+/// assert_eq!(any.parse("7").into_result(), Ok('7'));
+/// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
+/// assert!(any.parse("").has_errors());
+/// ```
+pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
+    Any {
+        phantom: PhantomData,
+    }
+}
+
+/*
+/// See [`take_until`].
+// TODO: Consider removing in favour of `not`/`and_is`, or replace with a dedicated escape text parser
+pub struct TakeUntil<P, I, OP, E, C = ()> {
+    until: P,
+    // FIXME try remove OP? See comment in Map declaration
+    phantom: PhantomData<(OP, E, C, I)>,
+}
+
+impl<'a, I, E, P, OP, C> TakeUntil<P, I, OP, E, C>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
+{
+    /// Set the type of [`Container`] to collect into.
+    pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, I, OP, E, D> {
+        TakeUntil {
+            until: self.until,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<P: Copy, I, C, E> Copy for TakeUntil<P, I, E, C> {}
+impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
+    fn clone(&self) -> Self {
+        TakeUntil {
+            until: self.until.clone(),
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -648,13 +641,14 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let single_line = just::<_, _, Simple<char>>("//")
+/// # use chumsky::{prelude::*, error::Simple};
+/// let single_line = just::<_, _, extra::Err<Simple<&str>>>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, Simple<char>>("/*")
-///     .then(take_until(just("*/")))
+/// let multi_line = just::<_, _, extra::Err<Simple<&str>>>("/*")
+///     .then(take_until(just("*/
+")))
 ///     .ignored();
 ///
 /// let comment = single_line.or(multi_line);
@@ -663,8 +657,10 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 ///     .padded()
 ///     .padded_by(comment
 ///         .padded()
-///         .repeated())
-///     .repeated();
+///         .repeated()
+///         .collect::<Vec<_>>())
+///     .repeated()
+///     .collect::<Vec<_>>();
 ///
 /// assert_eq!(tokens.parse(r#"
 ///     // These tokens...
@@ -676,166 +672,134 @@ impl<I: Clone, O, A: Parser<I, O>> Parser<I, (Vec<I>, O)> for TakeUntil<A> {
 ///     // ...and single-line...
 ///     tokens
 ///     // ...comments between them
-/// "#), Ok(vec!["these".to_string(), "are".to_string(), "tokens".to_string()]));
+/// "#).into_result(), Ok(vec!["these", "are", "tokens"]));
 /// ```
-pub fn take_until<A>(until: A) -> TakeUntil<A> {
-    TakeUntil(until)
-}
-
-/// See [`filter`].
-#[must_use]
-pub struct Filter<F, E>(F, PhantomData<E>);
-
-impl<F: Copy, E> Copy for Filter<F, E> {}
-impl<F: Clone, E> Clone for Filter<F, E> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
+pub const fn take_until<'a, P, OP, I, E>(until: P) -> TakeUntil<P, I, OP, (), E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
+{
+    TakeUntil {
+        until,
+        phantom: PhantomData,
     }
 }
 
-impl<I: Clone, F: Fn(&I) -> bool, E: Error<I>> Parser<I, I> for Filter<F, E> {
-    type Error = E;
+impl<'a, P, OP, I, E, C> Parser<'a, I, (C, OP), E> for TakeUntil<P, I, OP, C, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, OP, E>,
+    C: Container<I::Token>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (C, OP)> {
+        let mut output = M::bind(|| C::default());
 
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, I, E> {
-        match stream.next() {
-            (_, _, Some(tok)) if (self.0)(&tok) => (Vec::new(), Ok((tok, None))),
-            (at, span, found) => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, Vec::new(), found),
-                )),
-            ),
+        loop {
+            let start = inp.save();
+            let e = match self.until.go::<M>(inp) {
+                Ok(out) => break Ok(M::combine(output, out, |output, out| (output, out))),
+                Err(e) => e,
+            };
+
+            inp.rewind(start);
+
+            match inp.next() {
+                (_, Some(tok)) => {
+                    output = M::map(output, |mut output: C| {
+                        output.push(tok);
+                        output
+                    })
+                }
+                (_, None) => break Err(e),
+            }
         }
     }
 
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, I, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
+    go_extra!((C, OP));
+}
+*/
+
+/// See [`map_ctx`].
+pub struct MapCtx<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
 }
 
-/// A parser that accepts only inputs that match the given predicate.
-///
-/// The output type of this parser is `I`, the input that was found.
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let lowercase = filter::<_, _, Cheap<char>>(char::is_ascii_lowercase)
-///     .repeated().at_least(1)
-///     .then_ignore(end())
-///     .collect::<String>();
-///
-/// assert_eq!(lowercase.parse("hello"), Ok("hello".to_string()));
-/// assert!(lowercase.parse("Hello").is_err());
-/// ```
-pub fn filter<I, F: Fn(&I) -> bool, E>(f: F) -> Filter<F, E> {
-    Filter(f, PhantomData)
-}
-
-/// See [`filter_map`].
-#[must_use]
-pub struct FilterMap<F, E>(F, PhantomData<E>);
-
-impl<F: Copy, E> Copy for FilterMap<F, E> {}
-impl<F: Clone, E> Clone for FilterMap<F, E> {
+impl<A: Copy, F: Copy> Copy for MapCtx<A, F> {}
+impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<I: Clone, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>> Parser<I, O> for FilterMap<F, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        stream: &mut StreamOf<I, E>,
-    ) -> PResult<I, O, E> {
-        let (at, span, tok) = stream.next();
-        match tok.map(|tok| (self.0)(span.clone(), tok)) {
-            Some(Ok(tok)) => (Vec::new(), Ok((tok, None))),
-            Some(Err(err)) => (Vec::new(), Err(Located::at(at, err))),
-            None => (
-                Vec::new(),
-                Err(Located::at(
-                    at,
-                    E::expected_input_found(span, Vec::new(), None),
-                )),
-            ),
+        MapCtx {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
         }
     }
-
-    fn parse_inner_verbose(&self, d: &mut Verbose, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(&self, d: &mut Silent, s: &mut StreamOf<I, E>) -> PResult<I, O, E> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
 }
 
-/// A parser that accepts a input and tests it against the given fallible function.
-///
-/// This function allows integration with custom error types to allow for custom parser errors.
-///
-/// Before using this function, consider whether the [`select`] macro would serve you better.
-///
-/// The output type of this parser is `I`, the input that was found.
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let numeral = filter_map(|span, c: char| match c.to_digit(10) {
-///     Some(x) => Ok(x),
-///     None => Err(Simple::custom(span, format!("'{}' is not a digit", c))),
-/// });
-///
-/// assert_eq!(numeral.parse("3"), Ok(3));
-/// assert_eq!(numeral.parse("7"), Ok(7));
-/// assert_eq!(numeral.parse("f"), Err(vec![Simple::custom(0..1, "'f' is not a digit")]));
-/// ```
-pub fn filter_map<I, O, F: Fn(E::Span, I) -> Result<O, E>, E: Error<I>>(f: F) -> FilterMap<F, E> {
-    FilterMap(f, PhantomData)
+impl<'a, I, O, E, A, F, Ctx> Parser<'a, I, O, E> for MapCtx<A, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
+    F: Fn(&E::Context) -> Ctx,
+    Ctx: 'a,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
+    }
+
+    go_extra!(O);
 }
 
-/// See [`any`].
-pub type Any<I, E> = Filter<fn(&I) -> bool, E>;
-
-/// A parser that accepts any input (but not the end of input).
+/// Apply a mapping function to the context of this parser. Note that this combinator will
+/// behave differently from all other maps, in terms of which parsers it effects - while
+/// other maps apply to the output of the parser, and thus read left-to-right, this one
+/// applies to the _input_ of the parser, and as such applies right-to-left.
 ///
-/// The output type of this parser is `I`, the input that was found.
-///
-/// # Examples
+/// More technically, if all combinators form a 'tree' of parsers, where each node executes
+/// its children in turn, normal maps apply up the tree. This means a parent mapper gets the
+/// result of its children, applies the map, then passes the new result to its parent. This map,
+/// however, applies down the tree. Context is provided from the parent, such as [`Parser::then_with_ctx`],
+/// and gets altered before being provided to the children.
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Cheap};
-/// let any = any::<char, Cheap<char>>();
+/// # use chumsky::{prelude::*, error::Simple};
 ///
-/// assert_eq!(any.parse("a"), Ok('a'));
-/// assert_eq!(any.parse("7"), Ok('7'));
-/// assert_eq!(any.parse("\t"), Ok('\t'));
-/// assert!(any.parse("").is_err());
+/// let upper = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
+///
+/// let inc = one_of::<_, _, extra::Default>(b'a'..=b'z')
+///     .then_with_ctx(map_ctx(|c: &u8| c.to_ascii_uppercase(), upper))
+///     .slice()
+///     .repeated()
+///     .at_least(1)
+///     .collect::<Vec<_>>();
+///
+/// assert_eq!(inc.parse(b"aAbB" as &[_]).into_result(), Ok(vec![b"aA" as &[_], b"bB"]));
+/// assert!(inc.parse(b"aB").has_errors());
 /// ```
-pub fn any<I, E>() -> Any<I, E> {
-    Filter(|_| true, PhantomData)
+pub const fn map_ctx<'a, P, OP, I, E, F, Ctx>(mapper: F, parser: P) -> MapCtx<P, F>
+where
+    F: Fn(&E::Context) -> Ctx,
+    Ctx: 'a,
+    I: Input<'a>,
+    P: Parser<'a, I, OP, E>,
+    E: ParserExtra<'a, I>,
+{
+    MapCtx { parser, mapper }
 }
 
 /// See [`fn@todo`].
-#[must_use]
-pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
+pub struct Todo<I, O, E>(PhantomData<(O, E, I)>);
+
+impl<I, O, E> Copy for Todo<I, O, E> {}
+impl<I, O, E> Clone for Todo<I, O, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 /// A parser that can be used wherever you need to implement a parser later.
 ///
@@ -851,219 +815,51 @@ pub struct Todo<I, O, E>(&'static Location<'static>, PhantomData<(I, O, E)>);
 ///
 /// ```should_panic
 /// # use chumsky::prelude::*;
-/// let int = just::<_, _, Simple<char>>("0x").ignore_then(todo())
-///     .or(just("0b").ignore_then(text::digits(2)))
-///     .or(text::int(10));
+/// let int = just::<_, _, extra::Err<Simple<&str>>>("0x").ignore_then(todo())
+///     .or(just("0b").ignore_then(text::digits(2).slice()))
+///     .or(text::int(10).slice());
 ///
 /// // Decimal numbers are parsed
-/// assert_eq!(int.parse("12"), Ok("12".to_string()));
+/// assert_eq!(int.parse("12").into_result(), Ok("12"));
 /// // Binary numbers are parsed
-/// assert_eq!(int.parse("0b00101"), Ok("00101".to_string()));
-/// // Parsing hexadecimal numbers results in a panic because the parser is unimplemented
+/// assert_eq!(int.parse("0b00101").into_result(), Ok("00101"));
+/// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
-#[track_caller]
-pub fn todo<I, O, E>() -> Todo<I, O, E> {
-    Todo(Location::caller(), PhantomData)
+pub const fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
+    Todo(PhantomData)
 }
 
-impl<I, O, E> Copy for Todo<I, O, E> {}
-impl<I, O, E> Clone for Todo<I, O, E> {
-    fn clone(&self) -> Self {
-        Self(self.0, PhantomData)
-    }
-}
-
-impl<I: Clone, O, E: Error<I>> Parser<I, O> for Todo<I, O, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        _debugger: &mut D,
-        _stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        todo!(
-            "Attempted to use an unimplemented parser. Parser defined at {}",
-            self.0
-        )
+impl<'a, I, O, E> Parser<'a, I, O, E> for Todo<I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        todo!("Attempted to use an unimplemented parser")
     }
 
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
+    go_extra!(O);
 }
 
 /// See [`choice`].
-#[must_use]
-pub struct Choice<T, E>(pub(crate) T, pub(crate) PhantomData<E>);
+pub struct Choice<T, O> {
+    parsers: T,
+    phantom: PhantomData<O>,
+}
 
-impl<T: Copy, E> Copy for Choice<T, E> {}
-impl<T: Clone, E> Clone for Choice<T, E> {
+impl<T: Copy, O> Copy for Choice<T, O> {}
+impl<T: Clone, O> Clone for Choice<T, O> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
-    }
-}
-
-impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>, const N: usize> Parser<I, O>
-    for Choice<[A; N], E>
-{
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        let Choice(parsers, _) = self;
-        let mut alt = None;
-
-        for parser in parsers {
-            match stream.try_parse(|stream| {
-                #[allow(deprecated)]
-                debugger.invoke(parser, stream)
-            }) {
-                (errors, Ok(out)) => return (errors, Ok(out)),
-                (_, Err(a_alt)) => {
-                    alt = merge_alts(alt.take(), Some(a_alt));
-                }
-            };
+        Self {
+            parsers: self.parsers.clone(),
+            phantom: PhantomData,
         }
-
-        (Vec::new(), Err(alt.unwrap()))
-    }
-
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
     }
 }
 
-impl<I: Clone, O, E: Error<I>, A: Parser<I, O, Error = E>> Parser<I, O> for Choice<Vec<A>, E> {
-    type Error = E;
-
-    fn parse_inner<D: Debugger>(
-        &self,
-        debugger: &mut D,
-        stream: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        let Choice(parsers, _) = self;
-        let mut alt = None;
-
-        for parser in parsers {
-            match stream.try_parse(|stream| {
-                #[allow(deprecated)]
-                debugger.invoke(parser, stream)
-            }) {
-                (errors, Ok(out)) => return (errors, Ok(out)),
-                (_, Err(a_alt)) => {
-                    alt = merge_alts(alt.take(), Some(a_alt));
-                }
-            };
-        }
-
-        (Vec::new(), Err(alt.unwrap()))
-    }
-
-    fn parse_inner_verbose(
-        &self,
-        d: &mut Verbose,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-
-    fn parse_inner_silent(
-        &self,
-        d: &mut Silent,
-        s: &mut StreamOf<I, Self::Error>,
-    ) -> PResult<I, O, Self::Error> {
-        #[allow(deprecated)]
-        self.parse_inner(d, s)
-    }
-}
-
-macro_rules! impl_for_tuple {
-    () => {};
-    ($head:ident $($X:ident)*) => {
-        impl_for_tuple!($($X)*);
-        impl_for_tuple!(~ $head $($X)*);
-    };
-    (~ $($X:ident)*) => {
-        #[allow(unused_variables, non_snake_case)]
-        impl<I: Clone, O, E: Error<I>, $($X: Parser<I, O, Error = E>),*> Parser<I, O> for Choice<($($X,)*), E> {
-            type Error = E;
-
-            fn parse_inner<D: Debugger>(
-                &self,
-                debugger: &mut D,
-                stream: &mut StreamOf<I, Self::Error>,
-            ) -> PResult<I, O, Self::Error> {
-                let Choice(($($X,)*), _) = self;
-                let mut alt = None;
-                $(
-                    match stream.try_parse(|stream| {
-                        #[allow(deprecated)]
-                        debugger.invoke($X, stream)
-                    }) {
-                        (errors, Ok(out)) => return (errors, Ok(out)),
-                        (errors, Err(a_alt)) => {
-                            alt = merge_alts(alt.take(), Some(a_alt));
-                        },
-                    };
-                )*
-                (Vec::new(), Err(alt.unwrap()))
-            }
-
-            fn parse_inner_verbose(
-                &self,
-                d: &mut Verbose,
-                s: &mut StreamOf<I, Self::Error>,
-            ) -> PResult<I, O, Self::Error> {
-                #[allow(deprecated)]
-                self.parse_inner(d, s)
-            }
-            fn parse_inner_silent(
-                &self,
-                d: &mut Silent,
-                s: &mut StreamOf<I, Self::Error>,
-            ) -> PResult<I, O, Self::Error> {
-                #[allow(deprecated)]
-                self.parse_inner(d, s)
-            }
-        }
-    };
-}
-
-impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W_ X_ Y_ Z_);
-
-/// Parse using a tuple or array of many parsers, producing the output of the first to successfully parse.
+/// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
 ///
 /// This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
 ///
@@ -1081,17 +877,17 @@ impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W
 /// ```
 /// # use chumsky::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
-/// enum Token {
+/// enum Token<'a> {
 ///     If,
 ///     For,
 ///     While,
 ///     Fn,
 ///     Int(u64),
-///     Ident(String),
+///     Ident(&'a str),
 /// }
 ///
-/// let tokens = choice::<_, Simple<char>>((
-///     text::keyword("if").to(Token::If),
+/// let tokens = choice((
+///     text::keyword::<_, _, _, extra::Err<Simple<&str>>>("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),
@@ -1099,44 +895,211 @@ impl_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ S_ T_ U_ V_ W
 ///     text::ident().map(Token::Ident),
 /// ))
 ///     .padded()
-///     .repeated();
+///     .repeated()
+///     .collect::<Vec<_>>();
 ///
 /// use Token::*;
 /// assert_eq!(
-///     tokens.parse("if 56 for foo while 42 fn bar"),
-///     Ok(vec![If, Int(56), For, Ident("foo".to_string()), While, Int(42), Fn, Ident("bar".to_string())]),
+///     tokens.parse("if 56 for foo while 42 fn bar").into_result(),
+///     Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
 /// );
 /// ```
+pub const fn choice<T, O>(parsers: T) -> Choice<T, O> {
+    Choice {
+        parsers,
+        phantom: PhantomData,
+    }
+}
+
+macro_rules! impl_choice_for_tuple {
+    () => {};
+    ($head:ident $($X:ident)*) => {
+        impl_choice_for_tuple!($($X)*);
+        impl_choice_for_tuple!(~ $head $($X)*);
+    };
+    (~ $Head:ident $($X:ident)+) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*), O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            $Head:  Parser<'a, I, O, E>,
+            $($X: Parser<'a, I, O, E>),*
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+                let before = inp.save();
+
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
+
+                match $Head.go::<M>(inp) {
+                    Ok(out) => return Ok(out),
+                    Err(()) => inp.rewind(before),
+                }
+
+                $(
+                    match $X.go::<M>(inp) {
+                        Ok(out) => return Ok(out),
+                        Err(()) => inp.rewind(before),
+                    }
+                )*
+
+                Err(())
+            }
+
+            go_extra!(O);
+        }
+    };
+    (~ $Head:ident) => {
+        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,), O>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            $Head:  Parser<'a, I, O, E>,
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+                self.parsers.0.go::<M>(inp)
+            }
+
+            go_extra!(O);
+        }
+    };
+}
+
+impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+
+impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N], O>
+where
+    A: Parser<'a, I, O, E>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        if N == 0 {
+            let offs = inp.offset();
+            inp.add_alt(Located::at(
+                offs.into(),
+                // SAFETY: Using offsets derived from input
+                E::Error::expected_found(None, None, unsafe { inp.span_since(offs) }),
+            ));
+            Err(())
+        } else {
+            let before = inp.save();
+            match self.parsers.iter().find_map(|parser| {
+                inp.rewind(before);
+                match parser.go::<M>(inp) {
+                    Ok(out) => Some(out),
+                    Err(()) => None,
+                }
+            }) {
+                Some(out) => Ok(out),
+                None => Err(()),
+            }
+        }
+    }
+
+    go_extra!(O);
+}
+
+/// See [`group`].
+#[derive(Copy, Clone)]
+pub struct Group<T> {
+    parsers: T,
+}
+
+/// Parse using a tuple of many parsers, producing a tuple of outputs if all successfully parse,
+/// otherwise returning an error if any parsers fail.
 ///
-/// If you have more than 26 choices, the array-form of choice will work for any length. The downside
-/// being that the contained parsers must all be of the same type.
-/// ```
-/// # use chumsky::prelude::*;
-/// #[derive(Clone, Debug, PartialEq)]
-/// enum Token {
-///     If,
-///     For,
-///     While,
-///     Fn,
-///     Def,
-/// }
-///
-/// let tokens = choice::<_, Simple<char>>([
-///     text::keyword("if").to(Token::If),
-///     text::keyword("for").to(Token::For),
-///     text::keyword("while").to(Token::While),
-///     text::keyword("fn").to(Token::Fn),
-///     text::keyword("def").to(Token::Def),
-/// ])
-///     .padded()
-///     .repeated();
-///
-/// use Token::*;
-/// assert_eq!(
-///     tokens.parse("def fn while if for"),
-///     Ok(vec![Def, Fn, While, If, For]),
-/// );
-/// ```
-pub fn choice<T, E>(parsers: T) -> Choice<T, E> {
-    Choice(parsers, PhantomData)
+/// This parser is to [`Parser::then`] as [`choice`] is to [`Parser::or`]
+pub const fn group<T>(parsers: T) -> Group<T> {
+    Group { parsers }
+}
+
+macro_rules! flatten_map {
+    // map a single element into a 1-tuple
+    (<$M:ident> $head:ident) => {
+        $M::map(
+            $head,
+            |$head| ($head,),
+        )
+    };
+    // combine two elements into a 2-tuple
+    (<$M:ident> $head1:ident $head2:ident) => {
+        $M::combine(
+            $head1,
+            $head2,
+            |$head1, $head2| ($head1, $head2),
+        )
+    };
+    // combine and flatten n-tuples from recursion
+    (<$M:ident> $head:ident $($X:ident)+) => {
+        $M::combine(
+            $head,
+            flatten_map!(
+                <$M>
+                $($X)+
+            ),
+            |$head, ($($X),+)| ($head, $($X),+),
+        )
+    };
+}
+
+macro_rules! impl_group_for_tuple {
+    () => {};
+    ($head:ident $ohead:ident $($X:ident $O:ident)*) => {
+        impl_group_for_tuple!($($X $O)*);
+        impl_group_for_tuple!(~ $head $ohead $($X $O)*);
+    };
+    (~ $($X:ident $O:ident)*) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'a, I, E, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E> for Group<($($X,)*)>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            $($X: Parser<'a, I, $O, E>),*
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*)> {
+                let Group { parsers: ($($X,)*) } = self;
+
+                $(
+                    let $X = $X.go::<M>(inp)?;
+                )*
+
+                Ok(flatten_map!(<M> $($X)*))
+            }
+
+            go_extra!(($($O,)*));
+        }
+    };
+}
+
+impl_group_for_tuple! {
+    A_ OA
+    B_ OB
+    C_ OC
+    D_ OD
+    E_ OE
+    F_ OF
+    G_ OG
+    H_ OH
+    I_ OI
+    J_ OJ
+    K_ OK
+    L_ OL
+    M_ OM
+    N_ ON
+    O_ OO
+    P_ OP
+    Q_ OQ
+    R_ OR
+    S_ OS
+    T_ OT
+    U_ OU
+    V_ OV
+    W_ OW
+    X_ OX
+    Y_ OY
+    Z_ OZ
 }

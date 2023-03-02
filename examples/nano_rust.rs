@@ -3,6 +3,7 @@
 //! Run it with the following command:
 //! cargo run --example nano_rust -- examples/sample.nrs
 
+/*
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::{prelude::*, stream::Stream};
 use std::{collections::HashMap, env, fmt, fs};
@@ -59,7 +60,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Str);
 
     // A parser for operators
-    let op = one_of("+-*/!=")
+    let op = one_of("+*-/!=")
         .repeated()
         .at_least(1)
         .collect::<String>()
@@ -411,20 +412,18 @@ fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<To
         .map(|((name, args), body)| (name, Func { args, body }))
         .labelled("function");
 
-    func.repeated()
-        .try_map(|fs, _| {
-            let mut funcs = HashMap::new();
-            for ((name, name_span), f) in fs {
-                if funcs.insert(name.clone(), f).is_some() {
-                    return Err(Simple::custom(
-                        name_span.clone(),
-                        format!("Function '{}' already exists", name),
-                    ));
-                }
+    func.repeated().try_map(|fs, _| {
+        let mut funcs = HashMap::new();
+        for ((name, name_span), f) in fs {
+            if funcs.insert(name.clone(), f).is_some() {
+                return Err(Simple::custom(
+                    name_span.clone(),
+                    format!("Function '{}' already exists", name),
+                ));
             }
-            Ok(funcs)
-        })
-        .then_ignore(end())
+        }
+        Ok(funcs)
+    })
 }
 
 struct Error {
@@ -637,3 +636,6 @@ fn main() {
             report.finish().print(Source::from(&src)).unwrap();
         });
 }
+*/
+
+fn main() {}

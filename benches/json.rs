@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use test::{black_box, Bencher};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -14,42 +14,99 @@ pub enum Json {
     Object(Vec<(String, Json)>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum JsonZero<'a> {
+    Null,
+    Bool(bool),
+    Str(&'a [u8]),
+    Num(f64),
+    Array(Vec<JsonZero<'a>>),
+    Object(Vec<(&'a [u8], JsonZero<'a>)>),
+}
+
 static JSON: &'static [u8] = include_bytes!("sample.json");
 
-#[bench]
-fn chumsky(b: &mut Bencher) {
-    use ::chumsky::prelude::*;
+fn bench_json(c: &mut Criterion) {
+    c.bench_function("json_nom", {
+        move |b| b.iter(|| black_box(nom::json(black_box(JSON)).unwrap()))
+    });
 
-    let json = chumsky::json();
-    b.iter(|| black_box(json.parse(JSON).unwrap()));
+    c.bench_function("json_chumsky_zero_copy", {
+        use ::chumsky::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                black_box(json.parse(black_box(JSON)))
+                    .into_result()
+                    .unwrap()
+            })
+        }
+    });
+
+    c.bench_function("json_chumsky_zero_copy_check", {
+        use ::chumsky::prelude::*;
+        let json = chumsky_zero_copy::json();
+        move |b| {
+            b.iter(|| {
+                assert!(black_box(json.check(black_box(JSON)))
+                    .into_errors()
+                    .is_empty())
+            })
+        }
+    });
+
+    c.bench_function("json_serde_json", {
+        use serde_json::{from_slice, Value};
+        move |b| b.iter(|| black_box(from_slice::<Value>(black_box(JSON)).unwrap()))
+    });
+
+    c.bench_function("json_pom", {
+        let json = pom::json();
+        move |b| b.iter(|| black_box(json.parse(black_box(JSON)).unwrap()))
+    });
+
+    c.bench_function("json_pest", {
+        let json = black_box(std::str::from_utf8(JSON).unwrap());
+        move |b| b.iter(|| black_box(pest::parse(json).unwrap()))
+    });
+
+    c.bench_function("json_sn", {
+        move |b| b.iter(|| black_box(sn::Parser::new(black_box(JSON)).parse().unwrap()))
+    });
 }
 
-#[bench]
-fn pom(b: &mut Bencher) {
-    let json = pom::json();
-    b.iter(|| black_box(json.parse(JSON).unwrap()));
-}
+criterion_group!(benches, bench_json);
+criterion_main!(benches);
 
-mod chumsky {
-    use chumsky::{error::Cheap, prelude::*};
+mod chumsky_zero_copy {
+    use chumsky::prelude::*;
 
-    use super::Json;
+    use super::JsonZero;
     use std::str;
 
-    pub fn json() -> impl Parser<u8, Json, Error = Cheap<u8>> {
+    pub fn json<'a>() -> impl Parser<'a, &'a [u8], JsonZero<'a>> {
         recursive(|value| {
-            let frac = just(b'.').chain(text::digits(10));
+            let digits = one_of(b'0'..=b'9').repeated();
+
+            let int = one_of(b'1'..=b'9')
+                .then(one_of(b'0'..=b'9').repeated())
+                .ignored()
+                .or(just(b'0').ignored())
+                .ignored();
+
+            let frac = just(b'.').then(digits.clone());
 
             let exp = one_of(b"eE")
-                .ignore_then(just(b'+').or(just(b'-')).or_not())
-                .chain(text::digits(10));
+                .then(one_of(b"+-").or_not())
+                .then(digits.clone());
 
             let number = just(b'-')
                 .or_not()
-                .chain(text::int(10))
-                .chain(frac.or_not().flatten())
-                .chain::<u8, _, _>(exp.or_not().flatten())
-                .map(|bytes| str::from_utf8(&bytes.as_slice()).unwrap().parse().unwrap());
+                .then(int)
+                .then(frac.or_not())
+                .then(exp.or_not())
+                .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
+                .boxed();
 
             let escape = just(b'\\').ignore_then(choice((
                 just(b'\\'),
@@ -62,38 +119,41 @@ mod chumsky {
                 just(b't').to(b'\t'),
             )));
 
-            let string = just(b'"')
-                .ignore_then(filter(|c| *c != b'\\' && *c != b'"').or(escape).repeated())
-                .then_ignore(just(b'"'))
-                .map(|bytes| String::from_utf8(bytes).unwrap());
+            let string = none_of(b"\\\"")
+                .or(escape)
+                .repeated()
+                .slice()
+                .delimited_by(just(b'"'), just(b'"'))
+                .boxed();
 
             let array = value
                 .clone()
-                .separated_by(just(b',').padded())
+                .separated_by(just(b','))
+                .collect()
                 .padded()
                 .delimited_by(just(b'['), just(b']'))
-                .map(Json::Array);
+                .boxed();
 
-            let member = string.then_ignore(just(b':').padded()).then(value);
+            let member = string.clone().then_ignore(just(b':').padded()).then(value);
             let object = member
+                .clone()
                 .separated_by(just(b',').padded())
+                .collect()
                 .padded()
                 .delimited_by(just(b'{'), just(b'}'))
-                .collect::<Vec<(String, Json)>>()
-                .map(Json::Object);
+                .boxed();
 
             choice((
-                just(b"null").to(Json::Null),
-                just(b"true").to(Json::Bool(true)),
-                just(b"false").to(Json::Bool(false)),
-                number.map(Json::Num),
-                string.map(Json::Str),
-                array,
-                object,
+                just(b"null").to(JsonZero::Null),
+                just(b"true").to(JsonZero::Bool(true)),
+                just(b"false").to(JsonZero::Bool(false)),
+                number.map(JsonZero::Num),
+                string.map(JsonZero::Str),
+                array.map(JsonZero::Array),
+                object.map(JsonZero::Object),
             ))
             .padded()
         })
-        .then_ignore(end())
     }
 }
 
@@ -158,5 +218,158 @@ mod pom {
 
     pub fn json() -> Parser<u8, Json> {
         space() * value() - end()
+    }
+}
+
+mod nom {
+    use nom::{
+        branch::alt,
+        bytes::complete::{escaped, tag, take_while},
+        character::complete::{char, digit0, digit1, none_of, one_of},
+        combinator::{cut, map, opt, recognize, value as to},
+        error::ParseError,
+        multi::separated_list0,
+        sequence::{preceded, separated_pair, terminated, tuple},
+        IResult,
+    };
+
+    use super::JsonZero;
+    use std::str;
+
+    fn space<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+        take_while(|c| b" \t\r\n".contains(&c))(i)
+    }
+
+    fn number<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
+        map(
+            recognize(tuple((
+                opt(char('-')),
+                alt((
+                    to((), tuple((one_of("123456789"), digit0))),
+                    to((), char('0')),
+                )),
+                opt(tuple((char('.'), digit1))),
+                opt(tuple((one_of("eE"), opt(one_of("+-")), cut(digit1)))),
+            ))),
+            |bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap(),
+        )(i)
+    }
+
+    fn string<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+        preceded(
+            char('"'),
+            cut(terminated(
+                escaped(none_of("\\\""), '\\', one_of("\\/\"bfnrt")),
+                char('"'),
+            )),
+        )(i)
+    }
+
+    fn array<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], Vec<JsonZero>, E> {
+        preceded(
+            char('['),
+            cut(terminated(
+                separated_list0(preceded(space, char(',')), value),
+                preceded(space, char(']')),
+            )),
+        )(i)
+    }
+
+    fn member<'a, E: ParseError<&'a [u8]>>(
+        i: &'a [u8],
+    ) -> IResult<&'a [u8], (&'a [u8], JsonZero), E> {
+        separated_pair(
+            preceded(space, string),
+            cut(preceded(space, char(':'))),
+            value,
+        )(i)
+    }
+
+    fn object<'a, E: ParseError<&'a [u8]>>(
+        i: &'a [u8],
+    ) -> IResult<&'a [u8], Vec<(&'a [u8], JsonZero)>, E> {
+        preceded(
+            char('{'),
+            cut(terminated(
+                separated_list0(preceded(space, char(',')), member),
+                preceded(space, char('}')),
+            )),
+        )(i)
+    }
+
+    fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+        preceded(
+            space,
+            alt((
+                to(JsonZero::Null, tag("null")),
+                to(JsonZero::Bool(true), tag("true")),
+                to(JsonZero::Bool(false), tag("false")),
+                map(number, JsonZero::Num),
+                map(string, JsonZero::Str),
+                map(array, JsonZero::Array),
+                map(object, JsonZero::Object),
+            )),
+        )(i)
+    }
+
+    fn root<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+        terminated(value, space)(i)
+    }
+
+    pub fn json<'a>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, (&'a [u8], nom::error::ErrorKind)> {
+        root(i)
+    }
+}
+
+mod pest {
+    use super::JsonZero;
+
+    use pest::{error::Error, Parser};
+
+    #[derive(pest_derive::Parser)]
+    #[grammar = "benches/json.pest"]
+    struct JsonParser;
+
+    pub fn parse(file: &str) -> Result<JsonZero, Error<Rule>> {
+        let json = JsonParser::parse(Rule::json, file)?.next().unwrap();
+
+        use pest::iterators::Pair;
+
+        fn parse_value(pair: Pair<Rule>) -> JsonZero {
+            match pair.as_rule() {
+                Rule::object => JsonZero::Object(
+                    pair.into_inner()
+                        .map(|pair| {
+                            let mut inner_rules = pair.into_inner();
+                            let name = inner_rules
+                                .next()
+                                .unwrap()
+                                .into_inner()
+                                .next()
+                                .unwrap()
+                                .as_str();
+                            let value = parse_value(inner_rules.next().unwrap());
+                            (name.as_bytes(), value)
+                        })
+                        .collect(),
+                ),
+                Rule::array => JsonZero::Array(pair.into_inner().map(parse_value).collect()),
+                Rule::string => {
+                    JsonZero::Str(pair.into_inner().next().unwrap().as_str().as_bytes())
+                }
+                Rule::number => JsonZero::Num(pair.as_str().parse().unwrap()),
+                Rule::boolean => JsonZero::Bool(pair.as_str().parse().unwrap()),
+                Rule::null => JsonZero::Null,
+                Rule::json
+                | Rule::EOI
+                | Rule::pair
+                | Rule::value
+                | Rule::inner
+                | Rule::char
+                | Rule::WHITESPACE => unreachable!(),
+            }
+        }
+
+        Ok(parse_value(json))
     }
 }

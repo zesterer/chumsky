@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, zero-copy ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, zero-copy ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,5 +32,5 @@ jobs:
         with:
             toolchain: nightly
             components: rustfmt, clippy
-      - name: Run cargo check
+      - name: Run cargo test
         run: cargo test --verbose --all-features
