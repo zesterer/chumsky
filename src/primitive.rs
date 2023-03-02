@@ -1003,6 +1003,27 @@ pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }
 
+impl<'a, I, O, E, P, const N: usize> Parser<'a, I, [O; N], E> for Group<[P; N]>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [O; N]> {
+        let mut arr: [MaybeUninit<_>; N] = MaybeUninitExt::uninit_array();
+        self.parsers
+            .iter()
+            .zip(arr.iter_mut())
+            .try_for_each(| (p, res)| {
+                res.write(p.go::<M>(inp)?);
+                Ok(())
+            })?;
+        Ok(M::array(unsafe { MaybeUninitExt::array_assume_init(arr) }))
+    }
+
+    go_extra!([O; N]);
+}
+
 macro_rules! flatten_map {
     // map a single element into a 1-tuple
     (<$M:ident> $head:ident) => {
