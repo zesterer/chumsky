@@ -2292,6 +2292,25 @@ mod tests {
         assert!(parser().parse("and one &").has_errors());
     }
 
+    #[test]
+    fn zero_copy_group_array() {
+        use self::prelude::*;
+
+        fn parser<'a>() -> impl Parser<'a, &'a str, [char; 3]> {
+            group([
+                just('a'),
+                just('b'),
+                just('c'),
+            ])
+        }
+
+        assert_eq!(
+            parser().parse("abc").into_result(),
+            Ok(['a', 'b', 'c'])
+        );
+        assert!(parser().parse("abd").has_errors());
+    }
+
     #[cfg(feature = "regex")]
     #[test]
     fn regex_parser() {
