@@ -55,11 +55,19 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
         debugger: &mut D,
         stream: &mut StreamOf<I, P::Error>,
     ) -> PResult<I, O, P::Error> {
-        let _ = stream.next();
         if self.2 {
             let _ = stream.next();
         }
         loop {
+            #[allow(deprecated)]
+            let (mut errors, res) = stream.try_parse(|stream| {
+                #[allow(deprecated)]
+                debugger.invoke(&parser, stream)
+            });
+            if let Ok(out) = res {
+                errors.push(a_err);
+                break (errors, Ok(out));
+            }
             #[allow(clippy::blocks_in_if_conditions)]
             if !stream.attempt(
                 |stream| match stream.next().2.map(|tok| self.0.contains(&tok)) {
@@ -69,12 +77,6 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
                 },
             ) {
                 break (a_errors, Err(a_err));
-            }
-            #[allow(deprecated)]
-            let (mut errors, res) = debugger.invoke(&parser, stream);
-            if let Ok(out) = res {
-                errors.push(a_err);
-                break (errors, Ok(out));
             }
         }
     }
@@ -88,7 +90,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
 pub fn skip_then_retry_until<I, const N: usize>(until: [I; N]) -> SkipThenRetryUntil<I, N> {
-    SkipThenRetryUntil(until, false, false)
+    SkipThenRetryUntil(until, false, true)
 }
 
 /// See [`skip_until`].
@@ -432,5 +434,25 @@ mod tests {
             assert_eq!(result, Some(vec!['a', 'a', 'a', 'a']));
             assert_eq!(errors.len(), 1)
         }
+    }
+
+    #[test]
+    fn until_nothing() {
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        pub enum Token {
+            Foo,
+            Bar,
+        }
+
+        fn lexer() -> impl Parser<char, Token, Error = Simple<char>> {
+            let foo = just("foo").to(Token::Foo);
+            let bar = just("bar").to(Token::Bar);
+
+            choice((foo, bar)).recover_with(skip_then_retry_until([]))
+        }
+
+        let (result, errors) = lexer().parse_recovery("baz");
+        assert_eq!(result, None);
+        assert_eq!(errors.len(), 1);
     }
 }
