@@ -24,7 +24,7 @@ pub enum JsonZero<'a> {
     Object(Vec<(&'a [u8], JsonZero<'a>)>),
 }
 
-static JSON: &'static [u8] = include_bytes!("sample.json");
+static JSON: &'static [u8] = include_bytes!("samples/sample.json");
 
 fn bench_json(c: &mut Criterion) {
     c.bench_function("json_nom", {
