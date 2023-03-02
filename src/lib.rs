@@ -1712,12 +1712,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// // Does not panic, because the original parser only accepts "true" or "false"
     /// assert!(boolean.parse("42").has_errors());
     /// ```
+    // TODO: Use Location::caller(), make this a proper combinator
     fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
     where
         Self: Sized + Parser<'a, I, Result<U, E1>, E>,
         E1: fmt::Debug,
     {
-        Unwrapped(Location::caller(), self, PhantomData)
+        self.map(|o| o.unwrap())
     }
 
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.

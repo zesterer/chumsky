@@ -40,12 +40,6 @@ pub trait Char: Sized + Copy + PartialEq {
     /// Returns true if the character is canonically considered to be inline whitespace (i.e: not part of a newline).
     fn is_inline_whitespace(&self) -> bool;
 
-    /// Convert the given ASCII character to this character type.
-    fn from_ascii(c: u8) -> Self;
-
-    /// Returns true if the character is canonically considered to be inline whitespace (i.e: not part of a newline).
-    fn is_inline_whitespace(&self) -> bool;
-
     /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
 
@@ -475,72 +469,4 @@ where
             }
         })
         .slice()
-}
-
-/// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
-///
-/// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
-#[must_use]
-pub fn semantic_indentation<'a, C, Tok, T, F, E: Error<C> + 'a>(
-    token: T,
-    make_group: F,
-) -> impl Parser<C, Vec<Tok>, Error = E> + Clone + 'a
-where
-    C: Character + 'a,
-    Tok: 'a,
-    T: Parser<C, Tok, Error = E> + Clone + 'a,
-    F: Fn(Vec<Tok>, E::Span) -> Tok + Clone + 'a,
-{
-    let line_ws = filter(|c: &C| c.is_inline_whitespace());
-
-    let line = token.padded_by(line_ws.ignored().repeated()).repeated();
-
-    let lines = line_ws
-        .repeated()
-        .then(line.map_with_span(|line, span| (line, span)))
-        .separated_by(newline())
-        .padded();
-
-    lines.map(move |lines| {
-        fn collapse<C, Tok, F, S>(
-            mut tree: Vec<(Vec<C>, Vec<Tok>, Option<S>)>,
-            make_group: &F,
-        ) -> Option<Tok>
-        where
-            F: Fn(Vec<Tok>, S) -> Tok,
-        {
-            while let Some((_, tts, line_span)) = tree.pop() {
-                let tt = make_group(tts, line_span?);
-                if let Some(last) = tree.last_mut() {
-                    last.1.push(tt);
-                } else {
-                    return Some(tt);
-                }
-            }
-            None
-        }
-
-        let mut nesting = vec![(Vec::new(), Vec::new(), None)];
-        for (indent, (mut line, line_span)) in lines {
-            let mut indent = indent.as_slice();
-            let mut i = 0;
-            while let Some(tail) = nesting
-                .get(i)
-                .and_then(|(n, _, _)| indent.strip_prefix(n.as_slice()))
-            {
-                indent = tail;
-                i += 1;
-            }
-            if let Some(tail) = collapse(nesting.split_off(i), &make_group) {
-                nesting.last_mut().unwrap().1.push(tail);
-            }
-            if !indent.is_empty() {
-                nesting.push((indent.to_vec(), line, Some(line_span)));
-            } else {
-                nesting.last_mut().unwrap().1.append(&mut line);
-            }
-        }
-
-        nesting.remove(0).1
-    })
 }

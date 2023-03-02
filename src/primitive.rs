@@ -16,7 +16,6 @@
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
 use super::*;
-use core::panic::Location;
 
 /// See [`end`].
 pub struct End<I, E>(PhantomData<(E, I)>);
@@ -874,6 +873,7 @@ impl<T: Clone, O> Clone for Choice<T, O> {
 /// The output type of this parser is the output type of the inner parsers.
 ///
 /// # Examples
+///
 /// ```
 /// # use chumsky::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
