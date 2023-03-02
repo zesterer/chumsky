@@ -139,6 +139,17 @@ impl<P: ?Sized> Clone for Recursive<P> {
     }
 }
 
+#[cfg(feature = "stacker")]
+#[inline(always)]
+fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
+    stacker::maybe_grow(1024 * 1024, 1024 * 1024, f)
+}
+#[cfg(not(feature = "stacker"))]
+#[inline(always)]
+fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
+    f()
+}
+
 impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
 where
     I: Input<'a>,
@@ -146,14 +157,16 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        M::invoke(
-            self.parser()
-                .inner
-                .get()
-                .expect("Recursive parser used before being defined")
-                .as_ref(),
-            inp,
-        )
+        recurse(move || {
+            M::invoke(
+                self.parser()
+                    .inner
+                    .get()
+                    .expect("Recursive parser used before being defined")
+                    .as_ref(),
+                inp,
+            )
+        })
     }
 
     go_extra!(O);
@@ -166,7 +179,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        M::invoke(&*self.parser(), inp)
+        recurse(move || M::invoke(&*self.parser(), inp))
     }
 
     go_extra!(O);
