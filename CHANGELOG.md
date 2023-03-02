@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.9.1] - 2023-03-02
+
+### Fixed
+
+- Regression in `skip_then_retry_until` recovery strategy
+
 # [0.9.0] - 2023-02-07
 
 ### Added
