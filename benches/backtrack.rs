@@ -1,5 +1,5 @@
-use chumsky::zero_copy::prelude::*;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use chumsky::prelude::*;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 fn bench_backtrack(c: &mut Criterion) {
     let four = just::<_, &str, extra::Default>('!')
@@ -31,5 +31,5 @@ fn bench_backtrack(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_backtrace);
+criterion_group!(benches, bench_backtrack);
 criterion_main!(benches);
