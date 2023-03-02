@@ -64,7 +64,7 @@ impl<I: Clone + PartialEq, O, E: Error<I>, const N: usize> Strategy<I, O, E>
             if !stream.attempt(
                 |stream| match stream.next().2.map(|tok| self.0.contains(&tok)) {
                     Some(true) => (self.1, false),
-                    Some(false) => (false, true),
+                    Some(false) => (true, true),
                     None => (false, false),
                 },
             ) {
