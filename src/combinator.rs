@@ -698,22 +698,15 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        // TODO Use a method similar to `with_ctx` on `InputRef` instead of hacky swapping like this
+        let inp2 = self.parser_b.go::<Emit>(inp)?;
 
-        let mut inp2 = self.parser_b.go::<Emit>(inp)?;
-        let mut offset2 = inp2.start();
-
-        // Swap in new
-        core::mem::swap(&mut inp.input, &mut inp2);
-        core::mem::swap(&mut inp.offset, &mut offset2);
         let alt = inp.errors.alt.take();
 
-        let res = self.parser_a.go::<M>(inp);
-        let res = res.and_then(|o| expect_end(inp).map(move |()| o));
+        let res = inp.with_input(&inp2, |inp| {
+            let res = self.parser_a.go::<M>(inp);
+            res.and_then(|o| expect_end(inp).map(move |()| o))
+        });
 
-        // Swap out old
-        core::mem::swap(&mut inp.input, &mut inp2);
-        core::mem::swap(&mut inp.offset, &mut offset2);
         // TODO: Translate secondary error offsets too
         let new_alt = inp
             .errors

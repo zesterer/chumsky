@@ -21,7 +21,7 @@ impl<I: Iterator> Stream<I> {
     ///
     /// let parser = text::digits::<_, _, extra::Err<Simple<_>>>(10).collect::<String>();
     ///
-    /// assert_eq!(parser.parse(&stream).into_result().as_deref(), Ok("0123456789"));
+    /// assert_eq!(parser.parse(stream).into_result().as_deref(), Ok("0123456789"));
     /// ```
     pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl<I: Iterator> Stream<I> {
 /// A stream containing a boxed iterator. See [`Stream::boxed`].
 pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 
-impl<'a, I: Iterator> Input<'a> for &'a Stream<I>
+impl<'a, I: Iterator + 'a> Input<'a> for Stream<I>
 where
     I::Item: Clone,
 {
@@ -84,11 +84,23 @@ where
         range.into()
     }
 
-    fn reborrow(&self) -> Self {
-        *self
-    }
-
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
+}
+
+#[test]
+fn spanned() {
+    fn parser<'a>() -> impl Parser<
+        'a,
+        input::Spanned<char, Range<usize>, BoxedStream<'static, (char, Range<usize>)>>,
+        char,
+    > {
+        just('h')
+    }
+
+    let stream = Stream::from_iter(core::iter::once(('h', 0..1))).boxed();
+    let stream = stream.spanned(0..10);
+
+    assert_eq!(parser().parse(stream).into_result(), Ok('h'));
 }
