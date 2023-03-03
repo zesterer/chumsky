@@ -747,7 +747,10 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        inp.with_ctx((self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
+        inp.with_ctx(
+            MaybeRef::new_own((self.mapper)(inp.ctx())),
+            |inp| self.parser.go::<M>(inp)
+        )
     }
 
     go_extra!(O);

@@ -53,6 +53,7 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
+mod util;
 
 /// Commonly used functions, traits and types.
 ///
@@ -112,6 +113,7 @@ use self::{
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
+    util::{MaybeRef, MaybeMut},
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
