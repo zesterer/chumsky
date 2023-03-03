@@ -55,13 +55,13 @@ pub trait Input<'a>: 'a {
     /// Although `Spanned` does implement [`BorrowInput`], please be aware that, as you might anticipate, the slices
     /// will be those of the original input (usually `&[(T, S)]`) and not `&[T]` so as to avoid the need to copy
     /// around sections of the input.
-    fn spanned<T, S>(self, eoi: S) -> Spanned<T, S, Self>
+    fn spanned<T, S>(self, eoi: S) -> SpannedInput<T, S, Self>
     where
         Self: Input<'a, Token = (T, S)> + Sized,
         T: 'a,
         S: Span + Clone + 'a,
     {
-        Spanned {
+        SpannedInput {
             input: self,
             eoi,
             phantom: PhantomData,
@@ -212,13 +212,13 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
 
 /// A wrapper around an input that splits an input into spans and tokens. See [`Input::spanned`].
 #[derive(Copy, Clone)]
-pub struct Spanned<T, S, I> {
+pub struct SpannedInput<T, S, I> {
     input: I,
     eoi: S,
     phantom: PhantomData<T>,
 }
 
-impl<'a, T, S, I> Input<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> Input<'a> for SpannedInput<T, S, I>
 where
     I: Input<'a, Token = (T, S)>,
     T: 'a,
@@ -256,7 +256,7 @@ where
     }
 }
 
-impl<'a, T, S, I> BorrowInput<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> BorrowInput<'a> for SpannedInput<T, S, I>
 where
     I: BorrowInput<'a, Token = (T, S)>,
     T: 'a,
@@ -268,7 +268,7 @@ where
     }
 }
 
-impl<'a, T, S, I> SliceInput<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> SliceInput<'a> for SpannedInput<T, S, I>
 where
     I: SliceInput<'a, Token = (T, S)>,
     T: 'a,

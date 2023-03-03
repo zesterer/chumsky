@@ -99,12 +99,25 @@ impl fmt::Display for EmptyErr {
 
 /// A minimal error type that tracks only the error span and found token. This type is most useful
 /// when you want fast parsing but do not particularly care about the quality of error messages.
-pub struct Simple<'a, I: Input<'a>> {
-    span: I::Span,
-    found: Option<I::Token>,
+pub struct Simple<T, S> {
+    span: S,
+    found: Option<T>,
 }
 
-impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I> {
+impl<T, S> Simple<T, S> {
+    /// Transform this error's tokens using the given function.
+    ///
+    /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
+    /// the token type for each pass is different (`char` vs `MyToken`, say).
+    pub fn map_token<U, F: FnMut(T) -> U>(self, f: F) -> Simple<U, S> {
+        Simple {
+            span: self.span,
+            found: self.found.map(f),
+        }
+    }
+}
+
+impl<'a, I: Input<'a>> Error<'a, I> for Simple<I::Token, I::Span> {
     fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
         _expected: E,
         found: Option<I::Token>,
@@ -114,33 +127,33 @@ impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I> {
     }
 }
 
-impl<'a, I: Input<'a>> PartialEq for Simple<'a, I>
+impl<T, S> PartialEq for Simple<T, S>
 where
-    I::Token: PartialEq,
-    I::Span: PartialEq,
+    T: PartialEq,
+    S: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.span == other.span && self.found == other.found
     }
 }
 
-impl<'a, I: Input<'a>> fmt::Debug for Simple<'a, I>
+impl<T, S> fmt::Debug for Simple<T, S>
 where
-    I::Span: fmt::Debug,
-    I::Token: fmt::Debug,
+    T: fmt::Debug,
+    S: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "found ")?;
-        write_token(f, I::Token::fmt, &self.found)?;
+        write_token(f, T::fmt, &self.found)?;
         write!(f, " at {:?}", self.span)?;
         Ok(())
     }
 }
 
-impl<'a, I: Input<'a>> fmt::Display for Simple<'a, I>
+impl<T, S> fmt::Display for Simple<T, S>
 where
-    I::Span: fmt::Debug,
-    I::Token: fmt::Debug,
+    T: fmt::Debug,
+    S: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -149,33 +162,58 @@ where
 
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
 /// The reason for a [`Rich`] error
-pub enum RichReason<'a, I: Input<'a>> {
+pub enum RichReason<T> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
-        expected: Vec<Option<I::Token>>,
+        expected: Vec<Option<T>>,
         /// The tokens found
-        found: Option<I::Token>,
+        found: Option<T>,
     },
     /// An error with a custom message
     Custom(String),
     /// Multiple unrelated reasons were merged
-    Many(Vec<RichReason<'a, I>>),
+    Many(Vec<RichReason<T>>),
 }
 
-impl<'a, I: Input<'a>> RichReason<'a, I> {
-    fn found(&self) -> Option<&I::Token> {
+impl<T> RichReason<T> {
+    /// Return the token that was found by this error reason. `None` implies that the end of input was expected.
+    fn found(&self) -> Option<&T> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.as_ref(),
             RichReason::Custom(_) => None,
             RichReason::Many(many) => many.iter().find_map(|r| r.found()),
         }
     }
+
+    /// Transform this error's tokens using the given function.
+    ///
+    /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
+    /// the token type for each pass is different (`char` vs `MyToken`, say).
+    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichReason<U> {
+        fn map_token_inner<T, U, F: FnMut(T) -> U>(
+            reason: RichReason<T>,
+            mut f: &mut F,
+        ) -> RichReason<U> {
+            match reason {
+                RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
+                    expected: expected.into_iter().map(|tok| tok.map(&mut f)).collect(),
+                    found: found.map(f),
+                },
+                RichReason::Custom(msg) => RichReason::Custom(msg),
+                RichReason::Many(reasons) => {
+                    RichReason::Many(reasons.into_iter().map(|r| map_token_inner(r, f)).collect())
+                }
+            }
+        }
+
+        map_token_inner(self, &mut f)
+    }
 }
 
-impl<'a, I: Input<'a>> RichReason<'a, I>
+impl<T> RichReason<T>
 where
-    I::Token: PartialEq,
+    T: PartialEq,
 {
     fn flat_merge(self, other: Self) -> Self {
         match (self, other) {
@@ -216,10 +254,9 @@ where
     }
 }
 
-impl<'a, I: Input<'a>> PartialEq for RichReason<'a, I>
+impl<T> PartialEq for RichReason<T>
 where
-    I::Token: PartialEq,
-    I::Span: PartialEq,
+    T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -245,17 +282,17 @@ where
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 // TODO: Impl `Clone`
-pub struct Rich<'a, I: Input<'a>> {
-    span: I::Span,
-    reason: RichReason<'a, I>,
+pub struct Rich<T, S> {
+    span: S,
+    reason: RichReason<T>,
 }
 
-impl<'a, I: Input<'a>> Rich<'a, I> {
+impl<T, S> Rich<T, S> {
     fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
-        token: fn(&I::Token, &mut fmt::Formatter<'_>) -> fmt::Result,
-        span: fn(&I::Span, &mut fmt::Formatter<'_>) -> fmt::Result,
+        token: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
+        span: fn(&S, &mut fmt::Formatter<'_>) -> fmt::Result,
     ) -> fmt::Result {
         match &self.reason {
             RichReason::ExpectedFound { expected, found } => {
@@ -291,9 +328,9 @@ impl<'a, I: Input<'a>> Rich<'a, I> {
     }
 }
 
-impl<'a, I: Input<'a>> Rich<'a, I> {
+impl<T, S> Rich<T, S> {
     /// Create an error with a custom message and span
-    pub fn custom<M: ToString>(span: I::Span, msg: M) -> Self {
+    pub fn custom<M: ToString>(span: S, msg: M) -> Self {
         Rich {
             span,
             reason: RichReason::Custom(msg.to_string()),
@@ -301,24 +338,18 @@ impl<'a, I: Input<'a>> Rich<'a, I> {
     }
 
     /// Get the span associated with this error
-    pub fn span(&self) -> I::Span
-    where
-        I::Span: Clone,
-    {
-        self.span.clone()
+    pub fn span(&self) -> &S {
+        &self.span
     }
 
     /// Get the reason fro this error
-    pub fn reason(&self) -> &RichReason<'a, I> {
+    pub fn reason(&self) -> &RichReason<T> {
         &self.reason
     }
 
     /// Get an iterator over the expected items associated with this error
-    pub fn expected(&self) -> alloc::vec::IntoIter<Option<&I::Token>> {
-        fn push_expected<'a, 'b, I: Input<'b>>(
-            reason: &'a RichReason<'b, I>,
-            v: &mut Vec<Option<&'a I::Token>>,
-        ) {
+    pub fn expected(&self) -> alloc::vec::IntoIter<Option<&T>> {
+        fn push_expected<'a, T>(reason: &'a RichReason<T>, v: &mut Vec<Option<&'a T>>) {
             match reason {
                 RichReason::ExpectedFound { expected, .. } => {
                     v.extend(expected.iter().map(|e| e.as_ref()))
@@ -332,13 +363,24 @@ impl<'a, I: Input<'a>> Rich<'a, I> {
         v.into_iter()
     }
 
-    /// Get an iterator over the items found by this error
-    pub fn found(&self) -> Option<&I::Token> {
+    /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
+    pub fn found(&self) -> Option<&T> {
         self.reason.found()
+    }
+
+    /// Transform this error's tokens using the given function.
+    ///
+    /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
+    /// the token type for each pass is different (`char` vs `MyToken`, say).
+    pub fn map_token<U, F: FnMut(T) -> U>(self, f: F) -> Rich<U, S> {
+        Rich {
+            span: self.span,
+            reason: self.reason.map_token(f),
+        }
     }
 }
 
-impl<'a, I: Input<'a>> Error<'a, I> for Rich<'a, I>
+impl<'a, I: Input<'a>> Error<'a, I> for Rich<I::Token, I::Span>
 where
     I::Token: PartialEq,
 {
@@ -365,33 +407,33 @@ where
     }
 }
 
-impl<'a, I: Input<'a>> PartialEq for Rich<'a, I>
+impl<T, S> PartialEq for Rich<T, S>
 where
-    I::Token: PartialEq,
-    I::Span: PartialEq,
+    T: PartialEq,
+    S: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.span == other.span && self.reason == other.reason
     }
 }
 
-impl<'a, I: Input<'a>> fmt::Debug for Rich<'a, I>
+impl<T, S> fmt::Debug for Rich<T, S>
 where
-    I::Span: fmt::Debug,
-    I::Token: fmt::Debug,
+    T: fmt::Debug,
+    S: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
+        self.inner_fmt(f, T::fmt, S::fmt)
     }
 }
 
-impl<'a, I: Input<'a>> fmt::Display for Rich<'a, I>
+impl<T, S> fmt::Display for Rich<T, S>
 where
-    I::Span: fmt::Display,
-    I::Token: fmt::Display,
+    T: fmt::Display,
+    S: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner_fmt(f, I::Token::fmt, I::Span::fmt)
+        self.inner_fmt(f, T::fmt, S::fmt)
     }
 }
 

@@ -62,6 +62,7 @@ pub mod prelude {
     pub use super::{
         error::{EmptyErr, Error as _, Rich, Simple},
         extra,
+        input::Input,
         primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
@@ -103,7 +104,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Emitter, Input, InputRef, SliceInput, StrInput},
+    input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput},
     internal::{IPResult, PResult},
     prelude::*,
     primitive::Any,
