@@ -28,7 +28,7 @@ impl<'a, T> Deref for MaybeMut<'a, T> {
     fn deref(&self) -> &Self::Target {
         match self {
             MaybeMut::Ref(r) => &**r,
-            MaybeMut::Own(o) => o
+            MaybeMut::Own(o) => o,
         }
     }
 }

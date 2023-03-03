@@ -98,7 +98,10 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
         Ok((
             A::make_iter(&self.parser, inp)?,
             (self.cfg)(A::Config::default(), inp.ctx()),
@@ -296,11 +299,18 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
         self.parser.make_iter(inp)
     }
 
-    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> IPResult<M, O> {
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
         match self.parser.next::<M>(inp, state) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| (self.mapper)(o)))),
             Ok(None) => Ok(None),
@@ -861,20 +871,23 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
         let out = self.parser.go::<Emit>(inp)?;
-        let then = inp.with_ctx(&out, |inp| {
-            self.then.make_iter::<M>(inp)
-        })?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
         Ok((out, then))
     }
 
-    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> IPResult<M, OB> {
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, OB> {
         let (ctx, inner_state) = state;
 
-        inp.with_ctx(ctx, |inp| {
-            self.then.next(inp, inner_state)
-        })
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
     }
 }
 
@@ -1151,7 +1164,10 @@ where
 {
     type IterState<M: Mode> = usize;
 
-    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
         Ok(0)
     }
 
@@ -1397,7 +1413,10 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
         Ok(0)
     }
 

@@ -440,7 +440,11 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'parse I, state: &'parse mut E::State, ctx: &'parse E::Context) -> Self
+    pub(crate) fn new(
+        input: &'parse I,
+        state: &'parse mut E::State,
+        ctx: &'parse E::Context,
+    ) -> Self
     where
         E::Context: Default,
     {

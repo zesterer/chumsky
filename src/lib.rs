@@ -1825,7 +1825,7 @@ where
     type Item = O;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut inp =  InputRef {
+        let mut inp = InputRef {
             input: &self.input,
             offset: self.offset,
             errors: core::mem::take(&mut self.errors),
@@ -1866,7 +1866,10 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         I: 'a;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>>;
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
