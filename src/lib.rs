@@ -53,6 +53,7 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
+mod util;
 
 /// Commonly used functions, traits and types.
 ///
@@ -112,6 +113,7 @@ use self::{
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
+    util::MaybeMut,
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
@@ -452,7 +454,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(&input, state);
+        let ctx = E::Context::default();
+        let mut inp = InputRef::new(&input, state, &ctx);
         let res = self.go::<Emit>(&mut inp);
         let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
         let alt = inp.errors.alt.take();
@@ -495,7 +498,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(&input, state);
+        let ctx = E::Context::default();
+        let mut inp = InputRef::new(&input, state, &ctx);
         let res = self.go::<Check>(&mut inp);
         let res = res.and_then(|()| expect_end(&mut inp));
         let alt = inp.errors.alt.take();
@@ -1804,9 +1808,9 @@ pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E:
     parser: P,
     input: I,
     offset: I::Offset,
-    state: Result<&'iter mut E::State, E::State>,
+    state: MaybeMut<'iter, E::State>,
     errors: input::Errors<E::Error>,
-    ctx: Option<E::Context>,
+    ctx: E::Context,
     #[cfg(feature = "memoization")]
     memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
     iter_state: Option<P::IterState<Emit>>,
@@ -1825,23 +1829,26 @@ where
             input: &self.input,
             offset: self.offset,
             errors: core::mem::take(&mut self.errors),
-            state: match &mut self.state {
-                Ok(state) => *state,
-                Err(state) => state,
-            },
-            ctx: self.ctx.take(),
+            state: &mut *self.state,
+            ctx: &self.ctx,
             // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
             #[cfg(feature = "memoization")]
             memos: core::mem::take(&mut self.memos),
         };
         let parser = &self.parser;
-        let iter_state = self
-            .iter_state
-            .get_or_insert_with(|| parser.make_iter::<Emit>(&mut inp));
+
+        let iter_state = match &mut self.iter_state {
+            Some(state) => state,
+            None => {
+                let state = parser.make_iter::<Emit>(&mut inp).ok()?;
+                self.iter_state = Some(state);
+                self.iter_state.as_mut().unwrap()
+            }
+        };
+
         let res = parser.next::<Emit>(&mut inp, iter_state);
         self.offset = inp.offset;
         self.errors = inp.errors;
-        self.ctx = inp.ctx;
         #[cfg(feature = "memoization")]
         {
             self.memos = inp.memos;
@@ -1859,7 +1866,10 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         I: 'a;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M>;
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
@@ -1969,8 +1979,8 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
                 parser: self,
                 offset: input.start(),
                 input,
-                state: Err(E::State::default()),
-                ctx: Some(E::Context::default()),
+                state: MaybeMut::new_own(E::State::default()),
+                ctx: E::Context::default(),
                 errors: input::Errors::default(),
                 #[cfg(feature = "memoization")]
                 memos: HashMap::default(),
@@ -1998,8 +2008,8 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
                 parser: self,
                 offset: input.start(),
                 input,
-                state: Ok(state),
-                ctx: Some(E::Context::default()),
+                state: MaybeMut::new_ref(state),
+                ctx: E::Context::default(),
                 errors: input::Errors::default(),
                 #[cfg(feature = "memoization")]
                 memos: HashMap::default(),
@@ -2365,7 +2375,8 @@ mod tests {
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
         let mut state = ();
-        let mut input = InputRef::<_, extra::Default>::new(&input, &mut state);
+        let ctx = ();
+        let mut input = InputRef::<_, extra::Default>::new(&input, &mut state, &ctx);
 
         while let (_, Some(c)) = input.next() {
             std::hint::black_box(c);

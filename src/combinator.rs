@@ -74,7 +74,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp);
+        let mut state = self.make_iter::<Check>(inp)?;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
@@ -98,11 +98,14 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M> {
-        (
-            A::make_iter(&self.parser, inp),
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok((
+            A::make_iter(&self.parser, inp)?,
             (self.cfg)(A::Config::default(), inp.ctx()),
-        )
+        ))
     }
 
     fn next<M: Mode>(
@@ -283,6 +286,37 @@ where
     }
 
     go_extra!(O);
+}
+
+impl<'a, I, O, E, A, OA, F> IterParser<'a, I, O, E> for Map<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, OA, E>,
+    F: Fn(OA) -> O,
+{
+    type IterState<M: Mode> = A::IterState<M>
+    where
+        I: 'a;
+
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        self.parser.make_iter(inp)
+    }
+
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        match self.parser.next::<M>(inp, state) {
+            Ok(Some(o)) => Ok(Some(M::map(o, |o| (self.mapper)(o)))),
+            Ok(None) => Ok(None),
+            Err(()) => Err(()),
+        }
+    }
 }
 
 /// See [`Parser::map_with_span`].
@@ -818,10 +852,43 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(p1, |inp| self.then.go::<M>(inp))
+        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
     }
 
     go_extra!(OB);
+}
+
+impl<'a, I, E, A, B, OA, OB> IterParser<'a, I, OB, E>
+    for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
+{
+    type IterState<M: Mode> = (OA, B::IterState<M>)
+    where
+        I: 'a;
+
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        let out = self.parser.go::<Emit>(inp)?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
+        Ok((out, then))
+    }
+
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, OB> {
+        let (ctx, inner_state) = state;
+
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
+    }
 }
 
 /// See [`Parser::with_ctx`].
@@ -845,11 +912,11 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
-    Ctx: 'a + Clone,
+    Ctx: 'a,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        inp.with_ctx(self.ctx.clone(), |inp| self.parser.go::<M>(inp))
+        inp.with_ctx(&self.ctx, |inp| self.parser.go::<M>(inp))
     }
 
     go_extra!(O);
@@ -1076,7 +1143,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp);
+        let mut state = self.make_iter::<Check>(inp)?;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
@@ -1097,8 +1164,11 @@ where
 {
     type IterState<M: Mode> = usize;
 
-    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M> {
-        0
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok(0)
     }
 
     fn next<M: Mode>(
@@ -1343,8 +1413,11 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M> {
-        0
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok(0)
     }
 
     fn next<M: Mode>(
@@ -1416,7 +1489,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp);
+        let mut state = self.make_iter::<Check>(inp)?;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
@@ -1455,7 +1528,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
-        let mut iter_state = self.parser.make_iter::<M>(inp);
+        let mut iter_state = self.parser.make_iter::<M>(inp)?;
         loop {
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
@@ -1882,7 +1955,7 @@ where
         Self: Sized,
     {
         let mut a_out = M::bind(|| Vec::new());
-        let mut iter_state = self.parser_a.make_iter::<M>(inp);
+        let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
@@ -1940,7 +2013,7 @@ where
         Self: Sized,
     {
         let mut out = self.parser_a.go::<M>(inp)?;
-        let mut iter_state = self.parser_b.make_iter::<M>(inp);
+        let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {

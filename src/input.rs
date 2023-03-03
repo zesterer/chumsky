@@ -432,16 +432,19 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) input: &'parse I,
     pub(crate) offset: I::Offset,
     pub(crate) errors: Errors<E::Error>,
-    // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
     pub(crate) state: &'parse mut E::State,
     // TODO: Don't use `Option`, this is only here because we need to temporarily remove it in `with_input`
-    pub(crate) ctx: Option<E::Context>,
+    pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
     pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'parse I, state: &'parse mut E::State) -> Self
+    pub(crate) fn new(
+        input: &'parse I,
+        state: &'parse mut E::State,
+        ctx: &'parse E::Context,
+    ) -> Self
     where
         E::Context: Default,
     {
@@ -449,7 +452,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             offset: input.start(),
             input,
             state,
-            ctx: Some(E::Context::default()),
+            ctx,
             errors: Errors::default(),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
@@ -458,7 +461,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     pub(crate) fn with_ctx<'sub_parse, C, O>(
         &'sub_parse mut self,
-        new_ctx: C,
+        new_ctx: &'sub_parse C,
         f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, E::State, C>>) -> O,
     ) -> O
     where
@@ -471,7 +474,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             input: self.input,
             offset: self.offset,
             state: self.state,
-            ctx: Some(new_ctx),
+            ctx: new_ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(), // TODO: Reuse memoisation state?
@@ -496,14 +499,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             offset: new_input.start(),
             input: new_input,
             state: self.state,
-            ctx: self.ctx.take(),
+            ctx: self.ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(), // TODO: Reuse memoisation state?
         };
         let res = f(&mut new_inp);
         self.errors = new_inp.errors;
-        self.ctx = new_inp.ctx;
         res
     }
 
@@ -536,7 +538,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     #[inline]
     pub(crate) fn ctx(&self) -> &E::Context {
-        self.ctx.as_ref().expect("no ctx?")
+        &*self.ctx
     }
 
     #[inline]
