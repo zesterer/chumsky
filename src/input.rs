@@ -433,15 +433,15 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) offset: I::Offset,
     pub(crate) errors: Errors<E::Error>,
     // TODO: Don't use a result, use something like `Cow` but that allows `E::State` to not be `Clone`
-    state: Result<&'parse mut E::State, E::State>,
+    pub(crate) state: &'parse mut E::State,
     // TODO: Don't use `Option`, this is only here because we need to temporarily remove it in `with_input`
-    ctx: Option<E::Context>,
+    pub(crate) ctx: Option<E::Context>,
     #[cfg(feature = "memoization")]
     pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'parse I, state: Result<&'parse mut E::State, E::State>) -> Self
+    pub(crate) fn new(input: &'parse I, state: &'parse mut E::State) -> Self
     where
         E::Context: Default,
     {
@@ -470,10 +470,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         let mut new_inp = InputRef {
             input: self.input,
             offset: self.offset,
-            state: match &mut self.state {
-                Ok(state) => Ok(*state),
-                Err(state) => Ok(state),
-            },
+            state: self.state,
             ctx: Some(new_ctx),
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
@@ -498,10 +495,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         let mut new_inp = InputRef {
             offset: new_input.start(),
             input: new_input,
-            state: match &mut self.state {
-                Ok(state) => Ok(*state),
-                Err(state) => Ok(state),
-            },
+            state: self.state,
             ctx: self.ctx.take(),
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
@@ -537,10 +531,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     #[inline]
     pub(crate) fn state(&mut self) -> &mut E::State {
-        match &mut self.state {
-            Ok(state) => *state,
-            Err(state) => state,
-        }
+        self.state
     }
 
     #[inline]
