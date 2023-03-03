@@ -2052,41 +2052,49 @@ where
 /// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
 /// input patterns will become syntax errors, just as with [`Parser::filter`].
 ///
-/// The macro is semantically similar to a `match` expression and so supports
-/// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
+/// Internally, [`select!`] is very similar to [`Parser::try_map`] and thinking of it as such might make it less
+/// confusing.
 ///
-/// ```
-/// # use chumsky::{prelude::*, error::Simple};
-/// # #[derive(Clone)] enum Token { Bool(bool) }
-/// # enum Expr { True, False }
-/// # let _: chumsky::primitive::Select<_, &[Token], Expr, extra::Default> =
-/// select! {
-///     Token::Bool(true) => Expr::True,
-///     Token::Bool(false) => Expr::False,
-/// }
-/// # ;
-/// ```
+/// `select!` requires that tokens implement [`Clone`].
 ///
-/// If you require access to the input's span, you may add an argument after a pattern to gain access to it.
+/// If you're trying to access tokens referentially (for the sake of nested parsing, or simply because you want to
+/// avoid cloning the token), see [`select_ref!`].
+///
+/// # Examples
+///
+/// `select!` is syntactically similar to a `match` expression and has support for
+/// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards):
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
 /// #[derive(Clone)]
-/// enum Token<'a> {
-///     Num(f64),
-///     Str(&'a str),
+/// enum Token<'a> { Ident(&'a str) }
+///
+/// enum Expr<'a> { Local(&'a str), Null, True, False }
+///
+/// # let _: chumsky::primitive::Select<_, &[Token], Expr, extra::Default> =
+/// select! {
+///     Token::Ident(s) if s == "true" => Expr::True,
+///     Token::Ident(s) if s == "false" => Expr::False,
+///     Token::Ident(s) if s == "null" => Expr::Null,
+///     Token::Ident(s) => Expr::Local(s),
 /// }
-/// enum Expr<'a> {
-///     Num(f64),
-///     Str(&'a str),
-/// }
+/// # ;
+/// ```
+///
+/// If you require access to the token's span, you may add an argument after a pattern to gain access to it:
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// #[derive(Clone)]
+/// enum Token<'a> { Num(f64), Str(&'a str) }
+///
+/// enum Expr<'a> { Num(f64), Str(&'a str) }
 ///
 /// type Span = SimpleSpan<usize>;
 ///
 /// impl<'a> Expr<'a> {
-///     fn spanned(self, span: Span) -> (Self, Span) {
-///         (self, span)
-///     }
+///     fn spanned(self, span: Span) -> (Self, Span) { (self, span) }
 /// }
 ///
 /// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
@@ -2096,16 +2104,6 @@ where
 /// }
 /// # ;
 /// ```
-///
-/// Internally, [`select!`] is very similar to [`Parser::filter`] and thinking of it as such might make it less
-/// confusing.
-///
-/// `select!` requires that tokens implement [`Clone`].
-///
-/// If you're trying to access tokens referentially (for the sake of nested parsing, or simply because you want to
-/// avoid cloning the token), see [`select_ref!`].
-///
-/// # Examples
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
