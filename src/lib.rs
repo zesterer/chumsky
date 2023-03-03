@@ -1832,7 +1832,7 @@ where
             ctx: self.ctx.take(),
             // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
             #[cfg(feature = "memoization")]
-            memos: std::core::take(&mut self.memos),
+            memos: core::mem::take(&mut self.memos),
         };
         let parser = &self.parser;
         let iter_state = self
