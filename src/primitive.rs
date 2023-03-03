@@ -1014,7 +1014,7 @@ where
         self.parsers
             .iter()
             .zip(arr.iter_mut())
-            .try_for_each(| (p, res)| {
+            .try_for_each(|(p, res)| {
                 res.write(p.go::<M>(inp)?);
                 Ok(())
             })?;

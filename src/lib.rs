@@ -2319,17 +2319,10 @@ mod tests {
         use self::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, [char; 3]> {
-            group([
-                just('a'),
-                just('b'),
-                just('c'),
-            ])
+            group([just('a'), just('b'), just('c')])
         }
 
-        assert_eq!(
-            parser().parse("abc").into_result(),
-            Ok(['a', 'b', 'c'])
-        );
+        assert_eq!(parser().parse("abc").into_result(), Ok(['a', 'b', 'c']));
         assert!(parser().parse("abd").has_errors());
     }
 
