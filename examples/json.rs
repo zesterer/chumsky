@@ -17,7 +17,7 @@ enum Json {
     Object(HashMap<String, Json>),
 }
 
-fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, &'a str>>> {
+fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<char>>> {
     recursive(|value| {
         let digits = text::digits(10).slice();
 
@@ -161,6 +161,7 @@ fn main() {
                         RichReason::ExpectedFound { found, .. } => format!(
                             "Unexpected {}",
                             found
+                                .as_ref()
                                 .map(|c| format!("token {}", c.fg(Color::Red)))
                                 .unwrap_or_else(|| "end of input".to_string())
                         ),

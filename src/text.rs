@@ -164,7 +164,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let whitespace = text::whitespace::<_, _, extra::Err<Simple<&str>>>();
+/// let whitespace = text::whitespace::<_, _, extra::Err<Simple<char>>>();
 ///
 /// // Any amount of whitespace is parsed...
 /// assert_eq!(whitespace.parse("\t \n  \r ").into_result(), Ok(()));
@@ -192,7 +192,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<Simple<&str>>>();
+/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<Simple<char>>>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  ").into_result(), Ok(()));
@@ -231,7 +231,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let newline = text::newline::<_, extra::Err<Simple<&str>>>();
+/// let newline = text::newline::<_, extra::Err<Simple<char>>>();
 ///
 /// assert_eq!(newline.parse("\n").into_result(), Ok(()));
 /// assert_eq!(newline.parse("\r").into_result(), Ok(()));
@@ -275,7 +275,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let digits = text::digits::<_, _, extra::Err<Simple<&str>>>(10).slice();
+/// let digits = text::digits::<_, _, extra::Err<Simple<char>>>(10).slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -312,7 +312,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let dec = text::int::<_, _, extra::Err<Simple<&str>>>(10);
+/// let dec = text::int::<_, _, extra::Err<Simple<char>>>(10);
 ///
 /// assert_eq!(dec.parse("0").into_result(), Ok("0"));
 /// assert_eq!(dec.parse("1").into_result(), Ok("1"));
@@ -320,7 +320,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
-/// let hex = text::int::<_, _, extra::Err<Simple<&str>>>(16);
+/// let hex = text::int::<_, _, extra::Err<Simple<char>>>(16);
 ///
 /// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
 /// assert_eq!(hex.parse("d").into_result(), Ok("d"));
@@ -437,7 +437,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let def = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("def");
+/// let def = text::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
 ///
 /// // Exactly 'def' was found
 /// assert_eq!(def.parse("def").into_result(), Ok("def"));

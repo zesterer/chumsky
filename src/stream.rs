@@ -93,7 +93,7 @@ where
 fn spanned() {
     fn parser<'a>() -> impl Parser<
         'a,
-        input::Spanned<char, Range<usize>, BoxedStream<'static, (char, Range<usize>)>>,
+        input::SpannedInput<char, Range<usize>, BoxedStream<'static, (char, Range<usize>)>>,
         char,
     > {
         just('h')

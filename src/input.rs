@@ -55,13 +55,13 @@ pub trait Input<'a>: 'a {
     /// Although `Spanned` does implement [`BorrowInput`], please be aware that, as you might anticipate, the slices
     /// will be those of the original input (usually `&[(T, S)]`) and not `&[T]` so as to avoid the need to copy
     /// around sections of the input.
-    fn spanned<T, S>(self, eoi: S) -> Spanned<T, S, Self>
+    fn spanned<T, S>(self, eoi: S) -> SpannedInput<T, S, Self>
     where
         Self: Input<'a, Token = (T, S)> + Sized,
         T: 'a,
         S: Span + Clone + 'a,
     {
-        Spanned {
+        SpannedInput {
             input: self,
             eoi,
             phantom: PhantomData,
@@ -210,15 +210,66 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
     }
 }
 
+impl<'a, T: Clone + 'a, const N: usize> Input<'a> for &'a [T; N] {
+    type Offset = usize;
+    type Token = T;
+    type Span = SimpleSpan<usize>;
+
+    fn start(&self) -> Self::Offset {
+        0
+    }
+
+    #[inline]
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        let (offset, tok) = self.next_ref(offset);
+        (offset, tok.cloned())
+    }
+
+    #[inline]
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        range.into()
+    }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
+}
+
+impl<'a, const N: usize> StrInput<'a, u8> for &'a [u8; N] {}
+
+impl<'a, T: Clone + 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
+    type Slice = &'a [T];
+
+    #[inline]
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        &self[range]
+    }
+
+    #[inline]
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        &self[from]
+    }
+}
+
+impl<'a, T: Clone + 'a, const N: usize> BorrowInput<'a> for &'a [T; N] {
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
+        if let Some(tok) = self.get(offset) {
+            (offset + 1, Some(tok))
+        } else {
+            (offset, None)
+        }
+    }
+}
+
 /// A wrapper around an input that splits an input into spans and tokens. See [`Input::spanned`].
 #[derive(Copy, Clone)]
-pub struct Spanned<T, S, I> {
+pub struct SpannedInput<T, S, I> {
     input: I,
     eoi: S,
     phantom: PhantomData<T>,
 }
 
-impl<'a, T, S, I> Input<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> Input<'a> for SpannedInput<T, S, I>
 where
     I: Input<'a, Token = (T, S)>,
     T: 'a,
@@ -256,7 +307,7 @@ where
     }
 }
 
-impl<'a, T, S, I> BorrowInput<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> BorrowInput<'a> for SpannedInput<T, S, I>
 where
     I: BorrowInput<'a, Token = (T, S)>,
     T: 'a,
@@ -268,7 +319,7 @@ where
     }
 }
 
-impl<'a, T, S, I> SliceInput<'a> for Spanned<T, S, I>
+impl<'a, T, S, I> SliceInput<'a> for SpannedInput<T, S, I>
 where
     I: SliceInput<'a, Token = (T, S)>,
     T: 'a,
