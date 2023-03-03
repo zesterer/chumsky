@@ -842,7 +842,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(MaybeRef::new_own(p1), |inp| self.then.go::<M>(inp))
+        inp.with_ctx(MaybeRef::new_ref(&p1), |inp| self.then.go::<M>(inp))
     }
 
     go_extra!(OB);
@@ -855,7 +855,7 @@ where
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
     B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
-    OA: Clone + 'a,
+    OA: 'a,
 {
     type IterState<M: Mode> = (OA, B::IterState<M>)
     where
