@@ -515,6 +515,67 @@ where
     go_extra!(());
 }
 
+/// See [`Parser::unwrapped`].
+pub struct Unwrapped<A, O> {
+    pub(crate) parser: A,
+    pub(crate) location: Location<'static>,
+    pub(crate) phantom: PhantomData<O>,
+}
+
+impl<A: Copy, O> Copy for Unwrapped<A, O> {}
+impl<A: Clone, O> Clone for Unwrapped<A, O> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            location: self.location,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, E, A, O, U> Parser<'a, I, O, E> for Unwrapped<A, Result<O, U>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Result<O, U>, E>,
+    U: fmt::Debug,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, |out| match out {
+            Ok(out) => out,
+            Err(err) => panic!(
+                "called `Result::unwrap` on a `Err(_)` value at {}: {:?}",
+                self.location, err
+            ),
+        }))
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, E, A, O> Parser<'a, I, O, E> for Unwrapped<A, Option<O>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Option<O>, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, |out| match out {
+            Some(out) => out,
+            None => panic!(
+                "called `Option::unwrap` on a `None` value at {}",
+                self.location
+            ),
+        }))
+    }
+
+    go_extra!(O);
+}
+
 /// See [`Parser::memoised`].
 #[cfg(feature = "memoization")]
 #[derive(Copy, Clone)]

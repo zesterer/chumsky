@@ -93,6 +93,7 @@ use core::{
     marker::PhantomData,
     mem::MaybeUninit,
     ops::{Range, RangeFrom},
+    panic::Location,
     str::FromStr,
 };
 use hashbrown::HashMap;
@@ -1708,12 +1709,16 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     /// assert!(boolean.parse("42").has_errors());
     /// ```
     // TODO: Use Location::caller(), make this a proper combinator
-    fn unwrapped<U, E1>(self) -> Map<Self, Result<U, E1>, fn(Result<U, E1>) -> U>
+    #[track_caller]
+    fn unwrapped(self) -> Unwrapped<Self, O>
     where
-        Self: Sized + Parser<'a, I, Result<U, E1>, E>,
-        E1: fmt::Debug,
+        Self: Sized,
     {
-        self.map(|o| o.unwrap())
+        Unwrapped {
+            parser: self,
+            location: *Location::caller(),
+            phantom: PhantomData,
+        }
     }
 
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
@@ -2049,24 +2054,55 @@ where
 /// The macro is semantically similar to a `match` expression and so supports
 /// [pattern guards](https://doc.rust-lang.org/reference/expressions/match-expr.html#match-guards) too.
 ///
-/// ```ignore
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// # #[derive(Clone)] enum Token { Bool(bool) }
+/// # enum Expr { True, False }
+/// # let _: chumsky::primitive::Select<_, &[Token], Expr, extra::Default> =
 /// select! {
-///     Token::Bool(x) if x => Expr::True,
-///     Token::Bool(x) if !x => Expr::False,
+///     Token::Bool(true) => Expr::True,
+///     Token::Bool(false) => Expr::False,
 /// }
+/// # ;
 /// ```
 ///
-/// If you require access to the input's span, you may add an argument before the patterns to gain access to it.
+/// If you require access to the input's span, you may add an argument after a pattern to gain access to it.
 ///
-/// ```ignore
-/// select! { |span|
-///     Token::Num(x) => Expr::Num(x).spanned(span),
-///     Token::Str(s) => Expr::Str(s).spanned(span),
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// #[derive(Clone)]
+/// enum Token<'a> {
+///     Num(f64),
+///     Str(&'a str),
 /// }
+/// enum Expr<'a> {
+///     Num(f64),
+///     Str(&'a str),
+/// }
+///
+/// type Span = SimpleSpan<usize>;
+///
+/// impl<'a> Expr<'a> {
+///     fn spanned(self, span: Span) -> (Self, Span) {
+///         (self, span)
+///     }
+/// }
+///
+/// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
+/// select! {
+///     Token::Num(x), span => Expr::Num(x).spanned(span),
+///     Token::Str(s), span => Expr::Str(s).spanned(span),
+/// }
+/// # ;
 /// ```
 ///
 /// Internally, [`select!`] is very similar to [`Parser::filter`] and thinking of it as such might make it less
 /// confusing.
+///
+/// `select!` requires that tokens implement [`Clone`].
+///
+/// If you're trying to access tokens referentially (for the sake of nested parsing, or simply because you want to
+/// avoid cloning the token), see [`select_ref!`].
 ///
 /// # Examples
 ///
@@ -2133,6 +2169,8 @@ macro_rules! select {
 /// A version of [`select!`] that selects on token by reference instead of by value.
 ///
 /// Useful if you want to extract elements from a token in a zero-copy manner.
+///
+/// `select_ref` requires that the parser input implements [`BorrowInput`].
 // TODO: Remove this, somehow unify with `select`?
 #[macro_export]
 macro_rules! select_ref {
