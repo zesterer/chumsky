@@ -814,7 +814,9 @@ where
             .take()
             .map(|err| Located::at(inp.offset().into(), err.err));
         inp.errors.alt = alt;
-        inp.add_alt(new_alt);
+        if let Some(new_alt) = new_alt {
+            inp.add_alt(new_alt);
+        }
 
         res
     }
