@@ -4,7 +4,7 @@
 //! day.”*
 //!
 //! You can implement the [`Error`] trait to create your own parser errors, or you can use one provided by the crate
-//! like [`Simple`] or [`Rich`].
+//! like [`Cheap`], [`Simple`] or [`Rich`].
 
 use super::*;
 use alloc::string::ToString;
@@ -97,8 +97,52 @@ impl fmt::Display for EmptyErr {
     }
 }
 
-/// A minimal error type that tracks only the error span and found token. This type is most useful
-/// when you want fast parsing but do not particularly care about the quality of error messages.
+/// A very cheap error type that tracks only the error span. This type is most useful when you want fast parsing but do
+/// not particularly care about the quality of error messages.
+pub struct Cheap<S = SimpleSpan<usize>> {
+    span: S,
+}
+
+impl<'a, I: Input<'a>> Error<'a, I> for Cheap<I::Span> {
+    fn expected_found<E: IntoIterator<Item = Option<I::Token>>>(
+        _expected: E,
+        _found: Option<I::Token>,
+        span: I::Span,
+    ) -> Self {
+        Self { span }
+    }
+}
+
+impl<S> PartialEq for Cheap<S>
+where
+    S: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.span == other.span
+    }
+}
+
+impl<S> fmt::Debug for Cheap<S>
+where
+    S: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "at {:?}", self.span)?;
+        Ok(())
+    }
+}
+
+impl<S> fmt::Display for Cheap<S>
+where
+    S: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+/// A simple error type that tracks the error span and found token. This type is most useful when you want fast parsing
+/// but do not particularly care about the quality of error messages.
 pub struct Simple<T, S = SimpleSpan<usize>> {
     span: S,
     found: Option<T>,

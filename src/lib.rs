@@ -60,7 +60,7 @@ pub mod text;
 /// cereal.”*
 pub mod prelude {
     pub use super::{
-        error::{EmptyErr, Error as _, Rich, Simple},
+        error::{Cheap, EmptyErr, Error as _, Rich, Simple},
         extra,
         input::Input,
         primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},

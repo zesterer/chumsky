@@ -638,11 +638,11 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline]
-    pub(crate) fn add_alt(&mut self, error: impl Into<Option<Located<E::Error>>>) {
-        self.errors.alt = match (self.errors.alt.take(), error.into()) {
-            (Some(a), Some(b)) => Some(a.prioritize(b, |a, b| a.merge(b))),
-            (a, b) => a.or(b),
-        };
+    pub(crate) fn add_alt(&mut self, err: Located<E::Error>) {
+        self.errors.alt = Some(match self.errors.alt.take() {
+            Some(a) => a.prioritize(err, |a, b| a.merge(b)),
+            None => err,
+        });
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {
