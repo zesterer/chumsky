@@ -2375,7 +2375,8 @@ mod tests {
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
         let mut state = ();
-        let mut input = InputRef::<_, extra::Default>::new(&input, &mut state);
+        let ctx = ();
+        let mut input = InputRef::<_, extra::Default>::new(&input, &mut state, &ctx);
 
         while let (_, Some(c)) = input.next() {
             std::hint::black_box(c);

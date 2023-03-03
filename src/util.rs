@@ -13,13 +13,6 @@ impl<'a, T> MaybeMut<'a, T> {
     pub fn new_ref(val: &'a mut T) -> MaybeMut<'a, T> {
         MaybeMut::Ref(val)
     }
-
-    pub fn make_ref(&mut self) -> MaybeMut<'_, T> {
-        match self {
-            MaybeMut::Ref(r) => MaybeMut::Ref(*r),
-            MaybeMut::Own(o) => MaybeMut::Ref(o),
-        }
-    }
 }
 
 impl<'a, T> Deref for MaybeMut<'a, T> {
