@@ -1824,7 +1824,7 @@ where
         let mut inp = InputRef {
             input: &self.input,
             offset: self.offset,
-            errors: std::mem::take(&mut self.errors),
+            errors: core::mem::take(&mut self.errors),
             state: match &mut self.state {
                 Ok(state) => *state,
                 Err(state) => state,
@@ -1832,7 +1832,7 @@ where
             ctx: self.ctx.take(),
             // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
             #[cfg(feature = "memoization")]
-            memos: std::mem::take(&mut self.memos),
+            memos: std::core::take(&mut self.memos),
         };
         let parser = &self.parser;
         let iter_state = self
