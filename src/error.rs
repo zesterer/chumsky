@@ -99,7 +99,7 @@ impl fmt::Display for EmptyErr {
 
 /// A minimal error type that tracks only the error span and found token. This type is most useful
 /// when you want fast parsing but do not particularly care about the quality of error messages.
-pub struct Simple<T, S> {
+pub struct Simple<T, S = SimpleSpan<usize>> {
     span: S,
     found: Option<T>,
 }
@@ -282,7 +282,7 @@ where
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 // TODO: Impl `Clone`
-pub struct Rich<T, S> {
+pub struct Rich<T, S = SimpleSpan<usize>> {
     span: S,
     reason: RichReason<T>,
 }

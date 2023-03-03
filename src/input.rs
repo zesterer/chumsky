@@ -210,6 +210,57 @@ impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
     }
 }
 
+impl<'a, T: Clone + 'a, const N: usize> Input<'a> for &'a [T; N] {
+    type Offset = usize;
+    type Token = T;
+    type Span = SimpleSpan<usize>;
+
+    fn start(&self) -> Self::Offset {
+        0
+    }
+
+    #[inline]
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        let (offset, tok) = self.next_ref(offset);
+        (offset, tok.cloned())
+    }
+
+    #[inline]
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        range.into()
+    }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
+}
+
+impl<'a, const N: usize> StrInput<'a, u8> for &'a [u8; N] {}
+
+impl<'a, T: Clone + 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
+    type Slice = &'a [T];
+
+    #[inline]
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        &self[range]
+    }
+
+    #[inline]
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        &self[from]
+    }
+}
+
+impl<'a, T: Clone + 'a, const N: usize> BorrowInput<'a> for &'a [T; N] {
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
+        if let Some(tok) = self.get(offset) {
+            (offset + 1, Some(tok))
+        } else {
+            (offset, None)
+        }
+    }
+}
+
 /// A wrapper around an input that splits an input into spans and tokens. See [`Input::spanned`].
 #[derive(Copy, Clone)]
 pub struct SpannedInput<T, S, I> {

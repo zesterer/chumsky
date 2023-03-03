@@ -136,7 +136,7 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
-/// let question = just::<_, _, extra::Err<Simple<&str>>>('?');
+/// let question = just::<_, _, extra::Err<Simple<char>>>('?');
 ///
 /// assert_eq!(question.parse("?").into_result(), Ok('?'));
 /// // This fails because '?' was not found
@@ -239,7 +239,7 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
-/// let digits = one_of::<_, _, extra::Err<Simple<&str>>>("0123456789")
+/// let digits = one_of::<_, _, extra::Err<Simple<char>>>("0123456789")
 ///     .repeated()
 ///     .at_least(1)
 ///     .collect::<String>();
@@ -314,7 +314,7 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
-/// let string = one_of::<_, _, extra::Err<Simple<&str>>>("\"'")
+/// let string = one_of::<_, _, extra::Err<Simple<char>>>("\"'")
 ///     .ignore_then(none_of("\"'").repeated().collect::<String>())
 ///     .then_ignore(one_of("\"'"));
 ///
@@ -585,7 +585,7 @@ where
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
-/// let any = any::<_, extra::Err<Simple<&str>>>();
+/// let any = any::<_, extra::Err<Simple<char>>>();
 ///
 /// assert_eq!(any.parse("a").into_result(), Ok('a'));
 /// assert_eq!(any.parse("7").into_result(), Ok('7'));
@@ -641,11 +641,11 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
-/// let single_line = just::<_, _, extra::Err<Simple<&str>>>("//")
+/// let single_line = just::<_, _, extra::Err<Simple<char>>>("//")
 ///     .then(take_until(text::newline()))
 ///     .ignored();
 ///
-/// let multi_line = just::<_, _, extra::Err<Simple<&str>>>("/*")
+/// let multi_line = just::<_, _, extra::Err<Simple<char>>>("/*")
 ///     .then(take_until(just("*/
 ")))
 ///     .ignored();
@@ -814,7 +814,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 ///
 /// ```should_panic
 /// # use chumsky::prelude::*;
-/// let int = just::<_, _, extra::Err<Simple<&str>>>("0x").ignore_then(todo())
+/// let int = just::<_, _, extra::Err<Simple<char>>>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2).slice()))
 ///     .or(text::int(10).slice());
 ///
@@ -877,7 +877,7 @@ pub struct Choice<T> {
 /// }
 ///
 /// let tokens = choice((
-///     text::keyword::<_, _, _, extra::Err<Simple<&str>>>("if").to(Token::If),
+///     text::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
 ///     text::keyword("for").to(Token::For),
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),

@@ -88,7 +88,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// chain.define(just::<_, _, extra::Err<Simple<&str>>>('+')
+    /// chain.define(just::<_, _, extra::Err<Simple<char>>>('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
@@ -204,7 +204,7 @@ where
 /// }
 ///
 /// // Parser that recursively parses nested lists
-/// let tree = recursive::<_, _, extra::Err<Simple<&str>>, _, _>(|tree| tree
+/// let tree = recursive::<_, _, extra::Err<Simple<char>>, _, _>(|tree| tree
 ///     .separated_by(just(','))
 ///     .collect::<Vec<_>>()
 ///     .delimited_by(just('['), just(']'))

@@ -1024,7 +1024,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let ring = just::<_, _, extra::Err<Simple<&str>>>('O');
+    /// let ring = just::<_, _, extra::Err<Simple<char>>>('O');
     ///
     /// let for_the_elves = ring
     ///     .repeated()
@@ -1205,7 +1205,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let numbers = just::<_, _, extra::Err<Simple<&str>>>('-')
+    /// let numbers = just::<_, _, extra::Err<Simple<char>>>('-')
     ///     .separated_by(just('.'))
     ///     .at_least(2)
     ///     .collect::<Vec<_>>();
@@ -1222,7 +1222,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let row_4 = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    /// let row_4 = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .at_most(4)
@@ -1255,7 +1255,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let coordinate_3d = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    /// let coordinate_3d = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .exactly(3)
@@ -1284,7 +1284,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("enum")
+    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1314,7 +1314,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let numbers = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    /// let numbers = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
@@ -1716,7 +1716,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<&str>>>("enum")
+    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ident()
     ///         .padded()
@@ -1746,7 +1746,7 @@ impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let numbers = text::int::<_, _, extra::Err<Simple<&str>>>(10)
+    /// let numbers = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .allow_trailing()
