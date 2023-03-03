@@ -104,6 +104,7 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{BorrowInput, Emitter, Input, InputRef, SliceInput, StrInput},
+    internal::{IPResult, PResult},
     prelude::*,
     primitive::Any,
     private::{Check, Emit, Mode},
@@ -135,11 +136,6 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
         out
     }
 }
-
-/// The result of calling [`Parser::go`]
-pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
-/// The result of calling [`IterParser::next`]
-pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
@@ -399,6 +395,11 @@ mod private {
 pub mod internal {
     use super::*;
     pub use private::{Check, Emit, Mode};
+
+    /// The result of calling [`Parser::go`]
+    pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
+    /// The result of calling [`IterParser::next`]
+    pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
 }
 
 /// A trait implemented by parsers.
