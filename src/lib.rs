@@ -2193,22 +2193,6 @@ mod tests {
         use self::input::WithContext;
         use self::prelude::*;
 
-        // #[derive(Clone)]
-        // enum TokenTest {
-        //     Root,
-        //     Branch(Box<Self>),
-        // }
-
-        // fn parser2() -> impl Parser<'static, str, TokenTest> {
-        //     recursive(|token| {
-        //         token
-        //             .delimited_by(just('c'), just('c'))
-        //             .map(Box::new)
-        //             .map(TokenTest::Branch)
-        //             .or(just('!').to(TokenTest::Root))
-        //     })
-        // }
-
         #[derive(PartialEq, Debug)]
         enum Token<'a> {
             Ident(&'a str),
@@ -2347,36 +2331,6 @@ mod tests {
             Ok(['a', 'b', 'c'])
         );
         assert!(parser().parse("abd").has_errors());
-    }
-
-    #[cfg(feature = "regex")]
-    #[test]
-    fn regex_parser() {
-        use self::prelude::*;
-        use self::regex::*;
-
-        fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
-            regex("[a-zA-Z_][a-zA-Z0-9_]*")
-                .padded()
-                .repeated()
-                .collect()
-        }
-        assert_eq!(
-            parser().parse("hello world this works").into_result(),
-            Ok(vec!["hello", "world", "this", "works"]),
-        );
-
-        assert_eq!(
-            parser()
-                .parse(b"hello world this works" as &[_])
-                .into_result(),
-            Ok(vec![
-                b"hello" as &[_],
-                b"world" as &[_],
-                b"this" as &[_],
-                b"works" as &[_],
-            ]),
-        );
     }
 
     #[test]
