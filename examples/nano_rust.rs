@@ -3,12 +3,11 @@
 //! Run it with the following command:
 //! cargo run --example nano_rust -- examples/sample.nrs
 
-/*
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::{prelude::*, stream::Stream};
+use chumsky::{error::RichReason, prelude::*};
 use std::{collections::HashMap, env, fmt, fs};
 
-pub type Span = std::ops::Range<usize>;
+pub type Span = SimpleSpan<usize>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Token {
@@ -45,18 +44,16 @@ impl fmt::Display for Token {
     }
 }
 
-fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
+fn lexer<'a>() -> impl Parser<'a, &'a str, Vec<(Token, Span)>, extra::Err<Rich<char, Span>>> {
     // A parser for numbers
     let num = text::int(10)
-        .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())
-        .collect::<String>()
-        .map(Token::Num);
+        .then(just('.').then(text::digits(10)).or_not())
+        .map_slice(|e: &str| Token::Num(e.to_string()));
 
     // A parser for strings
     let str_ = just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
+        .ignore_then(none_of('"').repeated().collect::<String>())
         .then_ignore(just('"'))
-        .collect::<String>()
         .map(Token::Str);
 
     // A parser for operators
@@ -70,7 +67,7 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let ctrl = one_of("()[]{};,").map(|c| Token::Ctrl(c));
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: String| match ident.as_str() {
+    let ident = text::ident().map(|ident: &str| match ident {
         "fn" => Token::Fn,
         "let" => Token::Let,
         "print" => Token::Print,
@@ -79,24 +76,23 @@ fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         "true" => Token::Bool(true),
         "false" => Token::Bool(false),
         "null" => Token::Null,
-        _ => Token::Ident(ident),
+        _ => Token::Ident(ident.to_string()),
     });
 
     // A single token can be one of the above
-    let token = num
-        .or(str_)
-        .or(op)
-        .or(ctrl)
-        .or(ident)
-        .recover_with(skip_then_retry_until([]));
+    let token = num.or(str_).or(op).or(ctrl).or(ident);
+    // .recover_with(skip_then_retry_until([]));
 
-    let comment = just("//").then(take_until(just('\n'))).padded();
+    let comment = just("//")
+        .then(any().and_is(just('\n').not()).repeated())
+        .padded();
 
     token
         .map_with_span(|tok, span| (tok, span))
         .padded_by(comment.repeated())
         .padded()
         .repeated()
+        .collect()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -176,7 +172,10 @@ struct Func {
     body: Spanned<Expr>,
 }
 
-fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+type ParserInput<'a> = chumsky::input::SpannedInput<Token, Span, &'a [(Token, Span)]>;
+
+fn expr_parser<'a>(
+) -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, extra::Err<Rich<Token, Span>>> + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
             let val = select! {
@@ -184,16 +183,18 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 Token::Bool(x) => Expr::Value(Value::Bool(x)),
                 Token::Num(n) => Expr::Value(Value::Num(n.parse().unwrap())),
                 Token::Str(s) => Expr::Value(Value::Str(s)),
-            }
-            .labelled("value");
+            };
+            // .labelled("value");
 
-            let ident = select! { Token::Ident(ident) => ident.clone() }.labelled("identifier");
+            let ident = select! { Token::Ident(ident) => ident.clone() };
+            // .labelled("identifier");
 
             // A list of expressions
             let items = expr
                 .clone()
                 .separated_by(just(Token::Ctrl(',')))
-                .allow_trailing();
+                .allow_trailing()
+                .collect::<Vec<_>>();
 
             // A let expression
             let let_ = just(Token::Let)
@@ -206,8 +207,8 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
 
             let list = items
                 .clone()
-                .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-                .map(Expr::List);
+                .map(Expr::List)
+                .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
             // 'Atoms' are expressions that contain no ambiguity
             let atom = val
@@ -227,50 +228,47 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     .clone()
                     .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
                 // Attempt to recover anything that looks like a parenthesised expression but contains errors
-                .recover_with(nested_delimiters(
-                    Token::Ctrl('('),
-                    Token::Ctrl(')'),
-                    [
-                        (Token::Ctrl('['), Token::Ctrl(']')),
-                        (Token::Ctrl('{'), Token::Ctrl('}')),
-                    ],
-                    |span| (Expr::Error, span),
-                ))
+                // .recover_with(nested_delimiters(
+                //     Token::Ctrl('('),
+                //     Token::Ctrl(')'),
+                //     [
+                //         (Token::Ctrl('['), Token::Ctrl(']')),
+                //         (Token::Ctrl('{'), Token::Ctrl('}')),
+                //     ],
+                //     |span| (Expr::Error, span),
+                // ))
                 // Attempt to recover anything that looks like a list but contains errors
-                .recover_with(nested_delimiters(
-                    Token::Ctrl('['),
-                    Token::Ctrl(']'),
-                    [
-                        (Token::Ctrl('('), Token::Ctrl(')')),
-                        (Token::Ctrl('{'), Token::Ctrl('}')),
-                    ],
-                    |span| (Expr::Error, span),
-                ));
+                // .recover_with(nested_delimiters(
+                //     Token::Ctrl('['),
+                //     Token::Ctrl(']'),
+                //     [
+                //         (Token::Ctrl('('), Token::Ctrl(')')),
+                //         (Token::Ctrl('{'), Token::Ctrl('}')),
+                //     ],
+                //     |span| (Expr::Error, span),
+                // ))
+                ;
 
             // Function calls have very high precedence so we prioritise them
-            let call = atom
-                .then(
-                    items
-                        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-                        .map_with_span(|args, span: Span| (args, span))
-                        .repeated(),
-                )
-                .foldl(|f, args| {
+            let call = atom.foldl(
+                items
+                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+                    .map_with_span(|args, span: Span| (args, span))
+                    .repeated(),
+                |f, args| {
                     let span = f.1.start..args.1.end;
-                    (Expr::Call(Box::new(f), args.0), span)
-                });
+                    (Expr::Call(Box::new(f), args.0), span.into())
+                },
+            );
 
             // Product ops (multiply and divide) have equal precedence
             let op = just(Token::Op("*".to_string()))
                 .to(BinaryOp::Mul)
                 .or(just(Token::Op("/".to_string())).to(BinaryOp::Div));
-            let product = call
-                .clone()
-                .then(op.then(call).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+            let product = call.clone().foldl(op.then(call).repeated(), |a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span.into())
+            });
 
             // Sum ops (add and subtract) have equal precedence
             let op = just(Token::Op("+".to_string()))
@@ -278,23 +276,19 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .or(just(Token::Op("-".to_string())).to(BinaryOp::Sub));
             let sum = product
                 .clone()
-                .then(op.then(product).repeated())
-                .foldl(|a, (op, b)| {
+                .foldl(op.then(product).repeated(), |a, (op, b)| {
                     let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+                    (Expr::Binary(Box::new(a), op, Box::new(b)), span.into())
                 });
 
             // Comparison ops (equal, not-equal) have equal precedence
             let op = just(Token::Op("==".to_string()))
                 .to(BinaryOp::Eq)
                 .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
-            let compare = sum
-                .clone()
-                .then(op.then(sum).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+            let compare = sum.clone().foldl(op.then(sum).repeated(), |a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span.into())
+            });
 
             compare
         });
@@ -304,15 +298,16 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .clone()
             .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
             // Attempt to recover anything that looks like a block but contains errors
-            .recover_with(nested_delimiters(
-                Token::Ctrl('{'),
-                Token::Ctrl('}'),
-                [
-                    (Token::Ctrl('('), Token::Ctrl(')')),
-                    (Token::Ctrl('['), Token::Ctrl(']')),
-                ],
-                |span| (Expr::Error, span),
-            ));
+            // .recover_with(nested_delimiters(
+            //     Token::Ctrl('{'),
+            //     Token::Ctrl('}'),
+            //     [
+            //         (Token::Ctrl('('), Token::Ctrl(')')),
+            //         (Token::Ctrl('['), Token::Ctrl(']')),
+            //     ],
+            //     |span| (Expr::Error, span),
+            // ))
+            ;
 
         let if_ = recursive(|if_| {
             just(Token::If)
@@ -340,83 +335,87 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         });
 
         // Both blocks and `if` are 'block expressions' and can appear in the place of statements
-        let block_expr = block.or(if_).labelled("block");
+        let block_expr = block.or(if_);
+        // .labelled("block");
 
         let block_chain = block_expr
             .clone()
-            .then(block_expr.clone().repeated())
-            .foldl(|a, b| {
+            .foldl(block_expr.clone().repeated(), |a, b| {
                 let span = a.1.start..b.1.end;
-                (Expr::Then(Box::new(a), Box::new(b)), span)
+                (Expr::Then(Box::new(a), Box::new(b)), span.into())
             });
 
         block_chain
             // Expressions, chained by semicolons, are statements
             .or(raw_expr.clone())
-            .then(just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated())
-            .foldl(|a, b| {
-                // This allows creating a span that covers the entire Then expression.
-                // b_end is the end of b if it exists, otherwise it is the end of a.
-                let a_start = a.1.start;
-                let b_end = b.as_ref().map(|b| b.1.end).unwrap_or(a.1.end);
-                (
-                    Expr::Then(
-                        Box::new(a),
-                        Box::new(match b {
-                            Some(b) => b,
-                            // Since there is no b expression then its span is empty.
-                            None => (Expr::Value(Value::Null), b_end..b_end),
-                        }),
-                    ),
-                    a_start..b_end,
-                )
-            })
+            .foldl(
+                just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated(),
+                |a, b| {
+                    // This allows creating a span that covers the entire Then expression.
+                    // b_end is the end of b if it exists, otherwise it is the end of a.
+                    let a_start = a.1.start;
+                    let b_end = b.as_ref().map(|b| b.1.end).unwrap_or(a.1.end);
+                    (
+                        Expr::Then(
+                            Box::new(a),
+                            Box::new(match b {
+                                Some(b) => b,
+                                // Since there is no b expression then its span is empty.
+                                None => (Expr::Value(Value::Null), (b_end..b_end).into()),
+                            }),
+                        ),
+                        (a_start..b_end).into(),
+                    )
+                },
+            )
     })
 }
 
-fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident.clone()),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
+fn funcs_parser<'a>(
+) -> impl Parser<'a, ParserInput<'a>, HashMap<String, Func>, extra::Err<Rich<Token, Span>>> + Clone
+{
+    let ident = select! { Token::Ident(ident) => ident.clone() };
 
     // Argument lists are just identifiers separated by commas, surrounded by parentheses
     let args = ident
         .clone()
         .separated_by(just(Token::Ctrl(',')))
         .allow_trailing()
+        .collect()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-        .labelled("function args");
+        // .labelled("function args")
+        ;
 
     let func = just(Token::Fn)
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
-                .labelled("function name"),
+                // .labelled("function name"),
         )
         .then(args)
         .then(
             expr_parser()
                 .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
                 // Attempt to recover anything that looks like a function body but contains errors
-                .recover_with(nested_delimiters(
-                    Token::Ctrl('{'),
-                    Token::Ctrl('}'),
-                    [
-                        (Token::Ctrl('('), Token::Ctrl(')')),
-                        (Token::Ctrl('['), Token::Ctrl(']')),
-                    ],
-                    |span| (Expr::Error, span),
-                )),
+                // .recover_with(nested_delimiters(
+                //     Token::Ctrl('{'),
+                //     Token::Ctrl('}'),
+                //     [
+                //         (Token::Ctrl('('), Token::Ctrl(')')),
+                //         (Token::Ctrl('['), Token::Ctrl(']')),
+                //     ],
+                //     |span| (Expr::Error, span),
+                // )),
         )
         .map(|((name, args), body)| (name, Func { args, body }))
-        .labelled("function");
+        // .labelled("function")
+        ;
 
-    func.repeated().try_map(|fs, _| {
+    func.repeated().collect::<Vec<_>>().try_map(|fs, _| {
         let mut funcs = HashMap::new();
         for ((name, name_span), f) in fs {
             if funcs.insert(name.clone(), f).is_some() {
-                return Err(Simple::custom(
+                return Err(Rich::custom(
                     name_span.clone(),
                     format!("Function '{}' already exists", name),
                 ));
@@ -540,13 +539,13 @@ fn main() {
     let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument"))
         .expect("Failed to read file");
 
-    let (tokens, mut errs) = lexer().parse_recovery(src.as_str());
+    let (tokens, mut errs) = lexer().parse(src.as_str()).into_output_errors();
 
     let parse_errs = if let Some(tokens) = tokens {
         //dbg!(tokens);
-        let len = src.chars().count();
-        let (ast, parse_errs) =
-            funcs_parser().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
+        let (ast, parse_errs) = funcs_parser()
+            .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
+            .into_output_errors();
 
         //dbg!(ast);
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
@@ -554,7 +553,7 @@ fn main() {
                 assert_eq!(main.args.len(), 0);
                 match eval_expr(&main.body, &funcs, &mut Vec::new()) {
                     Ok(val) => println!("Return value: {}", val),
-                    Err(e) => errs.push(Simple::custom(e.span, e.msg)),
+                    Err(e) => errs.push(Rich::custom(e.span, e.msg)),
                 }
             } else {
                 panic!("No main function!");
@@ -567,75 +566,70 @@ fn main() {
     };
 
     errs.into_iter()
-        .map(|e| e.map(|c| c.to_string()))
-        .chain(parse_errs.into_iter().map(|e| e.map(|tok| tok.to_string())))
+        .map(|e| e.map_token(|c| c.to_string()))
+        .chain(
+            parse_errs
+                .into_iter()
+                .map(|e| e.map_token(|tok| tok.to_string())),
+        )
         .for_each(|e| {
-            let report = Report::build(ReportKind::Error, (), e.span().start);
-
-            let report = match e.reason() {
-                chumsky::error::SimpleReason::Unclosed { span, delimiter } => report
-                    .with_message(format!(
-                        "Unclosed delimiter {}",
-                        delimiter.fg(Color::Yellow)
-                    ))
-                    .with_label(
-                        Label::new(span.clone())
-                            .with_message(format!(
-                                "Unclosed delimiter {}",
-                                delimiter.fg(Color::Yellow)
-                            ))
-                            .with_color(Color::Yellow),
-                    )
-                    .with_label(
-                        Label::new(e.span())
-                            .with_message(format!(
-                                "Must be closed before this {}",
-                                e.found()
-                                    .unwrap_or(&"end of file".to_string())
-                                    .fg(Color::Red)
-                            ))
-                            .with_color(Color::Red),
-                    ),
-                chumsky::error::SimpleReason::Unexpected => report
-                    .with_message(format!(
-                        "{}, expected {}",
-                        if e.found().is_some() {
-                            "Unexpected token in input"
-                        } else {
-                            "Unexpected end of input"
-                        },
-                        if e.expected().len() == 0 {
-                            "something else".to_string()
-                        } else {
-                            e.expected()
-                                .map(|expected| match expected {
-                                    Some(expected) => expected.to_string(),
-                                    None => "end of input".to_string(),
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        }
-                    ))
-                    .with_label(
-                        Label::new(e.span())
-                            .with_message(format!(
-                                "Unexpected token {}",
-                                e.found()
-                                    .unwrap_or(&"end of file".to_string())
-                                    .fg(Color::Red)
-                            ))
-                            .with_color(Color::Red),
-                    ),
-                chumsky::error::SimpleReason::Custom(msg) => report.with_message(msg).with_label(
-                    Label::new(e.span())
-                        .with_message(format!("{}", msg.fg(Color::Red)))
-                        .with_color(Color::Red),
+            let msg = match e.reason() {
+                RichReason::Custom(msg) => msg.clone(),
+                RichReason::ExpectedFound { expected, found } => format!(
+                    "{}, expected {}",
+                    if found.is_some() {
+                        "Unexpected token"
+                    } else {
+                        "Unexpected end of input"
+                    },
+                    if expected.len() == 0 {
+                        "something else".to_string()
+                    } else {
+                        expected
+                            .into_iter()
+                            .map(|expected| match expected {
+                                Some(expected) => expected.to_string(),
+                                None => "end of input".to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    },
                 ),
+                RichReason::Many(_) => format!("uhhh"),
             };
+
+            let report = Report::build(ReportKind::Error, (), e.span().start)
+                .with_code(3)
+                .with_message(msg)
+                .with_label(
+                    Label::new(e.span().into_range())
+                        .with_message(match e.reason() {
+                            RichReason::Custom(msg) => msg.clone(),
+                            RichReason::ExpectedFound { found, .. } => format!(
+                                "Unexpected {}",
+                                found
+                                    .as_ref()
+                                    .map(|c| format!("token {}", c.fg(Color::Red)))
+                                    .unwrap_or_else(|| "end of input".to_string())
+                            ),
+                            RichReason::Many(_) => format!("uhhh"),
+                        })
+                        .with_color(Color::Red),
+                );
+
+            // let report = match e.reason() {
+            //     RichReason::Unclosed { span, delimiter } => report.with_label(
+            //         Label::new(span.clone())
+            //             .with_message(format!(
+            //                 "Unclosed delimiter {}",
+            //                 delimiter.fg(Color::Yellow)
+            //             ))
+            //             .with_color(Color::Yellow),
+            //     ),
+            //     RichReason::Unexpected => report,
+            //     RichReason::Custom(_) => report,
+            // };
 
             report.finish().print(Source::from(&src)).unwrap();
         });
 }
-*/
-
-fn main() {}
