@@ -1861,7 +1861,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         I: 'a;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> Self::IterState<M>;
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>>;
     #[doc(hidden)]
     fn next<M: Mode>(
         &self,
