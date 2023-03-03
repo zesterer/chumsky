@@ -113,7 +113,7 @@ use self::{
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
-    util::{MaybeRef, MaybeMut},
+    util::MaybeMut,
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
@@ -454,7 +454,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(&input, state);
+        let ctx = E::Context::default();
+        let mut inp = InputRef::new(&input, state, &ctx);
         let res = self.go::<Emit>(&mut inp);
         let res = res.and_then(|o| expect_end(&mut inp).map(move |()| o));
         let alt = inp.errors.alt.take();
@@ -497,7 +498,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized,
         E::Context: Default,
     {
-        let mut inp = InputRef::new(&input, state);
+        let ctx = E::Context::default();
+        let mut inp = InputRef::new(&input, state, &ctx);
         let res = self.go::<Check>(&mut inp);
         let res = res.and_then(|()| expect_end(&mut inp));
         let alt = inp.errors.alt.take();
@@ -1828,7 +1830,7 @@ where
             offset: self.offset,
             errors: core::mem::take(&mut self.errors),
             state: &mut *self.state,
-            ctx: MaybeRef::new_ref(&self.ctx),
+            ctx: &self.ctx,
             // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
             #[cfg(feature = "memoization")]
             memos: core::mem::take(&mut self.memos),

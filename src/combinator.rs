@@ -842,7 +842,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(MaybeRef::new_ref(&p1), |inp| self.then.go::<M>(inp))
+        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
     }
 
     go_extra!(OB);
@@ -863,7 +863,7 @@ where
 
     fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
         let out = self.parser.go::<Emit>(inp)?;
-        let then = inp.with_ctx(MaybeRef::new_ref(&out), |inp| {
+        let then = inp.with_ctx(&out, |inp| {
             self.then.make_iter::<M>(inp)
         })?;
         Ok((out, then))
@@ -872,7 +872,7 @@ where
     fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> IPResult<M, OB> {
         let (ctx, inner_state) = state;
 
-        inp.with_ctx(MaybeRef::new_ref(ctx), |inp| {
+        inp.with_ctx(ctx, |inp| {
             self.then.next(inp, inner_state)
         })
     }
@@ -903,7 +903,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        inp.with_ctx(MaybeRef::new_ref(&self.ctx), |inp| self.parser.go::<M>(inp))
+        inp.with_ctx(&self.ctx, |inp| self.parser.go::<M>(inp))
     }
 
     go_extra!(O);

@@ -434,13 +434,13 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) errors: Errors<E::Error>,
     pub(crate) state: &'parse mut E::State,
     // TODO: Don't use `Option`, this is only here because we need to temporarily remove it in `with_input`
-    pub(crate) ctx: MaybeRef<'parse, E::Context>,
+    pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
     pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(input: &'parse I, state: &'parse mut E::State) -> Self
+    pub(crate) fn new(input: &'parse I, state: &'parse mut E::State, ctx: &'parse E::Context) -> Self
     where
         E::Context: Default,
     {
@@ -448,7 +448,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             offset: input.start(),
             input,
             state,
-            ctx: MaybeRef::new_own(E::Context::default()),
+            ctx,
             errors: Errors::default(),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
@@ -457,7 +457,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     pub(crate) fn with_ctx<'sub_parse, C, O>(
         &'sub_parse mut self,
-        new_ctx: MaybeRef<'sub_parse, C>,
+        new_ctx: &'sub_parse C,
         f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, E::State, C>>) -> O,
     ) -> O
     where
@@ -495,7 +495,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             offset: new_input.start(),
             input: new_input,
             state: self.state,
-            ctx: self.ctx.make_ref(),
+            ctx: self.ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(), // TODO: Reuse memoisation state?

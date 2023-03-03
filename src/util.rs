@@ -1,38 +1,5 @@
 use core::ops::{Deref, DerefMut};
 
-pub enum MaybeRef<'a, T> {
-    Ref(&'a T),
-    Own(T),
-}
-
-impl<'a, T> MaybeRef<'a, T> {
-    pub fn new_own(val: T) -> MaybeRef<'a, T> {
-        MaybeRef::Own(val)
-    }
-
-    pub fn new_ref(val: &'a T) -> MaybeRef<'a, T> {
-        MaybeRef::Ref(val)
-    }
-
-    pub fn make_ref(&mut self) -> MaybeRef<'_, T> {
-        match self {
-            MaybeRef::Ref(r) => MaybeRef::Ref(*r),
-            MaybeRef::Own(o) => MaybeRef::Ref(o),
-        }
-    }
-}
-
-impl<'a, T> Deref for MaybeRef<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            MaybeRef::Ref(r) => &**r,
-            MaybeRef::Own(o) => o
-        }
-    }
-}
-
 pub enum MaybeMut<'a, T> {
     Ref(&'a mut T),
     Own(T),
