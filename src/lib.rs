@@ -1,6 +1,5 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
-#![feature(array_methods)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
