@@ -1,5 +1,6 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
+#![feature(array_methods)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
@@ -106,7 +107,7 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput},
-    internal::{IPResult, PResult},
+    internal::{IPResult, Located, PResult},
     prelude::*,
     primitive::Any,
     private::{Check, Emit, Mode},
@@ -202,27 +203,6 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
-#[doc(hidden)]
-#[derive(Clone)]
-pub struct Located<E> {
-    pos: usize,
-    err: E,
-}
-
-impl<E> Located<E> {
-    pub fn at(pos: usize, err: E) -> Self {
-        Self { pos, err }
-    }
-
-    fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
-        match self.pos.cmp(&other.pos) {
-            Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
-            Ordering::Greater => self,
-            Ordering::Less => other,
-        }
-    }
-}
-
 fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     inp: &mut InputRef<'a, '_, I, E>,
 ) -> PResult<Check, ()> {
@@ -268,6 +248,12 @@ mod private {
             y: Self::Output<U>,
             f: F,
         ) -> Self::Output<V>;
+        /// By-reference version of [`Mode::combine`].
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            x: &mut Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        );
 
         /// Given an array of outputs, bind them into an output of arrays
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
@@ -317,6 +303,14 @@ mod private {
             f(x, y)
         }
         #[inline]
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            x: &mut Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) {
+            f(x, y)
+        }
+        #[inline]
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
             x
         }
@@ -363,6 +357,13 @@ mod private {
         ) -> Self::Output<V> {
         }
         #[inline]
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            _: &mut Self::Output<T>,
+            _: Self::Output<U>,
+            _: F,
+        ) {
+        }
+        #[inline]
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
         #[inline]
@@ -403,6 +404,27 @@ pub mod internal {
     pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
     /// The result of calling [`IterParser::next`]
     pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
+
+    #[doc(hidden)]
+    #[derive(Clone)]
+    pub struct Located<E> {
+        pub(crate) pos: usize,
+        pub(crate) err: E,
+    }
+
+    impl<E> Located<E> {
+        pub fn at(pos: usize, err: E) -> Self {
+            Self { pos, err }
+        }
+
+        pub(crate) fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
+            match self.pos.cmp(&other.pos) {
+                Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
+                Ordering::Greater => self,
+                Ordering::Less => other,
+            }
+        }
+    }
 }
 
 /// A trait implemented by parsers.

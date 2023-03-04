@@ -74,6 +74,13 @@ pub trait Error<'a, I: Input<'a>>: Sized {
         #![allow(unused_variables)]
         self
     }
+
+    /// Determines whether the error actually carries data. If this function returns `false`, error prioritisation will
+    /// effectively be skipped for this error type. So far, only [`EmptyErr`] does not carry data.
+    #[inline]
+    fn carries_data() -> bool {
+        true
+    }
 }
 
 /// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
@@ -88,6 +95,11 @@ impl<'a, I: Input<'a>> Error<'a, I> for EmptyErr {
         _: I::Span,
     ) -> Self {
         EmptyErr(())
+    }
+
+    #[inline]
+    fn carries_data() -> bool {
+        false
     }
 }
 

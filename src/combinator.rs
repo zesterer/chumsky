@@ -1534,9 +1534,8 @@ where
         loop {
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
-                    output = M::combine(output, out, |mut output: C, item| {
+                    M::combine_mut(&mut output, out, |output: &mut C, item| {
                         output.push(item);
-                        output
                     });
                 }
                 Ok(None) => break Ok(output),
@@ -1961,9 +1960,8 @@ where
         loop {
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
-                    a_out = M::combine(a_out, out, |mut a_out, item| {
+                    M::combine_mut(&mut a_out, out, |a_out, item| {
                         a_out.push(item);
-                        a_out
                     });
                 }
                 Ok(None) => break,

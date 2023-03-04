@@ -18,7 +18,7 @@ pub trait Input<'a>: 'a {
     type Offset: Copy + Hash + Ord + Into<usize>;
     /// The type of singular items read from the stream
     type Token;
-    /// The type of a span on this input - to provide custom span context see [`Spanned`] and [`WithContext`].
+    /// The type of a span on this input - to provide custom span context see [`SpannedInput`] and [`WithContext`].
     type Span: Span;
 
     /// Get the offset representing the start of this stream
@@ -114,6 +114,7 @@ impl<'a> Input<'a> for &'a str {
     type Token = char;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
@@ -138,6 +139,7 @@ impl<'a> Input<'a> for &'a str {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -164,14 +166,18 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
     type Token = T;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
 
     #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let (offset, tok) = self.next_ref(offset);
-        (offset, tok.cloned())
+        if let Some(tok) = self.get(offset) {
+            (offset + 1, Some(tok.clone()))
+        } else {
+            (offset + 1, None)
+        }
     }
 
     #[inline]
@@ -179,6 +185,7 @@ impl<'a, T: Clone> Input<'a> for &'a [T] {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -201,6 +208,7 @@ impl<'a, T: Clone> SliceInput<'a> for &'a [T] {
 }
 
 impl<'a, T: Clone> BorrowInput<'a> for &'a [T] {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -215,6 +223,7 @@ impl<'a, T: Clone + 'a, const N: usize> Input<'a> for &'a [T; N] {
     type Token = T;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
@@ -230,6 +239,7 @@ impl<'a, T: Clone + 'a, const N: usize> Input<'a> for &'a [T; N] {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -252,6 +262,7 @@ impl<'a, T: Clone + 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
 }
 
 impl<'a, T: Clone + 'a, const N: usize> BorrowInput<'a> for &'a [T; N] {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -279,15 +290,18 @@ where
     type Token = T;
     type Span = S;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         self.input.start()
     }
 
+    #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         let (offs, tok) = self.input.next(offset);
         (offs, tok.map(|(tok, _)| tok))
     }
 
+    #[inline]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         let start = self
             .input
@@ -302,6 +316,7 @@ where
         S::new(self.eoi.context(), start..end)
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -313,6 +328,7 @@ where
     T: 'a,
     S: Span + Clone + 'a,
 {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         let (offs, tok) = self.input.next_ref(offset);
         (offs, tok.map(|(tok, _)| tok))
@@ -327,9 +343,12 @@ where
 {
     type Slice = I::Slice;
 
+    #[inline]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
+
+    #[inline]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -351,18 +370,22 @@ where
     type Token = I::Token;
     type Span = (Ctx, I::Span);
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         self.input.start()
     }
 
+    #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         self.input.next(offset)
     }
 
+    #[inline]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.context.clone(), self.input.span(range))
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -372,6 +395,7 @@ impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ct
 where
     I::Span: Span<Context = ()>,
 {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         self.input.next_ref(offset)
     }
@@ -383,9 +407,12 @@ where
 {
     type Slice = I::Slice;
 
+    #[inline]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
+
+    #[inline]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -543,15 +570,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     #[inline]
     pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F) {
-        let mut offs = self.offset;
         loop {
             // SAFETY: offset was generated by previous call to `Input::next`
-            let (offset, token) = unsafe { self.input.next(offs) };
+            let (offset, token) = unsafe { self.input.next(self.offset) };
             if token.filter(&mut f).is_none() {
-                self.offset = offs;
                 break;
             } else {
-                offs = offset;
+                self.offset = offset;
             }
         }
     }
@@ -639,12 +664,15 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.errors.secondary.push(error);
     }
 
+    /// TODO
     #[inline]
-    pub(crate) fn add_alt(&mut self, err: Located<E::Error>) {
-        self.errors.alt = Some(match self.errors.alt.take() {
-            Some(a) => a.prioritize(err, |a, b| a.merge(b)),
-            None => err,
-        });
+    pub fn add_alt(&mut self, err: Located<E::Error>) {
+        if E::Error::carries_data() {
+            self.errors.alt = Some(match self.errors.alt.take() {
+                Some(a) => a.prioritize(err, |a, b| a.merge(b)),
+                None => err,
+            });
+        }
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {

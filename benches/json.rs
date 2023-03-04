@@ -27,10 +27,6 @@ pub enum JsonZero<'a> {
 static JSON: &'static [u8] = include_bytes!("samples/sample.json");
 
 fn bench_json(c: &mut Criterion) {
-    c.bench_function("json_nom", {
-        move |b| b.iter(|| black_box(nom::json(black_box(JSON)).unwrap()))
-    });
-
     c.bench_function("json_winnow", {
         move |b| b.iter(|| black_box(winnow::json(black_box(JSON)).unwrap()))
     });
@@ -57,6 +53,10 @@ fn bench_json(c: &mut Criterion) {
                     .is_empty())
             })
         }
+    });
+
+    c.bench_function("json_nom", {
+        move |b| b.iter(|| black_box(nom::json(black_box(JSON)).unwrap()))
     });
 
     c.bench_function("json_serde_json", {
@@ -112,19 +112,12 @@ mod chumsky_zero_copy {
                 .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
                 .boxed();
 
-            let escape = just(b'\\').ignore_then(choice((
-                just(b'\\'),
-                just(b'/'),
-                just(b'"'),
-                just(b'b').to(b'\x08'),
-                just(b'f').to(b'\x0C'),
-                just(b'n').to(b'\n'),
-                just(b'r').to(b'\r'),
-                just(b't').to(b'\t'),
-            )));
+            let escape = just(b'\\').then_ignore(one_of(b"\\/\"bfnrt"));
 
             let string = none_of(b"\\\"")
-                .or(escape)
+                .repeated()
+                .at_least(1)
+                .or(escape.ignored())
                 .repeated()
                 .slice()
                 .delimited_by(just(b'"'), just(b'"'))

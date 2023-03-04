@@ -201,7 +201,7 @@ impl<T, const N: usize> Seq<T> for [T; N] {
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'a, T>
+    type Iter<'a> = core::slice::Iter<'a, T> // core::array::IntoIter<&'a T, N>
     where
         Self: 'a;
 
