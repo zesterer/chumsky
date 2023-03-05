@@ -521,7 +521,7 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     // TODO: Don't use `Option`, this is only here because we need to temporarily remove it in `with_input`
     pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
-    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+    pub(crate) memos: &'parse mut HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
@@ -529,6 +529,10 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         input: &'parse I,
         state: &'parse mut E::State,
         ctx: &'parse E::Context,
+        #[cfg(feature = "memoization")] memos: &'parse mut HashMap<
+            (I::Offset, usize),
+            Option<Located<E::Error>>,
+        >,
     ) -> Self
     where
         E::Context: Default,
@@ -540,7 +544,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             ctx,
             errors: Errors::default(),
             #[cfg(feature = "memoization")]
-            memos: HashMap::default(),
+            memos,
         }
     }
 
@@ -562,7 +566,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             ctx: new_ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
-            memos: HashMap::default(), // TODO: Reuse memoisation state?
+            memos: self.memos, // TODO: Reuse memoisation state?
         };
         let res = f(&mut new_inp);
         self.offset = new_inp.offset;
@@ -574,6 +578,10 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         &'sub_parse mut self,
         new_input: &'sub_parse I,
         f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, E>) -> O,
+        #[cfg(feature = "memoization")] memos: &'sub_parse mut HashMap<
+            (I::Offset, usize),
+            Option<Located<E::Error>>,
+        >,
     ) -> O
     where
         'parse: 'sub_parse,
@@ -587,7 +595,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             ctx: self.ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
-            memos: HashMap::default(), // TODO: Reuse memoisation state?
+            memos,
         };
         let res = f(&mut new_inp);
         self.errors = new_inp.errors;
