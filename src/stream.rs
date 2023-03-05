@@ -57,6 +57,25 @@ where
         0
     }
 
+    type TokenMaybe = I::Item;
+
+    unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
+        self.next(offset)
+    }
+
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        range.into()
+    }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
+}
+
+impl<'a, I: Iterator + 'a> ValueInput<'a> for Stream<I>
+where
+    I::Item: Clone,
+{
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         let mut other = Cell::new((Vec::new(), None));
         self.tokens.swap(&other);
@@ -78,14 +97,6 @@ where
         self.tokens.swap(&other);
 
         (offset + 1, tok)
-    }
-
-    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
-        range.into()
-    }
-
-    fn prev(offs: Self::Offset) -> Self::Offset {
-        offs.saturating_sub(1)
     }
 }
 

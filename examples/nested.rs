@@ -1,7 +1,7 @@
 use chumsky::prelude::*;
 
 // This token is a tree: it contains within it a sub-tree of tokens
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 enum Token {
     Num(i64),
     Add,
@@ -11,22 +11,22 @@ enum Token {
 
 fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
     recursive(|expr| {
-        let num = select! { Token::Num(x) => x };
+        let num = select_ref! { Token::Num(x) => *x };
         let parens = expr
             // Here we specify how the parser should come up with the nested tokens
             .nested_in(select_ref! { Token::Parens(xs) => xs.as_slice() });
 
         let atom = num.or(parens);
 
-        let product = atom
-            .clone()
-            .foldl(just(Token::Mul).ignore_then(atom).repeated(), |a, b| a * b);
+        let product = atom.clone().foldl(
+            select_ref! { Token::Mul }.ignore_then(atom).repeated(),
+            |a, b| a * b,
+        );
 
-        let sum = product
-            .clone()
-            .foldl(just(Token::Add).ignore_then(product).repeated(), |a, b| {
-                a + b
-            });
+        let sum = product.clone().foldl(
+            select_ref! { Token::Add }.ignore_then(product).repeated(),
+            |a, b| a + b,
+        );
 
         sum
     })

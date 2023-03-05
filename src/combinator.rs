@@ -1594,7 +1594,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
 
 impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Not<A, OA>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
 {

@@ -139,7 +139,7 @@ pub struct Padded<A> {
 
 impl<'a, I, O, E, A> Parser<'a, I, O, E> for Padded<A>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: Char,
     A: Parser<'a, I, O, E>,
@@ -171,7 +171,7 @@ where
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: StrInput<'a, C>, E: ParserExtra<'a, I>>(
+pub fn whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
@@ -201,7 +201,7 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: StrInput<'a, C>, E: ParserExtra<'a, I>>(
+pub fn inline_whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
@@ -243,7 +243,8 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E> + Copy + Clone
+pub fn newline<'a, I: ValueInput<'a>, E: ParserExtra<'a, I>>(
+) -> impl Parser<'a, I, (), E> + Copy + Clone
 where
     I::Token: Char,
 {
@@ -289,7 +290,7 @@ where
 pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy + Clone, C, I, E>
 where
     C: Char,
-    I: Input<'a, Token = C>,
+    I: ValueInput<'a> + Input<'a, Token = C>,
     E: ParserExtra<'a, I>,
 {
     any()
@@ -329,7 +330,7 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
@@ -349,7 +350,7 @@ pub fn int<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
-pub fn ident<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
         .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
@@ -449,7 +450,7 @@ where
 /// ```
 pub fn keyword<
     'a,
-    I: StrInput<'a, C>,
+    I: ValueInput<'a> + StrInput<'a, C>,
     C: Char + 'a,
     Str: AsRef<C::Str> + 'a + Clone,
     E: ParserExtra<'a, I> + 'a,

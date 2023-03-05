@@ -91,7 +91,7 @@ pub struct SkipThenRetryUntil<A> {
 
 impl<'a, I, O, E, A> Strategy<'a, I, O, E> for SkipThenRetryUntil<A>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     A: Parser<'a, I, (), E>,
     E: ParserExtra<'a, I>,
 {
@@ -147,11 +147,11 @@ pub fn skip_then_retry_until<A>(until: A) -> SkipThenRetryUntil<A> {
 /// after others as a last resort, and be careful about over-using it.
 pub fn skip_until<'a, P, I, O, E>(pattern: P) -> impl Parser<'a, I, (), E> + Clone
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     P: Parser<'a, I, O, E> + Clone,
     E: extra::ParserExtra<'a, I>,
 {
-    any().and_is(pattern.clone().not()).repeated()
+    pattern.rewind().ignored().or(any().ignored()).repeated()
     // .ignore_then(pattern)
 }
 
@@ -169,7 +169,7 @@ pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
     fallback: F,
 ) -> impl Parser<'a, I, O, E> + Clone
 where
-    I: Input<'a> + 'a,
+    I: ValueInput<'a> + 'a,
     I::Token: PartialEq + Clone,
     E: extra::ParserExtra<'a, I>,
     F: Fn(I::Span) -> O + Clone,

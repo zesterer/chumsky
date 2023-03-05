@@ -36,7 +36,7 @@ impl<I, E> Clone for End<I, E> {
 
 impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -192,13 +192,13 @@ where
         if let Some(err) = seq.seq_iter().find_map(|next| {
             let next = next.borrow();
             let before = inp.offset();
-            match inp.next() {
-                (_, Some(tok)) if *next == tok => None,
+            match inp.next_maybe() {
+                (_, Some(tok)) if next == tok.borrow() => None,
                 (at, tok) => Some(Located::at(
                     at.into(),
                     E::Error::expected_found(
                         Some(Some(I::Token::clone(next))),
-                        tok,
+                        None, //tok,
                         // SAFETY: Using offsets derived from input
                         unsafe { inp.span_since(before) },
                     ),
@@ -249,7 +249,7 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 /// ```
 pub const fn one_of<'a, T, I, E>(seq: T) -> OneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: Clone + PartialEq,
     T: Seq<I::Token>,
@@ -262,7 +262,7 @@ where
 
 impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: Clone + PartialEq,
     T: Seq<I::Token>,
@@ -271,7 +271,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
-            (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
@@ -324,7 +324,7 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 /// ```
 pub const fn none_of<'a, T, I, E>(seq: T) -> NoneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: Seq<I::Token>,
@@ -337,7 +337,7 @@ where
 
 impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: Seq<I::Token>,
@@ -346,7 +346,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
-            (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
@@ -442,7 +442,7 @@ where
 
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
     F: Fn(I::Token, I::Span) -> Option<O>,
@@ -494,7 +494,7 @@ impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
 pub const fn select_ref<'a, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
-    I::Token: Clone + 'a,
+    I::Token: 'a,
     E: ParserExtra<'a, I>,
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
@@ -507,7 +507,7 @@ where
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
-    I::Token: Clone + 'a,
+    I::Token: 'a,
     E: ParserExtra<'a, I>,
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
@@ -521,15 +521,21 @@ where
                 None => Located::at(
                     at.into(),
                     // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, Some(tok.clone()), unsafe {
-                        inp.span_since(before)
-                    }),
+                    E::Error::expected_found(
+                        None,
+                        None, /*Some(tok.clone())*/
+                        unsafe { inp.span_since(before) },
+                    ),
                 ),
             },
             (at, found) => Located::at(
                 at.into(),
                 // SAFETY: Using offsets derived from input
-                E::Error::expected_found(None, found.cloned(), unsafe { inp.span_since(before) }),
+                E::Error::expected_found(
+                    None,
+                    None, /*found.cloned()*/
+                    unsafe { inp.span_since(before) },
+                ),
             ),
         };
         inp.add_alt(err);
@@ -555,7 +561,7 @@ impl<I, E> Clone for Any<I, E> {
 
 impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
