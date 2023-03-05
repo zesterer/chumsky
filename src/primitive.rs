@@ -381,11 +381,24 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 }
 
 /// TODO
+///
+/// # Example
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+///
+/// let x = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
+///     let _ = inp.next_token();
+///     Ok(())
+/// });
+///
+/// assert_eq!(x.parse("!").into_result(), Ok(()));
+/// ```
 pub const fn custom<'a, F, I, O, E>(f: F) -> Custom<F, I, O, E>
 where
-    I: BorrowInput<'a>,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+    F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
 {
     Custom {
         f,
@@ -395,7 +408,7 @@ where
 
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for Custom<F, I, O, E>
 where
-    I: BorrowInput<'a>,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
     F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
 {
