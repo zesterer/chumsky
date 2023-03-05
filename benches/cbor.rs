@@ -3,6 +3,8 @@ use std::hash::{Hash, Hasher};
 use std::hint::black_box;
 use criterion::{Criterion, criterion_group, criterion_main};
 
+mod utils;
+
 static CBOR: &'static [u8] = include_bytes!("samples/sample.cbor");
 
 fn bench_cbor(c: &mut Criterion) {
@@ -58,7 +60,12 @@ fn bench_cbor(c: &mut Criterion) {
     // });
 }
 
-criterion_group!(benches, bench_cbor);
+criterion_group!(
+    name = benches;
+    config = utils::make_criterion();
+    targets = bench_cbor
+);
+
 criterion_main!(benches);
 
 fn i64_from_bytes(bytes: &[u8]) -> i64 {

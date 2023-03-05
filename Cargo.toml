@@ -49,6 +49,12 @@ pest_derive = "2.5"
 sn = "0.1"
 logos = "0.12"
 
+[target.'cfg(unix)'.dev-dependencies]
+pprof = { version = "0.11", features = ["flamegraph", "criterion"] }
+
+[profile.bench]
+debug = true
+
 [[bench]]
 name = "json"
 harness = false
