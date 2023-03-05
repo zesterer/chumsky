@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a, T, I, O, E> Parser<'a, I, O, E> for &'a T
+impl<'a, 'b, T, I, O, E> Parser<'a, I, O, E> for &'b T
 where
     T: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -16,7 +16,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, T, I, O, E> ConfigParser<'a, I, O, E> for &'a T
+impl<'a, 'b, T, I, O, E> ConfigParser<'a, I, O, E> for &'b T
 where
     T: ConfigParser<'a, I, O, E>,
     I: Input<'a>,

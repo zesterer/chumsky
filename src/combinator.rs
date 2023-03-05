@@ -485,14 +485,14 @@ where
 }
 
 /// See [`Parser::to`].
-pub struct To<A, OA, O, E> {
+pub struct To<A, OA, O> {
     pub(crate) parser: A,
     pub(crate) to: O,
-    pub(crate) phantom: PhantomData<(OA, E)>,
+    pub(crate) phantom: PhantomData<OA>,
 }
 
-impl<A: Copy, OA, O: Copy, E> Copy for To<A, OA, O, E> {}
-impl<A: Clone, OA, O: Clone, E> Clone for To<A, OA, O, E> {
+impl<A: Copy, OA, O: Copy> Copy for To<A, OA, O> {}
+impl<A: Clone, OA, O: Clone> Clone for To<A, OA, O> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -502,7 +502,7 @@ impl<A: Clone, OA, O: Clone, E> Clone for To<A, OA, O, E> {
     }
 }
 
-impl<'a, I, O, E, A, OA> Parser<'a, I, O, E> for To<A, OA, O, E>
+impl<'a, I, O, E, A, OA> Parser<'a, I, O, E> for To<A, OA, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -802,10 +802,7 @@ where
 
         let alt = inp.errors.alt.take();
 
-        let res = inp.with_input(&inp2, |inp| {
-            let res = self.parser_a.go::<M>(inp);
-            res.and_then(|o| expect_end(inp).map(move |()| o))
-        });
+        let res = inp.with_input(&inp2, |inp| self.then_ignore(end()).parser_a.go::<M>(inp));
 
         // TODO: Translate secondary error offsets too
         let new_alt = inp
@@ -2082,6 +2079,7 @@ where
         if res.is_err() {
             let mut e = inp.errors.alt.take().expect("error but no alt?");
             e.err = (self.mapper)(e.err);
+            inp.errors.alt = Some(e);
         }
 
         res

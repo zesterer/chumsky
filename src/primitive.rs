@@ -36,13 +36,13 @@ impl<I, E> Clone for End<I, E> {
 
 impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
 where
-    I: ValueInput<'a>,
+    I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_maybe() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => {
                 inp.add_alt(Located::at(
