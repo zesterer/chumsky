@@ -64,7 +64,7 @@ pub mod prelude {
         error::{Cheap, EmptyErr, Error as _, Rich, Simple},
         extra,
         input::Input,
-        primitive::{any, choice, empty, end, group, just, map_ctx, none_of, one_of, todo},
+        primitive::{any, choice, custom, empty, end, group, just, map_ctx, none_of, one_of, todo},
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
         // select,
