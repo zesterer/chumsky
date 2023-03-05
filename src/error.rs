@@ -89,6 +89,13 @@ pub trait Error<'a, I: Input<'a>>: Sized {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
 pub struct EmptyErr(());
 
+impl EmptyErr {
+    /// TODO
+    pub fn empty() -> EmptyErr {
+        EmptyErr(())
+    }
+}
+
 impl<'a, I: Input<'a>> Error<'a, I> for EmptyErr {
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         _: E,

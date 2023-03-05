@@ -65,6 +65,10 @@ harness = false
 name = "backtrack"
 harness = false
 
+[[bench]]
+name = "cbor"
+harness = false
+
 [[example]]
 name = "nano_rust"
 required-features = ["label"]

@@ -117,6 +117,75 @@ where
     }
 }
 
+/// See [`ConfigIterParser::try_configure`]
+pub struct TryIterConfigure<A, F, O> {
+    pub(crate) parser: A,
+    pub(crate) cfg: F,
+    pub(crate) phantom: PhantomData<O>,
+}
+
+impl<A: Copy, F: Copy, O> Copy for TryIterConfigure<A, F, O> {}
+impl<A: Clone, F: Clone, O> Clone for TryIterConfigure<A, F, O> {
+    fn clone(&self) -> Self {
+        TryIterConfigure {
+            parser: self.parser.clone(),
+            cfg: self.cfg.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, OA, E, A, F> Parser<'a, I, (), E> for TryIterConfigure<A, F, OA>
+where
+    A: ConfigIterParser<'a, I, OA, E>,
+    F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+        let mut state = self.make_iter::<Check>(inp)?;
+        loop {
+            match self.next::<Check>(inp, &mut state) {
+                Ok(Some(())) => {}
+                Ok(None) => break Ok(M::bind(|| ())),
+                Err(()) => break Err(()),
+            }
+        }
+    }
+
+    go_extra!(());
+}
+
+impl<'a, I, O, E, A, F> IterParser<'a, I, O, E> for TryIterConfigure<A, F, O>
+where
+    A: ConfigIterParser<'a, I, O, E>,
+    F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    type IterState<M: Mode> = (A::IterState<M>, A::Config)
+    where
+        I: 'a;
+
+    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
+        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe { inp.span_since(inp.offset) })
+            .map_err(|e| inp.add_alt(Located::at(
+                inp.offset.into(),
+                e
+            )))?;
+
+        Ok((
+            A::make_iter(&self.parser, inp)?,
+            cfg,
+        ))
+    }
+
+    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> IPResult<M, O> {
+        self.parser.next_cfg(inp, &mut state.0, &state.1)
+    }
+}
+
 /// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, F, U>
 where
