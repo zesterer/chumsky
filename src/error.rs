@@ -198,14 +198,80 @@ where
     }
 }
 
+/// An expected pattern for a [`Rich`] error.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum RichPattern<'a, T> {
+    /// A specific token was expected.
+    Token(MaybeRef<'a, T>),
+    /// A labelled pattern was expected.
+    Label(&'static str),
+    /// The end of input was expected.
+    EndOfInput,
+}
+
+impl<'a, T> RichPattern<'a, T> {
+    /// Transform this pattern's tokens using the given function.
+    ///
+    /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
+    /// the token type for each pass is different (`char` vs `MyToken`, say).
+    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichPattern<'a, U>
+    where
+        T: Clone,
+    {
+        match self {
+            Self::Token(t) => RichPattern::Token(f(t.into_inner()).into()),
+            Self::Label(s) => RichPattern::Label(s),
+            Self::EndOfInput => RichPattern::EndOfInput,
+        }
+    }
+
+    fn write(
+        &self,
+        f: &mut fmt::Formatter,
+        writer: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
+    ) -> fmt::Result {
+        match self {
+            Self::Token(t) => writer(t, f),
+            Self::Label(s) => write!(f, "{}", s),
+            Self::EndOfInput => write!(f, "end of input"),
+        }
+    }
+}
+
+impl<'a, T> fmt::Debug for RichPattern<'a, T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Token(t) => write!(f, "{:?}", t),
+            Self::Label(s) => write!(f, "{}", s),
+            Self::EndOfInput => write!(f, "end of input"),
+        }
+    }
+}
+
+impl<'a, T> fmt::Display for RichPattern<'a, T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Token(t) => write!(f, "{}", &**t),
+            Self::Label(s) => write!(f, "{}", s),
+            Self::EndOfInput => write!(f, "end of input"),
+        }
+    }
+}
+
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
-/// The reason for a [`Rich`] error
+/// The reason for a [`Rich`] error.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum RichReason<'a, T> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
-        expected: Vec<Option<MaybeRef<'a, T>>>,
+        expected: Vec<RichPattern<'a, T>>,
         /// The tokens found
         found: Option<MaybeRef<'a, T>>,
     },
@@ -217,11 +283,19 @@ pub enum RichReason<'a, T> {
 
 impl<'a, T> RichReason<'a, T> {
     /// Return the token that was found by this error reason. `None` implies that the end of input was expected.
-    fn found(&self) -> Option<&T> {
+    pub fn found(&self) -> Option<&T> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.as_deref(),
             RichReason::Custom(_) => None,
             RichReason::Many(many) => many.iter().find_map(|r| r.found()),
+        }
+    }
+
+    fn take_found(&mut self) -> Option<MaybeRef<'a, T>> {
+        match self {
+            RichReason::ExpectedFound { found, .. } => found.take(),
+            RichReason::Custom(_) => None,
+            RichReason::Many(many) => many.into_iter().find_map(|r| r.take_found()),
         }
     }
 
@@ -235,13 +309,13 @@ impl<'a, T> RichReason<'a, T> {
     {
         fn map_token_inner<'a, T: Clone, U, F: FnMut(T) -> U>(
             reason: RichReason<'a, T>,
-            f: &mut F,
+            mut f: &mut F,
         ) -> RichReason<'a, U> {
             match reason {
                 RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
                     expected: expected
                         .into_iter()
-                        .map(|tok| tok.map(|t| f(t.into_inner()).into()))
+                        .map(|pat| pat.map_token(&mut f))
                         .collect(),
                     found: found.map(|found| f(found.into_inner()).into()),
                 },
@@ -325,15 +399,15 @@ impl<'a, T, S> Rich<'a, T, S> {
                 write!(f, "expected ")?;
                 match &expected[..] {
                     [] => write!(f, "something else")?,
-                    [expected] => write_token(f, token, expected.as_deref())?,
+                    [expected] => expected.write(f, token)?,
                     _ => {
                         write!(f, "one of ")?;
                         for expected in &expected[..expected.len() - 1] {
-                            write_token(f, token, expected.as_deref())?;
+                            expected.write(f, token)?;
                             write!(f, ", ")?;
                         }
                         write!(f, "or ")?;
-                        write_token(f, token, expected.last().unwrap().as_deref())?;
+                        expected.last().unwrap().write(f, token)?;
                     }
                 }
             }
@@ -370,12 +444,13 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 
     /// Get an iterator over the expected items associated with this error
-    pub fn expected(&self) -> impl ExactSizeIterator<Item = Option<&T>> {
-        fn push_expected<'a, T>(reason: &'a RichReason<T>, v: &mut Vec<Option<&'a T>>) {
+    pub fn expected(&self) -> impl ExactSizeIterator<Item = &RichPattern<'a, T>> {
+        fn push_expected<'a, 'b, T>(
+            reason: &'b RichReason<'a, T>,
+            v: &mut Vec<&'b RichPattern<'a, T>>,
+        ) {
             match reason {
-                RichReason::ExpectedFound { expected, .. } => {
-                    v.extend(expected.iter().map(|e| e.as_deref()))
-                }
+                RichReason::ExpectedFound { expected, .. } => v.extend(expected.iter()),
                 RichReason::Custom(_) => {}
                 RichReason::Many(many) => many.iter().for_each(|r| push_expected(r, v)),
             }
@@ -417,7 +492,16 @@ where
         Self {
             span,
             reason: RichReason::ExpectedFound {
-                expected: expected.into_iter().collect(),
+                expected: expected
+                    .into_iter()
+                    .map(|tok| {
+                        if let Some(tok) = tok {
+                            RichPattern::Token(tok)
+                        } else {
+                            RichPattern::EndOfInput
+                        }
+                    })
+                    .collect(),
                 found,
             },
         }
@@ -428,6 +512,19 @@ where
         Self {
             span: self.span,
             reason: new_reason,
+        }
+    }
+}
+
+#[cfg(feature = "label")]
+impl<'a, I: Input<'a>> LabelError<'a, I, &'static str> for Rich<'a, I::Token, I::Span>
+where
+    I::Token: PartialEq,
+{
+    fn label_with(&mut self, label: &'static str) {
+        self.reason = RichReason::ExpectedFound {
+            expected: vec![RichPattern::Label(label)],
+            found: self.reason.take_found(),
         }
     }
 }

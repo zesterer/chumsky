@@ -140,10 +140,7 @@ fn main() {
                 } else {
                     expected
                         .into_iter()
-                        .map(|expected| match expected {
-                            Some(expected) => expected.to_string(),
-                            None => "end of input".to_string(),
-                        })
+                        .map(|expected| expected.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 },

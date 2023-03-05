@@ -203,11 +203,10 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 Token::Bool(x) => Expr::Value(Value::Bool(x)),
                 Token::Num(n) => Expr::Value(Value::Num(n)),
                 Token::Str(s) => Expr::Value(Value::Str(s)),
-            };
-            // .labelled("value");
+            }
+            .labelled("value");
 
-            let ident = select! { Token::Ident(ident) => ident.clone() };
-            // .labelled("identifier");
+            let ident = select! { Token::Ident(ident) => ident.clone() }.labelled("identifier");
 
             // A list of expressions
             let items = expr
@@ -310,7 +309,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span.into())
             });
 
-            compare
+            compare.labelled("expression")
         });
 
         // Blocks are expressions but delimited with braces
@@ -355,8 +354,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         });
 
         // Both blocks and `if` are 'block expressions' and can appear in the place of statements
-        let block_expr = block.or(if_);
-        // .labelled("block");
+        let block_expr = block.or(if_).labelled("block");
 
         let block_chain = block_expr
             .clone()
@@ -406,33 +404,29 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         .allow_trailing()
         .collect()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-        // .labelled("function args")
-        ;
+        .labelled("function args");
 
     let func = just(Token::Fn)
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
-                // .labelled("function name"),
+                .labelled("function name"),
         )
         .then(args)
         .then(
-            expr_parser()
-                .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
-                // Attempt to recover anything that looks like a function body but contains errors
-                // .recover_with(nested_delimiters(
-                //     Token::Ctrl('{'),
-                //     Token::Ctrl('}'),
-                //     [
-                //         (Token::Ctrl('('), Token::Ctrl(')')),
-                //         (Token::Ctrl('['), Token::Ctrl(']')),
-                //     ],
-                //     |span| (Expr::Error, span),
-                // )),
+            expr_parser().delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}'))), // Attempt to recover anything that looks like a function body but contains errors
+                                                                                        // .recover_with(nested_delimiters(
+                                                                                        //     Token::Ctrl('{'),
+                                                                                        //     Token::Ctrl('}'),
+                                                                                        //     [
+                                                                                        //         (Token::Ctrl('('), Token::Ctrl(')')),
+                                                                                        //         (Token::Ctrl('['), Token::Ctrl(']')),
+                                                                                        //     ],
+                                                                                        //     |span| (Expr::Error, span),
+                                                                                        // )),
         )
         .map(|((name, args), body)| (name, Func { args, body }))
-        // .labelled("function")
-        ;
+        .labelled("function");
 
     func.repeated().collect::<Vec<_>>().try_map(|fs, _| {
         let mut funcs = HashMap::new();
@@ -610,10 +604,7 @@ fn main() {
                     } else {
                         expected
                             .into_iter()
-                            .map(|expected| match expected {
-                                Some(expected) => expected.to_string(),
-                                None => "end of input".to_string(),
-                            })
+                            .map(|expected| expected.to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
                     },
