@@ -463,6 +463,7 @@ mod private {
 /// API features within this module unless you are happy for your code to break with only a minor version increment.**
 pub mod internal {
     use super::*;
+    pub use crate::input::SpannedTokenMaybe;
     pub use private::{Check, Emit, Mode};
 
     /// The result of calling [`Parser::go`]
