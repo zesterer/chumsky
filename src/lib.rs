@@ -89,12 +89,12 @@ use alloc::{
 };
 use core::{
     borrow::Borrow,
-    cmp::{Eq, Ordering},
+    cmp::{Eq, Ordering, PartialEq},
     fmt,
-    hash::Hash,
+    hash::{Hash, Hasher},
     marker::PhantomData,
     mem::MaybeUninit,
-    ops::{Range, RangeFrom},
+    ops::{Deref, Range, RangeFrom},
     panic::Location,
     str::FromStr,
 };
@@ -105,7 +105,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput},
+    input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput, ValueInput},
     internal::{IPResult, PResult},
     prelude::*,
     primitive::Any,
@@ -117,6 +117,72 @@ use self::{
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
+
+/// A type that can represent a borrowed reference to a `T` or a value of `T`.
+///
+/// Used internally to faciltitate zero-copy manipulation of tokens during error generation (see [`Error`]).
+#[derive(Copy, Clone)]
+pub enum MaybeRef<'a, T> {
+    /// We have a reference to `T`.
+    Ref(&'a T),
+    /// We have a value of `T`.
+    Val(T),
+}
+
+impl<'a, T: PartialEq> PartialEq for MaybeRef<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        &**self == &**other
+    }
+}
+
+impl<'a, T: Eq> Eq for MaybeRef<'a, T> {}
+
+impl<'a, T: Hash> Hash for MaybeRef<'a, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        T::hash(&**self, state)
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for MaybeRef<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        T::fmt(&**self, f)
+    }
+}
+
+impl<'a, T> MaybeRef<'a, T> {
+    /// Convert this [`MaybeRef<T>`] into a `T`, cloning the inner value if necessary.
+    pub fn into_inner(self) -> T
+    where
+        T: Clone,
+    {
+        match self {
+            Self::Ref(x) => x.clone(),
+            Self::Val(x) => x,
+        }
+    }
+}
+
+impl<'a, T> Deref for MaybeRef<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Ref(x) => *x,
+            Self::Val(x) => x,
+        }
+    }
+}
+
+impl<'a, T> From<T> for MaybeRef<'a, T> {
+    fn from(x: T) -> Self {
+        Self::Val(x)
+    }
+}
+
+impl<'a, T> From<&'a T> for MaybeRef<'a, T> {
+    fn from(x: &'a T) -> Self {
+        Self::Ref(x)
+    }
+}
 
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 trait MaybeUninitExt<T>: Sized {
@@ -227,12 +293,12 @@ fn expect_end<'a, I: Input<'a>, E: ParserExtra<'a, I>>(
     inp: &mut InputRef<'a, '_, I, E>,
 ) -> PResult<Check, ()> {
     let before = inp.offset();
-    match inp.next() {
+    match inp.next_maybe() {
         (_, None) => Ok(()),
         (_, Some(tok)) => {
             inp.emit(E::Error::expected_found(
                 None,
-                Some(tok),
+                Some(tok.into()),
                 // SAFETY: Using offsets derived from input
                 unsafe { inp.span_since(before) },
             ));
@@ -435,6 +501,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     fn parse(&self, input: I) -> ParseResult<O, E::Error>
     where
         Self: Sized,
+        I: Input<'a>,
         E::State: Default,
         E::Context: Default,
     {
@@ -452,6 +519,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     fn parse_with_state(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
         Self: Sized,
+        I: Input<'a>,
         E::Context: Default,
     {
         let ctx = E::Context::default();
@@ -480,6 +548,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     fn check(&self, input: I) -> ParseResult<(), E::Error>
     where
         Self: Sized,
+        I: Input<'a>,
         E::State: Default,
         E::Context: Default,
     {
@@ -496,6 +565,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     fn check_with_state(&self, input: I, state: &mut E::State) -> ParseResult<(), E::Error>
     where
         Self: Sized,
+        I: Input<'a>,
         E::Context: Default,
     {
         let ctx = E::Context::default();
@@ -1448,6 +1518,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     fn lazy(self) -> Lazy<'a, Self, I, E>
     where
         Self: Sized,
+        I: ValueInput<'a>,
     {
         self.then_ignore(any().repeated())
     }
@@ -2145,8 +2216,8 @@ where
 ///
 /// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
 /// select! {
-///     Token::Num(x), span => Expr::Num(x).spanned(span),
-///     Token::Str(s), span => Expr::Str(s).spanned(span),
+///     Token::Num(x) = span => Expr::Num(x).spanned(span),
+///     Token::Str(s) = span => Expr::Str(s).spanned(span),
 /// }
 /// # ;
 /// ```
@@ -2199,16 +2270,14 @@ where
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select(
             move |x, span| match x {
-                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
     });
-
-    ($($p:pat $(if $guard:expr)? => $out:expr),+ $(,)?) => (select!(|_span| $($p $(if $guard)? => $out),+));
 }
 
 /// A version of [`select!`] that selects on token by reference instead of by value.
@@ -2219,10 +2288,10 @@ macro_rules! select {
 // TODO: Remove this, somehow unify with `select`?
 #[macro_export]
 macro_rules! select_ref {
-    ($($p:pat $(, $span:ident)? $(if $guard:expr)? => $out:expr),+ $(,)?) => ({
+    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select_ref(
             move |x, span| match x {
-                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? $out })),+,
+                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )

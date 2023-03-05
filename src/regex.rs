@@ -9,7 +9,7 @@ pub struct Regex<C: Char, I: ?Sized, E> {
 }
 
 /// Match input based on a provided regex pattern
-pub fn regex<C: Char, I: ?Sized, E>(pattern: &str) -> Regex<C, I, E> {
+pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     Regex {
         regex: C::new_regex(pattern),
         phantom: PhantomData,

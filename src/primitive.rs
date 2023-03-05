@@ -36,7 +36,7 @@ impl<I, E> Clone for End<I, E> {
 
 impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -48,7 +48,9 @@ where
                 inp.add_alt(Located::at(
                     at.into(),
                     // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, Some(tok), unsafe { inp.span_since(before) }),
+                    E::Error::expected_found(None, Some(tok.into()), unsafe {
+                        inp.span_since(before)
+                    }),
                 ));
                 Err(())
             }
@@ -149,7 +151,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
-    T: OrderedSeq<I::Token> + Clone,
+    T: OrderedSeq<'a, I::Token> + Clone,
 {
     Just {
         seq,
@@ -161,8 +163,8 @@ impl<'a, I, E, T> Parser<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    I::Token: Clone + PartialEq,
-    T: OrderedSeq<I::Token> + Clone,
+    I::Token: PartialEq,
+    T: OrderedSeq<'a, I::Token> + Clone,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T> {
@@ -176,8 +178,8 @@ impl<'a, I, E, T> ConfigParser<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    I::Token: Clone + PartialEq,
-    T: OrderedSeq<I::Token> + Clone,
+    I::Token: PartialEq,
+    T: OrderedSeq<'a, I::Token> + Clone,
 {
     type Config = JustCfg<T>;
 
@@ -190,15 +192,14 @@ where
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
 
         if let Some(err) = seq.seq_iter().find_map(|next| {
-            let next = next.borrow();
             let before = inp.offset();
-            match inp.next() {
-                (_, Some(tok)) if *next == tok => None,
-                (at, tok) => Some(Located::at(
+            match inp.next_maybe() {
+                (_, Some(tok)) if next.borrow() == tok.borrow() => None,
+                (at, found) => Some(Located::at(
                     at.into(),
                     E::Error::expected_found(
-                        Some(Some(I::Token::clone(next))),
-                        tok,
+                        Some(Some(T::to_maybe_ref(next))),
+                        found.map(|f| f.into()),
                         // SAFETY: Using offsets derived from input
                         unsafe { inp.span_since(before) },
                     ),
@@ -249,10 +250,10 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 /// ```
 pub const fn one_of<'a, T, I, E>(seq: T) -> OneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Token: Clone + PartialEq,
-    T: Seq<I::Token>,
+    I::Token: PartialEq,
+    T: Seq<'a, I::Token>,
 {
     OneOf {
         seq,
@@ -262,22 +263,22 @@ where
 
 impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
-    I::Token: Clone + PartialEq,
-    T: Seq<I::Token>,
+    I::Token: PartialEq,
+    T: Seq<'a, I::Token>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
-            (_, Some(tok)) if self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
                     E::Error::expected_found(
-                        self.seq.seq_iter().map(|not| Some(not.borrow().clone())),
-                        found,
+                        self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
+                        found.map(|f| f.into()),
                         // SAFETY: Using offsets derived from input
                         unsafe { inp.span_since(before) },
                     ),
@@ -324,10 +325,10 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 /// ```
 pub const fn none_of<'a, T, I, E>(seq: T) -> NoneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
-    T: Seq<I::Token>,
+    T: Seq<'a, I::Token>,
 {
     NoneOf {
         seq,
@@ -337,21 +338,23 @@ where
 
 impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
-    T: Seq<I::Token>,
+    T: Seq<'a, I::Token>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next() {
-            (_, Some(tok)) if !self.seq.contains(&tok) => Ok(M::bind(|| tok)),
+            (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 inp.add_alt(Located::at(
                     at.into(),
                     // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
+                    E::Error::expected_found(None, found.map(|f| f.into()), unsafe {
+                        inp.span_since(before)
+                    }),
                 ));
                 Err(())
             }
@@ -442,7 +445,7 @@ where
 
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
     F: Fn(I::Token, I::Span) -> Option<O>,
@@ -461,11 +464,14 @@ where
                     None => Located::at(
                         at.into(),
                         // SAFETY: Using offsets derived from input
-                        E::Error::expected_found(None, Some(tok), err_span),
+                        E::Error::expected_found(None, Some(tok.into()), err_span),
                     ),
                 }
             }
-            (at, found) => Located::at(at.into(), E::Error::expected_found(None, found, err_span)),
+            (at, found) => Located::at(
+                at.into(),
+                E::Error::expected_found(None, found.map(|f| f.into()), err_span),
+            ),
         };
         inp.add_alt(err);
         Err(())
@@ -494,7 +500,7 @@ impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
 pub const fn select_ref<'a, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
-    I::Token: Clone + 'a,
+    I::Token: 'a,
     E: ParserExtra<'a, I>,
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
@@ -507,7 +513,7 @@ where
 impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
-    I::Token: Clone + 'a,
+    I::Token: 'a,
     E: ParserExtra<'a, I>,
     F: Fn(&'a I::Token, I::Span) -> Option<O>,
 {
@@ -521,7 +527,7 @@ where
                 None => Located::at(
                     at.into(),
                     // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, Some(tok.clone()), unsafe {
+                    E::Error::expected_found(None, Some(tok.into()), unsafe {
                         inp.span_since(before)
                     }),
                 ),
@@ -529,7 +535,9 @@ where
             (at, found) => Located::at(
                 at.into(),
                 // SAFETY: Using offsets derived from input
-                E::Error::expected_found(None, found.cloned(), unsafe { inp.span_since(before) }),
+                E::Error::expected_found(None, found.map(|f| f.into()), unsafe {
+                    inp.span_since(before)
+                }),
             ),
         };
         inp.add_alt(err);
@@ -555,7 +563,7 @@ impl<I, E> Clone for Any<I, E> {
 
 impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
 where
-    I: Input<'a>,
+    I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
@@ -567,7 +575,9 @@ where
                 inp.add_alt(Located::at(
                     at.into(),
                     // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, found, unsafe { inp.span_since(before) }),
+                    E::Error::expected_found(None, found.map(|f| f.into()), unsafe {
+                        inp.span_since(before)
+                    }),
                 ));
                 Err(())
             }
