@@ -1613,10 +1613,10 @@ where
 
         match result {
             Ok(()) => {
-                let (at, tok) = inp.next();
+                let (at, found) = inp.next();
                 inp.add_alt(Located::at(
                     at.into(),
-                    E::Error::expected_found(None, tok, result_span),
+                    E::Error::expected_found(None, found.map(|f| f.into()), result_span),
                 ));
                 Err(())
             }

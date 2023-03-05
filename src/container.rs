@@ -130,7 +130,7 @@ impl<T, const N: usize> ContainerExactly<T, N> for [T; N] {
 /// A utility trait to abstract over container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
-pub trait Seq<T> {
+pub trait Seq<'p, T> {
     /// The item yielded by the iterator.
     type Item<'a>: Borrow<T>
     where
@@ -148,9 +148,14 @@ pub trait Seq<T> {
     fn contains(&self, val: &T) -> bool
     where
         T: PartialEq;
+
+    /// Convert an item of the sequence into a [`MaybeRef`].
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b;
 }
 
-impl<T> Seq<T> for T {
+impl<'p, T: Clone> Seq<'p, T> for T {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -171,14 +176,53 @@ impl<T> Seq<T> for T {
     {
         self == val
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<'b, T> Seq<T> for &'b [T] {
-    type Item<'a> = &'a T
+impl<'p, T> Seq<'p, T> for &'p T {
+    type Item<'a> = &'p T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'a, T>
+    type Iter<'a> = core::iter::Once<&'p T>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        core::iter::once(*self)
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        *self == val
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Ref(item)
+    }
+}
+
+impl<'p, T> Seq<'p, T> for &'p [T] {
+    type Item<'a> = &'p T
+    where
+        Self: 'a;
+
+    type Iter<'a> = core::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -194,9 +238,17 @@ impl<'b, T> Seq<T> for &'b [T] {
     {
         <[T]>::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Ref(item)
+    }
 }
 
-impl<T, const N: usize> Seq<T> for [T; N] {
+impl<'p, T: Clone, const N: usize> Seq<'p, T> for [T; N] {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -217,14 +269,22 @@ impl<T, const N: usize> Seq<T> for [T; N] {
     {
         <[T]>::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<'b, T, const N: usize> Seq<T> for &'b [T; N] {
-    type Item<'a> = &'a T
+impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
+    type Item<'a> = &'p T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'a, T>
+    type Iter<'a> = core::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -240,9 +300,17 @@ impl<'b, T, const N: usize> Seq<T> for &'b [T; N] {
     {
         <[T]>::contains(*self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Ref(item)
+    }
 }
 
-impl<'b, T> Seq<T> for Vec<T> {
+impl<'p, T: Clone> Seq<'p, T> for Vec<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -263,9 +331,17 @@ impl<'b, T> Seq<T> for Vec<T> {
     {
         <[T]>::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<'b, T> Seq<T> for LinkedList<T> {
+impl<'p, T: Clone> Seq<'p, T> for LinkedList<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -286,9 +362,17 @@ impl<'b, T> Seq<T> for LinkedList<T> {
     {
         LinkedList::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<T: Eq + Hash> Seq<T> for HashSet<T> {
+impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for HashSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -309,10 +393,18 @@ impl<T: Eq + Hash> Seq<T> for HashSet<T> {
     {
         HashSet::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
 #[cfg(feature = "std")]
-impl<T: Eq + Hash> Seq<T> for std::collections::HashSet<T> {
+impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for std::collections::HashSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -333,9 +425,17 @@ impl<T: Eq + Hash> Seq<T> for std::collections::HashSet<T> {
     {
         self.contains(val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<T: Ord> Seq<T> for alloc::collections::BTreeSet<T> {
+impl<'p, T: Clone + Ord> Seq<'p, T> for alloc::collections::BTreeSet<T> {
     type Item<'a> = &'a T
     where
         Self: 'a;
@@ -356,9 +456,17 @@ impl<T: Ord> Seq<T> for alloc::collections::BTreeSet<T> {
     {
         self.contains(val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item.clone())
+    }
 }
 
-impl<T> Seq<T> for Range<T>
+impl<'p, T> Seq<'p, T> for Range<T>
 where
     T: Clone + PartialOrd, // Explicit declaration of an implied truth - `Step` requires these
     Self: Iterator<Item = T>,
@@ -380,9 +488,17 @@ where
     fn contains(&self, val: &T) -> bool {
         Range::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
 }
 
-impl<T> Seq<T> for core::ops::RangeInclusive<T>
+impl<'p, T> Seq<'p, T> for core::ops::RangeInclusive<T>
 where
     T: Clone + PartialOrd,
     Self: Iterator<Item = T>,
@@ -404,9 +520,17 @@ where
     fn contains(&self, val: &T) -> bool {
         core::ops::RangeInclusive::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
 }
 
-impl<T> Seq<T> for RangeFrom<T>
+impl<'p, T> Seq<'p, T> for RangeFrom<T>
 where
     T: Clone + PartialOrd,
     Self: Iterator<Item = T>,
@@ -428,9 +552,17 @@ where
     fn contains(&self, val: &T) -> bool {
         RangeFrom::contains(self, val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
 }
 
-impl Seq<char> for str {
+impl<'p> Seq<'p, char> for str {
     type Item<'a> = char
     where
         Self: 'a;
@@ -448,9 +580,17 @@ impl Seq<char> for str {
     fn contains(&self, val: &char) -> bool {
         self.contains(*val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
 }
 
-impl<'b> Seq<char> for &'b str {
+impl<'p> Seq<'p, char> for &'p str {
     type Item<'a> = char
     where
         Self: 'a;
@@ -468,9 +608,17 @@ impl<'b> Seq<char> for &'b str {
     fn contains(&self, val: &char) -> bool {
         str::contains(self, *val)
     }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
 }
 
-impl Seq<char> for String {
+impl<'p> Seq<'p, char> for String {
     type Item<'a> = char
     where
         Self: 'a;
@@ -487,23 +635,32 @@ impl Seq<char> for String {
     #[inline(always)]
     fn contains(&self, val: &char) -> bool {
         str::contains(self, *val)
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
     }
 }
 
 /// A utility trait to abstract over *linear* container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
-pub trait OrderedSeq<T>: Seq<T> {}
+pub trait OrderedSeq<'p, T>: Seq<'p, T> {}
 
-impl<T: Clone> OrderedSeq<T> for T {}
-impl<'b, T: Clone> OrderedSeq<T> for &'b [T] {}
-impl<T: Clone, const N: usize> OrderedSeq<T> for [T; N] {}
-impl<'b, T: Clone, const N: usize> OrderedSeq<T> for &'b [T; N] {}
-impl<'b, T: Clone> OrderedSeq<T> for Vec<T> {}
-impl<T> OrderedSeq<T> for Range<T> where Self: Seq<T> {}
-impl<T> OrderedSeq<T> for core::ops::RangeInclusive<T> where Self: Seq<T> {}
-impl<T> OrderedSeq<T> for RangeFrom<T> where Self: Seq<T> {}
+impl<'p, T: Clone> OrderedSeq<'p, T> for T {}
+impl<'p, T> OrderedSeq<'p, T> for &'p T {}
+impl<'p, T> OrderedSeq<'p, T> for &'p [T] {}
+impl<'p, T: Clone, const N: usize> OrderedSeq<'p, T> for [T; N] {}
+impl<'p, T, const N: usize> OrderedSeq<'p, T> for &'p [T; N] {}
+impl<'p, T: Clone> OrderedSeq<'p, T> for Vec<T> {}
+impl<'p, T> OrderedSeq<'p, T> for Range<T> where Self: Seq<'p, T> {}
+impl<'p, T> OrderedSeq<'p, T> for core::ops::RangeInclusive<T> where Self: Seq<'p, T> {}
+impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
-impl OrderedSeq<char> for str {}
-impl<'b> OrderedSeq<char> for &'b str {}
-impl OrderedSeq<char> for String {}
+impl<'p> OrderedSeq<'p, char> for str {}
+impl<'p> OrderedSeq<'p, char> for &'p str {}
+impl<'p> OrderedSeq<'p, char> for String {}

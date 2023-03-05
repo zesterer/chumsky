@@ -119,7 +119,7 @@ where
                 (_, Some(tok)) => {
                     inp.emit(E::Error::expected_found(
                         None,
-                        Some(tok),
+                        Some(tok.into()),
                         // SAFETY: Using offsets derived from input
                         unsafe { inp.span_since(before) },
                     ));

@@ -45,7 +45,7 @@ impl<'src> fmt::Display for Token<'src> {
 }
 
 fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<char, Span>>> {
+) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
     // A parser for numbers
     let num = text::int(10)
         .then(just('.').then(text::digits(10)).or_not())
@@ -194,7 +194,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
     ParserInput<'tokens, 'src>,
     Spanned<Expr<'src>>,
-    extra::Err<Rich<Token<'src>, Span>>,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
 > + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
@@ -395,7 +395,7 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
     ParserInput<'tokens, 'src>,
     HashMap<&'src str, Func<'src>>,
-    extra::Err<Rich<Token<'src>, Span>>,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
 > + Clone {
     let ident = select! { Token::Ident(ident) => ident.clone() };
 
@@ -564,7 +564,7 @@ fn main() {
 
     let (tokens, mut errs) = lexer().parse(src.as_str()).into_output_errors();
 
-    let parse_errs = if let Some(tokens) = tokens {
+    let parse_errs = if let Some(tokens) = &tokens {
         //dbg!(tokens);
         let (ast, parse_errs) = funcs_parser()
             .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
@@ -632,7 +632,7 @@ fn main() {
                                 "Unexpected {}",
                                 found
                                     .as_ref()
-                                    .map(|c| format!("token {}", c.fg(Color::Red)))
+                                    .map(|c| format!("token {}", c.as_str().fg(Color::Red)))
                                     .unwrap_or_else(|| "end of input".to_string())
                             ),
                             RichReason::Many(_) => format!("uhhh"),

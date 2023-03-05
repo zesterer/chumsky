@@ -25,7 +25,7 @@ pub trait Input<'a>: 'a {
     fn start(&self) -> Self::Offset;
 
     /// TODO
-    type TokenMaybe: Borrow<Self::Token>;
+    type TokenMaybe: Borrow<Self::Token> + Into<MaybeRef<'a, Self::Token>>;
     /// TODO
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>);
 
@@ -99,7 +99,7 @@ pub trait SliceInput<'a>: Input<'a> {
 // Implemented by inputs that reference a string slice and use byte indices as their offset.
 /// A trait for types that represent string-like streams of input tokens
 pub trait StrInput<'a, C: Char>:
-    Input<'a, Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
+    ValueInput<'a, Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
 {
 }
 

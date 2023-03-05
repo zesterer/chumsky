@@ -18,15 +18,15 @@ fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
 
         let atom = num.or(parens);
 
-        let product = atom.clone().foldl(
-            select_ref! { Token::Mul }.ignore_then(atom).repeated(),
-            |a, b| a * b,
-        );
+        let product = atom
+            .clone()
+            .foldl(just(&Token::Mul).ignore_then(atom).repeated(), |a, b| a * b);
 
-        let sum = product.clone().foldl(
-            select_ref! { Token::Add }.ignore_then(product).repeated(),
-            |a, b| a + b,
-        );
+        let sum = product
+            .clone()
+            .foldl(just(&Token::Add).ignore_then(product).repeated(), |a, b| {
+                a + b
+            });
 
         sum
     })

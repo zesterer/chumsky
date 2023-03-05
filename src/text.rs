@@ -17,7 +17,7 @@ use super::*;
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
-pub trait Char: Sized + Copy + PartialEq {
+pub trait Char: Sized + Copy + PartialEq + 'static {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
     ///
     /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
