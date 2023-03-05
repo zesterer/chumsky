@@ -89,9 +89,9 @@ use alloc::{
 };
 use core::{
     borrow::Borrow,
-    cmp::{Eq, Ordering},
+    cmp::{Eq, Ordering, PartialEq},
     fmt,
-    hash::Hash,
+    hash::{Hash, Hasher},
     marker::PhantomData,
     mem::MaybeUninit,
     ops::{Deref, Range, RangeFrom},
@@ -118,14 +118,35 @@ use self::{
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
 
-/// TODO
-// TODO: maybe PartialEq/Eq/Hash impl consider both branches to be equivalent
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+/// A type that can represent a borrowed reference to a `T` or a value of `T`.
+///
+/// Used internally to faciltitate zero-copy manipulation of tokens during error generation (see [`Error`]).
+#[derive(Copy, Clone)]
 pub enum MaybeRef<'a, T> {
     /// We have a reference to `T`.
     Ref(&'a T),
     /// We have a value of `T`.
     Val(T),
+}
+
+impl<'a, T: PartialEq> PartialEq for MaybeRef<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        &**self == &**other
+    }
+}
+
+impl<'a, T: Eq> Eq for MaybeRef<'a, T> {}
+
+impl<'a, T: Hash> Hash for MaybeRef<'a, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        T::hash(&**self, state)
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for MaybeRef<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        T::fmt(&**self, f)
+    }
 }
 
 impl<'a, T> MaybeRef<'a, T> {
