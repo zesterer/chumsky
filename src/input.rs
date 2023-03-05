@@ -308,9 +308,30 @@ pub struct SpannedInput<T, S, I> {
     phantom: PhantomData<T>,
 }
 
+/// Utility type required to allow [`SpannedInput`] to implement [`Input`].
+#[doc(hidden)]
+pub struct SpannedTokenMaybe<'a, I: Input<'a>, T, S>(I::TokenMaybe, PhantomData<(T, S)>);
+
+impl<'a, I: Input<'a, Token = (T, S)>, T, S> Borrow<T> for SpannedTokenMaybe<'a, I, T, S> {
+    fn borrow(&self) -> &T {
+        &self.0.borrow().0
+    }
+}
+
+impl<'a, I: Input<'a, Token = (T, S)>, T, S: 'a> Into<MaybeRef<'a, T>>
+    for SpannedTokenMaybe<'a, I, T, S>
+{
+    fn into(self) -> MaybeRef<'a, T> {
+        match self.0.into() {
+            MaybeRef::Ref((tok, _)) => MaybeRef::Ref(tok),
+            MaybeRef::Val((tok, _)) => MaybeRef::Val(tok),
+        }
+    }
+}
+
 impl<'a, T, S, I> Input<'a> for SpannedInput<T, S, I>
 where
-    I: ValueInput<'a, Token = (T, S)>,
+    I: Input<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
@@ -322,23 +343,24 @@ where
         self.input.start()
     }
 
-    type TokenMaybe = T;
+    type TokenMaybe = SpannedTokenMaybe<'a, I, T, S>;
 
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
-        self.next(offset)
+        let (offset, tok) = self.input.next_maybe(offset);
+        (offset, tok.map(|tok| SpannedTokenMaybe(tok, PhantomData)))
     }
 
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         let start = self
             .input
-            .next(range.start)
+            .next_maybe(range.start)
             .1
-            .map_or(self.eoi.start(), |(_, s)| s.start());
+            .map_or(self.eoi.start(), |tok| tok.borrow().1.start());
         let end = self
             .input
-            .next(I::prev(range.end))
+            .next_maybe(I::prev(range.end))
             .1
-            .map_or(self.eoi.start(), |(_, s)| s.end());
+            .map_or(self.eoi.start(), |tok| tok.borrow().1.end());
         S::new(self.eoi.context(), start..end)
     }
 
@@ -361,7 +383,7 @@ where
 
 impl<'a, T, S, I> BorrowInput<'a> for SpannedInput<T, S, I>
 where
-    I: ValueInput<'a> + BorrowInput<'a, Token = (T, S)>,
+    I: Input<'a> + BorrowInput<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
@@ -373,7 +395,7 @@ where
 
 impl<'a, T, S, I> SliceInput<'a> for SpannedInput<T, S, I>
 where
-    I: ValueInput<'a> + SliceInput<'a, Token = (T, S)>,
+    I: Input<'a> + SliceInput<'a, Token = (T, S)>,
     T: 'a,
     S: Span + Clone + 'a,
 {
