@@ -107,7 +107,7 @@ impl fmt::Display for EmptyErr {
 
 /// A very cheap error type that tracks only the error span. This type is most useful when you want fast parsing but do
 /// not particularly care about the quality of error messages.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Cheap<S = SimpleSpan<usize>> {
     span: S,
 }
@@ -143,7 +143,7 @@ where
 
 /// A simple error type that tracks the error span and found token. This type is most useful when you want fast parsing
 /// but do not particularly care about the quality of error messages.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Simple<'a, T, S = SimpleSpan<usize>> {
     span: S,
     found: Option<MaybeRef<'a, T>>,
@@ -199,7 +199,7 @@ where
 }
 
 /// An expected pattern for a [`Rich`] error.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RichPattern<'a, T> {
     /// A specific token was expected.
     Token(MaybeRef<'a, T>),
@@ -270,7 +270,7 @@ where
 
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
 /// The reason for a [`Rich`] error.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RichReason<'a, T> {
     /// An unexpected input was found
     ExpectedFound {
