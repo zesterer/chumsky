@@ -3,8 +3,8 @@
 //! Run it with the following command:
 //! cargo run --example nano_rust -- examples/sample.nrs
 
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::{error::RichReason, prelude::*};
+use ariadne::{Color, Label, Report, ReportKind, Source};
+use chumsky::prelude::*;
 use std::{collections::HashMap, env, fmt, fs};
 
 pub type Span = SimpleSpan<usize>;
@@ -611,44 +611,12 @@ fn main() {
                 .map(|e| e.map_token(|tok| tok.to_string())),
         )
         .for_each(|e| {
-            let msg = match e.reason() {
-                RichReason::Custom(msg) => msg.clone(),
-                RichReason::ExpectedFound { expected, found } => format!(
-                    "{}, expected {}",
-                    if found.is_some() {
-                        "Unexpected token"
-                    } else {
-                        "Unexpected end of input"
-                    },
-                    if expected.len() == 0 {
-                        "something else".to_string()
-                    } else {
-                        expected
-                            .into_iter()
-                            .map(|expected| expected.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    },
-                ),
-                RichReason::Many(_) => format!("uhhh"),
-            };
-
             let report = Report::build(ReportKind::Error, (), e.span().start)
                 .with_code(3)
-                .with_message(msg)
+                .with_message(e.to_string())
                 .with_label(
                     Label::new(e.span().into_range())
-                        .with_message(match e.reason() {
-                            RichReason::Custom(msg) => msg.clone(),
-                            RichReason::ExpectedFound { found, .. } => format!(
-                                "Unexpected {}",
-                                found
-                                    .as_ref()
-                                    .map(|c| format!("token {}", c.as_str().fg(Color::Red)))
-                                    .unwrap_or_else(|| "end of input".to_string())
-                            ),
-                            RichReason::Many(_) => format!("uhhh"),
-                        })
+                        .with_message(e.reason().to_string())
                         .with_color(Color::Red),
                 );
 

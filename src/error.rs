@@ -231,7 +231,11 @@ impl<'a, T> RichPattern<'a, T> {
         writer: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
     ) -> fmt::Result {
         match self {
-            Self::Token(t) => writer(t, f),
+            Self::Token(t) => {
+                write!(f, "'")?;
+                writer(t, f)?;
+                write!(f, "'")
+            }
             Self::Label(s) => write!(f, "{}", s),
             Self::EndOfInput => write!(f, "end of input"),
         }
@@ -257,7 +261,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Token(t) => write!(f, "{}", &**t),
+            Self::Token(t) => write!(f, "'{}'", &**t),
             Self::Label(s) => write!(f, "{}", s),
             Self::EndOfInput => write!(f, "end of input"),
         }
@@ -328,6 +332,53 @@ impl<'a, T> RichReason<'a, T> {
 
         map_token_inner(self, &mut f)
     }
+
+    fn inner_fmt<S>(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        token: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
+        write_span: fn(&S, &mut fmt::Formatter<'_>) -> fmt::Result,
+        span: Option<&S>,
+    ) -> fmt::Result {
+        match self {
+            RichReason::ExpectedFound { expected, found } => {
+                write!(f, "found ")?;
+                write_token(f, token, found.as_deref())?;
+                if let Some(span) = span {
+                    write!(f, " at ")?;
+                    write_span(span, f)?;
+                }
+                write!(f, " expected ")?;
+                match &expected[..] {
+                    [] => write!(f, "something else")?,
+                    [expected] => expected.write(f, token)?,
+                    _ => {
+                        for expected in &expected[..expected.len() - 1] {
+                            expected.write(f, token)?;
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "or ")?;
+                        expected.last().unwrap().write(f, token)?;
+                    }
+                }
+            }
+            RichReason::Custom(msg) => {
+                write!(f, "{}", msg)?;
+                if let Some(span) = span {
+                    write!(f, " at ")?;
+                    write_span(&span, f)?;
+                }
+            }
+            RichReason::Many(_) => {
+                write!(f, "multiple errors")?;
+                if let Some(span) = span {
+                    write!(f, " found at ")?;
+                    write_span(span, f)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<'a, T> RichReason<'a, T>
@@ -373,6 +424,24 @@ where
     }
 }
 
+impl<'a, T> fmt::Debug for RichReason<'a, T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.inner_fmt(f, T::fmt, |_: &(), _| Ok(()), None)
+    }
+}
+
+impl<'a, T> fmt::Display for RichReason<'a, T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner_fmt(f, T::fmt, |_: &(), _| Ok(()), None)
+    }
+}
+
 /// A rich default error type that tracks error spans, expected inputs, and the actual input found at an error site.
 ///
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
@@ -389,38 +458,14 @@ impl<'a, T, S> Rich<'a, T, S> {
         f: &mut fmt::Formatter<'_>,
         token: fn(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
         span: fn(&S, &mut fmt::Formatter<'_>) -> fmt::Result,
+        with_spans: bool,
     ) -> fmt::Result {
-        match &self.reason {
-            RichReason::ExpectedFound { expected, found } => {
-                write!(f, "found ")?;
-                write_token(f, token, found.as_deref())?;
-                write!(f, " at ")?;
-                span(&self.span, f)?;
-                write!(f, "expected ")?;
-                match &expected[..] {
-                    [] => write!(f, "something else")?,
-                    [expected] => expected.write(f, token)?,
-                    _ => {
-                        write!(f, "one of ")?;
-                        for expected in &expected[..expected.len() - 1] {
-                            expected.write(f, token)?;
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "or ")?;
-                        expected.last().unwrap().write(f, token)?;
-                    }
-                }
-            }
-            RichReason::Custom(msg) => {
-                write!(f, "{} at ", msg)?;
-                span(&self.span, f)?;
-            }
-            RichReason::Many(_) => {
-                write!(f, "Multiple errors found at ")?;
-                span(&self.span, f)?;
-            }
-        }
-        Ok(())
+        self.reason.inner_fmt(
+            f,
+            token,
+            span,
+            if with_spans { Some(&self.span) } else { None },
+        )
     }
 }
 
@@ -535,7 +580,7 @@ where
     S: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.inner_fmt(f, T::fmt, S::fmt)
+        self.inner_fmt(f, T::fmt, S::fmt, true)
     }
 }
 
@@ -545,7 +590,7 @@ where
     S: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner_fmt(f, T::fmt, S::fmt)
+        self.inner_fmt(f, T::fmt, S::fmt, false)
     }
 }
 
@@ -555,7 +600,11 @@ fn write_token<T>(
     tok: Option<&T>,
 ) -> fmt::Result {
     match tok {
-        Some(tok) => writer(tok, f),
+        Some(tok) => {
+            write!(f, "'")?;
+            writer(tok, f)?;
+            write!(f, "'")
+        }
         None => write!(f, "end of input"),
     }
 }

@@ -113,7 +113,6 @@ where
                 inp.rewind(before);
             }
 
-            let before = inp.offset();
             if let Err(()) = self.skip.go::<Check>(inp) {
                 inp.errors.alt = Some(alt);
                 break Err(());
