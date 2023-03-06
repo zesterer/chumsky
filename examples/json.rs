@@ -71,7 +71,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
 
         let array = value
             .clone()
-            .separated_by(just(',').padded())
+            .separated_by(just(',').padded().recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of(",").ignored(),
+            )))
             .allow_trailing()
             .collect()
             .padded()
@@ -87,7 +90,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
         let member = string.clone().then_ignore(just(':').padded()).then(value);
         let object = member
             .clone()
-            .separated_by(just(',').padded())
+            .separated_by(just(',').padded().recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of(",").ignored(),
+            )))
             .collect()
             .padded()
             .delimited_by(
