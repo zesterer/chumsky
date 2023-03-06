@@ -77,7 +77,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .padded()
             .delimited_by(
                 just('['),
-                just(']').ignored().recover_with(via_parser(end())),
+                just(']')
+                    .ignored()
+                    .recover_with(via_parser(end()))
+                    .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
             .boxed();
 
@@ -89,7 +92,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .padded()
             .delimited_by(
                 just('{'),
-                just('}').ignored().recover_with(via_parser(end())),
+                just('}')
+                    .ignored()
+                    .recover_with(via_parser(end()))
+                    .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
             .boxed();
 
@@ -114,7 +120,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             [('{', '}')],
             |_| Json::Invalid,
         )))
-        .recover_with(skip_then_retry_until(one_of(",]}").ignored()))
+        .recover_with(skip_then_retry_until(
+            any().ignored(),
+            one_of(",]}").ignored(),
+        ))
         .padded()
     })
 }

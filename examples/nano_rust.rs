@@ -91,7 +91,7 @@ fn lexer<'src>(
         .padded_by(comment.repeated())
         .padded()
         // If we encounter an error, skip and attempt to lex the next character as a token instead
-        .recover_with(skip_then_retry_until(end()))
+        .recover_with(skip_then_retry_until(any().ignored(), end()))
         .repeated()
         .collect()
 }
@@ -363,9 +363,28 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 (Expr::Then(Box::new(a), Box::new(b)), span.into())
             });
 
+        let block_recovery = nested_delimiters(
+            Token::Ctrl('{'),
+            Token::Ctrl('}'),
+            [
+                (Token::Ctrl('('), Token::Ctrl(')')),
+                (Token::Ctrl('['), Token::Ctrl(']')),
+            ],
+            |span| (Expr::Error, span),
+        );
+
         block_chain
             // Expressions, chained by semicolons, are statements
-            .or(raw_expr.clone())
+            .or(raw_expr.clone().recover_with(skip_then_retry_until(
+                block_recovery.ignored().or(any().ignored()),
+                one_of([
+                    Token::Ctrl(';'),
+                    Token::Ctrl('}'),
+                    Token::Ctrl(')'),
+                    Token::Ctrl(']'),
+                ])
+                .ignored(),
+            )))
             .foldl(
                 just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated(),
                 |a, b| {
