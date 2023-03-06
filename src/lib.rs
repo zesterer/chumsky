@@ -103,6 +103,7 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
+use crate::input::InputOwn;
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -511,19 +512,11 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         I: Input<'a>,
         E::Context: Default,
     {
-        let ctx = E::Context::default();
-        #[cfg(feature = "memoization")]
-        let mut memos = HashMap::default();
-        let mut inp = InputRef::new(
-            &input,
-            state,
-            &ctx,
-            #[cfg(feature = "memoization")]
-            &mut memos,
-        );
+        let mut own = InputOwn::new_state(input, state);
+        let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Emit>(&mut inp);
         let alt = inp.errors.alt.take();
-        let mut errs = inp.into_errs();
+        let mut errs = own.into_errs();
         let out = match res {
             Ok(out) => Some(out),
             Err(()) => {
@@ -564,19 +557,11 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         I: Input<'a>,
         E::Context: Default,
     {
-        let ctx = E::Context::default();
-        #[cfg(feature = "memoization")]
-        let mut memos = HashMap::default();
-        let mut inp = InputRef::new(
-            &input,
-            state,
-            &ctx,
-            #[cfg(feature = "memoization")]
-            &mut memos,
-        );
+        let mut own = InputOwn::new_state(input, state);
+        let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Check>(&mut inp);
         let alt = inp.errors.alt.take();
-        let mut errs = inp.into_errs();
+        let mut errs = own.into_errs();
         let out = match res {
             Ok(()) => Some(()),
             Err(()) => {
@@ -1898,13 +1883,8 @@ where
 pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E: ParserExtra<'a, I>>
 {
     parser: P,
-    input: I,
     offset: I::Offset,
-    state: MaybeMut<'iter, E::State>,
-    errors: input::Errors<E::Error>,
-    ctx: E::Context,
-    #[cfg(feature = "memoization")]
-    memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+    own: InputOwn<'a, 'iter, I, E>,
     iter_state: Option<P::IterState<Emit>>,
     phantom: PhantomData<&'a O>,
 }
@@ -1917,16 +1897,7 @@ where
     type Item = O;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut inp = InputRef {
-            input: &self.input,
-            offset: self.offset,
-            errors: core::mem::take(&mut self.errors),
-            state: &mut *self.state,
-            ctx: &self.ctx,
-            // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
-            #[cfg(feature = "memoization")]
-            memos: &mut self.memos,
-        };
+        let mut inp = self.own.as_ref_at(self.offset);
         let parser = &self.parser;
 
         let iter_state = match &mut self.iter_state {
@@ -1940,7 +1911,6 @@ where
 
         let res = parser.next::<Emit>(&mut inp, iter_state);
         self.offset = inp.offset;
-        self.errors = inp.errors;
         res.ok().and_then(|res| res)
     }
 }
@@ -2066,12 +2036,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
             Some(ParserIter {
                 parser: self,
                 offset: input.start(),
-                input,
-                state: MaybeMut::new_own(E::State::default()),
-                ctx: E::Context::default(),
-                errors: input::Errors::default(),
-                #[cfg(feature = "memoization")]
-                memos: HashMap::default(),
+                own: InputOwn::new(input),
                 iter_state: None,
                 phantom: PhantomData,
             }),
@@ -2095,12 +2060,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
             Some(ParserIter {
                 parser: self,
                 offset: input.start(),
-                input,
-                state: MaybeMut::new_ref(state),
-                ctx: E::Context::default(),
-                errors: input::Errors::default(),
-                #[cfg(feature = "memoization")]
-                memos: HashMap::default(),
+                own: InputOwn::new_state(input, state),
                 iter_state: None,
                 phantom: PhantomData,
             }),
@@ -2460,17 +2420,8 @@ mod tests {
     #[test]
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
-        let mut state = ();
-        let ctx = ();
-        #[cfg(feature = "memoization")]
-        let mut memos = HashMap::default();
-        let mut input = InputRef::<_, extra::Default>::new(
-            &input,
-            &mut state,
-            &ctx,
-            #[cfg(feature = "memoization")]
-            &mut memos,
-        );
+        let mut own = InputOwn::<_, extra::Default>::new(input);
+        let mut input = own.as_ref_start();
 
         while let (_, Some(c)) = input.next() {
             std::hint::black_box(c);

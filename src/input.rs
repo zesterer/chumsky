@@ -512,11 +512,88 @@ impl<E> Default for Errors<E> {
     }
 }
 
+/// Internal type representing the owned parts of an input - used at the top level by a call to
+/// `parse`.
+pub struct InputOwn<'a, 's, I: Input<'a>, E: ParserExtra<'a, I>> {
+    pub(crate) input: I,
+    pub(crate) errors: Errors<E::Error>,
+    pub(crate) state: MaybeMut<'s, E::State>,
+    pub(crate) ctx: E::Context,
+    #[cfg(feature = "memoization")]
+    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+}
+
+impl<'a, 's, I, E> InputOwn<'a, 's, I, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    pub(crate) fn new(input: I) -> InputOwn<'a, 's, I, E>
+    where
+        E::State: Default,
+        E::Context: Default,
+    {
+        InputOwn {
+            input,
+            errors: Errors::default(),
+            state: MaybeMut::new_own(E::State::default()),
+            ctx: E::Context::default(),
+            #[cfg(feature = "memoization")]
+            memos: HashMap::default(),
+        }
+    }
+
+    pub(crate) fn new_state(
+        input: I,
+        state: &'s mut E::State,
+    ) -> InputOwn<'a, 's, I, E>
+    where
+        E::Context: Default,
+    {
+        InputOwn {
+            input,
+            errors: Errors::default(),
+            state: MaybeMut::new_ref(state),
+            ctx: E::Context::default(),
+            #[cfg(feature = "memoization")]
+            memos: HashMap::default(),
+        }
+    }
+
+    pub(crate) fn as_ref_start<'parse>(&'parse mut self) -> InputRef<'a, 'parse, I, E> {
+        InputRef {
+            offset: self.input.start(),
+            input: &self.input,
+            errors: &mut self.errors,
+            state: &mut *self.state,
+            ctx: &self.ctx,
+            #[cfg(feature = "memoization")]
+            memos: &mut self.memos,
+        }
+    }
+
+    pub(crate) fn as_ref_at<'parse>(&'parse mut self, offset: I::Offset) -> InputRef<'a, 'parse, I, E> {
+        InputRef {
+            offset,
+            input: &self.input,
+            errors: &mut self.errors,
+            state: &mut *self.state,
+            ctx: &self.ctx,
+            #[cfg(feature = "memoization")]
+            memos: &mut self.memos,
+        }
+    }
+
+    pub(crate) fn into_errs(self) -> Vec<E::Error> {
+        self.errors.secondary
+    }
+}
+
 /// Internal type representing an input as well as all the necessary context for parsing.
 pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
-    pub(crate) input: &'parse I,
     pub(crate) offset: I::Offset,
-    pub(crate) errors: Errors<E::Error>,
+    pub(crate) input: &'parse I,
+    pub(crate) errors: &'parse mut Errors<E::Error>,
     pub(crate) state: &'parse mut E::State,
     pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
@@ -524,29 +601,6 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
-    pub(crate) fn new(
-        input: &'parse I,
-        state: &'parse mut E::State,
-        ctx: &'parse E::Context,
-        #[cfg(feature = "memoization")] memos: &'parse mut HashMap<
-            (I::Offset, usize),
-            Option<Located<E::Error>>,
-        >,
-    ) -> Self
-    where
-        E::Context: Default,
-    {
-        Self {
-            offset: input.start(),
-            input,
-            state,
-            ctx,
-            errors: Errors::default(),
-            #[cfg(feature = "memoization")]
-            memos,
-        }
-    }
-
     pub(crate) fn with_ctx<'sub_parse, C, O>(
         &'sub_parse mut self,
         new_ctx: &'sub_parse C,
@@ -556,20 +610,17 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         'parse: 'sub_parse,
         C: 'a,
     {
-        use core::mem;
-
         let mut new_inp = InputRef {
             input: self.input,
             offset: self.offset,
             state: self.state,
             ctx: new_ctx,
-            errors: mem::replace(&mut self.errors, Errors::default()),
+            errors: self.errors,
             #[cfg(feature = "memoization")]
             memos: self.memos,
         };
         let res = f(&mut new_inp);
         self.offset = new_inp.offset;
-        self.errors = new_inp.errors;
         res
     }
 
@@ -585,19 +636,16 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     where
         'parse: 'sub_parse,
     {
-        use core::mem;
-
         let mut new_inp = InputRef {
             offset: new_input.start(),
             input: new_input,
             state: self.state,
             ctx: self.ctx,
-            errors: mem::replace(&mut self.errors, Errors::default()),
+            errors: self.errors,
             #[cfg(feature = "memoization")]
             memos,
         };
         let res = f(&mut new_inp);
-        self.errors = new_inp.errors;
         res
     }
 
@@ -771,10 +819,6 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             Some(a) => a.prioritize(err, |a, b| a.merge(b)),
             None => err,
         });
-    }
-
-    pub(crate) fn into_errs(self) -> Vec<E::Error> {
-        self.errors.secondary
     }
 }
 
