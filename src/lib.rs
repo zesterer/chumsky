@@ -179,6 +179,14 @@ impl<'a, T> MaybeRef<'a, T> {
             Self::Val(x) => x,
         }
     }
+
+    /// Convert this [`MaybeRef<T>`] into an owned version of itself, cloning the inner reference if required.
+    pub fn into_owned<'b>(self) -> MaybeRef<'b, T>
+    where
+        T: Clone,
+    {
+        MaybeRef::Val(self.into_inner())
+    }
 }
 
 impl<'a, T> Deref for MaybeRef<'a, T> {
