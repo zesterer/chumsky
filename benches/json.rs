@@ -1,7 +1,3 @@
-#![feature(test)]
-
-extern crate test;
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 mod utils;

@@ -1,7 +1,3 @@
-#![feature(test, array_methods)]
-
-extern crate test;
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone, PartialEq)]
