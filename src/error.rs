@@ -83,7 +83,7 @@ pub trait Error<'a, I: Input<'a>>: Sized {
         self
     }
 
-    /// Fast path for `a.merge(Error::expected_found(...))` that many incur less overhead.
+    /// Fast path for `a.merge(Error::expected_found(...))` that may incur less overhead by, for example, reusing allocations.
     #[inline]
     fn merge_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         self,
@@ -94,7 +94,7 @@ pub trait Error<'a, I: Input<'a>>: Sized {
         self.merge(Self::expected_found(expected, found, span))
     }
 
-    /// Fast path for `a = Error::expected_found(...)` that many incur less overhead by reusing allocations.
+    /// Fast path for `a = Error::expected_found(...)` that may incur less overhead by, for example, reusing allocations.
     #[inline]
     fn replace_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         self,
