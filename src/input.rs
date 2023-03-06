@@ -601,6 +601,7 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
+    #[inline]
     pub(crate) fn with_ctx<'sub_parse, C, O>(
         &'sub_parse mut self,
         new_ctx: &'sub_parse C,
@@ -624,6 +625,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         res
     }
 
+    #[inline]
     pub(crate) fn with_input<'sub_parse, O>(
         &'sub_parse mut self,
         new_input: &'sub_parse I,

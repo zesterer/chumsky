@@ -98,6 +98,7 @@ where
     where
         I: 'a;
 
+    #[inline]
     fn make_iter<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -108,6 +109,7 @@ where
         ))
     }
 
+    #[inline]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -368,6 +370,7 @@ where
     where
         I: 'a;
 
+    #[inline]
     fn make_iter<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -375,6 +378,7 @@ where
         self.parser.make_iter(inp)
     }
 
+    #[inline]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -946,6 +950,7 @@ where
     where
         I: 'a;
 
+    #[inline]
     fn make_iter<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -955,6 +960,7 @@ where
         Ok((out, then))
     }
 
+    #[inline]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,

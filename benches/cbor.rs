@@ -106,19 +106,25 @@ mod chumsky_zero_copy {
 
     pub fn cbor<'a>() -> impl Parser<'a, &'a [u8], CborZero<'a>, extra::Err<Error<'a>>> {
         recursive(|data| {
-            let read_int = any().then_with_ctx(
+            let read_int = any()
+                .try_map(|ctx, _| {
+                    if ctx & 0b1_1111 < 28 {
+                        Ok(ctx)
+                    } else {
+                        Err(Error::default())
+                    }
+                })
+                .then_with_ctx(
                 any()
                     .repeated()
-                    .try_configure(|cfg, ctx, _| {
+                    .configure(|cfg, ctx| {
                         let info = *ctx & 0b1_1111;
                         let num = if info < 24 {
                             0
-                        } else if info < 28 {
-                            2usize.pow(info as u32 - 24)
                         } else {
-                            return Err(Error::empty() /*custom(span, format!("Invalid argument: {}", info))*/)
+                            2usize.pow(info as u32 - 24)
                         };
-                        Ok(cfg.exactly(num))
+                        cfg.exactly(num)
                     })
             )
                 .map_slice(int_out);
@@ -176,7 +182,7 @@ mod chumsky_zero_copy {
                 .try_map(move |n, _| if n & 0b1_1111 == num {
                     Ok(())
                 } else {
-                    Err(Error::empty() /*custom(span, format!("Invalid simple identifier {}", n))*/)
+                    Err(Error::default())
                 });
 
             let float_simple = choice((
@@ -186,13 +192,13 @@ mod chumsky_zero_copy {
                 simple(23).to(CborZero::Undef),
                 simple(26).ignore_then(any()
                     .repeated_exactly::<4>()
-                    .collect::<_, _, [_; 4]>()
+                    .collect()
                     .map(f32::from_be_bytes)
                     .map(CborZero::SingleFloat)
                 ),
                 simple(27).ignore_then(any()
                     .repeated_exactly::<8>()
-                    .collect::<_, _, [_; 8]>()
+                    .collect()
                     .map(f64::from_be_bytes)
                     .map(CborZero::DoubleFloat)
                 ),
@@ -202,7 +208,7 @@ mod chumsky_zero_copy {
                 .try_map(move |n, _| if (n >> 5) == num {
                     Ok(())
                 } else {
-                    Err(Error::empty() /*custom(span, format!("Invalid major version {}", n >> 5))*/)
+                    Err(Error::default())
                 })
                 .rewind();
 
