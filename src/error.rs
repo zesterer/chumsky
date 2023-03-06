@@ -225,6 +225,18 @@ impl<'a, T, L> RichPattern<'a, T, L> {
         }
     }
 
+    /// Convert this pattern into an owned version of itself by cloning any borrowed internal tokens, if necessary.
+    pub fn into_owned<'b>(self) -> RichPattern<'b, T, L>
+    where
+        T: Clone,
+    {
+        match self {
+            Self::Token(tok) => RichPattern::Token(tok.into_owned()),
+            Self::Label(label) => RichPattern::Label(label),
+            Self::EndOfInput => RichPattern::EndOfInput,
+        }
+    }
+
     fn write(
         &self,
         f: &mut fmt::Formatter,
@@ -292,9 +304,26 @@ impl<'a, T, L> RichReason<'a, T, L> {
     /// Return the token that was found by this error reason. `None` implies that the end of input was expected.
     pub fn found(&self) -> Option<&T> {
         match self {
-            RichReason::ExpectedFound { found, .. } => found.as_deref(),
-            RichReason::Custom(_) => None,
-            RichReason::Many(many) => many.iter().find_map(|r| r.found()),
+            Self::ExpectedFound { found, .. } => found.as_deref(),
+            Self::Custom(_) => None,
+            Self::Many(many) => many.iter().find_map(|r| r.found()),
+        }
+    }
+
+    /// Convert this reason into an owned version of itself by cloning any borrowed internal tokens, if necessary.
+    pub fn into_owned<'b>(self) -> RichReason<'b, T, L>
+    where
+        T: Clone,
+    {
+        match self {
+            Self::ExpectedFound { found, expected } => RichReason::ExpectedFound {
+                expected: expected.into_iter().map(RichPattern::into_owned).collect(),
+                found: found.map(MaybeRef::into_owned),
+            },
+            Self::Custom(msg) => RichReason::Custom(msg),
+            Self::Many(many) => {
+                RichReason::Many(many.into_iter().map(RichReason::into_owned).collect())
+            }
         }
     }
 
@@ -490,14 +519,35 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         }
     }
 
-    /// Get the span associated with this error
+    /// Get the span associated with this error.
     pub fn span(&self) -> &S {
         &self.span
     }
 
-    /// Get the reason fro this error
-    pub fn reason(&self) -> &RichReason<T, L> {
+    /// Get the reason for this error.
+    pub fn reason(&self) -> &RichReason<'a, T, L> {
         &self.reason
+    }
+
+    /// Take the reason from this error.
+    pub fn into_reason(self) -> RichReason<'a, T, L> {
+        self.reason
+    }
+
+    /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
+    pub fn found(&self) -> Option<&T> {
+        self.reason.found()
+    }
+
+    /// Convert this error into an owned version of itself by cloning any borrowed internal tokens, if necessary.
+    pub fn into_owned<'b>(self) -> Rich<'b, T, S, L>
+    where
+        T: Clone,
+    {
+        Rich {
+            reason: self.reason.into_owned(),
+            ..self
+        }
     }
 
     /// Get an iterator over the expected items associated with this error
@@ -515,11 +565,6 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         let mut v = Vec::new();
         push_expected(&self.reason, &mut v);
         v.into_iter()
-    }
-
-    /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
-    pub fn found(&self) -> Option<&T> {
-        self.reason.found()
     }
 
     /// Transform this error's tokens using the given function.
