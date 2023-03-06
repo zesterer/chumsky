@@ -82,6 +82,28 @@ pub trait Error<'a, I: Input<'a>>: Sized {
         #![allow(unused_variables)]
         self
     }
+
+    /// Fast path for `a.merge(Error::expected_found(...))` that many incur less overhead.
+    #[inline]
+    fn merge_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        self,
+        expected: E,
+        found: Option<MaybeRef<'a, I::Token>>,
+        span: I::Span,
+    ) -> Self {
+        self.merge(Self::expected_found(expected, found, span))
+    }
+
+    /// Fast path for `a = Error::expected_found(...)` that many incur less overhead by reusing allocations.
+    #[inline]
+    fn replace_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        self,
+        expected: E,
+        found: Option<MaybeRef<'a, I::Token>>,
+        span: I::Span,
+    ) -> Self {
+        Self::expected_found(expected, found, span)
+    }
 }
 
 /// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
@@ -90,6 +112,7 @@ pub trait Error<'a, I: Input<'a>>: Sized {
 pub struct EmptyErr(());
 
 impl<'a, I: Input<'a>> Error<'a, I> for EmptyErr {
+    #[inline]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         _: E,
         _: Option<MaybeRef<'a, I::Token>>,
@@ -113,6 +136,7 @@ pub struct Cheap<S = SimpleSpan<usize>> {
 }
 
 impl<'a, I: Input<'a>> Error<'a, I> for Cheap<I::Span> {
+    #[inline]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         _expected: E,
         _found: Option<MaybeRef<'a, I::Token>>,
@@ -166,6 +190,7 @@ impl<'a, T, S> Simple<'a, T, S> {
 }
 
 impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I::Token, I::Span> {
+    #[inline]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         _expected: E,
         found: Option<MaybeRef<'a, I::Token>>,
@@ -422,6 +447,7 @@ where
     T: PartialEq,
     L: PartialEq,
 {
+    #[inline]
     fn flat_merge(self, other: Self) -> Self {
         match (self, other) {
             (
@@ -587,6 +613,7 @@ where
     I::Token: PartialEq,
     L: PartialEq,
 {
+    #[inline]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         expected: E,
         found: Option<MaybeRef<'a, I::Token>>,
@@ -598,11 +625,8 @@ where
                 expected: expected
                     .into_iter()
                     .map(|tok| {
-                        if let Some(tok) = tok {
-                            RichPattern::Token(tok)
-                        } else {
-                            RichPattern::EndOfInput
-                        }
+                        tok.map(RichPattern::Token)
+                            .unwrap_or(RichPattern::EndOfInput)
                     })
                     .collect(),
                 found,
@@ -610,12 +634,94 @@ where
         }
     }
 
+    #[inline]
     fn merge(self, other: Self) -> Self {
         let new_reason = self.reason.flat_merge(other.reason);
         Self {
             span: self.span,
             reason: new_reason,
         }
+    }
+
+    #[inline]
+    fn merge_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        mut self,
+        new_expected: E,
+        found: Option<MaybeRef<'a, I::Token>>,
+        _span: I::Span,
+    ) -> Self {
+        match &mut self.reason {
+            RichReason::ExpectedFound { expected, found: _ } => {
+                for new_expected in new_expected {
+                    let new_expected = new_expected
+                        .map(RichPattern::Token)
+                        .unwrap_or(RichPattern::EndOfInput);
+                    if !<[_]>::contains(&expected, &new_expected) {
+                        expected.push(new_expected);
+                    }
+                }
+            }
+            RichReason::Many(m) => m.push(RichReason::ExpectedFound {
+                expected: new_expected
+                    .into_iter()
+                    .map(|tok| {
+                        tok.map(RichPattern::Token)
+                            .unwrap_or(RichPattern::EndOfInput)
+                    })
+                    .collect(),
+                found,
+            }),
+            RichReason::Custom(_) => {
+                let old = std::mem::replace(&mut self.reason, RichReason::Many(Vec::new()));
+                self.reason = RichReason::Many(vec![
+                    old,
+                    RichReason::ExpectedFound {
+                        expected: new_expected
+                            .into_iter()
+                            .map(|tok| {
+                                tok.map(RichPattern::Token)
+                                    .unwrap_or(RichPattern::EndOfInput)
+                            })
+                            .collect(),
+                        found,
+                    },
+                ]);
+            }
+        }
+        self
+    }
+
+    #[inline]
+    fn replace_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        mut self,
+        new_expected: E,
+        new_found: Option<MaybeRef<'a, I::Token>>,
+        span: I::Span,
+    ) -> Self {
+        self.span = span;
+        match &mut self.reason {
+            RichReason::ExpectedFound { expected, found } => {
+                expected.clear();
+                expected.extend(new_expected.into_iter().map(|tok| {
+                    tok.map(RichPattern::Token)
+                        .unwrap_or(RichPattern::EndOfInput)
+                }));
+                *found = new_found;
+            }
+            _ => {
+                self.reason = RichReason::ExpectedFound {
+                    expected: new_expected
+                        .into_iter()
+                        .map(|tok| {
+                            tok.map(RichPattern::Token)
+                                .unwrap_or(RichPattern::EndOfInput)
+                        })
+                        .collect(),
+                    found: new_found,
+                }
+            }
+        }
+        self
     }
 }
 

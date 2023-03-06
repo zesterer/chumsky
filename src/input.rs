@@ -129,12 +129,14 @@ impl<'a> Input<'a> for &'a str {
     type Token = char;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = char;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next(offset)
     }
@@ -144,6 +146,7 @@ impl<'a> Input<'a> for &'a str {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -187,12 +190,14 @@ impl<'a, T> Input<'a> for &'a [T] {
     type Token = T;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = &'a T;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next_ref(offset)
     }
@@ -202,6 +207,7 @@ impl<'a, T> Input<'a> for &'a [T] {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -256,6 +262,7 @@ impl<'a, T: 'a, const N: usize> Input<'a> for &'a [T; N] {
 
     type TokenMaybe = &'a T;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next_ref(offset)
     }
@@ -265,6 +272,7 @@ impl<'a, T: 'a, const N: usize> Input<'a> for &'a [T; N] {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -321,6 +329,7 @@ pub struct SpannedInput<T, S, I> {
 pub struct SpannedTokenMaybe<'a, I: Input<'a>, T, S>(I::TokenMaybe, PhantomData<(T, S)>);
 
 impl<'a, I: Input<'a, Token = (T, S)>, T, S> Borrow<T> for SpannedTokenMaybe<'a, I, T, S> {
+    #[inline]
     fn borrow(&self) -> &T {
         &self.0.borrow().0
     }
@@ -329,6 +338,7 @@ impl<'a, I: Input<'a, Token = (T, S)>, T, S> Borrow<T> for SpannedTokenMaybe<'a,
 impl<'a, I: Input<'a, Token = (T, S)>, T, S: 'a> Into<MaybeRef<'a, T>>
     for SpannedTokenMaybe<'a, I, T, S>
 {
+    #[inline]
     fn into(self) -> MaybeRef<'a, T> {
         match self.0.into() {
             MaybeRef::Ref((tok, _)) => MaybeRef::Ref(tok),
@@ -353,11 +363,13 @@ where
 
     type TokenMaybe = SpannedTokenMaybe<'a, I, T, S>;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         let (offset, tok) = self.input.next_maybe(offset);
         (offset, tok.map(|tok| SpannedTokenMaybe(tok, PhantomData)))
     }
 
+    #[inline]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         let start = self
             .input
@@ -372,6 +384,7 @@ where
         S::new(self.eoi.context(), start..end)
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -383,6 +396,7 @@ where
     T: 'a,
     S: Span + Clone + 'a,
 {
+    #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         let (offs, tok) = self.input.next(offset);
         (offs, tok.map(|(tok, _)| tok))
@@ -395,6 +409,7 @@ where
     T: 'a,
     S: Span + Clone + 'a,
 {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         let (offs, tok) = self.input.next_ref(offset);
         (offs, tok.map(|(tok, _)| tok))
@@ -409,9 +424,12 @@ where
 {
     type Slice = I::Slice;
 
+    #[inline]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
+
+    #[inline]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -433,20 +451,24 @@ where
     type Token = I::Token;
     type Span = (Ctx, I::Span);
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         self.input.start()
     }
 
     type TokenMaybe = I::TokenMaybe;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.input.next_maybe(offset)
     }
 
+    #[inline]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.context.clone(), self.input.span(range))
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -456,6 +478,7 @@ impl<'a, Ctx: Clone + 'a, I: ValueInput<'a>> ValueInput<'a> for WithContext<Ctx,
 where
     I::Span: Span<Context = ()>,
 {
+    #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         self.input.next(offset)
     }
@@ -465,6 +488,7 @@ impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ct
 where
     I::Span: Span<Context = ()>,
 {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         self.input.next_ref(offset)
     }
@@ -476,9 +500,12 @@ where
 {
     type Slice = I::Slice;
 
+    #[inline]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
+
+    #[inline]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -740,6 +767,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     /// Get the next token in the input. Returns `None` for EOI
+    #[inline]
     pub fn next_token(&mut self) -> Option<I::Token>
     where
         I: ValueInput<'a>,
@@ -748,6 +776,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     /// Peek the next token in the input. Returns `None` for EOI
+    #[inline]
     pub fn peek(&self) -> Option<I::Token>
     where
         I: ValueInput<'a>,
@@ -757,6 +786,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     /// Peek the next token in the input. Returns `None` for EOI
+    #[inline]
     pub fn peek_ref(&self) -> Option<&'a I::Token>
     where
         I: BorrowInput<'a>,
@@ -823,17 +853,41 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.errors.secondary.push(error);
     }
 
-    #[inline(always)]
-    pub(crate) fn add_alt(&mut self, at: impl Into<usize>, err: impl FnOnce() -> E::Error) {
+    #[inline]
+    pub(crate) fn add_alt<Exp: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        &mut self,
+        at: impl Into<usize>,
+        expected: Exp,
+        found: Option<MaybeRef<'a, I::Token>>,
+        span: I::Span,
+    ) {
         let at = at.into();
         // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
         self.errors.alt = Some(match self.errors.alt.take() {
             Some(alt) => match alt.pos.cmp(&at) {
-                Ordering::Equal => Located::at(alt.pos, alt.err.merge(err())),
+                Ordering::Equal => {
+                    Located::at(alt.pos, alt.err.merge_expected_found(expected, found, span))
+                }
                 Ordering::Greater => alt,
-                Ordering::Less => Located::at(at, err()),
+                Ordering::Less => {
+                    Located::at(at, alt.err.replace_expected_found(expected, found, span))
+                }
             },
-            None => Located::at(at, err()),
+            None => Located::at(at, Error::expected_found(expected, found, span)),
+        });
+    }
+
+    #[inline]
+    pub(crate) fn add_alt_err(&mut self, at: impl Into<usize>, err: E::Error) {
+        let at = at.into();
+        // Prioritize errors
+        self.errors.alt = Some(match self.errors.alt.take() {
+            Some(alt) => match alt.pos.cmp(&at) {
+                Ordering::Equal => Located::at(alt.pos, alt.err.merge(err)),
+                Ordering::Greater => alt,
+                Ordering::Less => Located::at(at, err),
+            },
+            None => Located::at(at, err),
         });
     }
 }
@@ -844,17 +898,20 @@ pub struct Emitter<E> {
 }
 
 impl<E> Emitter<E> {
+    #[inline]
     pub(crate) fn new() -> Emitter<E> {
         Emitter {
             emitted: Vec::new(),
         }
     }
 
+    #[inline]
     pub(crate) fn errors(self) -> Vec<E> {
         self.emitted
     }
 
     /// Emit a non-fatal error
+    #[inline]
     pub fn emit(&mut self, err: E) {
         self.emitted.push(err)
     }
