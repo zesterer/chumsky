@@ -676,7 +676,7 @@ where
                 found,
             }),
             RichReason::Custom(_) => {
-                let old = std::mem::replace(&mut self.reason, RichReason::Many(Vec::new()));
+                let old = core::mem::replace(&mut self.reason, RichReason::Many(Vec::new()));
                 self.reason = RichReason::Many(vec![
                     old,
                     RichReason::ExpectedFound {
