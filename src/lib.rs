@@ -84,6 +84,7 @@ pub mod prelude {
     pub use crate::{select, select_ref};
 }
 
+use crate::input::InputOwn;
 use alloc::{
     boxed::Box,
     rc::{Rc, Weak},
@@ -93,7 +94,7 @@ use alloc::{
 };
 use core::{
     borrow::Borrow,
-    cmp::{Eq, Ordering, PartialEq},
+    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
@@ -103,7 +104,6 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
-use crate::input::InputOwn;
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -143,6 +143,18 @@ impl<'a, T: PartialEq> PartialEq for MaybeRef<'a, T> {
 }
 
 impl<'a, T: Eq> Eq for MaybeRef<'a, T> {}
+
+impl<'a, T: PartialOrd> PartialOrd for MaybeRef<'a, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        (**self).partial_cmp(&**other)
+    }
+}
+
+impl<'a, T: Ord> Ord for MaybeRef<'a, T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (**self).cmp(&**other)
+    }
+}
 
 impl<'a, T: Hash> Hash for MaybeRef<'a, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -2103,7 +2115,7 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
     fn try_configure<F>(self, cfg: F) -> TryIterConfigure<Self, F, O>
     where
         Self: Sized,
-        F: Fn(Self::Config, &E::Context, I::Span) -> Result<Self::Config, E::Error>
+        F: Fn(Self::Config, &E::Context, I::Span) -> Result<Self::Config, E::Error>,
     {
         TryIterConfigure {
             parser: self,

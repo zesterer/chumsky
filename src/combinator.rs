@@ -170,20 +170,23 @@ where
     where
         I: 'a;
 
-    fn make_iter<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, Self::IterState<M>> {
-        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe { inp.span_since(inp.offset) })
-            .map_err(|e| inp.add_alt(Located::at(
-                inp.offset.into(),
-                e
-            )))?;
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe {
+            inp.span_since(inp.offset)
+        })
+        .map_err(|e| inp.add_alt(Located::at(inp.offset.into(), e)))?;
 
-        Ok((
-            A::make_iter(&self.parser, inp)?,
-            cfg,
-        ))
+        Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
 
-    fn next<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, state: &mut Self::IterState<M>) -> IPResult<M, O> {
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
         self.parser.next_cfg(inp, &mut state.0, &state.1)
     }
 }

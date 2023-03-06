@@ -551,10 +551,7 @@ where
         }
     }
 
-    pub(crate) fn new_state(
-        input: I,
-        state: &'s mut E::State,
-    ) -> InputOwn<'a, 's, I, E>
+    pub(crate) fn new_state(input: I, state: &'s mut E::State) -> InputOwn<'a, 's, I, E>
     where
         E::Context: Default,
     {
@@ -580,7 +577,10 @@ where
         }
     }
 
-    pub(crate) fn as_ref_at<'parse>(&'parse mut self, offset: I::Offset) -> InputRef<'a, 'parse, I, E> {
+    pub(crate) fn as_ref_at<'parse>(
+        &'parse mut self,
+        offset: I::Offset,
+    ) -> InputRef<'a, 'parse, I, E> {
         InputRef {
             offset,
             input: &self.input,

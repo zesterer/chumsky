@@ -1,5 +1,5 @@
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use criterion::{Criterion, criterion_group, criterion_main};
 
 mod utils;
 
@@ -64,7 +64,8 @@ criterion_main!(benches);
 
 fn i64_from_bytes(bytes: &[u8]) -> i64 {
     let mut b = [0; 8];
-    bytes.iter()
+    bytes
+        .iter()
         .rev()
         .zip(b.iter_mut().rev())
         .for_each(|(byte, b)| {
@@ -90,11 +91,11 @@ pub enum CborZero<'a> {
 }
 
 mod chumsky_zero_copy {
-    use chumsky::prelude::*;
-    use crate::i64_from_bytes;
     use super::CborZero;
+    use crate::i64_from_bytes;
+    use chumsky::prelude::*;
 
-    type Error<'a> = EmptyErr /*Rich<'a, u8>*/;
+    type Error<'a> = EmptyErr;
 
     fn int_out(slice: &[u8]) -> i64 {
         if slice.len() == 1 {
@@ -114,103 +115,95 @@ mod chumsky_zero_copy {
                         Err(Error::default())
                     }
                 })
-                .then_with_ctx(
-                any()
-                    .repeated()
-                    .configure(|cfg, ctx| {
-                        let info = *ctx & 0b1_1111;
-                        let num = if info < 24 {
-                            0
-                        } else {
-                            2usize.pow(info as u32 - 24)
-                        };
-                        cfg.exactly(num)
-                    })
-            )
+                .then_with_ctx(any().repeated().configure(|cfg, ctx| {
+                    let info = *ctx & 0b1_1111;
+                    let num = if info < 24 {
+                        0
+                    } else {
+                        2usize.pow(info as u32 - 24)
+                    };
+                    cfg.exactly(num)
+                }))
                 .map_slice(int_out);
 
             let uint = read_int.map(CborZero::Int);
             let nint = read_int.map(|i| CborZero::Int(-1 - i));
             // TODO: Handle indefinite lengths
-            let bstr = read_int
-                .then_with_ctx(
-                    any()
-                        .repeated()
-                        .configure(|cfg, ctx| {
-                            cfg.exactly(*ctx as usize)
-                        })
-                        .map_slice(CborZero::Bytes)
-                );
+            let bstr = read_int.then_with_ctx(
+                any()
+                    .repeated()
+                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .map_slice(CborZero::Bytes),
+            );
 
-            let str = read_int
-                .then_with_ctx(
-                    any()
-                        .repeated()
-                        .configure(|cfg, ctx| {
-                            cfg.exactly(*ctx as usize)
-                        })
-                        .map_slice(|slice| CborZero::String(std::str::from_utf8(slice).unwrap()))
-                );
+            let str = read_int.then_with_ctx(
+                any()
+                    .repeated()
+                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .map_slice(|slice| CborZero::String(std::str::from_utf8(slice).unwrap())),
+            );
 
-            let array = read_int
-                .then_with_ctx(
-                    data
-                        .clone()
-                        .with_ctx(())
-                        .repeated()
-                        .configure(|cfg, ctx| {
-                            cfg.exactly(*ctx as usize)
-                        })
-                        .collect::<Vec<_>>()
-                        .map(CborZero::Array)
-                );
+            let array = read_int.then_with_ctx(
+                data.clone()
+                    .with_ctx(())
+                    .repeated()
+                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .collect::<Vec<_>>()
+                    .map(CborZero::Array),
+            );
 
-            let map = read_int
-                .then_with_ctx(
-                    data.clone()
-                        .then(data.clone())
-                        .with_ctx(())
-                        .repeated()
-                        .configure(|cfg, ctx| {
-                            cfg.exactly(*ctx as usize)
-                        })
-                        .collect::<Vec<_>>()
-                        .map(CborZero::Map)
-                );
+            let map = read_int.then_with_ctx(
+                data.clone()
+                    .then(data.clone())
+                    .with_ctx(())
+                    .repeated()
+                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .collect::<Vec<_>>()
+                    .map(CborZero::Map),
+            );
 
-            let simple = |num: u8| any()
-                .try_map(move |n, _| if n & 0b1_1111 == num {
-                    Ok(())
-                } else {
-                    Err(Error::default())
-                });
+            let simple = |num: u8| {
+                any().try_map(move |n, _| {
+                    if n & 0b1_1111 == num {
+                        Ok(())
+                    } else {
+                        Err(Error::default())
+                    }
+                })
+            };
 
             let float_simple = choice((
                 simple(20).to(CborZero::Bool(false)),
                 simple(21).to(CborZero::Bool(true)),
                 simple(22).to(CborZero::Null),
                 simple(23).to(CborZero::Undef),
-                simple(26).ignore_then(any()
-                    .repeated_exactly::<4>()
-                    .collect()
-                    .map(f32::from_be_bytes)
-                    .map(CborZero::SingleFloat)
+                simple(26).ignore_then(
+                    any()
+                        .repeated_exactly::<4>()
+                        .collect()
+                        .map(f32::from_be_bytes)
+                        .map(CborZero::SingleFloat),
                 ),
-                simple(27).ignore_then(any()
-                    .repeated_exactly::<8>()
-                    .collect()
-                    .map(f64::from_be_bytes)
-                    .map(CborZero::DoubleFloat)
+                simple(27).ignore_then(
+                    any()
+                        .repeated_exactly::<8>()
+                        .collect()
+                        .map(f64::from_be_bytes)
+                        .map(CborZero::DoubleFloat),
                 ),
             ));
 
-            let major = |num: u8| any()
-                .try_map(move |n, _| if (n >> 5) == num {
-                    Ok(())
-                } else {
-                    Err(Error::default())
-                })
-                .rewind();
+            let major = |num: u8| {
+                any()
+                    .try_map(move |n, _| {
+                        if (n >> 5) == num {
+                            Ok(())
+                        } else {
+                            Err(Error::default())
+                        }
+                    })
+                    .rewind()
+            };
 
             choice((
                 major(0).ignore_then(uint),
