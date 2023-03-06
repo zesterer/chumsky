@@ -38,9 +38,10 @@ fn bench_cbor(c: &mut Criterion) {
         }
     });
 
-    c.bench_function("cbor_serde_cbor", {
-        use serde_cbor::{from_slice, Value};
-        move |b| b.iter(|| black_box(from_slice::<Value>(black_box(CBOR)).unwrap()))
+    c.bench_function("cbor_ciborium", {
+        use ciborium::de::from_reader;
+        use ciborium::value::Value;
+        move |b| b.iter(|| black_box(from_reader::<Value, _>(black_box(CBOR)).unwrap()))
     });
 
     // c.bench_function("cbor_pom", {
