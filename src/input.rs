@@ -518,7 +518,6 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) offset: I::Offset,
     pub(crate) errors: Errors<E::Error>,
     pub(crate) state: &'parse mut E::State,
-    // TODO: Don't use `Option`, this is only here because we need to temporarily remove it in `with_input`
     pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
     pub(crate) memos: &'parse mut HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
@@ -566,7 +565,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             ctx: new_ctx,
             errors: mem::replace(&mut self.errors, Errors::default()),
             #[cfg(feature = "memoization")]
-            memos: self.memos, // TODO: Reuse memoisation state?
+            memos: self.memos,
         };
         let res = f(&mut new_inp);
         self.offset = new_inp.offset;
