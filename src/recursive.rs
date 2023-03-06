@@ -142,7 +142,7 @@ impl<P: ?Sized> Clone for Recursive<P> {
 #[cfg(feature = "stacker")]
 #[inline(always)]
 fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
-    stacker::maybe_grow(1024 * 1024, 1024 * 1024, f)
+    stacker::maybe_grow(1024 * 64, 1024 * 1024, f)
 }
 #[cfg(not(feature = "stacker"))]
 #[inline(always)]
