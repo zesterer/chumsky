@@ -85,14 +85,16 @@ where
 /// See [`skip_then_retry_until`].
 #[must_use]
 #[derive(Copy, Clone)]
-pub struct SkipThenRetryUntil<A> {
-    until: A,
+pub struct SkipThenRetryUntil<S, U> {
+    skip: S,
+    until: U,
 }
 
-impl<'a, I, O, E, A> Strategy<'a, I, O, E> for SkipThenRetryUntil<A>
+impl<'a, I, O, E, S, U> Strategy<'a, I, O, E> for SkipThenRetryUntil<S, U>
 where
     I: ValueInput<'a>,
-    A: Parser<'a, I, (), E>,
+    S: Parser<'a, I, (), E>,
+    U: Parser<'a, I, (), E>,
     E: ParserExtra<'a, I>,
 {
     fn recover<M: Mode, P: Parser<'a, I, O, E>>(
@@ -105,29 +107,36 @@ where
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
                 inp.errors.alt = Some(alt);
+                inp.rewind(before);
                 break Err(());
             } else {
                 inp.rewind(before);
             }
 
-            let before = inp.offset();
-            match inp.next() {
-                (_, None) => {
-                    inp.errors.alt = Some(alt);
-                    break Err(());
-                }
-                (_, Some(tok)) => {
-                    inp.emit(E::Error::expected_found(
-                        None,
-                        Some(tok.into()),
-                        // SAFETY: Using offsets derived from input
-                        unsafe { inp.span_since(before) },
-                    ));
-                }
+            if let Err(()) = self.skip.go::<Check>(inp) {
+                inp.errors.alt = Some(alt);
+                break Err(());
             }
+
+            // let before = inp.offset();
+            // match inp.next() {
+            //     (_, None) => {
+            //         inp.errors.alt = Some(alt);
+            //         break Err(());
+            //     }
+            //     (_, Some(tok)) => {
+            //         inp.emit(E::Error::expected_found(
+            //             None,
+            //             Some(tok.into()),
+            //             // SAFETY: Using offsets derived from input
+            //             unsafe { inp.span_since(before) },
+            //         ));
+            //     }
+            // }
 
             let before = inp.save();
             if let Ok(out) = parser.go::<M>(inp) {
+                inp.emit(alt.err);
                 break Ok(out);
             } else {
                 inp.rewind(before);
@@ -137,22 +146,59 @@ where
 }
 
 /// TODO
-pub fn skip_then_retry_until<A>(until: A) -> SkipThenRetryUntil<A> {
-    SkipThenRetryUntil { until }
+pub fn skip_then_retry_until<S, U>(skip: S, until: U) -> SkipThenRetryUntil<S, U> {
+    SkipThenRetryUntil { skip, until }
+}
+
+/// See [`skip_until`].
+#[must_use]
+#[derive(Copy, Clone)]
+pub struct SkipUntil<S, U, F> {
+    skip: S,
+    until: U,
+    fallback: F,
+}
+
+impl<'a, I, O, E, S, U, F> Strategy<'a, I, O, E> for SkipUntil<S, U, F>
+where
+    I: ValueInput<'a>,
+    S: Parser<'a, I, (), E>,
+    U: Parser<'a, I, (), E>,
+    F: Fn() -> O,
+    E: ParserExtra<'a, I>,
+{
+    fn recover<M: Mode, P: Parser<'a, I, O, E>>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        _parser: &P,
+    ) -> PResult<M, O> {
+        let alt = inp.errors.alt.take().expect("error but no alt?");
+        loop {
+            let before = inp.save();
+            if let Ok(()) = self.until.go::<Check>(inp) {
+                inp.emit(alt.err);
+                break Ok(M::bind(|| (self.fallback)()));
+            }
+            inp.rewind(before);
+
+            if let Err(()) = self.skip.go::<Check>(inp) {
+                inp.errors.alt = Some(alt);
+                break Err(());
+            }
+        }
+    }
 }
 
 /// A recovery parser that skips input until one of several inputs is found.
 ///
 /// This strategy is very 'stupid' and can result in very poor error generation in some languages. Place this strategy
 /// after others as a last resort, and be careful about over-using it.
-pub fn skip_until<'a, P, I, O, E>(pattern: P) -> impl Parser<'a, I, (), E> + Clone
-where
-    I: ValueInput<'a>,
-    P: Parser<'a, I, O, E> + Clone,
-    E: extra::ParserExtra<'a, I>,
-{
-    pattern.rewind().ignored().or(any().ignored()).repeated()
-    // .ignore_then(pattern)
+pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F> {
+    SkipUntil {
+        skip,
+        until,
+        fallback,
+    }
 }
 
 /// A recovery parser that searches for a start and end delimiter, respecting nesting.

@@ -2,8 +2,8 @@
 //! Run it with the following command:
 //! cargo run --example json -- examples/sample.json
 
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::{error::RichReason, prelude::*};
+use ariadne::{Color, Label, Report, ReportKind, Source};
+use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]
@@ -71,25 +71,37 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
 
         let array = value
             .clone()
-            .separated_by(just(',').padded())
+            .separated_by(just(',').padded().recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of(",").ignored(),
+            )))
             .allow_trailing()
             .collect()
             .padded()
             .delimited_by(
                 just('['),
-                just(']').ignored().recover_with(via_parser(end())),
+                just(']')
+                    .ignored()
+                    .recover_with(via_parser(end()))
+                    .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
             .boxed();
 
         let member = string.clone().then_ignore(just(':').padded()).then(value);
         let object = member
             .clone()
-            .separated_by(just(',').padded())
+            .separated_by(just(',').padded().recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of(",").ignored(),
+            )))
             .collect()
             .padded()
             .delimited_by(
                 just('{'),
-                just('}').ignored().recover_with(via_parser(end())),
+                just('}')
+                    .ignored()
+                    .recover_with(via_parser(end()))
+                    .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
             .boxed();
 
@@ -114,7 +126,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             [('{', '}')],
             |_| Json::Invalid,
         )))
-        .recover_with(skip_then_retry_until(one_of(",]}").ignored()))
+        .recover_with(skip_then_retry_until(
+            any().ignored(),
+            one_of(",]}").ignored(),
+        ))
         .padded()
     })
 }
@@ -126,44 +141,12 @@ fn main() {
     let (json, errs) = parser().parse(src.trim()).into_output_errors();
     println!("{:#?}", json);
     errs.into_iter().for_each(|e| {
-        let msg = match e.reason() {
-            RichReason::Custom(msg) => msg.clone(),
-            RichReason::ExpectedFound { expected, found } => format!(
-                "{}, expected {}",
-                if found.is_some() {
-                    "Unexpected token"
-                } else {
-                    "Unexpected end of input"
-                },
-                if expected.len() == 0 {
-                    "something else".to_string()
-                } else {
-                    expected
-                        .into_iter()
-                        .map(|expected| expected.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                },
-            ),
-            RichReason::Many(_) => format!("uhhh"),
-        };
-
         let report = Report::build(ReportKind::Error, (), e.span().start)
             .with_code(3)
-            .with_message(msg)
+            .with_message(e.to_string())
             .with_label(
                 Label::new(e.span().into_range())
-                    .with_message(match e.reason() {
-                        RichReason::Custom(msg) => msg.clone(),
-                        RichReason::ExpectedFound { found, .. } => format!(
-                            "Unexpected {}",
-                            found
-                                .as_ref()
-                                .map(|c| format!("token {}", c.fg(Color::Red)))
-                                .unwrap_or_else(|| "end of input".to_string())
-                        ),
-                        RichReason::Many(_) => format!("uhhh"),
-                    })
+                    .with_message(e.reason().to_string())
                     .with_color(Color::Red),
             );
 
