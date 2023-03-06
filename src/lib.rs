@@ -512,7 +512,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         E::Context: Default,
     {
         let ctx = E::Context::default();
-        let mut inp = InputRef::new(&input, state, &ctx);
+        #[cfg(feature = "memoization")]
+        let mut memos = HashMap::default();
+        let mut inp = InputRef::new(
+            &input,
+            state,
+            &ctx,
+            #[cfg(feature = "memoization")]
+            &mut memos,
+        );
         let res = self.then_ignore(end()).go::<Emit>(&mut inp);
         let alt = inp.errors.alt.take();
         let mut errs = inp.into_errs();
@@ -557,7 +565,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         E::Context: Default,
     {
         let ctx = E::Context::default();
-        let mut inp = InputRef::new(&input, state, &ctx);
+        #[cfg(feature = "memoization")]
+        let mut memos = HashMap::default();
+        let mut inp = InputRef::new(
+            &input,
+            state,
+            &ctx,
+            #[cfg(feature = "memoization")]
+            &mut memos,
+        );
         let res = self.then_ignore(end()).go::<Check>(&mut inp);
         let alt = inp.errors.alt.take();
         let mut errs = inp.into_errs();
@@ -1909,7 +1925,7 @@ where
             ctx: &self.ctx,
             // TODO: Work out how to note take, since this probably allocates in `HashMap::default`
             #[cfg(feature = "memoization")]
-            memos: core::mem::take(&mut self.memos),
+            memos: &mut self.memos,
         };
         let parser = &self.parser;
 
@@ -1925,10 +1941,6 @@ where
         let res = parser.next::<Emit>(&mut inp, iter_state);
         self.offset = inp.offset;
         self.errors = inp.errors;
-        #[cfg(feature = "memoization")]
-        {
-            self.memos = inp.memos;
-        }
         res.ok().and_then(|res| res)
     }
 }
@@ -2450,7 +2462,15 @@ mod tests {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
         let mut state = ();
         let ctx = ();
-        let mut input = InputRef::<_, extra::Default>::new(&input, &mut state, &ctx);
+        #[cfg(feature = "memoization")]
+        let mut memos = HashMap::default();
+        let mut input = InputRef::<_, extra::Default>::new(
+            &input,
+            &mut state,
+            &ctx,
+            #[cfg(feature = "memoization")]
+            &mut memos,
+        );
 
         while let (_, Some(c)) = input.next() {
             std::hint::black_box(c);

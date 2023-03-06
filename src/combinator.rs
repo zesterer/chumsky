@@ -802,7 +802,14 @@ where
 
         let alt = inp.errors.alt.take();
 
-        let res = inp.with_input(&inp2, |inp| self.then_ignore(end()).parser_a.go::<M>(inp));
+        #[cfg(feature = "memoization")]
+        let mut memos = HashMap::default();
+        let res = inp.with_input(
+            &inp2,
+            |inp| self.then_ignore(end()).parser_a.go::<M>(inp),
+            #[cfg(feature = "memoization")]
+            &mut memos,
+        );
 
         // TODO: Translate secondary error offsets too
         let new_alt = inp

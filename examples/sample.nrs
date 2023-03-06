@@ -32,6 +32,6 @@ fn main() {
 
         print("However, I can tell you that the factorial of 10 is...");
         // Function calling
-        print(factorial(10, =));
+        print(factorial(10));
     }
 }

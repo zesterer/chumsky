@@ -6,6 +6,13 @@ use hashbrown::HashSet;
 
 /// A utility trait for types that can be constructed from a series of items.
 pub trait Container<T>: Default {
+    /// Create a container, attempting to pre-allocate enough space for `n` items.
+    ///
+    /// Failure to do so is not a problem, the size is only a hint.
+    fn with_capacity(n: usize) -> Self {
+        let _ = n;
+        Self::default()
+    }
     /// Add a value to the end of this container.
     fn push(&mut self, item: T);
 }
@@ -22,6 +29,9 @@ impl<T> Container<T> for usize {
 }
 
 impl<T> Container<T> for Vec<T> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
     fn push(&mut self, item: T) {
         (*self).push(item);
     }
@@ -34,12 +44,19 @@ impl<T> Container<T> for LinkedList<T> {
 }
 
 impl Container<char> for String {
+    fn with_capacity(n: usize) -> Self {
+        // Note: we're assuming that most characters are going to be ASCII, and hence only require one byte to store.
+        Self::with_capacity(n)
+    }
     fn push(&mut self, item: char) {
         (*self).push(item)
     }
 }
 
 impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
     }
@@ -47,12 +64,18 @@ impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
 
 #[cfg(feature = "std")]
 impl<K: Eq + Hash, V> Container<(K, V)> for std::collections::HashMap<K, V> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
     }
 }
 
 impl<T: Eq + Hash> Container<T> for HashSet<T> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
     fn push(&mut self, item: T) {
         (*self).insert(item);
     }
@@ -60,6 +83,9 @@ impl<T: Eq + Hash> Container<T> for HashSet<T> {
 
 #[cfg(feature = "std")]
 impl<T: Eq + Hash> Container<T> for std::collections::HashSet<T> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
     fn push(&mut self, item: T) {
         (*self).insert(item);
     }

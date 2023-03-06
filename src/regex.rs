@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// See [`regex`].
+/// See [`regex()`].
 pub struct Regex<C: Char, I: ?Sized, E> {
     regex: C::Regex,
     phantom: PhantomData<(E, I)>,
