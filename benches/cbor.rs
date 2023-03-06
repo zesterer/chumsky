@@ -52,10 +52,6 @@ fn bench_cbor(c: &mut Criterion) {
     //     let cbor = black_box(std::str::from_utf8(JSON).unwrap());
     //     move |b| b.iter(|| black_box(pest::parse(cbor).unwrap()))
     // });
-
-    // c.bench_function("cbor_sn", {
-    //     move |b| b.iter(|| black_box(sn::Parser::new(black_box(JSON)).parse().unwrap()))
-    // });
 }
 
 criterion_group!(
