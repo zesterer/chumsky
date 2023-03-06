@@ -1,8 +1,10 @@
-#![feature(test, array_methods)]
+#![feature(test)]
 
 extern crate test;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+
+mod utils;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -79,7 +81,12 @@ fn bench_json(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_json);
+criterion_group!(
+    name = benches;
+    config = utils::make_criterion();
+    targets = bench_json
+);
+
 criterion_main!(benches);
 
 mod chumsky_zero_copy {

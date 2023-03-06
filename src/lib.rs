@@ -2097,6 +2097,20 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
             phantom: PhantomData,
         }
     }
+
+    /// A combinator that allows fallible configuration of the parser from the current context -
+    /// if an error is returned, parsing fails.
+    fn try_configure<F>(self, cfg: F) -> TryIterConfigure<Self, F, O>
+    where
+        Self: Sized,
+        F: Fn(Self::Config, &E::Context, I::Span) -> Result<Self::Config, E::Error>
+    {
+        TryIterConfigure {
+            parser: self,
+            cfg,
+            phantom: PhantomData,
+        }
+    }
 }
 
 /// See [`Parser::boxed`].

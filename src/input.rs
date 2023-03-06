@@ -226,12 +226,16 @@ impl<'a, T> SliceInput<'a> for &'a [T] {
 impl<'a, T: Clone> ValueInput<'a> for &'a [T] {
     #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let (offset, tok) = self.next_ref(offset);
-        (offset, tok.cloned())
+        if let Some(tok) = self.get(offset) {
+            (offset + 1, Some(tok.clone()))
+        } else {
+            (offset, None)
+        }
     }
 }
 
 impl<'a, T> BorrowInput<'a> for &'a [T] {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -285,12 +289,16 @@ impl<'a, T: 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
 impl<'a, T: Clone + 'a, const N: usize> ValueInput<'a> for &'a [T; N] {
     #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let (offset, tok) = self.next_ref(offset);
-        (offset, tok.cloned())
+        if let Some(tok) = self.get(offset) {
+            (offset + 1, Some(tok.clone()))
+        } else {
+            (offset, None)
+        }
     }
 }
 
 impl<'a, T: 'a, const N: usize> BorrowInput<'a> for &'a [T; N] {
+    #[inline]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -601,6 +609,7 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
+    #[inline]
     pub(crate) fn with_ctx<'sub_parse, C, O>(
         &'sub_parse mut self,
         new_ctx: &'sub_parse C,
@@ -624,6 +633,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         res
     }
 
+    #[inline]
     pub(crate) fn with_input<'sub_parse, O>(
         &'sub_parse mut self,
         new_input: &'sub_parse I,
