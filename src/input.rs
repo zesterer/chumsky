@@ -823,11 +823,17 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.errors.secondary.push(error);
     }
 
-    #[inline]
-    pub(crate) fn add_alt(&mut self, err: Located<E::Error>) {
+    #[inline(always)]
+    pub(crate) fn add_alt(&mut self, at: impl Into<usize>, err: impl FnOnce() -> E::Error) {
+        let at = at.into();
+        // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
         self.errors.alt = Some(match self.errors.alt.take() {
-            Some(a) => a.prioritize(err, |a, b| a.merge(b)),
-            None => err,
+            Some(alt) => match alt.pos.cmp(&at) {
+                Ordering::Equal => Located::at(alt.pos, alt.err.merge(err())),
+                Ordering::Greater => alt,
+                Ordering::Less => Located::at(at, err()),
+            },
+            None => Located::at(at, err()),
         });
     }
 }
