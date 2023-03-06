@@ -456,12 +456,16 @@ where
                     found,
                 },
                 RichReason::ExpectedFound {
-                    expected: other_expected,
+                    expected: mut other_expected,
                     ..
                 },
             ) => {
+                // Try to avoid allocations if we possibly can by using the longer vector
+                if other_expected.len() > this_expected.len() {
+                    core::mem::swap(&mut this_expected, &mut other_expected);
+                }
                 for expected in other_expected {
-                    if !<[_]>::contains(&this_expected, &expected) {
+                    if this_expected[..].contains(&expected) {
                         this_expected.push(expected);
                     }
                 }
@@ -656,7 +660,7 @@ where
                     let new_expected = new_expected
                         .map(RichPattern::Token)
                         .unwrap_or(RichPattern::EndOfInput);
-                    if !<[_]>::contains(&expected, &new_expected) {
+                    if !expected[..].contains(&new_expected) {
                         expected.push(new_expected);
                     }
                 }
