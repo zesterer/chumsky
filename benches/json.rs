@@ -35,7 +35,7 @@ fn bench_json(c: &mut Criterion) {
 
     c.bench_function("json_chumsky_zero_copy", {
         use ::chumsky::prelude::*;
-        let json = chumsky_zero_copy::json();
+        let json = chumsky_zero_copy::json::<EmptyErr>();
         move |b| {
             b.iter(|| {
                 black_box(json.parse(black_box(JSON)))
@@ -47,7 +47,31 @@ fn bench_json(c: &mut Criterion) {
 
     c.bench_function("json_chumsky_zero_copy_check", {
         use ::chumsky::prelude::*;
-        let json = chumsky_zero_copy::json();
+        let json = chumsky_zero_copy::json::<EmptyErr>();
+        move |b| {
+            b.iter(|| {
+                assert!(black_box(json.check(black_box(JSON)))
+                    .into_errors()
+                    .is_empty())
+            })
+        }
+    });
+
+    c.bench_function("json_chumsky_zero_copy_rich", {
+        use ::chumsky::prelude::*;
+        let json = chumsky_zero_copy::json::<Rich<u8>>();
+        move |b| {
+            b.iter(|| {
+                black_box(json.parse(black_box(JSON)))
+                    .into_result()
+                    .unwrap()
+            })
+        }
+    });
+
+    c.bench_function("json_chumsky_zero_copy_check_rich", {
+        use ::chumsky::prelude::*;
+        let json = chumsky_zero_copy::json::<Rich<u8>>();
         move |b| {
             b.iter(|| {
                 assert!(black_box(json.check(black_box(JSON)))
@@ -86,12 +110,13 @@ criterion_group!(
 criterion_main!(benches);
 
 mod chumsky_zero_copy {
-    use chumsky::prelude::*;
+    use chumsky::{error::Error, prelude::*};
 
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a>() -> impl Parser<'a, &'a [u8], JsonZero<'a>> {
+    pub fn json<'a, E: Error<'a, &'a [u8]> + 'a>(
+    ) -> impl Parser<'a, &'a [u8], JsonZero<'a>, extra::Err<E>> {
         recursive(|value| {
             let digits = one_of(b'0'..=b'9').repeated();
 

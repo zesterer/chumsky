@@ -34,11 +34,8 @@ where
             }
             None => {
                 // TODO: Improve error
-                inp.add_alt(Located::at(
-                    inp.offset().into(),
-                    // SAFETY: Using offsets derived from input
-                    E::Error::expected_found(None, None, unsafe { inp.span_since(before) }),
-                ));
+                // SAFETY: Using offsets derived from input
+                inp.add_alt(inp.offset(), None, None, unsafe { inp.span_since(before) });
                 Err(())
             }
         }

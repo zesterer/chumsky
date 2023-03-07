@@ -306,14 +306,6 @@ impl<E> Located<E> {
     pub fn at(pos: usize, err: E) -> Self {
         Self { pos, err }
     }
-
-    fn prioritize(self, other: Self, merge: impl FnOnce(E, E) -> E) -> Self {
-        match self.pos.cmp(&other.pos) {
-            Ordering::Equal => Self::at(self.pos, merge(self.err, other.err)),
-            Ordering::Greater => self,
-            Ordering::Less => other,
-        }
-    }
 }
 
 mod private {

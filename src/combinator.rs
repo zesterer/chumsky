@@ -177,7 +177,7 @@ where
         let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe {
             inp.span_since(inp.offset)
         })
-        .map_err(|e| inp.add_alt(Located::at(inp.offset.into(), e)))?;
+        .map_err(|e| inp.add_alt_err(inp.offset, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
@@ -315,11 +315,8 @@ where
                 Ok(M::bind(|| out))
             } else {
                 // SAFETY: Using offsets derived from input
-                let span = unsafe { inp.span_since(before) };
-                inp.add_alt(Located::at(
-                    inp.offset().into(),
-                    E::Error::expected_found(None, None, span),
-                ));
+                let err_span = unsafe { inp.span_since(before) };
+                inp.add_alt(inp.offset(), None, None, err_span);
                 Err(())
             }
         })
@@ -507,8 +504,8 @@ where
         let span = unsafe { inp.span_since(before) };
         match (self.mapper)(out, span) {
             Ok(out) => Ok(M::bind(|| out)),
-            Err(e) => {
-                inp.add_alt(Located::at(inp.offset().into(), e));
+            Err(err) => {
+                inp.add_alt_err(inp.offset(), err);
                 Err(())
             }
         }
@@ -550,8 +547,8 @@ where
         let span = unsafe { inp.span_since(before) };
         match (self.mapper)(out, span, inp.state()) {
             Ok(out) => Ok(M::bind(|| out)),
-            Err(e) => {
-                inp.add_alt(Located::at(inp.offset().into(), e));
+            Err(err) => {
+                inp.add_alt_err(inp.offset(), err);
                 Err(())
             }
         }
@@ -710,13 +707,11 @@ where
             hashbrown::hash_map::Entry::Occupied(o) => {
                 if let Some(err) = o.get() {
                     let err = err.clone();
-                    inp.add_alt(err);
+                    inp.add_alt_err(err.pos, err.err);
                 } else {
-                    inp.add_alt(Located::at(
-                        key.0.into(),
-                        // SAFETY: Using offsets derived from input
-                        Error::expected_found(None, None, unsafe { inp.span_since(key.0) }),
-                    ));
+                    // SAFETY: Using offsets derived from input
+                    let err_span = unsafe { inp.span_since(key.0) };
+                    inp.add_alt(key.0, None, None, err_span);
                 }
                 return Err(());
             }
@@ -888,14 +883,10 @@ where
         );
 
         // TODO: Translate secondary error offsets too
-        let new_alt = inp
-            .errors
-            .alt
-            .take()
-            .map(|err| Located::at(inp.offset().into(), err.err));
+        let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt(new_alt);
+            inp.add_alt_err(inp.offset(), new_alt.err);
         }
 
         res
@@ -1696,10 +1687,7 @@ where
         match result {
             Ok(()) => {
                 let (at, found) = inp.next();
-                inp.add_alt(Located::at(
-                    at.into(),
-                    E::Error::expected_found(None, found.map(|f| f.into()), result_span),
-                ));
+                inp.add_alt(at, None, found.map(|f| f.into()), result_span);
                 Err(())
             }
             Err(()) => Ok(M::bind(|| ())),
