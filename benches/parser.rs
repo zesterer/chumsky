@@ -1,6 +1,8 @@
 use chumsky::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
+mod utils;
+
 fn bench_choice(c: &mut Criterion) {
     let alphabet_choice = choice((
         just::<_, &str, extra::Default>('A'),
@@ -58,5 +60,51 @@ fn bench_choice(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_choice);
+pub fn bench_or(c: &mut Criterion) {
+    let mut group = c.benchmark_group("or");
+
+    let many_or = just::<_, _, extra::Default>('A')
+        .or(just('B'))
+        .or(just('C'))
+        .or(just('D'))
+        .or(just('E'))
+        .or(just('F'))
+        .or(just('G'))
+        .or(just('H'))
+        .or(just('I'))
+        .or(just('J'))
+        .or(just('K'))
+        .or(just('L'))
+        .or(just('M'));
+
+    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "A"), |b| {
+        b.iter(|| {
+            black_box(many_or.parse(black_box("A")))
+                .into_result()
+                .unwrap();
+        })
+    });
+
+    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "M"), |b| {
+        b.iter(|| {
+            black_box(many_or.parse(black_box("M")))
+                .into_result()
+                .unwrap();
+        })
+    });
+
+    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "0"), |b| {
+        b.iter(|| {
+            black_box(many_or.parse(black_box("0")))
+                .into_result()
+                .unwrap_err();
+        })
+    });
+}
+
+criterion_group!(
+    name = benches;
+    config = utils::make_criterion();
+    targets = bench_choice, bench_or,
+);
 criterion_main!(benches);
