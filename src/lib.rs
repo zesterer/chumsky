@@ -94,12 +94,12 @@ use alloc::{
 };
 use core::{
     borrow::Borrow,
-    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
+    cmp::{Eq, Ordering},
     fmt,
-    hash::{Hash, Hasher},
+    hash::Hash,
     marker::PhantomData,
     mem::MaybeUninit,
-    ops::{Deref, Range, RangeFrom},
+    ops::{Range, RangeFrom},
     panic::Location,
     str::FromStr,
 };
@@ -120,96 +120,10 @@ use self::{
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
-    util::MaybeMut,
+    util::{MaybeMut, MaybeRef},
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
-
-/// A type that can represent a borrowed reference to a `T` or a value of `T`.
-///
-/// Used internally to faciltitate zero-copy manipulation of tokens during error generation (see [`Error`]).
-#[derive(Copy, Clone)]
-pub enum MaybeRef<'a, T> {
-    /// We have a reference to `T`.
-    Ref(&'a T),
-    /// We have a value of `T`.
-    Val(T),
-}
-
-impl<'a, T: PartialEq> PartialEq for MaybeRef<'a, T> {
-    fn eq(&self, other: &Self) -> bool {
-        &**self == &**other
-    }
-}
-
-impl<'a, T: Eq> Eq for MaybeRef<'a, T> {}
-
-impl<'a, T: PartialOrd> PartialOrd for MaybeRef<'a, T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        (**self).partial_cmp(&**other)
-    }
-}
-
-impl<'a, T: Ord> Ord for MaybeRef<'a, T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (**self).cmp(&**other)
-    }
-}
-
-impl<'a, T: Hash> Hash for MaybeRef<'a, T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        T::hash(&**self, state)
-    }
-}
-
-impl<'a, T: fmt::Debug> fmt::Debug for MaybeRef<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        T::fmt(&**self, f)
-    }
-}
-
-impl<'a, T> MaybeRef<'a, T> {
-    /// Convert this [`MaybeRef<T>`] into a `T`, cloning the inner value if necessary.
-    pub fn into_inner(self) -> T
-    where
-        T: Clone,
-    {
-        match self {
-            Self::Ref(x) => x.clone(),
-            Self::Val(x) => x,
-        }
-    }
-
-    /// Convert this [`MaybeRef<T>`] into an owned version of itself, cloning the inner reference if required.
-    pub fn into_owned<'b>(self) -> MaybeRef<'b, T>
-    where
-        T: Clone,
-    {
-        MaybeRef::Val(self.into_inner())
-    }
-}
-
-impl<'a, T> Deref for MaybeRef<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Ref(x) => *x,
-            Self::Val(x) => x,
-        }
-    }
-}
-
-impl<'a, T> From<T> for MaybeRef<'a, T> {
-    fn from(x: T) -> Self {
-        Self::Val(x)
-    }
-}
-
-impl<'a, T> From<&'a T> for MaybeRef<'a, T> {
-    fn from(x: &'a T) -> Self {
-        Self::Ref(x)
-    }
-}
 
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 trait MaybeUninitExt<T>: Sized {

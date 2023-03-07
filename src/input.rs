@@ -571,7 +571,7 @@ where
         InputOwn {
             input,
             errors: Errors::default(),
-            state: MaybeMut::new_own(E::State::default()),
+            state: MaybeMut::Val(E::State::default()),
             ctx: E::Context::default(),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
@@ -585,7 +585,7 @@ where
         InputOwn {
             input,
             errors: Errors::default(),
-            state: MaybeMut::new_ref(state),
+            state: MaybeMut::Ref(state),
             ctx: E::Context::default(),
             #[cfg(feature = "memoization")]
             memos: HashMap::default(),
