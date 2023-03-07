@@ -6,7 +6,6 @@
 //! when accessed through their respective methods on [`Parser`].
 
 use super::*;
-use core::mem::MaybeUninit;
 
 /// The type of a lazy parser.
 pub type Lazy<'a, A, I, E> =
@@ -1161,8 +1160,7 @@ where
         }
     }
 
-    /// Require that the pattern appear exactly the given number of times. If the value provided
-    /// is constant, consider instead using [`Parser::repeated_exactly`]
+    /// Require that the pattern appear exactly the given number of times.
     ///
     /// ```
     /// # use chumsky::prelude::*;
@@ -1395,8 +1393,7 @@ where
         }
     }
 
-    /// Require that the pattern appear exactly the given number of times. If the value provided is
-    /// constant, consider instead using [`Parser::separated_by_exactly`].
+    /// Require that the pattern appear exactly the given number of times.
     ///
     /// ```
     /// # use chumsky::prelude::*;
@@ -1618,6 +1615,61 @@ where
     go_extra!(C);
 }
 
+/// See [`IterParser::collect_exactly`]
+pub struct CollectExactly<A, O, C, const N: usize> {
+    pub(crate) parser: A,
+    pub(crate) phantom: PhantomData<(O, C)>,
+}
+
+impl<A: Copy, O, C, const N: usize> Copy for CollectExactly<A, O, C, N> {}
+impl<A: Clone, O, C, const N: usize> Clone for CollectExactly<A, O, C, N> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, O, E, A, C, const N: usize> Parser<'a, I, C, E> for CollectExactly<A, O, C, N>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, O, E>,
+    C: ContainerExactly<O, N>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
+        let before = inp.offset();
+        let mut output = M::bind(|| C::uninit());
+        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        for idx in 0..N {
+            match self.parser.next::<M>(inp, &mut iter_state) {
+                Ok(Some(out)) => {
+                    M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
+                }
+                Ok(None) => {
+                    inp.add_alt(
+                        inp.offset,
+                        None,
+                        None,
+                        unsafe { inp.span_since(before) },
+                    );
+                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
+                    return Err(())
+                }
+                Err(()) => {
+                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
+                    return Err(())
+                }
+            }
+        }
+        Ok(M::map(output, |output| unsafe { C::take(output) }))
+    }
+
+    go_extra!(C);
+}
+
 /// See [`Parser::or_not`].
 #[derive(Copy, Clone)]
 pub struct OrNot<A> {
@@ -1750,244 +1802,6 @@ where
     }
 
     go_extra!(OA);
-}
-
-/// See [`Parser::repeated_exactly`].
-pub struct RepeatedExactly<A, OA, C, const N: usize> {
-    pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<(OA, C)>,
-}
-
-impl<A: Copy, OA, C, const N: usize> Copy for RepeatedExactly<A, OA, C, N> {}
-impl<A: Clone, OA, C, const N: usize> Clone for RepeatedExactly<A, OA, C, N> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<A, OA, C, const N: usize> RepeatedExactly<A, OA, C, N> {
-    /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, I, E, D>(self) -> RepeatedExactly<A, OA, D, N>
-    where
-        A: Parser<'a, I, OA, E>,
-        I: Input<'a>,
-        E: ParserExtra<'a, I>,
-        D: ContainerExactly<OA, N>,
-    {
-        RepeatedExactly {
-            parser: self.parser,
-            phantom: PhantomData,
-        }
-    }
-}
-
-// TODO: Work out how this can properly integrate into `IterParser`
-impl<'a, I, E, A, OA, C, const N: usize> Parser<'a, I, C, E> for RepeatedExactly<A, OA, C, N>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    C: ContainerExactly<OA, N>,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
-        let mut i = 0;
-        let mut output = M::bind(|| C::uninit());
-        loop {
-            let before = inp.save();
-            match self.parser.go::<M>(inp) {
-                Ok(out) => {
-                    output = M::map(output, |mut output| {
-                        M::map(out, |out| {
-                            C::write(&mut output, i, out);
-                        });
-                        output
-                    });
-                    i += 1;
-                    if i == N {
-                        // SAFETY: All entries with an index < i are filled
-                        break Ok(M::map(output, |output| unsafe { C::take(output) }));
-                    }
-                }
-                Err(()) => {
-                    inp.rewind(before);
-                    // SAFETY: All entries with an index < i are filled
-                    unsafe {
-                        M::map(output, |mut output| C::drop_before(&mut output, i));
-                    }
-                    break Err(());
-                }
-            }
-        }
-    }
-
-    go_extra!(C);
-}
-
-/// See [`Parser::separated_by_exactly`].
-pub struct SeparatedByExactly<A, B, OB, C, const N: usize> {
-    pub(crate) parser: A,
-    pub(crate) separator: B,
-    pub(crate) allow_leading: bool,
-    pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(OB, C)>,
-}
-
-impl<A: Copy, B: Copy, OB, C, const N: usize> Copy for SeparatedByExactly<A, B, OB, C, N> {}
-impl<A: Clone, B: Clone, OB, C, const N: usize> Clone for SeparatedByExactly<A, B, OB, C, N> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            separator: self.separator.clone(),
-            allow_leading: self.allow_leading,
-            allow_trailing: self.allow_trailing,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<A, B, OB, C, const N: usize> SeparatedByExactly<A, B, OB, C, N> {
-    /// Allow a leading separator to appear before the first item.
-    ///
-    /// Note that even if no items are parsed, a leading separator *is* permitted.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
-    ///     .padded()
-    ///     .ignore_then(text::ident()
-    ///         .padded()
-    ///         .separated_by(just('|'))
-    ///         .allow_leading()
-    ///         .collect::<Vec<_>>());
-    ///
-    /// assert_eq!(r#enum.parse("enum True | False").into_result(), Ok(vec!["True", "False"]));
-    /// assert_eq!(r#enum.parse("
-    ///     enum
-    ///     | True
-    ///     | False
-    /// ").into_result(), Ok(vec!["True", "False"]));
-    /// ```
-    pub fn allow_leading(self) -> Self {
-        Self {
-            allow_leading: true,
-            ..self
-        }
-    }
-
-    /// Allow a trailing separator to appear after the last item.
-    ///
-    /// Note that if no items are parsed, no trailing separator is permitted.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    /// let numbers = text::int::<_, _, extra::Err<Simple<char>>>(10)
-    ///     .padded()
-    ///     .separated_by(just(','))
-    ///     .allow_trailing()
-    ///     .collect::<Vec<_>>()
-    ///     .delimited_by(just('('), just(')'));
-    ///
-    /// assert_eq!(numbers.parse("(1, 2)").into_result(), Ok(vec!["1", "2"]));
-    /// assert_eq!(numbers.parse("(1, 2,)").into_result(), Ok(vec!["1", "2"]));
-    /// ```
-    pub fn allow_trailing(self) -> Self {
-        Self {
-            allow_trailing: true,
-            ..self
-        }
-    }
-
-    /// Set the type of [`ContainerExactly`] to collect into.
-    pub fn collect<'a, I, OA, E, D>(self) -> SeparatedByExactly<A, B, OB, D, N>
-    where
-        A: Parser<'a, I, OA, E>,
-        I: Input<'a>,
-        E: ParserExtra<'a, I>,
-        D: ContainerExactly<OA, N>,
-    {
-        SeparatedByExactly {
-            parser: self.parser,
-            separator: self.separator,
-            allow_leading: self.allow_leading,
-            allow_trailing: self.allow_trailing,
-            phantom: PhantomData,
-        }
-    }
-}
-
-// FIXME: why parser output is not C ?
-impl<'a, I, E, A, B, OA, OB, C, const N: usize> Parser<'a, I, [OA; N], E>
-    for SeparatedByExactly<A, B, OB, C, N>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    B: Parser<'a, I, OB, E>,
-    C: ContainerExactly<OA, N>,
-{
-    // FIXME: why parse result output is not C ?
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [OA; N]> {
-        if self.allow_leading {
-            let before_separator = inp.save();
-            if let Err(()) = self.separator.go::<Check>(inp) {
-                inp.rewind(before_separator);
-            }
-        }
-
-        let mut i = 0;
-        let mut output = <MaybeUninit<_> as MaybeUninitExt<_>>::uninit_array();
-        loop {
-            let before = inp.save();
-            match self.parser.go::<M>(inp) {
-                Ok(out) => {
-                    output[i].write(out);
-                    i += 1;
-                    if i == N {
-                        if self.allow_trailing {
-                            let before_separator = inp.save();
-                            if self.separator.go::<Check>(inp).is_err() {
-                                inp.rewind(before_separator);
-                            }
-                        }
-
-                        // SAFETY: All entries with an index < i are filled
-                        break Ok(M::array::<OA, N>(unsafe {
-                            MaybeUninitExt::array_assume_init(output)
-                        }));
-                    } else {
-                        let before_separator = inp.save();
-                        if self.separator.go::<Check>(inp).is_err() {
-                            inp.rewind(before_separator);
-                            // SAFETY: All entries with an index < i are filled
-                            output[..i]
-                                .iter_mut()
-                                .for_each(|o| unsafe { o.assume_init_drop() });
-                            break Err(());
-                        }
-                    }
-                }
-                Err(()) => {
-                    inp.rewind(before);
-                    // SAFETY: All entries with an index < i are filled
-                    output[..i]
-                        .iter_mut()
-                        .for_each(|o| unsafe { o.assume_init_drop() });
-                    break Err(());
-                }
-            }
-        }
-    }
-
-    go_extra!([OA; N]);
 }
 
 /// See [`IterParser::foldr`].

@@ -23,8 +23,8 @@ fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]>
         .or(string)
         .map_with_span(|token, span| (span, token))
         .padded()
-        .repeated_exactly()
-        .collect()
+        .repeated()
+        .collect_exactly()
 }
 
 fn main() {

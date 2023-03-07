@@ -1313,21 +1313,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         }
     }
 
-    /// Parse a pattern a specific number of times.
-    ///
-    /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
-    ///
-    /// The output type of this parser can be any [`ContainerExactly`].
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
-    where
-        Self: Sized,
-    {
-        RepeatedExactly {
-            parser: self,
-            phantom: PhantomData,
-        }
-    }
-
     /// Parse a pattern, separated by another, any number of times.
     ///
     /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
@@ -1359,29 +1344,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
             separator,
             at_least: 0,
             at_most: !0,
-            allow_leading: false,
-            allow_trailing: false,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Parse a pattern, separated by another, a specific number of times.
-    ///
-    /// You can use [`SeparatedByExactly::allow_leading`] or [`SeparatedByExactly::allow_trailing`] to
-    /// allow leading or trailing separators.
-    ///
-    /// The output type of this parser can be any [`ContainerExactly`].
-    fn separated_by_exactly<U, B, const N: usize>(
-        self,
-        separator: B,
-    ) -> SeparatedByExactly<Self, B, U, (), N>
-    where
-        Self: Sized,
-        B: Parser<'a, I, U, E>,
-    {
-        SeparatedByExactly {
-            parser: self,
-            separator,
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
@@ -1884,7 +1846,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
 
     /// Collect this iterable parser into a [`Container`].
     ///
-    /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
+    /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
     /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
     ///
     /// The output type of this parser is `C`, the type being collected into.
@@ -1904,6 +1866,35 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         Self: Sized,
     {
         Collect {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Collect this iterable parser into a [`ContainerExactly`].
+    ///
+    /// This is useful for situations where the number of items to consume is statically known.
+    /// A common use-case is collecting into an array.
+    ///
+    /// The output type of this parser if `C`, the type being collected into.
+    ///
+    /// # Exmaples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let three_digit = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_numeric())
+    ///     .repeated()
+    ///     .collect_exactly::<3, _>();
+    ///
+    /// assert_eq!(three_digit.parse("123").into_result(), Ok(['1', '2', '3']));
+    /// assert!(three_digit.parse("12").into_result().is_err());
+    /// assert!(three_digit.parse("1234").into_result().is_err());
+    /// ```
+    fn collect_exactly<const N: usize, C: ContainerExactly<O, N>>(self) -> CollectExactly<Self, O, C, N>
+    where
+        Self: Sized,
+    {
+        CollectExactly {
             parser: self,
             phantom: PhantomData,
         }
@@ -2271,8 +2262,8 @@ mod tests {
                 .or(string)
                 .map_with_span(|token, span| (span, token))
                 .padded()
-                .repeated_exactly()
-                .collect()
+                .repeated()
+                .collect_exactly()
         }
 
         assert_eq!(
