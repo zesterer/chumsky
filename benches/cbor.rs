@@ -181,14 +181,14 @@ mod chumsky_zero_copy {
                 simple(26).ignore_then(
                     any()
                         .repeated()
-                        .collect_exactly::<[_; 4]>()
+                        .collect_exactly::<4, _>()
                         .map(f32::from_be_bytes)
                         .map(CborZero::SingleFloat),
                 ),
                 simple(27).ignore_then(
                     any()
                         .repeated()
-                        .collect_exactly::<[_; 8]>()
+                        .collect_exactly::<8, _>()
                         .map(f64::from_be_bytes)
                         .map(CborZero::DoubleFloat),
                 ),
