@@ -38,7 +38,7 @@ stacker = { version = "0.1", optional = true }
 regex = { version = "1.7", optional = true }
 
 [dev-dependencies]
-ariadne = "0.1.6"
+ariadne = "0.2"
 pom = "3.2"
 nom = "7.1"
 winnow = "0.3"

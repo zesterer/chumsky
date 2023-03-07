@@ -98,6 +98,7 @@ pub struct JustCfg<T> {
 
 impl<T> JustCfg<T> {
     /// Set the sequence to be used while parsing
+    #[inline]
     pub fn seq(mut self, new_seq: T) -> Self {
         self.seq = Some(new_seq);
         self
@@ -105,6 +106,7 @@ impl<T> JustCfg<T> {
 }
 
 impl<T> Default for JustCfg<T> {
+    #[inline]
     fn default() -> Self {
         JustCfg { seq: None }
     }
@@ -956,6 +958,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         if N == 0 {
             let offs = inp.offset();
@@ -1001,6 +1004,7 @@ where
     E: ParserExtra<'a, I>,
     P: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [O; N]> {
         let mut arr: [MaybeUninit<_>; N] = MaybeUninitExt::uninit_array();
         self.parsers

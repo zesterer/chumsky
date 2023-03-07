@@ -31,6 +31,7 @@ impl<T> OnceCell<T> {
             Err(())
         }
     }
+    #[inline]
     pub fn get(&self) -> Option<core::cell::Ref<T>> {
         Some(core::cell::Ref::map(self.0.borrow(), |x| {
             x.as_ref().unwrap()
@@ -118,6 +119,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
 }
 
 impl<P: ?Sized> Recursive<P> {
+    #[inline]
     fn parser(&self) -> Rc<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
@@ -140,12 +142,12 @@ impl<P: ?Sized> Clone for Recursive<P> {
 }
 
 #[cfg(feature = "stacker")]
-#[inline(always)]
+#[inline]
 fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     stacker::maybe_grow(1024 * 64, 1024 * 1024, f)
 }
 #[cfg(not(feature = "stacker"))]
-#[inline(always)]
+#[inline]
 fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
