@@ -3,7 +3,7 @@
 //! Run it with the following command:
 //! cargo run --example nano_rust -- examples/sample.nrs
 
-use ariadne::{Color, Label, Report, ReportKind, Source};
+use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fmt, fs};
 
@@ -170,6 +170,7 @@ enum Expr<'src> {
 #[derive(Debug)]
 struct Func<'src> {
     args: Vec<&'src str>,
+    span: Span,
     body: Spanned<Expr<'src>>,
 }
 
@@ -198,7 +199,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     extra::Err<Rich<'tokens, Token<'src>, Span>>,
 > + Clone {
     recursive(|expr| {
-        let raw_expr = recursive(|raw_expr| {
+        let inline_expr = recursive(|inline_expr| {
             let val = select! {
                 Token::Null => Expr::Value(Value::Null),
                 Token::Bool(x) => Expr::Value(Value::Bool(x)),
@@ -220,7 +221,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             let let_ = just(Token::Let)
                 .ignore_then(ident)
                 .then_ignore(just(Token::Op("=")))
-                .then(raw_expr)
+                .then(inline_expr)
                 .then_ignore(just(Token::Ctrl(';')))
                 .then(expr.clone())
                 .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)));
@@ -342,11 +343,8 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                         Expr::If(
                             Box::new(cond),
                             Box::new(a),
-                            Box::new(match b {
-                                Some(b) => b,
-                                // If an `if` expression has no trailing `else` block, we magic up one that just produces null
-                                None => (Expr::Value(Value::Null), span.clone()),
-                            }),
+                            // If an `if` expression has no trailing `else` block, we magic up one that just produces null
+                            Box::new(b.unwrap_or_else(|| (Expr::Value(Value::Null), span.clone()))),
                         ),
                         span,
                     )
@@ -375,7 +373,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
 
         block_chain
             // Expressions, chained by semicolons, are statements
-            .or(raw_expr.clone().recover_with(skip_then_retry_until(
+            .or(inline_expr.clone().recover_with(skip_then_retry_until(
                 block_recovery.ignored().or(any().ignored()),
                 one_of([
                     Token::Ctrl(';'),
@@ -395,11 +393,10 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     (
                         Expr::Then(
                             Box::new(a),
-                            Box::new(match b {
-                                Some(b) => b,
-                                // Since there is no b expression then its span is empty.
-                                None => (Expr::Value(Value::Null), (b_end..b_end).into()),
-                            }),
+                            // If there is no b expression then its span is empty.
+                            Box::new(b.unwrap_or_else(|| {
+                                (Expr::Value(Value::Null), (b_end..b_end).into())
+                            })),
                         ),
                         (a_start..b_end).into(),
                     )
@@ -418,7 +415,6 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
 
     // Argument lists are just identifiers separated by commas, surrounded by parentheses
     let args = ident
-        .clone()
         .separated_by(just(Token::Ctrl(',')))
         .allow_trailing()
         .collect()
@@ -432,6 +428,7 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 .labelled("function name"),
         )
         .then(args)
+        .map_with_span(|start, span| (start, span))
         .then(
             expr_parser()
                 .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
@@ -446,7 +443,7 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     |span| (Expr::Error, span),
                 ))),
         )
-        .map(|((name, args), body)| (name, Func { args, body }))
+        .map(|(((name, args), span), body)| (name, Func { args, span, body }))
         .labelled("function");
 
     func.repeated().collect::<Vec<_>>().try_map(|fs, _| {
@@ -574,27 +571,36 @@ fn eval_expr<'src>(
 }
 
 fn main() {
-    let src = fs::read_to_string(env::args().nth(1).expect("Expected file argument"))
-        .expect("Failed to read file");
+    let filename = env::args().nth(1).expect("Expected file argument");
+
+    let src = fs::read_to_string(&filename).expect("Failed to read file");
 
     let (tokens, mut errs) = lexer().parse(src.as_str()).into_output_errors();
 
     let parse_errs = if let Some(tokens) = &tokens {
-        //dbg!(tokens);
         let (ast, parse_errs) = funcs_parser()
+            .map_with_span(|ast, span| (ast, span))
             .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
             .into_output_errors();
 
-        //dbg!(ast);
-        if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
+        if let Some((funcs, file_span)) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
             if let Some(main) = funcs.get("main") {
-                assert_eq!(main.args.len(), 0);
-                match eval_expr(&main.body, &funcs, &mut Vec::new()) {
-                    Ok(val) => println!("Return value: {}", val),
-                    Err(e) => errs.push(Rich::custom(e.span, e.msg)),
+                if main.args.len() != 0 {
+                    errs.push(Rich::custom(
+                        main.span,
+                        format!("The main function cannot have arguments"),
+                    ))
+                } else {
+                    match eval_expr(&main.body, &funcs, &mut Vec::new()) {
+                        Ok(val) => println!("Return value: {}", val),
+                        Err(e) => errs.push(Rich::custom(e.span, e.msg)),
+                    }
                 }
             } else {
-                panic!("No main function!");
+                errs.push(Rich::custom(
+                    file_span,
+                    format!("Programs need a main function but none was found"),
+                ));
             }
         }
 
@@ -611,28 +617,15 @@ fn main() {
                 .map(|e| e.map_token(|tok| tok.to_string())),
         )
         .for_each(|e| {
-            let report = Report::build(ReportKind::Error, (), e.span().start)
-                .with_code(3)
+            Report::build(ReportKind::Error, filename.clone(), e.span().start)
                 .with_message(e.to_string())
                 .with_label(
-                    Label::new(e.span().into_range())
+                    Label::new((filename.clone(), e.span().into_range()))
                         .with_message(e.reason().to_string())
                         .with_color(Color::Red),
-                );
-
-            // let report = match e.reason() {
-            //     RichReason::Unclosed { span, delimiter } => report.with_label(
-            //         Label::new(span.clone())
-            //             .with_message(format!(
-            //                 "Unclosed delimiter {}",
-            //                 delimiter.fg(Color::Yellow)
-            //             ))
-            //             .with_color(Color::Yellow),
-            //     ),
-            //     RichReason::Unexpected => report,
-            //     RichReason::Custom(_) => report,
-            // };
-
-            report.finish().print(Source::from(&src)).unwrap();
+                )
+                .finish()
+                .print(sources([(filename.clone(), src.clone())]))
+                .unwrap()
         });
 }

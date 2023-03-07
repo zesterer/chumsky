@@ -141,28 +141,15 @@ fn main() {
     let (json, errs) = parser().parse(src.trim()).into_output_errors();
     println!("{:#?}", json);
     errs.into_iter().for_each(|e| {
-        let report = Report::build(ReportKind::Error, (), e.span().start)
-            .with_code(3)
+        Report::build(ReportKind::Error, (), e.span().start)
             .with_message(e.to_string())
             .with_label(
                 Label::new(e.span().into_range())
                     .with_message(e.reason().to_string())
                     .with_color(Color::Red),
-            );
-
-        // let report = match e.reason() {
-        //     RichReason::Unclosed { span, delimiter } => report.with_label(
-        //         Label::new(span.clone())
-        //             .with_message(format!(
-        //                 "Unclosed delimiter {}",
-        //                 delimiter.fg(Color::Yellow)
-        //             ))
-        //             .with_color(Color::Yellow),
-        //     ),
-        //     RichReason::Unexpected => report,
-        //     RichReason::Custom(_) => report,
-        // };
-
-        report.finish().print(Source::from(&src)).unwrap();
+            )
+            .finish()
+            .print(Source::from(&src))
+            .unwrap()
     });
 }
