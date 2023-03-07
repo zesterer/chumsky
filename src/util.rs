@@ -8,7 +8,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-/// A value that may be a `T` or an mutable reference to a `T`.
+/// A value that may be a `T` or a mutable reference to a `T`.
 pub type MaybeMut<'a, T> = Maybe<T, &'a mut T>;
 
 /// A value that may be a `T` or a shared reference to a `T`.
@@ -58,7 +58,7 @@ impl<T: fmt::Debug, R: Deref<Target = T>> fmt::Debug for Maybe<T, R> {
 }
 
 impl<T, R: Deref<Target = T>> Maybe<T, R> {
-    /// Convert this [`MaybeRef<T>`] into a `T`, cloning the inner value if necessary.
+    /// Convert this [`Maybe<T, _>`] into a `T`, cloning the inner value if necessary.
     pub fn into_inner(self) -> T
     where
         T: Clone,
@@ -68,15 +68,14 @@ impl<T, R: Deref<Target = T>> Maybe<T, R> {
             Self::Val(x) => x,
         }
     }
-}
 
-impl<'a, T> Maybe<T, &'a T> {
-    /// Convert this [`MaybeRef<T>`] into an owned version of itself, cloning the inner reference if required.
-    pub fn into_owned<'b>(self) -> Maybe<T, &'b T>
+    /// Convert this [`Maybe<T, _>`] into an owned version of itself, cloning the inner reference if required.
+    pub fn into_owned<U>(self) -> Maybe<T, U>
     where
         T: Clone,
+        U: Deref<Target = T>,
     {
-        MaybeRef::Val(self.into_inner())
+        Maybe::Val(self.into_inner())
     }
 }
 
@@ -105,8 +104,20 @@ impl<'a, T> From<T> for Maybe<T, &'a T> {
     }
 }
 
+impl<'a, T> From<T> for Maybe<T, &'a mut T> {
+    fn from(x: T) -> Self {
+        Self::Val(x)
+    }
+}
+
 impl<'a, T> From<&'a T> for Maybe<T, &'a T> {
     fn from(x: &'a T) -> Self {
+        Self::Ref(x)
+    }
+}
+
+impl<'a, T> From<&'a mut T> for Maybe<T, &'a mut T> {
+    fn from(x: &'a mut T) -> Self {
         Self::Ref(x)
     }
 }
