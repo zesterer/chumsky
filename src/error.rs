@@ -518,7 +518,7 @@ where
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>, L = &'static str> {
     span: S,
-    reason: RichReason<'a, T, L>,
+    reason: Box<RichReason<'a, T, L>>,
 }
 
 impl<'a, T, S, L> Rich<'a, T, S, L> {
@@ -545,7 +545,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
     pub fn custom<M: ToString>(span: S, msg: M) -> Self {
         Rich {
             span,
-            reason: RichReason::Custom(msg.to_string()),
+            reason: Box::new(RichReason::Custom(msg.to_string())),
         }
     }
 
@@ -561,7 +561,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
 
     /// Take the reason from this error.
     pub fn into_reason(self) -> RichReason<'a, T, L> {
-        self.reason
+        *self.reason
     }
 
     /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
@@ -575,7 +575,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         T: Clone,
     {
         Rich {
-            reason: self.reason.into_owned(),
+            reason: Box::new(self.reason.into_owned()),
             ..self
         }
     }
@@ -607,7 +607,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
     {
         Rich {
             span: self.span,
-            reason: self.reason.map_token(f),
+            reason: Box::new(self.reason.map_token(f)),
         }
     }
 }
@@ -625,7 +625,7 @@ where
     ) -> Self {
         Self {
             span,
-            reason: RichReason::ExpectedFound {
+            reason: Box::new(RichReason::ExpectedFound {
                 expected: expected
                     .into_iter()
                     .map(|tok| {
@@ -634,16 +634,16 @@ where
                     })
                     .collect(),
                 found,
-            },
+            }),
         }
     }
 
     #[inline]
     fn merge(self, other: Self) -> Self {
-        let new_reason = self.reason.flat_merge(other.reason);
+        let new_reason = self.reason.flat_merge(*other.reason);
         Self {
             span: self.span,
-            reason: new_reason,
+            reason: Box::new(new_reason),
         }
     }
 
@@ -654,7 +654,7 @@ where
         found: Option<MaybeRef<'a, I::Token>>,
         _span: I::Span,
     ) -> Self {
-        match &mut self.reason {
+        match &mut *self.reason {
             RichReason::ExpectedFound { expected, found: _ } => {
                 for new_expected in new_expected {
                     let new_expected = new_expected
@@ -676,8 +676,8 @@ where
                 found,
             }),
             RichReason::Custom(_) => {
-                let old = core::mem::replace(&mut self.reason, RichReason::Many(Vec::new()));
-                self.reason = RichReason::Many(vec![
+                let old = core::mem::replace(&mut *self.reason, RichReason::Many(Vec::new()));
+                self.reason = Box::new(RichReason::Many(vec![
                     old,
                     RichReason::ExpectedFound {
                         expected: new_expected
@@ -689,7 +689,7 @@ where
                             .collect(),
                         found,
                     },
-                ]);
+                ]));
             }
         }
         self
@@ -703,7 +703,7 @@ where
         span: I::Span,
     ) -> Self {
         self.span = span;
-        match &mut self.reason {
+        match &mut *self.reason {
             RichReason::ExpectedFound { expected, found } => {
                 expected.clear();
                 expected.extend(new_expected.into_iter().map(|tok| {
@@ -713,7 +713,7 @@ where
                 *found = new_found;
             }
             _ => {
-                self.reason = RichReason::ExpectedFound {
+                self.reason = Box::new(RichReason::ExpectedFound {
                     expected: new_expected
                         .into_iter()
                         .map(|tok| {
@@ -722,7 +722,7 @@ where
                         })
                         .collect(),
                     found: new_found,
-                }
+                });
             }
         }
         self
