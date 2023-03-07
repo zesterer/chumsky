@@ -209,14 +209,14 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
-#[doc(hidden)]
 #[derive(Clone)]
-pub struct Located<E> {
+struct Located<E> {
     pos: usize,
     err: E,
 }
 
 impl<E> Located<E> {
+    #[inline]
     pub fn at(pos: usize, err: E) -> Self {
         Self { pos, err }
     }
@@ -249,6 +249,12 @@ mod private {
             y: Self::Output<U>,
             f: F,
         ) -> Self::Output<V>;
+        /// By-reference version of [`Mode::combine`].
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            x: &mut Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        );
 
         /// Given an array of outputs, bind them into an output of arrays
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
@@ -298,6 +304,14 @@ mod private {
             f(x, y)
         }
         #[inline]
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            x: &mut Self::Output<T>,
+            y: Self::Output<U>,
+            f: F,
+        ) {
+            f(x, y)
+        }
+        #[inline]
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
             x
         }
@@ -342,6 +356,13 @@ mod private {
             _: Self::Output<U>,
             _: F,
         ) -> Self::Output<V> {
+        }
+        #[inline]
+        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
+            _: &mut Self::Output<T>,
+            _: Self::Output<U>,
+            _: F,
+        ) {
         }
         #[inline]
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}

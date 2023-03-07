@@ -140,16 +140,7 @@ mod chumsky_zero_copy {
                 .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
                 .boxed();
 
-            let escape = just(b'\\').ignore_then(choice((
-                just(b'\\'),
-                just(b'/'),
-                just(b'"'),
-                just(b'b').to(b'\x08'),
-                just(b'f').to(b'\x0C'),
-                just(b'n').to(b'\n'),
-                just(b'r').to(b'\r'),
-                just(b't').to(b'\t'),
-            )));
+            let escape = just(b'\\').then_ignore(one_of(b"\\/\"bfnrt"));
 
             let string = none_of(b"\\\"")
                 .or(escape)

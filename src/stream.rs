@@ -53,20 +53,24 @@ where
     type Token = I::Item;
     type Span = SimpleSpan<usize>;
 
+    #[inline]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = I::Item;
 
+    #[inline]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next(offset)
     }
 
+    #[inline]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
+    #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -76,6 +80,7 @@ impl<'a, I: Iterator + 'a> ValueInput<'a> for Stream<I>
 where
     I::Item: Clone,
 {
+    #[inline]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         let mut other = Cell::new((Vec::new(), None));
         self.tokens.swap(&other);
