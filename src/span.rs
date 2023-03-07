@@ -48,7 +48,7 @@ pub trait Span {
 /// The most basic implementor of `Span` - akin to `Range`, but `Copy` since it's not also
 /// an iterator. Also has a `Display` implementation
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct SimpleSpan<T, C = ()> {
+pub struct SimpleSpan<T = usize, C = ()> {
     /// The start offset of the span.
     pub start: T,
     /// The end (exclusive) offset of the span.
