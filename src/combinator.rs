@@ -1616,13 +1616,13 @@ where
 }
 
 /// See [`IterParser::collect_exactly`]
-pub struct CollectExactly<A, O, C, const N: usize> {
+pub struct CollectExactly<A, O, C> {
     pub(crate) parser: A,
     pub(crate) phantom: PhantomData<(O, C)>,
 }
 
-impl<A: Copy, O, C, const N: usize> Copy for CollectExactly<A, O, C, N> {}
-impl<A: Clone, O, C, const N: usize> Clone for CollectExactly<A, O, C, N> {
+impl<A: Copy, O, C> Copy for CollectExactly<A, O, C> {}
+impl<A: Clone, O, C> Clone for CollectExactly<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1631,19 +1631,19 @@ impl<A: Clone, O, C, const N: usize> Clone for CollectExactly<A, O, C, N> {
     }
 }
 
-impl<'a, I, O, E, A, C, const N: usize> Parser<'a, I, C, E> for CollectExactly<A, O, C, N>
+impl<'a, I, O, E, A, C> Parser<'a, I, C, E> for CollectExactly<A, O, C>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: IterParser<'a, I, O, E>,
-    C: ContainerExactly<O, N>,
+    C: ContainerExactly<O>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
         let before = inp.offset();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
-        for idx in 0..N {
+        for idx in 0..C::LEN {
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));

@@ -88,6 +88,7 @@ use crate::input::InputOwn;
 use alloc::{
     boxed::Box,
     rc::{Rc, Weak},
+    sync::Arc,
     string::String,
     vec,
     vec::Vec,
@@ -1890,7 +1891,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
     /// assert!(three_digit.parse("12").into_result().is_err());
     /// assert!(three_digit.parse("1234").into_result().is_err());
     /// ```
-    fn collect_exactly<const N: usize, C: ContainerExactly<O, N>>(self) -> CollectExactly<Self, O, C, N>
+    fn collect_exactly<C: ContainerExactly<O>>(self) -> CollectExactly<Self, O, C>
     where
         Self: Sized,
     {
