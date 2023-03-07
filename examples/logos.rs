@@ -64,9 +64,9 @@ enum SExpr {
 // inputs that:
 //     - Can have tokens pulled out of them by-value, by cloning (`ValueInput`)
 //     - Produces tokens of type `Token`, the type we defined above (`Token = Token<'a>`)
-//     - Produces spans of type `SimpleSpan`, a built-in span type provided by chumsky
+//     - Produces spans of type `SimpleSpan`, a built-in span type provided by chumsky (`Span = SimpleSpan`)
 // The function then returns a parser that:
-//     - Has an input type of type `I`, the one it's generic over
+//     - Has an input type of type `I`, the one we declared as a type parameter
 //     - Produces an `SExpr` as its output
 //     - Uses `Rich`, a built-in error type provided by chumsky, for error generation
 fn parser<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
