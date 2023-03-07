@@ -736,9 +736,18 @@ where
     L: PartialEq,
 {
     fn label_with(&mut self, label: L) {
-        self.reason = RichReason::ExpectedFound {
-            expected: vec![RichPattern::Label(label)],
-            found: self.reason.take_found(),
+        // Opportunistically attempt to reuse allocations if we can
+        match &mut *self.reason {
+            RichReason::ExpectedFound { expected, found: _ } => {
+                expected.clear();
+                expected.push(RichPattern::Label(label));
+            }
+            _ => {
+                self.reason = Box::new(RichReason::ExpectedFound {
+                    expected: vec![RichPattern::Label(label)],
+                    found: self.reason.take_found(),
+                });
+            }
         }
     }
 }
