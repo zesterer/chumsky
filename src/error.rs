@@ -78,13 +78,14 @@ pub trait Error<'a, I: Input<'a>>: Sized {
     ) -> Self;
 
     /// Merge two errors that point to the same input together, combining their information.
+    #[inline(always)]
     fn merge(self, other: Self) -> Self {
         #![allow(unused_variables)]
         self
     }
 
     /// Fast path for `a.merge(Error::expected_found(...))` that may incur less overhead by, for example, reusing allocations.
-    #[inline]
+    #[inline(always)]
     fn merge_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         self,
         expected: E,
@@ -95,7 +96,7 @@ pub trait Error<'a, I: Input<'a>>: Sized {
     }
 
     /// Fast path for `a = Error::expected_found(...)` that may incur less overhead by, for example, reusing allocations.
-    #[inline]
+    #[inline(always)]
     fn replace_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         self,
         expected: E,
@@ -112,7 +113,7 @@ pub trait Error<'a, I: Input<'a>>: Sized {
 pub struct EmptyErr(());
 
 impl<'a, I: Input<'a>> Error<'a, I> for EmptyErr {
-    #[inline]
+    #[inline(always)]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         _: E,
         _: Option<MaybeRef<'a, I::Token>>,
@@ -542,6 +543,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
 
 impl<'a, T, S, L> Rich<'a, T, S, L> {
     /// Create an error with a custom message and span
+    #[inline]
     pub fn custom<M: ToString>(span: S, msg: M) -> Self {
         Rich {
             span,
@@ -735,6 +737,7 @@ where
     I::Token: PartialEq,
     L: PartialEq,
 {
+    #[inline]
     fn label_with(&mut self, label: L) {
         // Opportunistically attempt to reuse allocations if we can
         match &mut *self.reason {

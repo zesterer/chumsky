@@ -136,24 +136,24 @@ impl<'a> Input<'a> for &'a str {
 
     type TokenMaybe = char;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
-    #[inline]
+    #[inline(always)]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
 }
 
 impl<'a> ValueInput<'a> for &'a str {
-    #[inline]
+    #[inline(always)]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         if offset < self.len() {
             let c = unsafe {
@@ -174,12 +174,12 @@ impl<'a> StrInput<'a, char> for &'a str {}
 impl<'a> SliceInput<'a> for &'a str {
     type Slice = &'a str;
 
-    #[inline]
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
 
-    #[inline]
+    #[inline(always)]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         &self[from]
     }
@@ -190,24 +190,24 @@ impl<'a, T> Input<'a> for &'a [T] {
     type Token = T;
     type Span = SimpleSpan<usize>;
 
-    #[inline]
+    #[inline(always)]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = &'a T;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next_ref(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
-    #[inline]
+    #[inline(always)]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -218,19 +218,19 @@ impl<'a> StrInput<'a, u8> for &'a [u8] {}
 impl<'a, T> SliceInput<'a> for &'a [T] {
     type Slice = &'a [T];
 
-    #[inline]
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
 
-    #[inline]
+    #[inline(always)]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         &self[from]
     }
 }
 
 impl<'a, T: Clone> ValueInput<'a> for &'a [T] {
-    #[inline]
+    #[inline(always)]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok.clone()))
@@ -241,7 +241,7 @@ impl<'a, T: Clone> ValueInput<'a> for &'a [T] {
 }
 
 impl<'a, T> BorrowInput<'a> for &'a [T] {
-    #[inline]
+    #[inline(always)]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -256,23 +256,24 @@ impl<'a, T: 'a, const N: usize> Input<'a> for &'a [T; N] {
     type Token = T;
     type Span = SimpleSpan<usize>;
 
+    #[inline(always)]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = &'a T;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next_ref(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
 
-    #[inline]
+    #[inline(always)]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
     }
@@ -283,19 +284,19 @@ impl<'a, const N: usize> StrInput<'a, u8> for &'a [u8; N] {}
 impl<'a, T: 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
     type Slice = &'a [T];
 
-    #[inline]
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
 
-    #[inline]
+    #[inline(always)]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         &self[from]
     }
 }
 
 impl<'a, T: Clone + 'a, const N: usize> ValueInput<'a> for &'a [T; N] {
-    #[inline]
+    #[inline(always)]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok.clone()))
@@ -306,7 +307,7 @@ impl<'a, T: Clone + 'a, const N: usize> ValueInput<'a> for &'a [T; N] {
 }
 
 impl<'a, T: 'a, const N: usize> BorrowInput<'a> for &'a [T; N] {
-    #[inline]
+    #[inline(always)]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         if let Some(tok) = self.get(offset) {
             (offset + 1, Some(tok))
@@ -329,7 +330,7 @@ pub struct SpannedInput<T, S, I> {
 pub struct SpannedTokenMaybe<'a, I: Input<'a>, T, S>(I::TokenMaybe, PhantomData<(T, S)>);
 
 impl<'a, I: Input<'a, Token = (T, S)>, T, S> Borrow<T> for SpannedTokenMaybe<'a, I, T, S> {
-    #[inline]
+    #[inline(always)]
     fn borrow(&self) -> &T {
         &self.0.borrow().0
     }
@@ -338,7 +339,7 @@ impl<'a, I: Input<'a, Token = (T, S)>, T, S> Borrow<T> for SpannedTokenMaybe<'a,
 impl<'a, I: Input<'a, Token = (T, S)>, T, S: 'a> Into<MaybeRef<'a, T>>
     for SpannedTokenMaybe<'a, I, T, S>
 {
-    #[inline]
+    #[inline(always)]
     fn into(self) -> MaybeRef<'a, T> {
         match self.0.into() {
             MaybeRef::Ref((tok, _)) => MaybeRef::Ref(tok),
@@ -357,19 +358,20 @@ where
     type Token = T;
     type Span = S;
 
+    #[inline(always)]
     fn start(&self) -> Self::Offset {
         self.input.start()
     }
 
     type TokenMaybe = SpannedTokenMaybe<'a, I, T, S>;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         let (offset, tok) = self.input.next_maybe(offset);
         (offset, tok.map(|tok| SpannedTokenMaybe(tok, PhantomData)))
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         let start = self
             .input
@@ -384,7 +386,7 @@ where
         S::new(self.eoi.context(), start..end)
     }
 
-    #[inline]
+    #[inline(always)]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -396,7 +398,7 @@ where
     T: 'a,
     S: Span + Clone + 'a,
 {
-    #[inline]
+    #[inline(always)]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         let (offs, tok) = self.input.next(offset);
         (offs, tok.map(|(tok, _)| tok))
@@ -409,7 +411,7 @@ where
     T: 'a,
     S: Span + Clone + 'a,
 {
-    #[inline]
+    #[inline(always)]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         let (offs, tok) = self.input.next_ref(offset);
         (offs, tok.map(|(tok, _)| tok))
@@ -424,12 +426,12 @@ where
 {
     type Slice = I::Slice;
 
-    #[inline]
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
 
-    #[inline]
+    #[inline(always)]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -451,24 +453,24 @@ where
     type Token = I::Token;
     type Span = (Ctx, I::Span);
 
-    #[inline]
+    #[inline(always)]
     fn start(&self) -> Self::Offset {
         self.input.start()
     }
 
     type TokenMaybe = I::TokenMaybe;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.input.next_maybe(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         (self.context.clone(), self.input.span(range))
     }
 
-    #[inline]
+    #[inline(always)]
     fn prev(offs: Self::Offset) -> Self::Offset {
         I::prev(offs)
     }
@@ -478,7 +480,7 @@ impl<'a, Ctx: Clone + 'a, I: ValueInput<'a>> ValueInput<'a> for WithContext<Ctx,
 where
     I::Span: Span<Context = ()>,
 {
-    #[inline]
+    #[inline(always)]
     unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
         self.input.next(offset)
     }
@@ -488,7 +490,7 @@ impl<'a, Ctx: Clone + 'a, I: BorrowInput<'a>> BorrowInput<'a> for WithContext<Ct
 where
     I::Span: Span<Context = ()>,
 {
-    #[inline]
+    #[inline(always)]
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
         self.input.next_ref(offset)
     }
@@ -500,12 +502,12 @@ where
 {
     type Slice = I::Slice;
 
-    #[inline]
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
 
-    #[inline]
+    #[inline(always)]
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
@@ -528,7 +530,7 @@ pub struct Marker<'a, I: Input<'a>> {
 
 impl<'a, I: Input<'a>> Copy for Marker<'a, I> {}
 impl<'a, I: Input<'a>> Clone for Marker<'a, I> {
-    #[inline]
+    #[inline(always)]
     fn clone(&self) -> Self {
         *self
     }
@@ -688,13 +690,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     /// Get the input offset that is currently being pointed to.
-    #[inline]
+    #[inline(always)]
     pub fn offset(&self) -> I::Offset {
         self.offset
     }
 
     /// Save off a [`Marker`] to the current position in the input
-    #[inline]
+    #[inline(always)]
     pub fn save(&self) -> Marker<'a, I> {
         Marker {
             offset: self.offset,
@@ -703,18 +705,18 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     /// Reset the input state to the provided [`Marker`]
-    #[inline]
+    #[inline(always)]
     pub fn rewind(&mut self, marker: Marker<'a, I>) {
         self.errors.secondary.truncate(marker.err_count);
         self.offset = marker.offset;
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn state(&mut self) -> &mut E::State {
         self.state
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn ctx(&self) -> &E::Context {
         &*self.ctx
     }
@@ -735,7 +737,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn next(&mut self) -> (I::Offset, Option<I::Token>)
     where
         I: ValueInput<'a>,
@@ -746,7 +748,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         (self.offset, token)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn next_maybe(&mut self) -> (I::Offset, Option<I::TokenMaybe>) {
         // SAFETY: offset was generated by previous call to `Input::next`
         let (offset, token) = unsafe { self.input.next_maybe(self.offset) };
@@ -754,7 +756,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         (self.offset, token)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn next_ref(&mut self) -> (I::Offset, Option<&'a I::Token>)
     where
         I: BorrowInput<'a>,
@@ -803,7 +805,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         let _ = self.next();
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn slice(&self, range: Range<I::Offset>) -> I::Slice
     where
         I: SliceInput<'a>,
@@ -812,7 +814,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[allow(dead_code)]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn slice_from(&self, from: RangeFrom<I::Offset>) -> I::Slice
     where
         I: SliceInput<'a>,
@@ -821,7 +823,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[cfg_attr(not(feature = "regex"), allow(dead_code))]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn slice_trailing(&self) -> I::Slice
     where
         I: SliceInput<'a>,
@@ -832,13 +834,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     /// Return the span from the provided [`Marker`] to the current position
     ///
     /// So be safely called, the offsets passed to this function must has been previously generated by the input (such as from [`InputRef::offset`]).
-    #[inline]
+    #[inline(always)]
     pub unsafe fn span_since(&self, before: I::Offset) -> I::Span {
         self.input.span(before..self.offset)
     }
 
-    #[inline]
     #[cfg(feature = "regex")]
+    #[inline(always)]
     pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
     where
         C: Char,
