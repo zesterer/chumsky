@@ -95,6 +95,7 @@ use alloc::{
 };
 use core::{
     borrow::Borrow,
+    cell::UnsafeCell,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,

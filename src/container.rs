@@ -104,7 +104,11 @@ impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
 }
 
 /// A utility trait for types that hold a specific constant number of output values.
-pub trait ContainerExactly<T> {
+///
+/// # Safety
+///
+/// This trait requires that [`Uninit`](ContainerExactly::Uninit) be sound to reinterpret as `Self`
+pub unsafe trait ContainerExactly<T> {
     /// The length of this container
     const LEN: usize;
 
@@ -132,7 +136,7 @@ pub trait ContainerExactly<T> {
     unsafe fn take(uninit: Self::Uninit) -> Self;
 }
 
-impl<T, const N: usize> ContainerExactly<T> for [T; N] {
+unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
     const LEN: usize = N;
 
     type Uninit = [MaybeUninit<T>; N];
@@ -150,7 +154,7 @@ impl<T, const N: usize> ContainerExactly<T> for [T; N] {
     }
 }
 
-impl<T, C> ContainerExactly<T> for Box<C>
+unsafe impl<T, C> ContainerExactly<T> for Box<C>
 where
     C: ContainerExactly<T>,
 {
@@ -166,47 +170,51 @@ where
         C::drop_before(&mut *uninit, i)
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        Box::new(C::take(*uninit))
+        Box::from_raw(Box::into_raw(uninit) as *mut C)
     }
 }
 
-impl<T, C> ContainerExactly<T> for Rc<C>
+unsafe impl<T, C> ContainerExactly<T> for Rc<C>
 where
     C: ContainerExactly<T>,
 {
     const LEN: usize = C::LEN;
-    type Uninit = Box<C::Uninit>;
+    type Uninit = Rc<UnsafeCell<C::Uninit>>;
     fn uninit() -> Self::Uninit {
-        Box::new(C::uninit())
+        Rc::new(UnsafeCell::new(C::uninit()))
     }
     fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
-        C::write(&mut *uninit, i, item)
+        // SAFETY: We're the only owners of the uninit data at this point
+        C::write(unsafe { &mut *uninit.get() }, i, item)
     }
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-        C::drop_before(&mut *uninit, i)
+        // SAFETY: We're the only owners of the uninit data at this point
+        C::drop_before(unsafe { &mut *uninit.get() }, i)
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        Rc::new(C::take(*uninit))
+        Rc::from_raw(Rc::into_raw(uninit) as *mut C)
     }
 }
 
-impl<T, C> ContainerExactly<T> for Arc<C>
+unsafe impl<T, C> ContainerExactly<T> for Arc<C>
 where
     C: ContainerExactly<T>,
 {
     const LEN: usize = C::LEN;
-    type Uninit = Box<C::Uninit>;
+    type Uninit = Arc<UnsafeCell<C::Uninit>>;
     fn uninit() -> Self::Uninit {
-        Box::new(C::uninit())
+        Arc::new(UnsafeCell::new(C::uninit()))
     }
     fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
-        C::write(&mut *uninit, i, item)
+        // SAFETY: We're the only owners of the uninit data at this point
+        C::write(unsafe { &mut *uninit.get() }, i, item)
     }
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-        C::drop_before(&mut *uninit, i)
+        // SAFETY: We're the only owners of the uninit data at this point
+        C::drop_before(unsafe { &mut *uninit.get() }, i)
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        Arc::new(C::take(*uninit))
+        Arc::from_raw(Arc::into_raw(uninit) as *mut C)
     }
 }
 
