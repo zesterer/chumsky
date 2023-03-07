@@ -2182,6 +2182,7 @@ where
             // SAFETY: Using offsets derived from input
             let span = unsafe { inp.span_since(start) };
             e.err = (self.mapper)(e.err, span);
+            inp.errors.alt = Some(e);
         }
 
         res
@@ -2217,6 +2218,7 @@ where
             // SAFETY: Using offsets derived from input
             let span = unsafe { inp.span_since(start) };
             e.err = (self.mapper)(e.err, span, inp.state());
+            inp.errors.alt = Some(e);
         }
 
         res
