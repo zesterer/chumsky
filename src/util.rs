@@ -1,3 +1,5 @@
+//! Utility items used throughout the crate.
+
 use super::*;
 
 use core::{
@@ -6,8 +8,10 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-pub(crate) type MaybeMut<'a, T> = Maybe<T, &'a mut T>;
+/// A value that may be a `T` or an mutable reference to a `T`.
+pub type MaybeMut<'a, T> = Maybe<T, &'a mut T>;
 
+/// A value that may be a `T` or a shared reference to a `T`.
 pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
 
 /// A type that can represent a borrowed reference to a `T` or a value of `T`.

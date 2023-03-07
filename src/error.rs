@@ -18,7 +18,7 @@ use alloc::string::ToString;
 /// # Examples
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Simple};
+/// use chumsky::{prelude::*, error::Error, util::MaybeRef};
 /// type Span = SimpleSpan<usize>;
 ///
 /// // A custom error type
@@ -32,10 +32,10 @@ use alloc::string::ToString;
 ///     NotADigit(Span, char),
 /// }
 ///
-/// impl<'a> chumsky::error::Error<'a, &'a str> for MyError {
-///     fn expected_found<Iter: IntoIterator<Item = Option<chumsky::MaybeRef<'a, char>>>>(
+/// impl<'a> Error<'a, &'a str> for MyError {
+///     fn expected_found<Iter: IntoIterator<Item = Option<MaybeRef<'a, char>>>>(
 ///         expected: Iter,
-///         found: Option<chumsky::MaybeRef<'a, char>>,
+///         found: Option<MaybeRef<'a, char>>,
 ///         span: Span,
 ///     ) -> Self {
 ///         Self::ExpectedFound {

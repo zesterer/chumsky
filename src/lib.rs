@@ -55,7 +55,7 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
-mod util;
+pub mod util;
 
 /// Commonly used functions, traits and types.
 ///
