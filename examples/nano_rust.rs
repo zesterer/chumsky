@@ -352,7 +352,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         });
 
         // Both blocks and `if` are 'block expressions' and can appear in the place of statements
-        let block_expr = block.or(if_).labelled("block");
+        let block_expr = block.or(if_);
 
         let block_chain = block_expr
             .clone()
@@ -372,8 +372,10 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         );
 
         block_chain
+            .labelled("block")
             // Expressions, chained by semicolons, are statements
-            .or(inline_expr.clone().recover_with(skip_then_retry_until(
+            .or(inline_expr.clone())
+            .recover_with(skip_then_retry_until(
                 block_recovery.ignored().or(any().ignored()),
                 one_of([
                     Token::Ctrl(';'),
@@ -382,7 +384,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     Token::Ctrl(']'),
                 ])
                 .ignored(),
-            )))
+            ))
             .foldl(
                 just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated(),
                 |a, b| {

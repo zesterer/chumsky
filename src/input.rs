@@ -966,6 +966,12 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.errors.secondary.push(error);
     }
 
+    /// Returns `true` if any secondary errors have been emitted since the given marker was created.
+    #[inline]
+    pub(crate) fn secondary_errors_since(&self, markers: Marker<'a, 'parse, I>) -> bool {
+        self.errors.secondary.len() > markers.err_count
+    }
+
     #[inline]
     pub(crate) fn add_alt<Exp: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         &mut self,
