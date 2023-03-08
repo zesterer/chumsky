@@ -39,6 +39,7 @@ impl<T> OnceCell<T> {
     }
 }
 
+// TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
     Owned(RefC<T>),
     Unowned(RefW<T>),
@@ -152,7 +153,7 @@ fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -174,7 +175,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

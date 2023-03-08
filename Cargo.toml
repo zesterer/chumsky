@@ -28,6 +28,9 @@ spill-stack = ["stacker", "std"]
 # Allows parser memoisation, speeding up heavily back-tracking parsers and allowing left recursion
 memoization = []
 
+# Allows extending chumsky by writing your own parser implementations
+extension = []
+
 # Enable support for parser labelling
 label = []
 

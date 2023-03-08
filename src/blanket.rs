@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a, 'b, T, I, O, E> Parser<'a, I, O, E> for &'b T
+impl<'a, 'b, T, I, O, E> ParserSealed<'a, I, O, E> for &'b T
 where
     T: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -16,7 +16,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, 'b, T, I, O, E> ConfigParser<'a, I, O, E> for &'b T
+impl<'a, 'b, T, I, O, E> ConfigParserSealed<'a, I, O, E> for &'b T
 where
     T: ConfigParser<'a, I, O, E>,
     I: Input<'a>,
@@ -32,4 +32,36 @@ where
     }
 
     go_cfg_extra!(O);
+}
+
+impl<'a, I, O, E, P> Parser<'a, I, O, E> for P
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: ParserSealed<'a, I, O, E>,
+{
+}
+
+impl<'a, I, O, E, P> ConfigParser<'a, I, O, E> for P
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: ConfigParserSealed<'a, I, O, E>,
+{
+}
+
+impl<'a, I, O, E, P> IterParser<'a, I, O, E> for P
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: IterParserSealed<'a, I, O, E>,
+{
+}
+
+impl<'a, I, O, E, P> ConfigIterParser<'a, I, O, E> for P
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: ConfigIterParserSealed<'a, I, O, E>,
+{
 }

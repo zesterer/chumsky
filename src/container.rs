@@ -771,7 +771,7 @@ mod test {
 
     fn drop_container<C: ContainerExactly<usize>>() {
         let mut uninit = C::uninit();
-        for idx in 0..(C::LEN/2) {
+        for idx in 0..(C::LEN / 2) {
             C::write(&mut uninit, idx, idx);
         }
         unsafe { C::drop_before(&mut uninit, C::LEN / 2) };
@@ -798,6 +798,7 @@ mod test {
         drop_container::<Rc<Box<[usize; 4]>>>();
     }
 
+    #[test]
     fn exact_box_rc_array() {
         let c = init_container::<Box<Rc<[usize; 4]>>>();
         assert_eq!(&**c, &[0, 1, 2, 3]);

@@ -12,22 +12,13 @@ pub type Lazy<'a, A, I, E> =
     ThenIgnore<A, Repeated<Any<I, E>, <I as Input<'a>>::Token, I, E>, (), E>;
 
 /// Alter the configuration of a struct using parse-time context
+#[derive(Copy, Clone)]
 pub struct Configure<A, F> {
     pub(crate) parser: A,
     pub(crate) cfg: F,
 }
 
-impl<A: Copy, F: Copy> Copy for Configure<A, F> {}
-impl<A: Clone, F: Clone> Clone for Configure<A, F> {
-    fn clone(&self) -> Self {
-        Configure {
-            parser: self.parser.clone(),
-            cfg: self.cfg.clone(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for Configure<A, F>
+impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for Configure<A, F>
 where
     A: ConfigParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
@@ -64,7 +55,7 @@ impl<A: Clone, F: Clone, OA> Clone for IterConfigure<A, F, OA> {
     }
 }
 
-impl<'a, I, OA, E, A, F> Parser<'a, I, (), E> for IterConfigure<A, F, OA>
+impl<'a, I, OA, E, A, F> ParserSealed<'a, I, (), E> for IterConfigure<A, F, OA>
 where
     A: ConfigIterParser<'a, I, OA, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
@@ -86,7 +77,7 @@ where
     go_extra!(());
 }
 
-impl<'a, I, O, E, A, F> IterParser<'a, I, O, E> for IterConfigure<A, F, O>
+impl<'a, I, O, E, A, F> IterParserSealed<'a, I, O, E> for IterConfigure<A, F, O>
 where
     A: ConfigIterParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
@@ -136,7 +127,7 @@ impl<A: Clone, F: Clone, O> Clone for TryIterConfigure<A, F, O> {
     }
 }
 
-impl<'a, I, OA, E, A, F> Parser<'a, I, (), E> for TryIterConfigure<A, F, OA>
+impl<'a, I, OA, E, A, F> ParserSealed<'a, I, (), E> for TryIterConfigure<A, F, OA>
 where
     A: ConfigIterParser<'a, I, OA, E>,
     F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
@@ -158,7 +149,7 @@ where
     go_extra!(());
 }
 
-impl<'a, I, O, E, A, F> IterParser<'a, I, O, E> for TryIterConfigure<A, F, O>
+impl<'a, I, O, E, A, F> IterParserSealed<'a, I, O, E> for TryIterConfigure<A, F, O>
 where
     A: ConfigIterParser<'a, I, O, E>,
     F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
@@ -173,9 +164,11 @@ where
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<M>> {
-        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe {
-            inp.span_since(inp.offset)
-        })
+        let cfg = (self.cfg)(
+            A::Config::default(),
+            inp.ctx(),
+            inp.span_since(inp.offset()),
+        )
         .map_err(|e| inp.add_alt_err(inp.offset, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
@@ -227,7 +220,7 @@ where
     }
 }
 
-impl<'a, I, O, E, A, F, U> Parser<'a, I, U, E> for MapSlice<'a, A, I, O, E, F, U>
+impl<'a, I, O, E, A, F, U> ParserSealed<'a, I, U, E> for MapSlice<'a, A, I, O, E, F, U>
 where
     I: SliceInput<'a>,
     E: ParserExtra<'a, I>,
@@ -236,9 +229,9 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U> {
-        let before = inp.offset();
+        let before = inp.offset().offset;
         self.parser.go::<Check>(inp)?;
-        let after = inp.offset();
+        let after = inp.offset().offset;
 
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
@@ -262,7 +255,7 @@ impl<A: Clone, O> Clone for Slice<A, O> {
     }
 }
 
-impl<'a, A, I, O, E> Parser<'a, I, I::Slice, E> for Slice<A, O>
+impl<'a, A, I, O, E> ParserSealed<'a, I, I::Slice, E> for Slice<A, O>
 where
     A: Parser<'a, I, O, E>,
     I: SliceInput<'a>,
@@ -273,9 +266,9 @@ where
     where
         Self: Sized,
     {
-        let before = inp.offset();
+        let before = inp.offset().offset;
         self.parser.go::<Check>(inp)?;
-        let after = inp.offset();
+        let after = inp.offset().offset;
 
         Ok(M::bind(|| inp.slice(before..after)))
     }
@@ -299,7 +292,7 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
     }
 }
 
-impl<'a, A, I, O, E, F> Parser<'a, I, O, E> for Filter<A, F>
+impl<'a, A, I, O, E, F> ParserSealed<'a, I, O, E> for Filter<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -313,9 +306,8 @@ where
             if (self.filter)(&out) {
                 Ok(M::bind(|| out))
             } else {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
-                inp.add_alt(inp.offset(), None, None, err_span);
+                let err_span = inp.span_since(before);
+                inp.add_alt(inp.offset().offset, None, None, err_span);
                 Err(())
             }
         })
@@ -342,7 +334,7 @@ impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
     }
 }
 
-impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for Map<A, OA, F>
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for Map<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -358,7 +350,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, A, OA, F> IterParser<'a, I, O, E> for Map<A, OA, F>
+impl<'a, I, O, E, A, OA, F> IterParserSealed<'a, I, O, E> for Map<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -409,7 +401,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithSpan<A, OA, F> {
     }
 }
 
-impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for MapWithSpan<A, OA, F>
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithSpan<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -421,8 +413,7 @@ where
         let before = inp.offset();
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             (self.mapper)(out, span)
         }))
     }
@@ -448,7 +439,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithState<A, OA, F> {
     }
 }
 
-impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for MapWithState<A, OA, F>
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithState<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -460,8 +451,7 @@ where
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
         Ok(M::bind(|| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             let state = inp.state();
             (self.mapper)(out, span, state)
         }))
@@ -488,7 +478,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
     }
 }
 
-impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for TryMap<A, OA, F>
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for TryMap<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -499,12 +489,11 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
+        let span = inp.span_since(before);
         match (self.mapper)(out, span) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(inp.offset().offset, err);
                 Err(())
             }
         }
@@ -531,7 +520,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMapWithState<A, OA, F> {
     }
 }
 
-impl<'a, I, O, E, A, OA, F> Parser<'a, I, O, E> for TryMapWithState<A, OA, F>
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for TryMapWithState<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -542,12 +531,11 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
+        let span = inp.span_since(before);
         match (self.mapper)(out, span, inp.state()) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(inp.offset().offset, err);
                 Err(())
             }
         }
@@ -574,7 +562,7 @@ impl<A: Clone, OA, O: Clone> Clone for To<A, OA, O> {
     }
 }
 
-impl<'a, I, O, E, A, OA> Parser<'a, I, O, E> for To<A, OA, O>
+impl<'a, I, O, E, A, OA> ParserSealed<'a, I, O, E> for To<A, OA, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -606,7 +594,7 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
     }
 }
 
-impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Ignored<A, OA>
+impl<'a, I, E, A, OA> ParserSealed<'a, I, (), E> for Ignored<A, OA>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -639,7 +627,7 @@ impl<A: Clone, O> Clone for Unwrapped<A, O> {
     }
 }
 
-impl<'a, I, E, A, O, U> Parser<'a, I, O, E> for Unwrapped<A, Result<O, U>>
+impl<'a, I, E, A, O, U> ParserSealed<'a, I, O, E> for Unwrapped<A, Result<O, U>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -661,7 +649,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, E, A, O> Parser<'a, I, O, E> for Unwrapped<A, Option<O>>
+impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Unwrapped<A, Option<O>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -690,7 +678,7 @@ pub struct Memoised<A> {
 }
 
 #[cfg(feature = "memoization")]
-impl<'a, I, E, A, O> Parser<'a, I, O, E> for Memoised<A>
+impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Memoised<A>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -699,8 +687,12 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
         // TODO: Don't use address, since this might not be constant?
-        let key = (inp.offset(), &self.parser as *const _ as *const () as usize);
+        let key = (
+            before.offset,
+            &self.parser as *const _ as *const () as usize,
+        );
 
         match inp.memos.entry(key) {
             hashbrown::hash_map::Entry::Occupied(o) => {
@@ -708,8 +700,7 @@ where
                     let err = err.clone();
                     inp.add_alt_err(err.pos, err.err);
                 } else {
-                    // SAFETY: Using offsets derived from input
-                    let err_span = unsafe { inp.span_since(key.0) };
+                    let err_span = inp.span_since(before);
                     inp.add_alt(key.0, None, None, err_span);
                 }
                 return Err(());
@@ -754,7 +745,7 @@ impl<A: Clone, B: Clone, OA, OB, E> Clone for Then<A, B, OA, OB, E> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, (OA, OB), E> for Then<A, B, OA, OB, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, (OA, OB), E> for Then<A, B, OA, OB, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -789,7 +780,7 @@ impl<A: Clone, B: Clone, OA, E> Clone for IgnoreThen<A, B, OA, E> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E> for IgnoreThen<A, B, OA, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E> for IgnoreThen<A, B, OA, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -824,7 +815,7 @@ impl<A: Clone, B: Clone, OB, E> Clone for ThenIgnore<A, B, OB, E> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for ThenIgnore<A, B, OB, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OA, E> for ThenIgnore<A, B, OB, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -859,7 +850,7 @@ impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
     }
 }
 
-impl<'a, I, E, A, B, O> Parser<'a, I, O, E> for NestedIn<A, B, O, E>
+impl<'a, I, E, A, B, O> ParserSealed<'a, I, O, E> for NestedIn<A, B, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -885,7 +876,7 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err(inp.offset(), new_alt.err);
+            inp.add_alt_err(inp.offset().offset, new_alt.err);
         }
 
         res
@@ -912,7 +903,7 @@ impl<A: Clone, B: Clone, OA, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, I, E>
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OB, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
@@ -930,7 +921,7 @@ where
     go_extra!(OB);
 }
 
-impl<'a, I, E, A, B, OA, OB> IterParser<'a, I, OB, E>
+impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
@@ -981,7 +972,7 @@ impl<A: Clone, Ctx: Clone> Clone for WithCtx<A, Ctx> {
     }
 }
 
-impl<'a, I, O, E, A, Ctx> Parser<'a, I, O, E> for WithCtx<A, Ctx>
+impl<'a, I, O, E, A, Ctx> ParserSealed<'a, I, O, E> for WithCtx<A, Ctx>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1016,7 +1007,7 @@ impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC
     }
 }
 
-impl<'a, I, E, A, B, C, OA, OB, OC> Parser<'a, I, OA, E> for DelimitedBy<A, B, C, OB, OC>
+impl<'a, I, E, A, B, C, OA, OB, OC> ParserSealed<'a, I, OA, E> for DelimitedBy<A, B, C, OB, OC>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1053,7 +1044,7 @@ impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for PaddedBy<A, B, OB>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OA, E> for PaddedBy<A, B, OB>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1077,7 +1068,7 @@ pub struct Or<A, B> {
     pub(crate) choice: crate::primitive::Choice<(A, B)>,
 }
 
-impl<'a, I, O, E, A, B> Parser<'a, I, O, E> for Or<A, B>
+impl<'a, I, O, E, A, B> ParserSealed<'a, I, O, E> for Or<A, B>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1208,7 +1199,7 @@ where
     }
 }
 
-impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Repeated<A, OA, I, E>
+impl<'a, I, E, A, OA> ParserSealed<'a, I, (), E> for Repeated<A, OA, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1229,7 +1220,7 @@ where
     go_extra!(());
 }
 
-impl<'a, A, O, I, E> IterParser<'a, I, O, E> for Repeated<A, O, I, E>
+impl<'a, A, O, I, E> IterParserSealed<'a, I, O, E> for Repeated<A, O, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1271,7 +1262,7 @@ where
     }
 }
 
-impl<'a, A, O, I, E> ConfigIterParser<'a, I, O, E> for Repeated<A, O, I, E>
+impl<'a, A, O, I, E> ConfigIterParserSealed<'a, I, O, E> for Repeated<A, O, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1474,7 +1465,7 @@ where
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> IterParser<'a, I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
+impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1552,7 +1543,7 @@ where
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1590,7 +1581,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
     }
 }
 
-impl<'a, I, O, E, A, C> Parser<'a, I, C, E> for Collect<A, O, C>
+impl<'a, I, O, E, A, C> ParserSealed<'a, I, C, E> for Collect<A, O, C>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1631,7 +1622,7 @@ impl<A: Clone, O, C> Clone for CollectExactly<A, O, C> {
     }
 }
 
-impl<'a, I, O, E, A, C> Parser<'a, I, C, E> for CollectExactly<A, O, C>
+impl<'a, I, O, E, A, C> ParserSealed<'a, I, C, E> for CollectExactly<A, O, C>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1640,6 +1631,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
+        // TODO: Document safety invariants
         let before = inp.offset();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
@@ -1649,18 +1641,17 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    inp.add_alt(
-                        inp.offset,
-                        None,
-                        None,
-                        unsafe { inp.span_since(before) },
-                    );
-                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
-                    return Err(())
+                    inp.add_alt(inp.offset, None, None, inp.span_since(before));
+                    M::map(output, |mut output| unsafe {
+                        C::drop_before(&mut output, idx)
+                    });
+                    return Err(());
                 }
                 Err(()) => {
-                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
-                    return Err(())
+                    M::map(output, |mut output| unsafe {
+                        C::drop_before(&mut output, idx)
+                    });
+                    return Err(());
                 }
             }
         }
@@ -1677,7 +1668,7 @@ pub struct OrNot<A> {
 }
 
 // TODO: Maybe implement `IterParser` too?
-impl<'a, I, O, E, A> Parser<'a, I, Option<O>, E> for OrNot<A>
+impl<'a, I, O, E, A> ParserSealed<'a, I, Option<O>, E> for OrNot<A>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1714,7 +1705,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
     }
 }
 
-impl<'a, I, E, A, OA> Parser<'a, I, (), E> for Not<A, OA>
+impl<'a, I, E, A, OA> ParserSealed<'a, I, (), E> for Not<A, OA>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -1727,15 +1718,14 @@ where
         let alt = inp.errors.alt.take();
 
         let result = self.parser.go::<Check>(inp);
-        // SAFETY: Using offsets derived from input
-        let result_span = unsafe { inp.span_since(before.offset) };
+        let result_span = inp.span_since(before.offset());
         inp.rewind(before);
 
         inp.errors.alt = alt;
 
         match result {
             Ok(()) => {
-                let (at, found) = inp.next();
+                let (at, found) = inp.next_inner();
                 inp.add_alt(at, None, found.map(|f| f.into()), result_span);
                 Err(())
             }
@@ -1764,7 +1754,7 @@ impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> Parser<'a, I, OA, E> for AndIs<A, B, OB>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OA, E> for AndIs<A, B, OB>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1824,7 +1814,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
     }
 }
 
-impl<'a, I, F, A, B, O, OA, E> Parser<'a, I, O, E> for Foldr<F, A, B, OA, E>
+impl<'a, I, F, A, B, O, OA, E> ParserSealed<'a, I, O, E> for Foldr<F, A, B, OA, E>
 where
     I: Input<'a>,
     A: IterParser<'a, I, OA, E>,
@@ -1879,7 +1869,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
     }
 }
 
-impl<'a, I, F, A, B, O, OB, E> Parser<'a, I, O, E> for Foldl<F, A, B, OB, E>
+impl<'a, I, F, A, B, O, OB, E> ParserSealed<'a, I, O, E> for Foldl<F, A, B, OB, E>
 where
     I: Input<'a>,
     A: Parser<'a, I, O, E>,
@@ -1915,7 +1905,7 @@ pub struct Rewind<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, A> Parser<'a, I, O, E> for Rewind<A>
+impl<'a, I, O, E, A> ParserSealed<'a, I, O, E> for Rewind<A>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1943,7 +1933,7 @@ pub struct MapErr<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErr<A, F>
+impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for MapErr<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1976,7 +1966,7 @@ pub struct MapErrWithSpan<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErrWithSpan<A, F>
+impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for MapErrWithSpan<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1993,8 +1983,7 @@ where
 
         if res.is_err() {
             let mut e = inp.errors.alt.take().expect("error but no alt?");
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(start) };
+            let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span);
             inp.errors.alt = Some(e);
         }
@@ -2012,7 +2001,7 @@ pub struct MapErrWithState<A, F> {
     pub(crate) mapper: F,
 }
 
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for MapErrWithState<A, F>
+impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for MapErrWithState<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2029,8 +2018,7 @@ where
 
         if res.is_err() {
             let mut e = inp.errors.alt.take().expect("error but no alt?");
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(start) };
+            let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span, inp.state());
             inp.errors.alt = Some(e);
         }
@@ -2059,7 +2047,7 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
     }
 }
 
-impl<'a, I, OA, U, E, A, F> Parser<'a, I, U, E> for Validate<A, OA, F>
+impl<'a, I, OA, U, E, A, F> ParserSealed<'a, I, U, E> for Validate<A, OA, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2073,8 +2061,7 @@ where
     {
         let before = inp.offset();
         self.parser.go::<Emit>(inp).map(|out| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             let mut emitter = Emitter::new();
             let out = (self.validator)(out, span, &mut emitter);
             for err in emitter.errors() {
@@ -2094,7 +2081,7 @@ pub struct OrElse<A, F> {
     pub(crate) or_else: F,
 }
 
-impl<'a, I, O, E, A, F> Parser<'a, I, O, E> for OrElse<A, F>
+impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for OrElse<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
