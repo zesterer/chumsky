@@ -33,7 +33,7 @@ where
         // TODO: Label secondary errors too?
         if res.is_err() {
             let err = inp.errors.alt.as_mut().expect("error but no alt?");
-            if err.pos == before.into() + 1 {
+            if err.pos == before.offset.into() + 1 {
                 err.err.label_with(self.label.clone());
             }
         }

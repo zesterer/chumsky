@@ -30,12 +30,11 @@ where
                 let before = inp.offset();
                 inp.skip_bytes(len);
                 let after = inp.offset();
-                Ok(M::bind(|| inp.slice(before..after)))
+                Ok(M::bind(|| inp.slice(before.offset..after.offset)))
             }
             None => {
                 // TODO: Improve error
-                // SAFETY: Using offsets derived from input
-                inp.add_alt(inp.offset(), None, None, unsafe { inp.span_since(before) });
+                inp.add_alt(inp.offset().offset, None, None, inp.span_since(before));
                 Err(())
             }
         }

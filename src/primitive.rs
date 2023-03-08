@@ -45,9 +45,7 @@ where
         match inp.next_maybe() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
-                inp.add_alt(at, None, Some(tok.into()), err_span);
+                inp.add_alt(at, None, Some(tok.into()), inp.span_since(before));
                 Err(())
             }
         }
@@ -198,8 +196,7 @@ where
                         at,
                         Some(Some(T::to_maybe_ref(next))),
                         found.map(|f| f.into()),
-                        // SAFETY: Using offsets derived from input
-                        unsafe { inp.span_since(before) },
+                        inp.span_since(before),
                     );
                     Some(())
                 }
@@ -272,8 +269,7 @@ where
         match inp.next() {
             (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(
                     at,
                     self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
@@ -346,8 +342,7 @@ where
         match inp.next() {
             (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(at, None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -410,7 +405,7 @@ where
         match (self.f)(inp) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(inp.offset().offset, err);
                 Err(())
             }
         }
@@ -460,16 +455,12 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let next = inp.next();
-        // SAFETY: Using offsets derived from input
-        let err_span = unsafe { inp.span_since(before) };
+        let err_span = inp.span_since(before);
         let (at, found) = match next {
-            // SAFETY: Using offsets derived from input
-            (at, Some(tok)) => {
-                match (self.filter)(tok.clone(), unsafe { inp.span_since(before) }) {
-                    Some(out) => return Ok(M::bind(|| out)),
-                    None => (at, Some(tok.into())),
-                }
-            }
+            (at, Some(tok)) => match (self.filter)(tok.clone(), inp.span_since(before)) {
+                Some(out) => return Ok(M::bind(|| out)),
+                None => (at, Some(tok.into())),
+            },
             (at, found) => (at, found.map(|f| f.into())),
         };
         inp.add_alt(at, None, found, err_span);
@@ -520,9 +511,8 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let next = inp.next_ref();
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
-        let err_span = unsafe { inp.span_since(before) };
+        let span = inp.span_since(before);
+        let err_span = inp.span_since(before);
         let (at, found) = match next {
             (at, Some(tok)) => match (self.filter)(tok, span) {
                 Some(out) => return Ok(M::bind(|| out)),
@@ -562,8 +552,7 @@ where
         match inp.next() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(at, None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -962,9 +951,8 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         if N == 0 {
             let offs = inp.offset();
-            // SAFETY: Using offsets derived from input
-            let err_span = unsafe { inp.span_since(offs) };
-            inp.add_alt(offs, None, None, err_span);
+            let err_span = inp.span_since(offs);
+            inp.add_alt(offs.offset, None, None, err_span);
             Err(())
         } else {
             let before = inp.save();

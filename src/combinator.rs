@@ -164,9 +164,11 @@ where
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<M>> {
-        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), unsafe {
-            inp.span_since(inp.offset)
-        })
+        let cfg = (self.cfg)(
+            A::Config::default(),
+            inp.ctx(),
+            inp.span_since(inp.offset()),
+        )
         .map_err(|e| inp.add_alt_err(inp.offset, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
@@ -227,9 +229,9 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U> {
-        let before = inp.offset();
+        let before = inp.offset().offset;
         self.parser.go::<Check>(inp)?;
-        let after = inp.offset();
+        let after = inp.offset().offset;
 
         Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
     }
@@ -264,9 +266,9 @@ where
     where
         Self: Sized,
     {
-        let before = inp.offset();
+        let before = inp.offset().offset;
         self.parser.go::<Check>(inp)?;
-        let after = inp.offset();
+        let after = inp.offset().offset;
 
         Ok(M::bind(|| inp.slice(before..after)))
     }
@@ -304,9 +306,8 @@ where
             if (self.filter)(&out) {
                 Ok(M::bind(|| out))
             } else {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
-                inp.add_alt(inp.offset(), None, None, err_span);
+                let err_span = inp.span_since(before);
+                inp.add_alt(inp.offset().offset, None, None, err_span);
                 Err(())
             }
         })
@@ -412,8 +413,7 @@ where
         let before = inp.offset();
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             (self.mapper)(out, span)
         }))
     }
@@ -451,8 +451,7 @@ where
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
         Ok(M::bind(|| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             let state = inp.state();
             (self.mapper)(out, span, state)
         }))
@@ -490,12 +489,11 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
+        let span = inp.span_since(before);
         match (self.mapper)(out, span) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(inp.offset().offset, err);
                 Err(())
             }
         }
@@ -533,12 +531,11 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
+        let span = inp.span_since(before);
         match (self.mapper)(out, span, inp.state()) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(inp.offset().offset, err);
                 Err(())
             }
         }
@@ -690,8 +687,12 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
         // TODO: Don't use address, since this might not be constant?
-        let key = (inp.offset(), &self.parser as *const _ as *const () as usize);
+        let key = (
+            before.offset,
+            &self.parser as *const _ as *const () as usize,
+        );
 
         match inp.memos.entry(key) {
             hashbrown::hash_map::Entry::Occupied(o) => {
@@ -699,8 +700,7 @@ where
                     let err = err.clone();
                     inp.add_alt_err(err.pos, err.err);
                 } else {
-                    // SAFETY: Using offsets derived from input
-                    let err_span = unsafe { inp.span_since(key.0) };
+                    let err_span = inp.span_since(before);
                     inp.add_alt(key.0, None, None, err_span);
                 }
                 return Err(());
@@ -876,7 +876,7 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err(inp.offset(), new_alt.err);
+            inp.add_alt_err(inp.offset().offset, new_alt.err);
         }
 
         res
@@ -1631,6 +1631,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
+        // TODO: Document safety invariants
         let before = inp.offset();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
@@ -1640,7 +1641,7 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    inp.add_alt(inp.offset, None, None, unsafe { inp.span_since(before) });
+                    inp.add_alt(inp.offset, None, None, inp.span_since(before));
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
                     });
@@ -1717,8 +1718,7 @@ where
         let alt = inp.errors.alt.take();
 
         let result = self.parser.go::<Check>(inp);
-        // SAFETY: Using offsets derived from input
-        let result_span = unsafe { inp.span_since(before.offset) };
+        let result_span = inp.span_since(before.offset());
         inp.rewind(before);
 
         inp.errors.alt = alt;
@@ -1983,8 +1983,7 @@ where
 
         if res.is_err() {
             let mut e = inp.errors.alt.take().expect("error but no alt?");
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(start) };
+            let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span);
             inp.errors.alt = Some(e);
         }
@@ -2019,8 +2018,7 @@ where
 
         if res.is_err() {
             let mut e = inp.errors.alt.take().expect("error but no alt?");
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(start) };
+            let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span, inp.state());
             inp.errors.alt = Some(e);
         }
@@ -2063,8 +2061,7 @@ where
     {
         let before = inp.offset();
         self.parser.go::<Emit>(inp).map(|out| {
-            // SAFETY: Using offsets derived from input
-            let span = unsafe { inp.span_since(before) };
+            let span = inp.span_since(before);
             let mut emitter = Emitter::new();
             let out = (self.validator)(out, span, &mut emitter);
             for err in emitter.errors() {
