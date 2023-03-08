@@ -119,7 +119,7 @@ where
             }
 
             // let before = inp.offset();
-            // match inp.next() {
+            // match inp.next_inner() {
             //     (_, None) => {
             //         inp.errors.alt = Some(alt);
             //         break Err(());

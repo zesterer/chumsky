@@ -42,7 +42,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let before = inp.offset();
-        match inp.next_maybe() {
+        match inp.next_maybe_inner() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => {
                 inp.add_alt(at, None, Some(tok.into()), inp.span_since(before));
@@ -189,7 +189,7 @@ where
 
         if let Some(()) = seq.seq_iter().find_map(|next| {
             let before = inp.offset();
-            match inp.next_maybe() {
+            match inp.next_maybe_inner() {
                 (_, Some(tok)) if next.borrow() == tok.borrow() => None,
                 (at, found) => {
                     inp.add_alt(
@@ -266,7 +266,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 let err_span = inp.span_since(before);
@@ -339,7 +339,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 let err_span = inp.span_since(before);
@@ -376,7 +376,7 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 /// # use chumsky::{prelude::*, error::Simple};
 ///
 /// let x = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
-///     let _ = inp.next_token();
+///     let _ = inp.next();
 ///     Ok(())
 /// });
 ///
@@ -454,7 +454,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        let next = inp.next();
+        let next = inp.next_inner();
         let err_span = inp.span_since(before);
         let (at, found) = match next {
             (at, Some(tok)) => match (self.filter)(tok.clone(), inp.span_since(before)) {
@@ -510,7 +510,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        let next = inp.next_ref();
+        let next = inp.next_ref_inner();
         let span = inp.span_since(before);
         let err_span = inp.span_since(before);
         let (at, found) = match next {
@@ -549,7 +549,7 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => {
                 let err_span = inp.span_since(before);
@@ -690,7 +690,7 @@ where
 
             inp.rewind(start);
 
-            match inp.next() {
+            match inp.next_inner() {
                 (_, Some(tok)) => {
                     output = M::map(output, |mut output: C| {
                         output.push(tok);

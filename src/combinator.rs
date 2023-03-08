@@ -1725,7 +1725,7 @@ where
 
         match result {
             Ok(()) => {
-                let (at, found) = inp.next();
+                let (at, found) = inp.next_inner();
                 inp.add_alt(at, None, found.map(|f| f.into()), result_span);
                 Err(())
             }

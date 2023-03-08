@@ -29,7 +29,7 @@
 //! {
 //!     fn parse(&self, inp: &mut input::InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
 //!         let before = inp.offset();
-//!         match inp.next_token() {
+//!         match inp.next() {
 //!             // The next token was a null byte, meaning that parsing was successful
 //!             Some(b'\0') => Ok(()),
 //!             // The next token was something that wasn't a null byte, generate an error instead
@@ -118,9 +118,10 @@ mod current {
 
     /// A type used to wrap parser extensions.
     ///
-    /// Sadly, Rust's coherent rules prevent us from blanket implementing [`Parser`] for any implementor of [`ExtParser`].
-    /// This is the compromise solution that keeps things working: wrap your parser types in [`Ext`], and you can start
-    /// talking to the rest of the chumsky ecosystem.
+    /// Sadly, Rust's trait coherence rules (often called 'orphan rules') prevent us from having a blanket
+    /// implementation of [`Parser`] for any implementer of [`ExtParser`]. This wrapper type is the compromise solution
+    /// that keeps things working: wrap your parser types in [`Ext`], and you can start talking to the rest of the
+    /// chumsky ecosystem. See [`extension`] for an example of how to do this.
     ///
     /// It's possible that future changes to Rust's coherence rules, or to chumsky's core, may relax this requirement in
     /// the future.

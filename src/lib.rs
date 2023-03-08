@@ -1549,6 +1549,9 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    // TODO: Unfortunately we can't constrain the trait above without a cycle. Figure out a way to have this associated
+    // type visible to the world without weirdness (maybe it should be a type param of `ConfigParser`?)
+
     // /// Type used to configure the parser
     // type Config: Default;
 
@@ -2123,9 +2126,9 @@ mod tests {
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
         let mut own = InputOwn::<_, extra::Default>::new(input);
-        let mut input = own.as_ref_start();
+        let mut inp = own.as_ref_start();
 
-        while let (_, Some(c)) = input.next() {
+        while let Some(c) = inp.next() {
             std::hint::black_box(c);
         }
     }
