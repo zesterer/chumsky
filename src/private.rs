@@ -30,6 +30,13 @@ pub trait Mode {
     /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
 
+    /// Choose between two fallible functions to execute depending on the mode.
+    fn choose<A, T, E, F: FnOnce(A) -> Result<T, E>, G: FnOnce(A) -> Result<(), E>>(
+        arg: A,
+        f: F,
+        g: G,
+    ) -> Result<Self::Output<T>, E>;
+
     /// Given two [`Output`](Self::Output)s, take their values and combine them into a new
     /// output value
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(
@@ -78,6 +85,14 @@ impl Mode for Emit {
     #[inline(always)]
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
         f(x)
+    }
+    #[inline(always)]
+    fn choose<A, T, E, F: FnOnce(A) -> Result<T, E>, G: FnOnce(A) -> Result<(), E>>(
+        arg: A,
+        f: F,
+        _: G,
+    ) -> Result<Self::Output<T>, E> {
+        f(arg)
     }
     #[inline(always)]
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(
@@ -130,6 +145,14 @@ impl Mode for Check {
     fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
     #[inline(always)]
     fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
+    #[inline(always)]
+    fn choose<A, T, E, F: FnOnce(A) -> Result<T, E>, G: FnOnce(A) -> Result<(), E>>(
+        arg: A,
+        _: F,
+        g: G,
+    ) -> Result<Self::Output<T>, E> {
+        g(arg)
+    }
     #[inline(always)]
     fn combine<T, U, V, F: FnOnce(T, U) -> V>(
         _: Self::Output<T>,

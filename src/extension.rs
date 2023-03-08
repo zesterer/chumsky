@@ -113,6 +113,17 @@ mod current {
         ///
         /// See [`InputRef`] for more information about how you can work with parser inputs.
         fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>;
+
+        /// Attempt to check the given input.
+        ///
+        /// This function should have exactly the same behaviour as [`ExtParser::parse`]. If the behaviour differs, the
+        /// result of using the parser is unspecified.
+        ///
+        /// By default, this method just uses `ExtParser::parse`, dropping the out. You may want to override the
+        /// implementation for the sake of performance.
+        fn check(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
+            self.parse(inp).map(|_| ())
+        }
     }
 
     /// A type used to wrap parser extensions.
@@ -140,8 +151,8 @@ mod current {
         #[inline(always)]
         fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
             let before = inp.offset();
-            match self.0.parse(inp) {
-                Ok(out) => Ok(M::bind(|| out)),
+            match M::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
+                Ok(out) => Ok(out),
                 Err(err) => {
                     inp.add_alt_err(before.offset, err);
                     Err(())

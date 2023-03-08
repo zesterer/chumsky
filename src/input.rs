@@ -809,6 +809,40 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         (self.offset, token)
     }
 
+    /// Attempt to parse this input using the given parser.
+    ///
+    /// # Important Notice
+    ///
+    /// Parsers that return `Err(...)` are permitted to leave the input in an **unspecified** (but not
+    /// [undefined](https://en.wikipedia.org/wiki/Undefined_behavior)) state.
+    ///
+    /// The only well-specified action you are permitted to perform on the input after an error has occurred is
+    /// rewinding to a marker created *before* the error occurred via [`InputRef::rewind`].
+    ///
+    /// This state is not consistent between releases of chumsky, compilations of the final binary, or even invocations
+    /// of the parser. You should not rely on this state for anything, and choosing to rely on it means that your
+    /// parser may break in unexpected ways at any time.
+    ///
+    /// You have been warned.
+    pub fn parse<O, P: Parser<'a, I, O, E>>(&mut self, parser: P) -> Result<O, E::Error> {
+        match parser.go::<Emit>(self) {
+            Ok(out) => Ok(out),
+            Err(()) => Err(self.errors.alt.take().expect("error but no alt?").err),
+        }
+    }
+
+    /// A check-only version of [`InputRef::parse`].
+    ///
+    /// # Import Notice
+    ///
+    /// See [`InputRef::parse`] about unspecified behaviour associated with this function.
+    pub fn check<O, P: Parser<'a, I, O, E>>(&mut self, parser: P) -> Result<(), E::Error> {
+        match parser.go::<Check>(self) {
+            Ok(()) => Ok(()),
+            Err(()) => Err(self.errors.alt.take().expect("error but no alt?").err),
+        }
+    }
+
     /// Get the next token in the input. Returns `None` if the end of the input has been reached.
     ///
     /// This function is more flexible than either [`InputRef::next`] or [`InputRef::next_ref`] since it
