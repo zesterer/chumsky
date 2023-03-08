@@ -1528,9 +1528,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
-    fn boxed(self) -> Boxed<'a, I, O, E>
+    fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
-        Self: Sized + 'a,
+        Self: Sized + 'a + 'b,
     {
         ParserSealed::boxed(self)
     }
@@ -1819,11 +1819,11 @@ where
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
-pub struct Boxed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
-    inner: RefC<dyn Parser<'a, I, O, E> + 'a>,
+pub struct Boxed<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> {
+    inner: RefC<dyn Parser<'a, I, O, E> + 'b>,
 }
 
-impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
+impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, 'b, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -1831,7 +1831,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     }
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, I, O, E>
+impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, 'b, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1840,9 +1840,9 @@ where
         M::invoke(&*self.inner, inp)
     }
 
-    fn boxed(self) -> Boxed<'a, I, O, E>
+    fn boxed<'c>(self) -> Boxed<'a, 'c, I, O, E>
     where
-        Self: Sized + 'a,
+        Self: Sized + 'a + 'c,
     {
         // Never double-box parsers
         self
