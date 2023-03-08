@@ -116,11 +116,13 @@ mod current {
 
         /// Attempt to check the given input.
         ///
-        /// This function should have exactly the same behaviour as [`ExtParser::parse`]. If the behaviour differs, the
-        /// result of using the parser is unspecified.
+        /// This function should have **exactly** the same behaviour as [`ExtParser::parse`]. If the behaviour differs,
+        /// the result of using the parser is unspecified (note that chumsky tries to aggressively avoid generating
+        /// outputs if it doesn't use them, and will readily swap between [`ExtParser::parse`] and [`ExtParser::check`]
+        /// when it thinks that doing so might yield performance benefits).
         ///
-        /// By default, this method just uses `ExtParser::parse`, dropping the out. You may want to override the
-        /// implementation for the sake of performance.
+        /// By default, this method just uses `ExtParser::parse`, dropping the output. You may want to override the
+        /// implementation so that this output is never even generated, thereby improving performance.
         fn check(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
             self.parse(inp).map(|_| ())
         }

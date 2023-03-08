@@ -3,6 +3,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 // TODO: docsrs feature flags for nice feature labels in crate docs
+// TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
 
