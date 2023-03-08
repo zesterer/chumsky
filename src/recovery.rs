@@ -118,27 +118,16 @@ where
                 break Err(());
             }
 
-            // let before = inp.offset();
-            // match inp.next_inner() {
-            //     (_, None) => {
-            //         inp.errors.alt = Some(alt);
-            //         break Err(());
-            //     }
-            //     (_, Some(tok)) => {
-            //         inp.emit(E::Error::expected_found(
-            //             None,
-            //             Some(tok.into()),
-            //             // SAFETY: Using offsets derived from input
-            //             unsafe { inp.span_since(before) },
-            //         ));
-            //     }
-            // }
-
             let before = inp.save();
-            if let Ok(out) = parser.go::<M>(inp) {
+            if let Some(out) = parser
+                .go::<M>(inp)
+                .ok()
+                .filter(|_| !inp.secondary_errors_since(before))
+            {
                 inp.emit(alt.err);
                 break Ok(out);
             } else {
+                inp.errors.alt.take();
                 inp.rewind(before);
             }
         }
