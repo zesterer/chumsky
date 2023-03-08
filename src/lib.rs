@@ -1497,7 +1497,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // Does not panic, because the original parser only accepts "true" or "false"
     /// assert!(boolean.parse("42").has_errors());
     /// ```
-    // TODO: Use Location::caller(), make this a proper combinator
     #[track_caller]
     fn unwrapped(self) -> Unwrapped<Self, O>
     where
