@@ -9,11 +9,11 @@ macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
         fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O> {
-            Parser::<I, $O, E>::go::<Emit>(self, inp)
+            ParserSealed::<I, $O, E>::go::<Emit>(self, inp)
         }
         #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O> {
-            Parser::<I, $O, E>::go::<Check>(self, inp)
+            ParserSealed::<I, $O, E>::go::<Check>(self, inp)
         }
     };
 }
@@ -26,7 +26,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Emit, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+            ConfigParserSealed::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
         #[inline(always)]
         fn go_check_cfg(
@@ -34,7 +34,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Check, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+            ConfigParserSealed::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
 }
@@ -48,6 +48,7 @@ pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
 pub mod primitive;
+mod private;
 pub mod recovery;
 pub mod recursive;
 #[cfg(feature = "regex")]
@@ -108,10 +109,12 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput, ValueInput},
-    internal::{IPResult, PResult},
     prelude::*,
     primitive::Any,
-    private::{Check, Emit, Mode},
+    private::{
+        Check, ConfigIterParserSealed, ConfigParserSealed, Emit, IPResult, IterParserSealed,
+        Located, MaybeUninitExt, Mode, PResult, ParserSealed,
+    },
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
@@ -133,28 +136,6 @@ mod sync {
 }
 
 use sync::*;
-
-// TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
-trait MaybeUninitExt<T>: Sized {
-    /// Identical to the unstable [`MaybeUninit::uninit_array`]
-    fn uninit_array<const N: usize>() -> [Self; N];
-
-    /// Identical to the unstable [`MaybeUninit::array_assume_init`]
-    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N];
-}
-
-impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
-    fn uninit_array<const N: usize>() -> [Self; N] {
-        // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
-        unsafe { MaybeUninit::uninit().assume_init() }
-    }
-
-    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
-        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
-        core::mem::forget(uninit);
-        out
-    }
-}
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
@@ -218,205 +199,6 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
-#[derive(Clone)]
-struct Located<E> {
-    pos: usize,
-    err: E,
-}
-
-impl<E> Located<E> {
-    #[inline]
-    pub fn at(pos: usize, err: E) -> Self {
-        Self { pos, err }
-    }
-}
-
-mod private {
-    use super::*;
-
-    pub trait ModeSealed {}
-
-    impl ModeSealed for Emit {}
-    impl ModeSealed for Check {}
-
-    /// An abstract parse mode - can be [`Emit`] or [`Check`] in practice, and represents the
-    /// common interface for handling both in the same method.
-    pub trait Mode: ModeSealed {
-        /// The output of this mode for a given type
-        type Output<T>;
-
-        /// Bind the result of a closure into an output
-        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
-
-        /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
-        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
-
-        /// Given two [`Output`](Self::Output)s, take their values and combine them into a new
-        /// output value
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            x: Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) -> Self::Output<V>;
-        /// By-reference version of [`Mode::combine`].
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            x: &mut Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        );
-
-        /// Given an array of outputs, bind them into an output of arrays
-        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
-
-        /// Invoke a parser user the current mode. This is normally equivalent to
-        /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
-        /// `dyn Parser`.
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized;
-
-        /// Invoke a parser with configuration using the current mode. This is normally equivalent
-        /// to [`parser.go::<M>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
-        /// such as `dyn Parser`.
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized;
-    }
-
-    /// Emit mode - generates parser output
-    pub struct Emit;
-
-    impl Mode for Emit {
-        type Output<T> = T;
-        #[inline(always)]
-        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
-            f()
-        }
-        #[inline(always)]
-        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
-            f(x)
-        }
-        #[inline(always)]
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            x: Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) -> Self::Output<V> {
-            f(x, y)
-        }
-        #[inline(always)]
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            x: &mut Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) {
-            f(x, y)
-        }
-        #[inline(always)]
-        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
-            x
-        }
-
-        #[inline(always)]
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_emit(inp)
-        }
-
-        #[inline(always)]
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_emit_cfg(inp, cfg)
-        }
-    }
-
-    /// Check mode - all output is discarded, and only uses parsers to check validity
-    pub struct Check;
-
-    impl Mode for Check {
-        type Output<T> = ();
-        #[inline(always)]
-        fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-        #[inline(always)]
-        fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
-        #[inline(always)]
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            _: Self::Output<T>,
-            _: Self::Output<U>,
-            _: F,
-        ) -> Self::Output<V> {
-        }
-        #[inline(always)]
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            _: &mut Self::Output<T>,
-            _: Self::Output<U>,
-            _: F,
-        ) {
-        }
-        #[inline(always)]
-        fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
-
-        #[inline(always)]
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_check(inp)
-        }
-
-        #[inline(always)]
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_check_cfg(inp, cfg)
-        }
-    }
-}
-
-/// Internal API features not intended for general use.
-///
-/// **Please note that this module is exempt from the ordinary stability guarantees of the crate. You must not rely on
-/// API features within this module unless you are happy for your code to break with only a minor version increment.**
-pub mod internal {
-    use super::*;
-    pub use crate::input::SpannedTokenMaybe;
-    pub use private::{Check, Emit, Mode};
-
-    /// The result of calling [`Parser::go`]
-    pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
-    /// The result of calling [`IterParser::next`]
-    pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
-}
-
 /// A trait implemented by parsers.
 ///
 /// Parsers take a stream of tokens of type `I` and attempt to parse them into a value of type `O`. In doing so, they
@@ -436,7 +218,9 @@ pub mod internal {
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
+    ParserSealed<'a, I, O, E>
+{
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -527,19 +311,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         };
         ParseResult::new(out, errs)
     }
-
-    /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
-    /// that both the signature and semantic requirements of this function are very likely to change in later versions.
-    /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own.
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized;
-
-    #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
-    #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
@@ -1744,14 +1515,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     where
         Self: Sized + 'a,
     {
-        Boxed {
-            inner: RefC::new(self),
-        }
+        ParserSealed::boxed(self)
     }
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, I, O, E> Parser<'a, I, O, E> for !
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for !
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1764,28 +1533,13 @@ where
 }
 
 /// A parser that can be configured with runtime context
-pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
+pub trait ConfigParser<'a, I, O, E>: ConfigParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    /// Type used to configure the parser
-    type Config: Default;
-
-    /// Parse a stream with the provided configured values. This can be used to control a parser's
-    /// behavior at parse-time.
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
-    where
-        Self: Sized;
-
-    #[doc(hidden)]
-    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O>;
-    #[doc(hidden)]
-    fn go_check_cfg(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        cfg: Self::Config,
-    ) -> PResult<Check, O>;
+    // /// Type used to configure the parser
+    // type Config: Default;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
@@ -1835,24 +1589,11 @@ where
 
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
 // TODO: Make sealed
-pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
-    /// The state of the iterator during iteration.
-    type IterState<M: Mode>
-    where
-        I: 'a;
-
-    #[doc(hidden)]
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>>;
-    #[doc(hidden)]
-    fn next<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<M>,
-    ) -> IPResult<M, O>;
-
+pub trait IterParser<'a, I, O, E = extra::Default>: IterParserSealed<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
     /// Collect this iterable parser into a [`Container`].
     ///
     /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
@@ -2018,20 +1759,12 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
-pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
-    IterParser<'a, I, O, E>
+pub trait ConfigIterParser<'a, I, O, E = extra::Default>:
+    ConfigIterParserSealed<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
 {
-    /// Type used to configure the parser
-    type Config: Default;
-
-    #[doc(hidden)]
-    fn next_cfg<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<M>,
-        cfg: &Self::Config,
-    ) -> IPResult<M, O>;
-
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
     where
@@ -2078,7 +1811,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     }
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, I, O, E>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

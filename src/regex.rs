@@ -16,7 +16,7 @@ pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     }
 }
 
-impl<'a, C, I, E> Parser<'a, I, &'a C::Str, E> for Regex<C, I, E>
+impl<'a, C, I, E> ParserSealed<'a, I, &'a C::Str, E> for Regex<C, I, E>
 where
     C: Char,
     I: StrInput<'a, C>,

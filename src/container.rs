@@ -798,6 +798,7 @@ mod test {
         drop_container::<Rc<Box<[usize; 4]>>>();
     }
 
+    #[test]
     fn exact_box_rc_array() {
         let c = init_container::<Box<Rc<[usize; 4]>>>();
         assert_eq!(&**c, &[0, 1, 2, 3]);

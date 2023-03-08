@@ -17,7 +17,7 @@ pub struct Labelled<A, L> {
     pub(crate) label: L,
 }
 
-impl<'a, I, O, E, A, L> Parser<'a, I, O, E> for Labelled<A, L>
+impl<'a, I, O, E, A, L> ParserSealed<'a, I, O, E> for Labelled<A, L>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

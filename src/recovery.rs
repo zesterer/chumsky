@@ -54,7 +54,7 @@ pub struct RecoverWith<A, S> {
     pub(crate) strategy: S,
 }
 
-impl<'a, I, O, E, A, S> Parser<'a, I, O, E> for RecoverWith<A, S>
+impl<'a, I, O, E, A, S> ParserSealed<'a, I, O, E> for RecoverWith<A, S>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -224,14 +224,15 @@ where
     recursive({
         let (start, end) = (start.clone(), end.clone());
         |block| {
-            let mut many_block = block
-                .clone()
-                .delimited_by(just(start.clone()), just(end.clone()))
-                .boxed();
+            let mut many_block = Parser::boxed(
+                block
+                    .clone()
+                    .delimited_by(just(start.clone()), just(end.clone())),
+            );
             for (s, e) in &others {
-                many_block = many_block
-                    .or(block.clone().delimited_by(just(s.clone()), just(e.clone())))
-                    .boxed();
+                many_block = Parser::boxed(
+                    many_block.or(block.clone().delimited_by(just(s.clone()), just(e.clone()))),
+                );
             }
 
             let skip = IntoIterator::into_iter([start, end])
