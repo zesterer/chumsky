@@ -85,11 +85,11 @@ mod current {
     /// breaking the public API.
     ///
     /// If your parser is a combinator and you'd like it to be used like a method (such as chumsky's built-in `a.or(b)`
-    /// combinator), it is recommended that you implement an extension trait in your own library and have uses import
+    /// combinator), it is recommended that you implement an extension trait in your own library and have users import
     /// it, like so:
     ///
     /// ```
-    /// use chumsky::{prelude::*, input, extra, extension::v1::{ExtParser, Ext}};
+    /// use chumsky::{prelude::*, input, extra};
     ///
     /// pub struct FrobnicatedWith<A, B> { a: A, b: B }
     ///
