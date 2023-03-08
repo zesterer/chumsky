@@ -28,7 +28,7 @@ pub enum Maybe<T, R: Deref<Target = T>> {
 impl<T: PartialEq, R: Deref<Target = T>> PartialEq for Maybe<T, R> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        &**self == &**other
+        **self == **other
     }
 }
 
@@ -92,7 +92,7 @@ impl<T, R: Deref<Target = T>> Deref for Maybe<T, R> {
     #[inline]
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::Ref(x) => &*x,
+            Self::Ref(x) => x,
             Self::Val(x) => x,
         }
     }

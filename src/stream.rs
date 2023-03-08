@@ -93,11 +93,7 @@ where
         }
 
         // Get the token at the given offset
-        let tok = if let Some(tok) = vec.get(offset) {
-            Some(tok.clone())
-        } else {
-            None
-        };
+        let tok = vec.get(offset).map(I::Item::clone);
 
         self.tokens.swap(&other);
 

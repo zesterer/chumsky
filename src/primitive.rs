@@ -1003,6 +1003,8 @@ where
                 res.write(p.go::<M>(inp)?);
                 Ok(())
             })?;
+        // SAFETY: We guarantee that all parers succeeded and as such all items have been initialized
+        //         if we reach this point
         Ok(M::array(unsafe { MaybeUninitExt::array_assume_init(arr) }))
     }
 

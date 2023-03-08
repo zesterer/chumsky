@@ -390,8 +390,8 @@ where
         .collect();
 
     lines.map(move |lines: Vec<(&str, (Vec<Tok>, SimpleSpan<usize>))>| {
-        fn collapse<'b, Tok, F>(
-            mut tree: Vec<(&'b str, Vec<Tok>, Option<SimpleSpan<usize>>)>,
+        fn collapse<Tok, F>(
+            mut tree: Vec<(&str, Vec<Tok>, Option<SimpleSpan<usize>>)>,
             make_group: &F,
         ) -> Option<Tok>
         where

@@ -353,14 +353,6 @@ impl<'a, T, L> RichReason<'a, T, L> {
         }
     }
 
-    fn take_found(&mut self) -> Option<MaybeRef<'a, T>> {
-        match self {
-            RichReason::ExpectedFound { found, .. } => found.take(),
-            RichReason::Custom(_) => None,
-            RichReason::Many(many) => many.into_iter().find_map(|r| r.take_found()),
-        }
-    }
-
     /// Transform this error's tokens using the given function.
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
@@ -428,7 +420,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
                 write!(f, "{}", msg)?;
                 if let Some(span) = span {
                     write!(f, " at ")?;
-                    fmt_span(&span, f)?;
+                    fmt_span(span, f)?;
                 }
             }
             RichReason::Many(_) => {

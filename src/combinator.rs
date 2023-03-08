@@ -571,7 +571,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let () = self.parser.go::<Check>(inp)?;
+        self.parser.go::<Check>(inp)?;
         Ok(M::bind(|| self.to.clone()))
     }
 
@@ -602,7 +602,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let () = self.parser.go::<Check>(inp)?;
+        self.parser.go::<Check>(inp)?;
         Ok(M::bind(|| ()))
     }
 
@@ -789,7 +789,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
-        let _a = self.parser_a.go::<Check>(inp)?;
+        self.parser_a.go::<Check>(inp)?;
         let b = self.parser_b.go::<M>(inp)?;
         Ok(M::map(b, |b: OB| b))
     }
@@ -825,7 +825,7 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA> {
         let a = self.parser_a.go::<M>(inp)?;
-        let _b = self.parser_b.go::<Check>(inp)?;
+        self.parser_b.go::<Check>(inp)?;
         Ok(M::map(a, |a: OA| a))
     }
 
@@ -1017,9 +1017,9 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA> {
-        let _ = self.start.go::<Check>(inp)?;
+        self.start.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
-        let _ = self.end.go::<Check>(inp)?;
+        self.end.go::<Check>(inp)?;
         Ok(a)
     }
 
@@ -1053,9 +1053,9 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA> {
-        let _ = self.padding.go::<Check>(inp)?;
+        self.padding.go::<Check>(inp)?;
         let a = self.parser.go::<M>(inp)?;
-        let _ = self.padding.go::<Check>(inp)?;
+        self.padding.go::<Check>(inp)?;
         Ok(a)
     }
 
@@ -1494,7 +1494,7 @@ where
 
         let before_separator = inp.save();
         if *state == 0 && self.allow_leading {
-            if let Err(_) = self.separator.go::<Check>(inp) {
+            if self.separator.go::<Check>(inp).is_err() {
                 inp.rewind(before_separator);
             }
         } else if *state > 0 {
@@ -1642,12 +1642,14 @@ where
                 }
                 Ok(None) => {
                     inp.add_alt(inp.offset, None, None, inp.span_since(before));
+                    // SAFETY: We're guaranteed to have initialized up to `idx` values
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
                     });
                     return Err(());
                 }
                 Err(()) => {
+                    // SAFETY: We're guaranteed to have initialized up to `idx` values
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
                     });
@@ -1655,6 +1657,7 @@ where
                 }
             }
         }
+        // SAFETY: If we reach this point, we guarantee to have initialized C::LEN values
         Ok(M::map(output, |output| unsafe { C::take(output) }))
     }
 

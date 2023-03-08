@@ -235,7 +235,7 @@ where
                 );
             }
 
-            let skip = IntoIterator::into_iter([start, end])
+            let skip = [start, end]
                 .into_iter()
                 .chain(IntoIterator::into_iter(others).flat_map(|(s, e)| [s, e]))
                 .collect::<Vec<_>>();
