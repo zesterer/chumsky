@@ -14,7 +14,7 @@ exclude = [
 ]
 
 [features]
-default = ["std", "spill-stack", "memoization"]
+default = ["std", "spill-stack", "memoization", "sync"]
 
 # Integrate with the standard library
 std = []
@@ -30,6 +30,9 @@ memoization = []
 
 # Enable support for parser labelling
 label = []
+
+# Make builtin parsers such as `Boxed` use atomic instead of non-atomic internals
+sync = []
 
 [dependencies]
 hashbrown = "0.13"

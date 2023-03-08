@@ -87,7 +87,7 @@ pub mod prelude {
 use crate::input::InputOwn;
 use alloc::{
     boxed::Box,
-    rc::{Rc, Weak},
+    rc::Rc,
     sync::Arc,
     string::String,
     vec,
@@ -126,6 +126,20 @@ use self::{
 };
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
+
+#[cfg(feature = "sync")]
+mod sync {
+    pub(crate) type RefC<T> = alloc::sync::Arc<T>;
+    pub(crate) type RefW<T> = alloc::sync::Weak<T>;
+}
+
+#[cfg(not(feature = "sync"))]
+mod sync {
+    pub(crate) type RefC<T> = alloc::rc::Rc<T>;
+    pub(crate) type RefW<T> = alloc::rc::Weak<T>;
+}
+
+use sync::*;
 
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 trait MaybeUninitExt<T>: Sized {
@@ -1738,7 +1752,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         Self: Sized + 'a,
     {
         Boxed {
-            inner: Rc::new(self),
+            inner: RefC::new(self),
         }
     }
 }
@@ -2055,15 +2069,12 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
 
 /// See [`Parser::boxed`].
 ///
-/// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
-/// around its inner value.
-///
 /// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 pub struct Boxed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
-    inner: Rc<dyn Parser<'a, I, O, E> + 'a>,
+    inner: RefC<dyn Parser<'a, I, O, E> + 'a>,
 }
 
 impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
