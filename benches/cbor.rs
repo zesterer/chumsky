@@ -180,15 +180,15 @@ mod chumsky_zero_copy {
                 simple(23).to(CborZero::Undef),
                 simple(26).ignore_then(
                     any()
-                        .repeated_exactly::<4>()
-                        .collect()
+                        .repeated()
+                        .collect_exactly()
                         .map(f32::from_be_bytes)
                         .map(CborZero::SingleFloat),
                 ),
                 simple(27).ignore_then(
                     any()
-                        .repeated_exactly::<8>()
-                        .collect()
+                        .repeated()
+                        .collect_exactly()
                         .map(f64::from_be_bytes)
                         .map(CborZero::DoubleFloat),
                 ),
