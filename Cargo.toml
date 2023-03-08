@@ -37,6 +37,10 @@ label = []
 # Make builtin parsers such as `Boxed` use atomic instead of non-atomic internals
 sync = []
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 hashbrown = "0.13"
 stacker = { version = "0.1", optional = true }

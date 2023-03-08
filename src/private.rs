@@ -198,9 +198,9 @@ pub trait ParserSealed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
     fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
     fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
 
-    fn boxed(self) -> Boxed<'a, I, O, E>
+    fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
-        Self: Sized + 'a,
+        Self: Sized + 'a + 'b,
     {
         Boxed {
             inner: RefC::new(self),
