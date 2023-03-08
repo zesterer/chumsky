@@ -34,7 +34,7 @@ impl<I, E> Clone for End<I, E> {
     }
 }
 
-impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
+impl<'a, I, E> ParserSealed<'a, I, (), E> for End<I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -42,12 +42,10 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let before = inp.offset();
-        match inp.next_maybe() {
+        match inp.next_maybe_inner() {
             (_, None) => Ok(M::bind(|| ())),
             (at, Some(tok)) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
-                inp.add_alt(at, None, Some(tok.into()), err_span);
+                inp.add_alt(at, None, Some(tok.into()), inp.span_since(before));
                 Err(())
             }
         }
@@ -73,7 +71,7 @@ impl<I, E> Clone for Empty<I, E> {
     }
 }
 
-impl<'a, I, E> Parser<'a, I, (), E> for Empty<I, E>
+impl<'a, I, E> ParserSealed<'a, I, (), E> for Empty<I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -157,7 +155,7 @@ where
     }
 }
 
-impl<'a, I, E, T> Parser<'a, I, T, E> for Just<T, I, E>
+impl<'a, I, E, T> ParserSealed<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -172,7 +170,7 @@ where
     go_extra!(T);
 }
 
-impl<'a, I, E, T> ConfigParser<'a, I, T, E> for Just<T, I, E>
+impl<'a, I, E, T> ConfigParserSealed<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -191,15 +189,14 @@ where
 
         if let Some(()) = seq.seq_iter().find_map(|next| {
             let before = inp.offset();
-            match inp.next_maybe() {
+            match inp.next_maybe_inner() {
                 (_, Some(tok)) if next.borrow() == tok.borrow() => None,
                 (at, found) => {
                     inp.add_alt(
                         at,
                         Some(Some(T::to_maybe_ref(next))),
                         found.map(|f| f.into()),
-                        // SAFETY: Using offsets derived from input
-                        unsafe { inp.span_since(before) },
+                        inp.span_since(before),
                     );
                     Some(())
                 }
@@ -259,7 +256,7 @@ where
     }
 }
 
-impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
+impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for OneOf<T, I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -269,11 +266,10 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(
                     at,
                     self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
@@ -333,7 +329,7 @@ where
     }
 }
 
-impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
+impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for NoneOf<T, I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -343,11 +339,10 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(at, None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -381,7 +376,7 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 /// # use chumsky::{prelude::*, error::Simple};
 ///
 /// let x = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
-///     let _ = inp.next_token();
+///     let _ = inp.next();
 ///     Ok(())
 /// });
 ///
@@ -399,7 +394,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> Parser<'a, I, O, E> for Custom<F, I, O, E>
+impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Custom<F, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -407,10 +402,11 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let before = inp.offset();
         match (self.f)(inp) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset(), err);
+                inp.add_alt_err(before.offset, err);
                 Err(())
             }
         }
@@ -449,7 +445,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
+impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Select<F, I, O, E>
 where
     I: ValueInput<'a>,
     I::Token: Clone + 'a,
@@ -459,17 +455,13 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        let next = inp.next();
-        // SAFETY: Using offsets derived from input
-        let err_span = unsafe { inp.span_since(before) };
+        let next = inp.next_inner();
+        let err_span = inp.span_since(before);
         let (at, found) = match next {
-            // SAFETY: Using offsets derived from input
-            (at, Some(tok)) => {
-                match (self.filter)(tok.clone(), unsafe { inp.span_since(before) }) {
-                    Some(out) => return Ok(M::bind(|| out)),
-                    None => (at, Some(tok.into())),
-                }
-            }
+            (at, Some(tok)) => match (self.filter)(tok.clone(), inp.span_since(before)) {
+                Some(out) => return Ok(M::bind(|| out)),
+                None => (at, Some(tok.into())),
+            },
             (at, found) => (at, found.map(|f| f.into())),
         };
         inp.add_alt(at, None, found, err_span);
@@ -509,7 +501,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
+impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
     I::Token: 'a,
@@ -519,10 +511,9 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
-        let next = inp.next_ref();
-        // SAFETY: Using offsets derived from input
-        let span = unsafe { inp.span_since(before) };
-        let err_span = unsafe { inp.span_since(before) };
+        let next = inp.next_ref_inner();
+        let span = inp.span_since(before);
+        let err_span = inp.span_since(before);
         let (at, found) = match next {
             (at, Some(tok)) => match (self.filter)(tok, span) {
                 Some(out) => return Ok(M::bind(|| out)),
@@ -551,7 +542,7 @@ impl<I, E> Clone for Any<I, E> {
     }
 }
 
-impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
+impl<'a, I, E> ParserSealed<'a, I, I::Token, E> for Any<I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -559,11 +550,10 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
-        match inp.next() {
+        match inp.next_inner() {
             (_, Some(tok)) => Ok(M::bind(|| tok)),
             (at, found) => {
-                // SAFETY: Using offsets derived from input
-                let err_span = unsafe { inp.span_since(before) };
+                let err_span = inp.span_since(before);
                 inp.add_alt(at, None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -681,7 +671,7 @@ where
     }
 }
 
-impl<'a, P, OP, I, E, C> Parser<'a, I, (C, OP), E> for TakeUntil<P, I, OP, C, E>
+impl<'a, P, OP, I, E, C> ParserSealed<'a, I, (C, OP), E> for TakeUntil<P, I, OP, C, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -701,7 +691,7 @@ where
 
             inp.rewind(start);
 
-            match inp.next() {
+            match inp.next_inner() {
                 (_, Some(tok)) => {
                     output = M::map(output, |mut output: C| {
                         output.push(tok);
@@ -733,7 +723,7 @@ impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
     }
 }
 
-impl<'a, I, O, E, A, F, Ctx> Parser<'a, I, O, E> for MapCtx<A, F>
+impl<'a, I, O, E, A, F, Ctx> ParserSealed<'a, I, O, E> for MapCtx<A, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -825,7 +815,7 @@ pub const fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E>
     Todo(PhantomData)
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Todo<I, O, E>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Todo<I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -902,7 +892,7 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $Head:ident $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*)>
+        impl<'a, I, E, $Head, $($X),*, O> ParserSealed<'a, I, O, E> for Choice<($Head, $($X,)*)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -934,7 +924,7 @@ macro_rules! impl_choice_for_tuple {
         }
     };
     (~ $Head:ident) => {
-        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,)>
+        impl<'a, I, E, $Head, O> ParserSealed<'a, I, O, E> for Choice<($Head,)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -952,7 +942,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N]>
+impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -962,9 +952,8 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         if N == 0 {
             let offs = inp.offset();
-            // SAFETY: Using offsets derived from input
-            let err_span = unsafe { inp.span_since(offs) };
-            inp.add_alt(offs, None, None, err_span);
+            let err_span = inp.span_since(offs);
+            inp.add_alt(offs.offset, None, None, err_span);
             Err(())
         } else {
             let before = inp.save();
@@ -998,7 +987,7 @@ pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }
 
-impl<'a, I, O, E, P, const N: usize> Parser<'a, I, [O; N], E> for Group<[P; N]>
+impl<'a, I, O, E, P, const N: usize> ParserSealed<'a, I, [O; N], E> for Group<[P; N]>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1057,7 +1046,7 @@ macro_rules! impl_group_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E> for Group<($($X,)*)>
+        impl<'a, I, E, $($X),*, $($O),*> ParserSealed<'a, I, ($($O,)*), E> for Group<($($X,)*)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,

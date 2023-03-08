@@ -2,6 +2,8 @@
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
+// TODO: docsrs feature flags for nice feature labels in crate docs
+// TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
 
@@ -9,11 +11,11 @@ macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
         fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O> {
-            Parser::<I, $O, E>::go::<Emit>(self, inp)
+            ParserSealed::<I, $O, E>::go::<Emit>(self, inp)
         }
         #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O> {
-            Parser::<I, $O, E>::go::<Check>(self, inp)
+            ParserSealed::<I, $O, E>::go::<Check>(self, inp)
         }
     };
 }
@@ -26,7 +28,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Emit, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+            ConfigParserSealed::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
         #[inline(always)]
         fn go_check_cfg(
@@ -34,7 +36,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Check, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+            ConfigParserSealed::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
 }
@@ -43,11 +45,14 @@ mod blanket;
 pub mod combinator;
 pub mod container;
 pub mod error;
+#[cfg(feature = "extension")]
+pub mod extension;
 pub mod extra;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
 pub mod primitive;
+mod private;
 pub mod recovery;
 pub mod recursive;
 #[cfg(feature = "regex")]
@@ -85,15 +90,10 @@ pub mod prelude {
 }
 
 use crate::input::InputOwn;
-use alloc::{
-    boxed::Box,
-    rc::{Rc, Weak},
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     borrow::Borrow,
+    cell::UnsafeCell,
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
@@ -113,10 +113,12 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput, ValueInput},
-    internal::{IPResult, PResult},
     prelude::*,
     primitive::Any,
-    private::{Check, Emit, Mode},
+    private::{
+        Check, ConfigIterParserSealed, ConfigParserSealed, Emit, IPResult, IterParserSealed,
+        Located, MaybeUninitExt, Mode, PResult, ParserSealed,
+    },
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
@@ -125,27 +127,19 @@ use self::{
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
 
-// TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
-trait MaybeUninitExt<T>: Sized {
-    /// Identical to the unstable [`MaybeUninit::uninit_array`]
-    fn uninit_array<const N: usize>() -> [Self; N];
-
-    /// Identical to the unstable [`MaybeUninit::array_assume_init`]
-    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N];
+#[cfg(feature = "sync")]
+mod sync {
+    pub(crate) type RefC<T> = alloc::sync::Arc<T>;
+    pub(crate) type RefW<T> = alloc::sync::Weak<T>;
 }
 
-impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
-    fn uninit_array<const N: usize>() -> [Self; N] {
-        // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
-        unsafe { MaybeUninit::uninit().assume_init() }
-    }
-
-    unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
-        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
-        core::mem::forget(uninit);
-        out
-    }
+#[cfg(not(feature = "sync"))]
+mod sync {
+    pub(crate) type RefC<T> = alloc::rc::Rc<T>;
+    pub(crate) type RefW<T> = alloc::rc::Weak<T>;
 }
+
+use sync::*;
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
@@ -209,216 +203,25 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
-#[derive(Clone)]
-struct Located<E> {
-    pos: usize,
-    err: E,
-}
-
-impl<E> Located<E> {
-    #[inline]
-    pub fn at(pos: usize, err: E) -> Self {
-        Self { pos, err }
-    }
-}
-
-mod private {
-    use super::*;
-
-    pub trait ModeSealed {}
-
-    impl ModeSealed for Emit {}
-    impl ModeSealed for Check {}
-
-    /// An abstract parse mode - can be [`Emit`] or [`Check`] in practice, and represents the
-    /// common interface for handling both in the same method.
-    pub trait Mode: ModeSealed {
-        /// The output of this mode for a given type
-        type Output<T>;
-
-        /// Bind the result of a closure into an output
-        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
-
-        /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
-        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
-
-        /// Given two [`Output`](Self::Output)s, take their values and combine them into a new
-        /// output value
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            x: Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) -> Self::Output<V>;
-        /// By-reference version of [`Mode::combine`].
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            x: &mut Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        );
-
-        /// Given an array of outputs, bind them into an output of arrays
-        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
-
-        /// Invoke a parser user the current mode. This is normally equivalent to
-        /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
-        /// `dyn Parser`.
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized;
-
-        /// Invoke a parser with configuration using the current mode. This is normally equivalent
-        /// to [`parser.go::<M>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
-        /// such as `dyn Parser`.
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized;
-    }
-
-    /// Emit mode - generates parser output
-    pub struct Emit;
-
-    impl Mode for Emit {
-        type Output<T> = T;
-        #[inline]
-        fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
-            f()
-        }
-        #[inline]
-        fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
-            f(x)
-        }
-        #[inline]
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            x: Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) -> Self::Output<V> {
-            f(x, y)
-        }
-        #[inline]
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            x: &mut Self::Output<T>,
-            y: Self::Output<U>,
-            f: F,
-        ) {
-            f(x, y)
-        }
-        #[inline]
-        fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
-            x
-        }
-
-        #[inline]
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_emit(inp)
-        }
-
-        #[inline]
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_emit_cfg(inp, cfg)
-        }
-    }
-
-    /// Check mode - all output is discarded, and only uses parsers to check validity
-    pub struct Check;
-
-    impl Mode for Check {
-        type Output<T> = ();
-        #[inline]
-        fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-        #[inline]
-        fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
-        #[inline]
-        fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-            _: Self::Output<T>,
-            _: Self::Output<U>,
-            _: F,
-        ) -> Self::Output<V> {
-        }
-        #[inline]
-        fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
-            _: &mut Self::Output<T>,
-            _: Self::Output<U>,
-            _: F,
-        ) {
-        }
-        #[inline]
-        fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
-
-        #[inline]
-        fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: Parser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_check(inp)
-        }
-
-        #[inline]
-        fn invoke_cfg<'a, I, O, E, P>(
-            parser: &P,
-            inp: &mut InputRef<'a, '_, I, E>,
-            cfg: P::Config,
-        ) -> PResult<Self, O>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            P: ConfigParser<'a, I, O, E> + ?Sized,
-        {
-            parser.go_check_cfg(inp, cfg)
-        }
-    }
-}
-
-/// Internal API features not intended for general use.
-///
-/// **Please note that this module is exempt from the ordinary stability guarantees of the crate. You must not rely on
-/// API features within this module unless you are happy for your code to break with only a minor version increment.**
-pub mod internal {
-    use super::*;
-    pub use crate::input::SpannedTokenMaybe;
-    pub use private::{Check, Emit, Mode};
-
-    /// The result of calling [`Parser::go`]
-    pub type PResult<M, O> = Result<<M as Mode>::Output<O>, ()>;
-    /// The result of calling [`IterParser::next`]
-    pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
-}
-
 /// A trait implemented by parsers.
 ///
-/// Parsers take a stream of tokens of type `I` and attempt to parse them into a value of type `O`. In doing so, they
-/// may encounter errors. These need not be fatal to the parsing process: syntactic errors can be recovered from and a
-/// valid output may still be generated alongside any syntax errors that were encountered along the way. Usually, this
-/// output comes in the form of an [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
+/// Parsers take inputs of type `I` (implementing [`Input`]) and attempt to parse them into a value of type `O`. In
+/// doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
+/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along
+/// the way. Usually, this output comes in the form of an
+/// [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
 ///
-/// You should not need to implement this trait by hand. If you cannot combine existing combintors (and in particular
-/// [`custom`]) to create the combinator you're looking for, please
-/// [open an issue](https://github.com/zesterer/chumsky/issues/new)! If you *really* need to implement this trait,
-/// please check the documentation in the source: some implementation details have been deliberately hidden.
+/// You cannot directly implement this trait yourself. If you feel like the built-in parsers are not enough for you,
+/// there are several options in increasing order of complexity:
+///
+/// 1) Try using combinators like [`Parser::try_map`] and [`Parser::validate`] to implement custom error generation
+///
+/// 2) Use [`custom`] to implement your own parsing logic inline within an existing parser
+///
+/// 3) Use chumsky's [`extension`] API to write an extension parser that feels like it's native to chumsky
+///
+/// 4) If you believe you've found a common use-case that's missing from chumsky, you could open a pull request to
+///    implement it in chumsky itself.
 #[cfg_attr(
     feature = "nightly",
     rustc_on_unimplemented(
@@ -427,7 +230,9 @@ pub mod internal {
         note = "You should check that the output types of your parsers are consistent with combinator you're using",
     )
 )]
-pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
+    ParserSealed<'a, I, O, E>
+{
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -518,19 +323,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         };
         ParseResult::new(out, errs)
     }
-
-    /// Parse a stream with all the bells & whistles. You can use this to implement your own parser combinators. Note
-    /// that both the signature and semantic requirements of this function are very likely to change in later versions.
-    /// Where possible, prefer more ergonomic combinators provided elsewhere in the crate rather than implementing your
-    /// own.
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized;
-
-    #[doc(hidden)]
-    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
-    #[doc(hidden)]
-    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
 
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
@@ -1313,21 +1105,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
         }
     }
 
-    /// Parse a pattern a specific number of times.
-    ///
-    /// Input is eagerly parsed. Consider using [`RepeatedExactly::repeated`] if a non-constant number of values are expected.
-    ///
-    /// The output type of this parser can be any [`ContainerExactly`].
-    fn repeated_exactly<const N: usize>(self) -> RepeatedExactly<Self, O, (), N>
-    where
-        Self: Sized,
-    {
-        RepeatedExactly {
-            parser: self,
-            phantom: PhantomData,
-        }
-    }
-
     /// Parse a pattern, separated by another, any number of times.
     ///
     /// You can use [`SeparatedBy::allow_leading`] or [`SeparatedBy::allow_trailing`] to allow leading or trailing
@@ -1359,29 +1136,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
             separator,
             at_least: 0,
             at_most: !0,
-            allow_leading: false,
-            allow_trailing: false,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Parse a pattern, separated by another, a specific number of times.
-    ///
-    /// You can use [`SeparatedByExactly::allow_leading`] or [`SeparatedByExactly::allow_trailing`] to
-    /// allow leading or trailing separators.
-    ///
-    /// The output type of this parser can be any [`ContainerExactly`].
-    fn separated_by_exactly<U, B, const N: usize>(
-        self,
-        separator: B,
-    ) -> SeparatedByExactly<Self, B, U, (), N>
-    where
-        Self: Sized,
-        B: Parser<'a, I, U, E>,
-    {
-        SeparatedByExactly {
-            parser: self,
-            separator,
             allow_leading: false,
             allow_trailing: false,
             phantom: PhantomData,
@@ -1773,14 +1527,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
     where
         Self: Sized + 'a,
     {
-        Boxed {
-            inner: Rc::new(self),
-        }
+        ParserSealed::boxed(self)
     }
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, I, O, E> Parser<'a, I, O, E> for !
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for !
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1793,28 +1545,16 @@ where
 }
 
 /// A parser that can be configured with runtime context
-pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
+pub trait ConfigParser<'a, I, O, E>: ConfigParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    /// Type used to configure the parser
-    type Config: Default;
+    // TODO: Unfortunately we can't constrain the trait above without a cycle. Figure out a way to have this associated
+    // type visible to the world without weirdness (maybe it should be a type param of `ConfigParser`?)
 
-    /// Parse a stream with the provided configured values. This can be used to control a parser's
-    /// behavior at parse-time.
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
-    where
-        Self: Sized;
-
-    #[doc(hidden)]
-    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O>;
-    #[doc(hidden)]
-    fn go_check_cfg(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        cfg: Self::Config,
-    ) -> PResult<Check, O>;
+    // /// Type used to configure the parser
+    // type Config: Default;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
@@ -1864,27 +1604,14 @@ where
 
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
 // TODO: Make sealed
-pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
-    /// The state of the iterator during iteration.
-    type IterState<M: Mode>
-    where
-        I: 'a;
-
-    #[doc(hidden)]
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>>;
-    #[doc(hidden)]
-    fn next<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<M>,
-    ) -> IPResult<M, O>;
-
+pub trait IterParser<'a, I, O, E = extra::Default>: IterParserSealed<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
     /// Collect this iterable parser into a [`Container`].
     ///
-    /// This is commonly useful for collecting parsers that many values outputs into containers of various kinds:
+    /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
     /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
     ///
     /// The output type of this parser is `C`, the type being collected into.
@@ -1904,6 +1631,35 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
         Self: Sized,
     {
         Collect {
+            parser: self,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Collect this iterable parser into a [`ContainerExactly`].
+    ///
+    /// This is useful for situations where the number of items to consume is statically known.
+    /// A common use-case is collecting into an array.
+    ///
+    /// The output type of this parser if `C`, the type being collected into.
+    ///
+    /// # Exmaples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let three_digit = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_numeric())
+    ///     .repeated()
+    ///     .collect_exactly::<[_; 3]>();
+    ///
+    /// assert_eq!(three_digit.parse("123").into_result(), Ok(['1', '2', '3']));
+    /// assert!(three_digit.parse("12").into_result().is_err());
+    /// assert!(three_digit.parse("1234").into_result().is_err());
+    /// ```
+    fn collect_exactly<C: ContainerExactly<O>>(self) -> CollectExactly<Self, O, C>
+    where
+        Self: Sized,
+    {
+        CollectExactly {
             parser: self,
             phantom: PhantomData,
         }
@@ -2018,20 +1774,12 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
-pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
-    IterParser<'a, I, O, E>
+pub trait ConfigIterParser<'a, I, O, E = extra::Default>:
+    ConfigIterParserSealed<'a, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
 {
-    /// Type used to configure the parser
-    type Config: Default;
-
-    #[doc(hidden)]
-    fn next_cfg<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<M>,
-        cfg: &Self::Config,
-    ) -> IPResult<M, O>;
-
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
     where
@@ -2062,15 +1810,12 @@ pub trait ConfigIterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::D
 
 /// See [`Parser::boxed`].
 ///
-/// This type is a [`repr(transparent)`](https://doc.rust-lang.org/nomicon/other-reprs.html#reprtransparent) wrapper
-/// around its inner value.
-///
 /// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 pub struct Boxed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
-    inner: Rc<dyn Parser<'a, I, O, E> + 'a>,
+    inner: RefC<dyn Parser<'a, I, O, E> + 'a>,
 }
 
 impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
@@ -2081,7 +1826,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, I, O, E> {
     }
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, I, O, E>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2271,8 +2016,8 @@ mod tests {
                 .or(string)
                 .map_with_span(|token, span| (span, token))
                 .padded()
-                .repeated_exactly()
-                .collect()
+                .repeated()
+                .collect_exactly()
         }
 
         assert_eq!(
@@ -2382,9 +2127,9 @@ mod tests {
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
         let mut own = InputOwn::<_, extra::Default>::new(input);
-        let mut input = own.as_ref_start();
+        let mut inp = own.as_ref_start();
 
-        while let (_, Some(c)) = input.next() {
+        while let Some(c) = inp.next() {
             std::hint::black_box(c);
         }
     }

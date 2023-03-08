@@ -39,9 +39,10 @@ impl<T> OnceCell<T> {
     }
 }
 
+// TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
-    Owned(Rc<T>),
-    Unowned(Weak<T>),
+    Owned(RefC<T>),
+    Unowned(RefW<T>),
 }
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
@@ -103,7 +104,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
     /// ```
     pub fn declare() -> Self {
         Recursive {
-            inner: RecursiveInner::Owned(Rc::new(Indirect {
+            inner: RecursiveInner::Owned(RefC::new(Indirect {
                 inner: OnceCell::new(),
             })),
         }
@@ -120,7 +121,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
 
 impl<P: ?Sized> Recursive<P> {
     #[inline]
-    fn parser(&self) -> Rc<P> {
+    fn parser(&self) -> RefC<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -152,7 +153,7 @@ fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -174,7 +175,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -243,8 +244,8 @@ where
     A: Parser<'a, I, O, E> + Clone + 'a,
     F: FnOnce(Recursive<Direct<'a, I, O, E>>) -> A,
 {
-    let rc = Rc::new_cyclic(|rc| {
-        let rc: Weak<dyn Parser<'a, I, O, E>> = rc.clone() as _;
+    let rc = RefC::new_cyclic(|rc| {
+        let rc: RefW<dyn Parser<'a, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };

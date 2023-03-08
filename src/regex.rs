@@ -16,7 +16,7 @@ pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     }
 }
 
-impl<'a, C, I, E> Parser<'a, I, &'a C::Str, E> for Regex<C, I, E>
+impl<'a, C, I, E> ParserSealed<'a, I, &'a C::Str, E> for Regex<C, I, E>
 where
     C: Char,
     I: StrInput<'a, C>,
@@ -30,12 +30,11 @@ where
                 let before = inp.offset();
                 inp.skip_bytes(len);
                 let after = inp.offset();
-                Ok(M::bind(|| inp.slice(before..after)))
+                Ok(M::bind(|| inp.slice(before.offset..after.offset)))
             }
             None => {
                 // TODO: Improve error
-                // SAFETY: Using offsets derived from input
-                inp.add_alt(inp.offset(), None, None, unsafe { inp.span_since(before) });
+                inp.add_alt(inp.offset().offset, None, None, inp.span_since(before));
                 Err(())
             }
         }
