@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```
-//! use chumsky::{prelude::*, input, extra, extension::v1::{ExtParser, Ext}};
+//! use chumsky::{prelude::*, input::InputRef, extension::v1::{ExtParser, Ext}};
 //!
 //! // An example extension parser that expects a null byte.
 //! pub struct Null_;
@@ -23,13 +23,12 @@
 //! // We implement `ExtParser` for our null byte parser, plugging us into the chumsky ecosystem
 //! impl<'a, I, E> ExtParser<'a, I, (), E> for Null_
 //! where
-//!     // We require `ValueInput` because we want to pull bytes by-value from the input
-//!     I: input::ValueInput<'a, Token = u8>,
+//!     I: Input<'a, Token = u8>,
 //!     E: extra::ParserExtra<'a, I>,
 //! {
-//!     fn parse(&self, inp: &mut input::InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
+//!     fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
 //!         let before = inp.offset();
-//!         match inp.next() {
+//!         match inp.next_maybe().as_deref() {
 //!             // The next token was a null byte, meaning that parsing was successful
 //!             Some(b'\0') => Ok(()),
 //!             // The next token was something that wasn't a null byte, generate an error instead
@@ -37,7 +36,7 @@
 //!                 // Expected a null byte
 //!                 core::iter::once(Some(b'\0'.into())),
 //!                 // Found whatever the token was instead
-//!                 found.map(Into::into),
+//!                 found.copied().map(Into::into),
 //!                 // The span of the error is the span of the token that was found instead
 //!                 inp.span_since(before),
 //!             )),
@@ -89,13 +88,13 @@ mod current {
     /// it, like so:
     ///
     /// ```
-    /// use chumsky::{prelude::*, input, extra};
+    /// use chumsky::prelude::*;
     ///
     /// pub struct FrobnicatedWith<A, B> { a: A, b: B }
     ///
     /// pub trait ParserExt<'a, I, O, E>
     /// where
-    ///     I: input::Input<'a>,
+    ///     I: Input<'a>,
     ///     E: extra::ParserExtra<'a, I>
     /// {
     ///     fn frobnicated_with<B>(self, other: B) -> FrobnicatedWith<Self, B>

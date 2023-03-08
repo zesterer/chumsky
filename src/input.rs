@@ -811,13 +811,13 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     /// Get the next token in the input. Returns `None` if the end of the input has been reached.
     ///
-    /// This function is more flexible than either [`InputRef::next_token`] or [`InputRef::next_token_ref`] since it
+    /// This function is more flexible than either [`InputRef::next`] or [`InputRef::next_ref`] since it
     /// only requires that the [`Input`] trait be implemented for `I` (instead of either [`ValueInput`] or
     /// [`BorrowInput`]). However, that increased flexibility for the end user comes with a tradeoff for the
     /// implementation: this function returns a [`MaybeRef<I::Token>`] that provides only a temporary reference to the
     /// token.
     ///
-    /// See [`InputRef::next_token_ref`] if you want get a reference to the next token instead.
+    /// See [`InputRef::next_ref`] if you want get a reference to the next token instead.
     #[inline(always)]
     pub fn next_maybe(&mut self) -> Option<MaybeRef<'a, I::Token>> {
         self.next_maybe_inner().1.map(Into::into)
@@ -825,7 +825,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     /// Get the next token in the input by value. Returns `None` if the end of the input has been reached.
     ///
-    /// See [`InputRef::next_token_ref`] if you want get a reference to the next token instead.
+    /// See [`InputRef::next_ref`] if you want get a reference to the next token instead.
     #[inline(always)]
     pub fn next(&mut self) -> Option<I::Token>
     where
@@ -836,7 +836,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     /// Get a reference to the next token in the input. Returns `None` if the end of the input has been reached.
     ///
-    /// See [`InputRef::next_token`] if you want get the next token by value instead.
+    /// See [`InputRef::next`] if you want get the next token by value instead.
     #[inline(always)]
     pub fn next_ref(&mut self) -> Option<&'a I::Token>
     where
