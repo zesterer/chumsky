@@ -12,19 +12,10 @@ pub type Lazy<'a, A, I, E> =
     ThenIgnore<A, Repeated<Any<I, E>, <I as Input<'a>>::Token, I, E>, (), E>;
 
 /// Alter the configuration of a struct using parse-time context
+#[derive(Copy, Clone)]
 pub struct Configure<A, F> {
     pub(crate) parser: A,
     pub(crate) cfg: F,
-}
-
-impl<A: Copy, F: Copy> Copy for Configure<A, F> {}
-impl<A: Clone, F: Clone> Clone for Configure<A, F> {
-    fn clone(&self) -> Self {
-        Configure {
-            parser: self.parser.clone(),
-            cfg: self.cfg.clone(),
-        }
-    }
 }
 
 impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for Configure<A, F>

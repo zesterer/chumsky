@@ -39,6 +39,7 @@ impl<T> OnceCell<T> {
     }
 }
 
+// TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
     Owned(RefC<T>),
     Unowned(RefW<T>),

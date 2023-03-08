@@ -2,6 +2,7 @@
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
+// TODO: docsrs feature flags for nice feature labels in crate docs
 
 extern crate alloc;
 
@@ -43,6 +44,8 @@ mod blanket;
 pub mod combinator;
 pub mod container;
 pub mod error;
+#[cfg(feature = "extension")]
+pub mod extension;
 pub mod extra;
 pub mod input;
 #[cfg(feature = "label")]
