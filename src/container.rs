@@ -137,6 +137,7 @@ pub unsafe trait ContainerExactly<T> {
     unsafe fn take(uninit: Self::Uninit) -> Self;
 }
 
+// SAFETY: `[MaybeUninit<T>; N]` has the same layout as `[T; N]`
 unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
     const LEN: usize = N;
 
@@ -155,6 +156,7 @@ unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
     }
 }
 
+// Safety: `Box<C::Uninit>` is sound to reinterpret assuming the inner `C` implements this trait soundly
 unsafe impl<T, C> ContainerExactly<T> for Box<C>
 where
     C: ContainerExactly<T>,
@@ -175,6 +177,8 @@ where
     }
 }
 
+// Safety: `Rc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
+//         this trait soundly
 unsafe impl<T, C> ContainerExactly<T> for Rc<C>
 where
     C: ContainerExactly<T>,
@@ -197,6 +201,8 @@ where
     }
 }
 
+// Safety: `Arc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
+//         this trait soundly
 unsafe impl<T, C> ContainerExactly<T> for Arc<C>
 where
     C: ContainerExactly<T>,
@@ -390,6 +396,7 @@ impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
     where
         T: PartialEq,
     {
+        #[allow(clippy::explicit_auto_deref)] // FIXME: Clippy bug #9841
         <[T]>::contains(*self, val)
     }
 

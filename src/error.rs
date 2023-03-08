@@ -353,6 +353,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
         }
     }
 
+    #[cfg(feature = "label")]
     fn take_found(&mut self) -> Option<MaybeRef<'a, T>> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.take(),
@@ -428,7 +429,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
                 write!(f, "{}", msg)?;
                 if let Some(span) = span {
                     write!(f, " at ")?;
-                    fmt_span(&span, f)?;
+                    fmt_span(span, f)?;
                 }
             }
             RichReason::Many(_) => {

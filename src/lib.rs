@@ -1,7 +1,12 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
+#![allow(
+    clippy::should_implement_trait,
+    clippy::type_complexity,
+    clippy::result_unit_err,
+)]
 // TODO: docsrs feature flags for nice feature labels in crate docs
 // TODO: Talk about `.map` and purity assumptions
 
@@ -1492,7 +1497,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // Does not panic, because the original parser only accepts "true" or "false"
     /// assert!(boolean.parse("42").has_errors());
     /// ```
-    // TODO: Use Location::caller(), make this a proper combinator
     #[track_caller]
     fn unwrapped(self) -> Unwrapped<Self, O>
     where

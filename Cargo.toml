@@ -7,7 +7,7 @@ repository = "https://github.com/zesterer/chumsky"
 license = "MIT"
 keywords = ["parser", "combinator", "token", "language", "syntax"]
 categories = ["parsing", "text-processing"]
-edition = "2018"
+edition = "2021"
 exclude = [
     "/misc/*",
 	"/benches/samples/*",
