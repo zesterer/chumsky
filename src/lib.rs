@@ -1886,7 +1886,7 @@ pub trait IterParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default
     /// # use chumsky::{prelude::*, error::Simple};
     /// let three_digit = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_numeric())
     ///     .repeated()
-    ///     .collect_exactly::<3, _>();
+    ///     .collect_exactly::<[_; 3]>();
     ///
     /// assert_eq!(three_digit.parse("123").into_result(), Ok(['1', '2', '3']));
     /// assert!(three_digit.parse("12").into_result().is_err());

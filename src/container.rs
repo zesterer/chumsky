@@ -755,3 +755,51 @@ impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 impl<'p> OrderedSeq<'p, char> for str {}
 impl<'p> OrderedSeq<'p, char> for &'p str {}
 impl<'p> OrderedSeq<'p, char> for String {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn init_container<C: ContainerExactly<usize>>() -> C {
+        let mut uninit = C::uninit();
+        for idx in 0..C::LEN {
+            C::write(&mut uninit, idx, idx);
+        }
+        unsafe { C::take(uninit) }
+    }
+
+    fn drop_container<C: ContainerExactly<usize>>() {
+        let mut uninit = C::uninit();
+        for idx in 0..(C::LEN/2) {
+            C::write(&mut uninit, idx, idx);
+        }
+        unsafe { C::drop_before(&mut uninit, C::LEN / 2) };
+    }
+
+    #[test]
+    fn exact_array() {
+        let c = init_container::<[usize; 4]>();
+        assert_eq!(&c, &[0, 1, 2, 3]);
+        drop_container::<[usize; 4]>();
+    }
+
+    #[test]
+    fn exact_rc_array() {
+        let c = init_container::<Rc<[usize; 4]>>();
+        assert_eq!(&*c, &[0, 1, 2, 3]);
+        drop_container::<Rc<[usize; 4]>>();
+    }
+
+    #[test]
+    fn exact_rc_box_array() {
+        let c = init_container::<Rc<Box<[usize; 4]>>>();
+        assert_eq!(&**c, &[0, 1, 2, 3]);
+        drop_container::<Rc<Box<[usize; 4]>>>();
+    }
+
+    fn exact_box_rc_array() {
+        let c = init_container::<Box<Rc<[usize; 4]>>>();
+        assert_eq!(&**c, &[0, 1, 2, 3]);
+        drop_container::<Box<Rc<[usize; 4]>>>();
+    }
+}
