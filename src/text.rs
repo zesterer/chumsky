@@ -362,72 +362,7 @@ pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a
         .slice()
 }
 
-/// A parser that consumes text and generates tokens using semantic whitespace rules and the given token parser.
-///
-/// Also required is a function that collects a [`Vec`] of tokens into a whitespace-indicated token tree.
-#[must_use]
-pub fn semantic_indentation<'a, Tok, T, F, E: ParserExtra<'a, &'a str>>(
-    token: T,
-    make_group: F,
-) -> impl Parser<'a, &'a str, Vec<Tok>, E>
-where
-    T: Parser<'a, &'a str, Tok, E>,
-    F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
-{
-    let line_ws = any::<&'a str, E>().filter(|c: &char| c.is_inline_whitespace());
-
-    let line = token
-        .padded_by(line_ws.repeated())
-        .repeated()
-        .collect::<Vec<_>>();
-
-    let lines = line_ws
-        .repeated()
-        .slice()
-        .then(line.map_with_span(|line, span| (line, span)))
-        .then_ignore(line_ws.repeated())
-        .separated_by(newline())
-        .collect();
-
-    lines.map(move |lines: Vec<(&str, (Vec<Tok>, SimpleSpan<usize>))>| {
-        fn collapse<Tok, F>(
-            mut tree: Vec<(&str, Vec<Tok>, Option<SimpleSpan<usize>>)>,
-            make_group: &F,
-        ) -> Option<Tok>
-        where
-            F: Fn(Vec<Tok>, SimpleSpan<usize>) -> Tok,
-        {
-            while let Some((_, tts, line_span)) = tree.pop() {
-                let tt = make_group(tts, line_span?);
-                if let Some(last) = tree.last_mut() {
-                    last.1.push(tt);
-                } else {
-                    return Some(tt);
-                }
-            }
-            None
-        }
-
-        let mut nesting = vec![("", Vec::new(), None)];
-        for (mut indent, (mut line, line_span)) in lines {
-            let mut i = 0;
-            while let Some(tail) = nesting.get(i).and_then(|(n, _, _)| indent.strip_prefix(n)) {
-                indent = tail;
-                i += 1;
-            }
-            if let Some(tail) = collapse(nesting.split_off(i), &make_group) {
-                nesting.last_mut().unwrap().1.push(tail);
-            }
-            if !indent.is_empty() {
-                nesting.push((indent, line, Some(line_span)));
-            } else {
-                nesting.last_mut().unwrap().1.append(&mut line);
-            }
-        }
-
-        nesting.remove(0).1
-    })
-}
+// TODO: Better native form of semantic indentation that uses the context system?
 
 /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
 ///
