@@ -27,15 +27,19 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let old_alt = inp.errors.alt.take();
         let before = inp.offset();
         let res = self.parser.go::<M>(inp);
 
         // TODO: Label secondary errors too?
-        if res.is_err() {
-            let err = inp.errors.alt.as_mut().expect("error but no alt?");
-            if err.pos == before.offset.into() + 1 {
-                err.err.label_with(self.label.clone());
+        let new_alt = inp.errors.alt.take();
+        inp.errors.alt = old_alt;
+
+        if let Some(mut new_alt) = new_alt {
+            if new_alt.pos == before.offset.into() + 1 {
+                new_alt.err.label_with(self.label.clone());
             }
+            inp.add_alt_err(new_alt.pos, new_alt.err);
         }
 
         res
