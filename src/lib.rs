@@ -85,14 +85,7 @@ pub mod prelude {
 }
 
 use crate::input::InputOwn;
-use alloc::{
-    boxed::Box,
-    rc::Rc,
-    sync::Arc,
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     borrow::Borrow,
     cell::UnsafeCell,
@@ -303,15 +296,15 @@ mod private {
 
     impl Mode for Emit {
         type Output<T> = T;
-        #[inline]
+        #[inline(always)]
         fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T> {
             f()
         }
-        #[inline]
+        #[inline(always)]
         fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U> {
             f(x)
         }
-        #[inline]
+        #[inline(always)]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             x: Self::Output<T>,
             y: Self::Output<U>,
@@ -319,7 +312,7 @@ mod private {
         ) -> Self::Output<V> {
             f(x, y)
         }
-        #[inline]
+        #[inline(always)]
         fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
             x: &mut Self::Output<T>,
             y: Self::Output<U>,
@@ -327,12 +320,12 @@ mod private {
         ) {
             f(x, y)
         }
-        #[inline]
+        #[inline(always)]
         fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
             x
         }
 
-        #[inline]
+        #[inline(always)]
         fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
         where
             I: Input<'a>,
@@ -342,7 +335,7 @@ mod private {
             parser.go_emit(inp)
         }
 
-        #[inline]
+        #[inline(always)]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,
@@ -362,28 +355,28 @@ mod private {
 
     impl Mode for Check {
         type Output<T> = ();
-        #[inline]
+        #[inline(always)]
         fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
-        #[inline]
+        #[inline(always)]
         fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
-        #[inline]
+        #[inline(always)]
         fn combine<T, U, V, F: FnOnce(T, U) -> V>(
             _: Self::Output<T>,
             _: Self::Output<U>,
             _: F,
         ) -> Self::Output<V> {
         }
-        #[inline]
+        #[inline(always)]
         fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
             _: &mut Self::Output<T>,
             _: Self::Output<U>,
             _: F,
         ) {
         }
-        #[inline]
+        #[inline(always)]
         fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
 
-        #[inline]
+        #[inline(always)]
         fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
         where
             I: Input<'a>,
@@ -393,7 +386,7 @@ mod private {
             parser.go_check(inp)
         }
 
-        #[inline]
+        #[inline(always)]
         fn invoke_cfg<'a, I, O, E, P>(
             parser: &P,
             inp: &mut InputRef<'a, '_, I, E>,

@@ -771,7 +771,7 @@ mod test {
 
     fn drop_container<C: ContainerExactly<usize>>() {
         let mut uninit = C::uninit();
-        for idx in 0..(C::LEN/2) {
+        for idx in 0..(C::LEN / 2) {
             C::write(&mut uninit, idx, idx);
         }
         unsafe { C::drop_before(&mut uninit, C::LEN / 2) };

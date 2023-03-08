@@ -1649,18 +1649,17 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    inp.add_alt(
-                        inp.offset,
-                        None,
-                        None,
-                        unsafe { inp.span_since(before) },
-                    );
-                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
-                    return Err(())
+                    inp.add_alt(inp.offset, None, None, unsafe { inp.span_since(before) });
+                    M::map(output, |mut output| unsafe {
+                        C::drop_before(&mut output, idx)
+                    });
+                    return Err(());
                 }
                 Err(()) => {
-                    M::map(output, |mut output| unsafe { C::drop_before(&mut output, idx) });
-                    return Err(())
+                    M::map(output, |mut output| unsafe {
+                        C::drop_before(&mut output, idx)
+                    });
+                    return Err(());
                 }
             }
         }
