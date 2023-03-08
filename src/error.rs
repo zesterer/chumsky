@@ -311,7 +311,7 @@ where
 
 // TODO: Maybe should make ExpectedFound encapsulated a bit more
 /// The reason for a [`Rich`] error.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RichReason<'a, T, L = &'static str> {
     /// An unexpected input was found
     ExpectedFound {
@@ -489,16 +489,6 @@ where
             }
             (this, other) => RichReason::Many(vec![this, other]),
         }
-    }
-}
-
-impl<'a, T, L> fmt::Debug for RichReason<'a, T, L>
-where
-    T: fmt::Debug,
-    L: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.inner_fmt(f, T::fmt, |_: &(), _| Ok(()), L::fmt, None)
     }
 }
 
