@@ -204,15 +204,23 @@ impl<T, E> ParseResult<T, E> {
 
 /// A trait implemented by parsers.
 ///
-/// Parsers take a stream of tokens of type `I` and attempt to parse them into a value of type `O`. In doing so, they
-/// may encounter errors. These need not be fatal to the parsing process: syntactic errors can be recovered from and a
-/// valid output may still be generated alongside any syntax errors that were encountered along the way. Usually, this
-/// output comes in the form of an [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
+/// Parsers take inputs of type `I` (implementing [`Input`]) and attempt to parse them into a value of type `O`. In
+/// doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
+/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along
+/// the way. Usually, this output comes in the form of an
+/// [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
 ///
-/// You should not need to implement this trait by hand. If you cannot combine existing combintors (and in particular
-/// [`custom`]) to create the combinator you're looking for, please
-/// [open an issue](https://github.com/zesterer/chumsky/issues/new)! If you *really* need to implement this trait,
-/// please check the documentation in the source: some implementation details have been deliberately hidden.
+/// You cannot directly implement this trait yourself. If you feel like the built-in parsers are not enough for you,
+/// there are several options in increasing order of complexity:
+///
+/// 1) Try using combinators like [`Parser::try_map`] and [`Parser::validate`] to implement custom error generation
+///
+/// 2) Use [`custom`] to implement your own parsing logic inline within an existing parser
+///
+/// 3) Use chumsky's [`extension`] API to write an extension parser that feels like it's native to chumsky
+///
+/// 4) If you believe you've found a common use-case that's missing from chumsky, you could open a pull request to
+///    implement it in chumsky itself.
 #[cfg_attr(
     feature = "nightly",
     rustc_on_unimplemented(

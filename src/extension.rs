@@ -2,7 +2,7 @@
 //!
 //! Chumsky is a complicated crate that performs many internal optimisations to keep your parsers fast. These
 //! optimisations mean that chumsky's core is rapidly changing, difficult to work with, and reveals a lot of
-//! implementation details that are necessary to account for.
+//! often-superfluous implementation details that are necessary to account for.
 //!
 //! In short: it's not a good basis for a stable public API upon which to build a parser ecosystem.
 //!
@@ -23,6 +23,7 @@
 //! // We implement `ExtParser` for our null byte parser, plugging us into the chumsky ecosystem
 //! impl<'a, I, E> ExtParser<'a, I, (), E> for Null_
 //! where
+//!     // We require `ValueInput` because we want to pull bytes by-value from the input
 //!     I: input::ValueInput<'a, Token = u8>,
 //!     E: extra::ParserExtra<'a, I>,
 //! {
@@ -82,10 +83,36 @@ mod current {
     /// This trait is a stable interface that can be used to build on top of chumsky without exposing extension crates to
     /// the complex inner workings of chumsky, allowing us to iterate on the core to improve performance without regularly
     /// breaking the public API.
+    ///
+    /// If your parser is a combinator and you'd like it to be used like a method (such as chumsky's built-in `a.or(b)`
+    /// combinator), it is recommended that you implement an extension trait in your own library and have uses import
+    /// it, like so:
+    ///
+    /// ```
+    /// use chumsky::{prelude::*, input, extra, extension::v1::{ExtParser, Ext}};
+    ///
+    /// pub struct FrobnicatedWith<A, B> { a: A, b: B }
+    ///
+    /// pub trait ParserExt<'a, I, O, E>
+    /// where
+    ///     I: input::Input<'a>,
+    ///     E: extra::ParserExtra<'a, I>
+    /// {
+    ///     fn frobnicated_with<B>(self, other: B) -> FrobnicatedWith<Self, B>
+    ///     where
+    ///         Self: Sized,
+    ///         B: Parser<'a, I, O, E>,
+    ///     {
+    ///         FrobnicatedWith { a: self, b: other }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Now, users can import your trait and do `a.frobnicate_with(b)` as if your parser were native to chumsky!
     pub trait ExtParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
         /// Attempt parsing on the given input.
         ///
-        /// See [`InputRef`] for more information about how you can manipulate inputs.
+        /// See [`InputRef`] for more information about how you can work with parser inputs.
         fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>;
     }
 
