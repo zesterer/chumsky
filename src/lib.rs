@@ -1,11 +1,12 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
     clippy::should_implement_trait,
     clippy::type_complexity,
-    clippy::result_unit_err,
+    clippy::result_unit_err
 )]
 // TODO: docsrs feature flags for nice feature labels in crate docs
 // TODO: Talk about `.map` and purity assumptions
