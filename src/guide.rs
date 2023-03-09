@@ -12,3 +12,8 @@ pub mod key_concepts {
     #![doc = include_str!("../guide/key_concepts.md")]
     use super::*;
 }
+
+pub mod meet_the_parsers {
+    #![doc = include_str!("../guide/meet_the_parsers.md")]
+    use super::*;
+}
