@@ -6,11 +6,11 @@ This section is mostly a glossary of terms and concepts. Feel free to skip to th
 
     - [Parsers](#parsers)
 
+    - [Declarative style](#declarative-style)
+
     - [Combinators](#combinators)
 
     - [Primitives](#primitives)
-
-    - [Declarative style](#declarative-style)
 
 - [API features](#api-features)
 
@@ -24,7 +24,7 @@ This section is mostly a glossary of terms and concepts. Feel free to skip to th
 
 # What are parser combinators?
 
-Chumsky is a **declarative parser combinator** library. Let's break that up to explain what it means.
+Chumsky is a **declarative parser combinator** library. Let's break that down to explain what it means.
 
 ## Parsers
 
@@ -39,6 +39,26 @@ Because the set of possible unstructured inputs to a parser (such as bytes in a 
 those that can be correctly translated to the structured output according to the grammar rules (such as an
 [Abstract Syntax Tree](https://en.m.wikipedia.org/wiki/Abstract_syntax_tree)), parsers need a way to generate **errors**
 when these invalid inputs are encountered.
+
+## Declarative style
+
+If you've hand-written a parser before, it was likely in the
+[imperative](https://en.wikipedia.org/wiki/Imperative_programming) style: which is to say that you used code to tell
+your program *how* to parse inputs. This is a valid approach to writing parsers, and many successful parsers are written
+in an imperative style.
+
+However, imperative-style parsers are often extremely 'noisy': resulting in parser code that is long, difficult to
+maintain, is hard to read, time-consuming to optimise, and easy to break, and difficult to debug.
+
+In comparison, chumsky encourages you to write **declarative** parsers. In the declarative style, instead of telling
+your code *how* to parse inputs, you tell it *what* to parse. This is a much more grounded and to-the-point approach to
+implementing parsers, allowing you to focus on the grammar rules you want to parse instead of spending ages debugging
+and maintaining imperative-style parser logic.
+
+If you search for information about declarative parsers (and in particular, parser combinators), you'll often hear it
+said that they're slow and imprecise. While this might have been true in decades gone by, modern optimising compilers -
+and in particular Rust's powerful type system - make the development of expressive declarative parsers that are as fast (or
+faster!) than hand-written parsers both easy and quick.
 
 ## Combinators
 
@@ -66,26 +86,6 @@ trivial. For example, they might recognise a specific keyword or even just a sin
 
 Chumsky comes with several [`primitive`] parsers that each perform a specific job.
 
-## Declarative style
-
-If you've hand-written a parser before, it was likely in the
-[imperative](https://en.wikipedia.org/wiki/Imperative_programming) style: which is to say that you used code to tell
-your program *how* to parse inputs. This is a valid approach to writing parsers, and many successful parsers are written
-in an imperative style.
-
-However, imperative-style parsers are often extremely 'noisy': resulting in parser code that is long, difficult to
-maintain, is hard to read, time-consuming to optimise, and easy to break, and difficult to debug.
-
-In comparison, chumsky encourages you to write **declarative** parsers. In the declarative style, instead of telling
-your code *how* to parse inputs, you tell it *what* to parse. This is a much more grounded and to-the-point approach to
-implementing parsers, allowing you to focus on the grammar rules you want to parse instead of spending ages debugging
-and maintaining imperative-style parser logic.
-
-If you search for information about declarative parsers (and in particular, parser combinators), you'll often hear it
-said that they're slow and imprecise. While this might have been true in decades gone by, modern optimising compilers -
-and in particular Rust's powerful type system - make the development of expressive declarative parsers that are as fast (or
-faster!) than hand-written parsers both easy and quick.
-
 # API features
 
 ## The [`Parser`] trait
@@ -112,8 +112,8 @@ implemented by types such as:
 
 Certain inputs have special properties. For example, it is possible to borrow `&T` tokens from `&[T]` array slices, but
 not `char`s from `&str` string slices (due to their UTF-8 encoding). Additionally, some inputs can have sub-slices taken
-from them. All of these operations are potentially useful to a parser, to chumsky expressed them with a set of extension
-traits that add extra functionality on top of the base [`Input`] trait such as:
+from them. All of these operations are potentially useful to a parser, so chumsky expresses them with a set of extension
+traits that add extra functionality on top of the base [`Input`] trait:
 
 - [`ValueInput`]: for inputs that can have tokens copied/cloned from them by-value
 
@@ -121,7 +121,7 @@ traits that add extra functionality on top of the base [`Input`] trait such as:
 
 - [`SliceInput`]: for inputs that can have entire sub-slices of tokens borrowed from them
 
-- [`StrInput`]: for inputs that 'look like' text strings: `&[u8]` byte slices and `&str` string slices
+- [`StrInput`]: for inputs that 'look like' text strings: ASCII byte slices (`&[u8]`) and UTF-8 string slices (`&str`)
 
 Taken together, these traits give chumsky the power to use many different types as input: bytes, strings, tokens,
 token trees, iterators, and much more besides.
