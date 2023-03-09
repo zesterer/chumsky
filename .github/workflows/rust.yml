@@ -11,7 +11,7 @@ env:
 
 jobs:
   check:
-    name: Check Chumsky
+    name: Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -27,7 +27,7 @@ jobs:
       - name: Run cargo fmt
         run: cargo fmt --verbose --check
   test:
-    name: Test Chumsky
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -39,11 +39,11 @@ jobs:
       - name: Run cargo test
         run: cargo test --verbose --all-features
   msrv:
-    name: Check Chumsky MSRV
+    name: MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install latest nightly
+      - name: Install MSRV
         uses: dtolnay/rust-toolchain@master
         with:
             toolchain: "1.65"
