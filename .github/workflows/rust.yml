@@ -42,6 +42,8 @@ jobs:
             components: rustfmt, clippy
       - name: Run cargo test
         run: cargo test --verbose --all-features
+        env:
+            RUSTDOCFLAGS: --cfg docsrs
   msrv:
     name: MSRV
     runs-on: ubuntu-latest
