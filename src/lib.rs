@@ -66,6 +66,8 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
+#[cfg(docsrs)]
+pub mod tutorial;
 pub mod util;
 
 /// Commonly used functions, traits and types.
