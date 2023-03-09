@@ -18,10 +18,14 @@ jobs:
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
-            toolchain: stable
+            toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo check
-        run: cargo check --verbose --no-default-features
+        run: cargo check --verbose --all-features
+      - name: Run cargo clippy
+        run: cargo clippy --verbose --all-features -- -D warnings
+      - name: Run cargo fmt
+        run: cargo fmt --verbose --check
   test:
     name: Test Chumsky
     runs-on: ubuntu-latest
@@ -34,3 +38,15 @@ jobs:
             components: rustfmt, clippy
       - name: Run cargo test
         run: cargo test --verbose --all-features
+  msrv:
+    name: Check Chumsky MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: dtolnay/rust-toolchain@master
+        with:
+            toolchain: "1.65"
+            components: rustfmt, clippy
+      - name: Run cargo check
+        run: cargo check --verbose --features _test_stable
