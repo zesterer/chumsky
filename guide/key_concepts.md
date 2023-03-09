@@ -43,17 +43,17 @@ when these invalid inputs are encountered.
 ## Declarative style
 
 If you've hand-written a parser before, it was likely in the
-[imperative](https://en.wikipedia.org/wiki/Imperative_programming) style: which is to say that you used code to tell
+[**imperative**](https://en.wikipedia.org/wiki/Imperative_programming) style: which is to say that you used code to tell
 your program *how* to parse inputs. This is a valid approach to writing parsers, and many successful parsers are written
 in an imperative style.
 
 However, imperative-style parsers are often extremely 'noisy': resulting in parser code that is long, difficult to
 maintain, is hard to read, time-consuming to optimise, and easy to break, and difficult to debug.
 
-In comparison, chumsky encourages you to write **declarative** parsers. In the declarative style, instead of telling
-your code *how* to parse inputs, you tell it *what* to parse. This is a much more grounded and to-the-point approach to
-implementing parsers, allowing you to focus on the grammar rules you want to parse instead of spending ages debugging
-and maintaining imperative-style parser logic.
+In comparison, chumsky encourages you to write [**declarative**](https://en.wikipedia.org/wiki/Declarative_programming)
+parsers. In the declarative style, instead of telling your code *how* to parse inputs, you tell it *what* to parse. This
+is a much more grounded and to-the-point approach to implementing parsers, allowing you to focus on the grammar rules
+you want to parse instead of spending ages debugging and maintaining imperative-style parser logic.
 
 If you search for information about declarative parsers (and in particular, parser combinators), you'll often hear it
 said that they're slow and imprecise. While this might have been true in decades gone by, modern optimising compilers -

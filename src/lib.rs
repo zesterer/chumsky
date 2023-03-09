@@ -54,6 +54,8 @@ pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
 pub mod extra;
+#[cfg(docsrs)]
+pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
@@ -66,8 +68,6 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
-#[cfg(docsrs)]
-pub mod tutorial;
 pub mod util;
 
 /// Commonly used functions, traits and types.
