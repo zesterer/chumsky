@@ -1962,40 +1962,40 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::map_err_with_span`].
-#[derive(Copy, Clone)]
-pub struct MapErrWithSpan<A, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-}
+// /// See [`Parser::map_err_with_span`].
+// #[derive(Copy, Clone)]
+// pub struct MapErrWithSpan<A, F> {
+//     pub(crate) parser: A,
+//     pub(crate) mapper: F,
+// }
 
-impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for MapErrWithSpan<A, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(E::Error, I::Span) -> E::Error,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        let start = inp.offset();
-        let res = self.parser.go::<M>(inp);
+// impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for MapErrWithSpan<A, F>
+// where
+//     I: Input<'a>,
+//     E: ParserExtra<'a, I>,
+//     A: Parser<'a, I, O, E>,
+//     F: Fn(E::Error, I::Span) -> E::Error,
+// {
+//     #[inline(always)]
+//     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+//     where
+//         Self: Sized,
+//     {
+//         let start = inp.offset();
+//         let res = self.parser.go::<M>(inp);
 
-        if res.is_err() {
-            let mut e = inp.errors.alt.take().expect("error but no alt?");
-            let span = inp.span_since(start);
-            e.err = (self.mapper)(e.err, span);
-            inp.errors.alt = Some(e);
-        }
+//         if res.is_err() {
+//             let mut e = inp.errors.alt.take().expect("error but no alt?");
+//             let span = inp.span_since(start);
+//             e.err = (self.mapper)(e.err, span);
+//             inp.errors.alt = Some(e);
+//         }
 
-        res
-    }
+//         res
+//     }
 
-    go_extra!(O);
-}
+//     go_extra!(O);
+// }
 
 /// See [`Parser::map_err_with_state`].
 #[derive(Copy, Clone)]
@@ -2077,49 +2077,49 @@ where
     go_extra!(U);
 }
 
-/// See [`Parser::or_else`].
-#[derive(Copy, Clone)]
-pub struct OrElse<A, F> {
-    pub(crate) parser: A,
-    pub(crate) or_else: F,
-}
+// /// See [`Parser::or_else`].
+// #[derive(Copy, Clone)]
+// pub struct OrElse<A, F> {
+//     pub(crate) parser: A,
+//     pub(crate) or_else: F,
+// }
 
-impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for OrElse<A, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(E::Error) -> Result<O, E::Error>,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        let before = inp.save();
-        match self.parser.go::<M>(inp) {
-            Ok(out) => Ok(out),
-            Err(()) => {
-                let err = inp.errors.alt.take().expect("error but no alt?");
-                match (self.or_else)(err.err) {
-                    Ok(out) => {
-                        inp.rewind(before);
-                        Ok(M::bind(|| out))
-                    }
-                    Err(new_err) => {
-                        inp.errors.alt = Some(Located {
-                            pos: err.pos,
-                            err: new_err,
-                        });
-                        Err(())
-                    }
-                }
-            }
-        }
-    }
+// impl<'a, I, O, E, A, F> ParserSealed<'a, I, O, E> for OrElse<A, F>
+// where
+//     I: Input<'a>,
+//     E: ParserExtra<'a, I>,
+//     A: Parser<'a, I, O, E>,
+//     F: Fn(E::Error) -> Result<O, E::Error>,
+// {
+//     #[inline(always)]
+//     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+//     where
+//         Self: Sized,
+//     {
+//         let before = inp.save();
+//         match self.parser.go::<M>(inp) {
+//             Ok(out) => Ok(out),
+//             Err(()) => {
+//                 let err = inp.errors.alt.take().expect("error but no alt?");
+//                 match (self.or_else)(err.err) {
+//                     Ok(out) => {
+//                         inp.rewind(before);
+//                         Ok(M::bind(|| out))
+//                     }
+//                     Err(new_err) => {
+//                         inp.errors.alt = Some(Located {
+//                             pos: err.pos,
+//                             err: new_err,
+//                         });
+//                         Err(())
+//                     }
+//                 }
+//             }
+//         }
+//     }
 
-    go_extra!(O);
-}
+//     go_extra!(O);
+// }
 
 #[cfg(test)]
 mod tests {

@@ -1262,20 +1262,20 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Padded { parser: self }
     }
 
-    /// Flatten a nested collection.
-    ///
-    /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
-    ///
-    /// The output type of this parser is `Vec<T>`, where the original parser output was
-    /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
-    fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
-    where
-        Self: Sized,
-        O: IntoIterator<Item = Inner>,
-        Inner: IntoIterator<Item = T>,
-    {
-        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
-    }
+    // /// Flatten a nested collection.
+    // ///
+    // /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
+    // ///
+    // /// The output type of this parser is `Vec<T>`, where the original parser output was
+    // /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
+    // fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
+    // where
+    //     Self: Sized,
+    //     O: IntoIterator<Item = Inner>,
+    //     Inner: IntoIterator<Item = T>,
+    // {
+    //     self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
+    // }
 
     /// Apply a fallback recovery strategy to this parser should it fail.
     ///
@@ -1356,25 +1356,25 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
-    /// to the point at which the error was encountered.
-    ///
-    /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
-    /// pattern, for example to add a "while parsing" clause to your error messages.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    // TODO: Map E -> D, not E -> E
-    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
-    where
-        Self: Sized,
-        F: Fn(E::Error, I::Span) -> E::Error,
-    {
-        MapErrWithSpan {
-            parser: self,
-            mapper: f,
-        }
-    }
+    // /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
+    // /// to the point at which the error was encountered.
+    // ///
+    // /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
+    // /// pattern, for example to add a "while parsing" clause to your error messages.
+    // ///
+    // /// The output type of this parser is `O`, the same as the original parser.
+    // ///
+    // // TODO: Map E -> D, not E -> E
+    // fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
+    // where
+    //     Self: Sized,
+    //     F: Fn(E::Error, I::Span) -> E::Error,
+    // {
+    //     MapErrWithSpan {
+    //         parser: self,
+    //         mapper: f,
+    //     }
+    // }
 
     /// Map the primary error of this parser to another value, making use of the parser state.
     ///
@@ -1431,21 +1431,21 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
-    ///
-    /// Note that, if the closure returns [`Err`], the parser will not consume any input.
-    ///
-    /// The output type of this parser is `U`, the [`Ok`] type of the result.
-    fn or_else<F>(self, f: F) -> OrElse<Self, F>
-    where
-        Self: Sized,
-        F: Fn(E::Error) -> Result<O, E::Error>,
-    {
-        OrElse {
-            parser: self,
-            or_else: f,
-        }
-    }
+    // /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
+    // ///
+    // /// Note that, if the closure returns [`Err`], the parser will not consume any input.
+    // ///
+    // /// The output type of this parser is `U`, the [`Ok`] type of the result.
+    // fn or_else<F>(self, f: F) -> OrElse<Self, F>
+    // where
+    //     Self: Sized,
+    //     F: Fn(E::Error) -> Result<O, E::Error>,
+    // {
+    //     OrElse {
+    //         parser: self,
+    //         or_else: f,
+    //     }
+    // }
 
     /// Attempt to convert the output of this parser into something else using Rust's [`FromStr`] trait.
     ///

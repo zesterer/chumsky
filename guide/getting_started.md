@@ -124,7 +124,14 @@ From here, the world is your lobster: you can move on to the tutorial sections o
 writing parsers. The main repository has [plenty of examples](https://github.com/zesterer/chumsky/tree/main/examples)
 to use as a reference and the crate has documentation that will help guide you, with many examples.
 
+## Compilation times
 
+TODO
 
+## Compiler errors
 
+TODO
 
+## Debugging parsers
+
+TODO
