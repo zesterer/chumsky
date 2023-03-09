@@ -52,8 +52,8 @@ reason, it's common practice to leave the heavy work of dealing with types to th
 Here's an example of a typical parser function. We'll go over what each part means.
 
 ```
-//         (1)           (2)              (3)    (4)
-//          |        _____|_____       ____|____  |_
+//        (1)            (2)              (3)    (4)
+//        _|__       _____|_____       ____|____  |_
 fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
     end() // --(5)
 }
@@ -80,9 +80,9 @@ fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
    will eventually give you, assuming that parsing was successful. For now, we just use an output type of [`()`], i.e:
    nothing.
 
-(**5**) Because this is just an example parser, the implementation is composed of only a single parser primitive, [`end`].
-   This is a primitive that recognises only the end of the input and generates an error if it does not find it. This
-   means that our parser effectively just checks that we pass it an empty string: anything else will generate an error.
+(**5**) Because this is just an example parser, the implementation is just a single parser primitive, [`end`]. This is a
+   primitive that recognises only the end of the input and generates an error if it does not find it. This means that
+   our parser effectively just checks that we pass it an empty string: anything else will generate an error.
 
 Note that this function only *creates* the parser: it does not, by itself, perform any parsing.
 
