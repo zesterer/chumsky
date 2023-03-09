@@ -359,7 +359,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.take(),
             RichReason::Custom(_) => None,
-            RichReason::Many(many) => many.into_iter().find_map(|r| r.take_found()),
+            RichReason::Many(many) => many.iter_mut().find_map(|r| r.take_found()),
         }
     }
 

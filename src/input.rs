@@ -641,7 +641,7 @@ where
             offset: self.input.start(),
             input: &self.input,
             errors: &mut self.errors,
-            state: &mut *self.state,
+            state: &mut self.state,
             ctx: &self.ctx,
             #[cfg(feature = "memoization")]
             memos: &mut self.memos,
@@ -656,7 +656,7 @@ where
             offset,
             input: &self.input,
             errors: &mut self.errors,
-            state: &mut *self.state,
+            state: &mut self.state,
             ctx: &self.ctx,
             #[cfg(feature = "memoization")]
             memos: &mut self.memos,

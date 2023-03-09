@@ -152,7 +152,7 @@ use sync::*;
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
 /// error and output via [`ParseResult::into_output_errors`]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ParseResult<T, E> {
     output: Option<T>,
     errs: Vec<E>,
@@ -2137,7 +2137,7 @@ mod tests {
         let mut inp = own.as_ref_start();
 
         while let Some(c) = inp.next() {
-            std::hint::black_box(c);
+            drop(c);
         }
     }
 
