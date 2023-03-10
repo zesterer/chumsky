@@ -1688,7 +1688,6 @@ where
 }
 
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
-// TODO: Make sealed
 pub trait IterParser<'a, I, O, E = extra::Default>: IterParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
@@ -2053,7 +2052,6 @@ macro_rules! select {
 /// Useful if you want to extract elements from a token in a zero-copy manner.
 ///
 /// `select_ref` requires that the parser input implements [`BorrowInput`].
-// TODO: Remove this, somehow unify with `select`?
 #[macro_export]
 macro_rules! select_ref {
     ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
