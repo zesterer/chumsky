@@ -1,6 +1,6 @@
 //! TODO
 
-use crate::zero_copy::visit::{ParserInfo, ParserVisitor, Visitable};
+use crate::visit::{ParserInfo, ParserVisitor, Visitable};
 
 #[derive(Clone, PartialEq)]
 enum CheckState {

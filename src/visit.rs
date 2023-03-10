@@ -1,8 +1,7 @@
 use std::convert::TryFrom;
-use crate::zero_copy::combinator::*;
-use crate::zero_copy::container::OrderedSeq;
-use crate::zero_copy::input::Input;
-use crate::zero_copy::primitive::Just;
+use super::*;
+use crate::primitive::*;
+use crate::combinator::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SizeHint {
@@ -123,9 +122,9 @@ where
     }
 }
 
-impl<T, I: ?Sized + Input, E> Visitable for Just<T, I, E>
+impl<'a, T, I: Input<'a>, E> Visitable for Just<T, I, E>
 where
-    T: OrderedSeq<I::Token>,
+    T: OrderedSeq<'a, I::Token>,
 {
     fn info(&self) -> ParserInfo<'_, Self> {
         let size = self.seq.seq_iter()
@@ -148,15 +147,15 @@ where
             self,
             "or",
             SizeHint::or(
-                self.parser_a.info().size_hint,
-                self.parser_b.info().size_hint,
+                self.choice.parsers.0.info().size_hint,
+                self.choice.parsers.1.info().size_hint,
             )
         )
     }
 
     fn visit_children<V: ParserVisitor>(&self, visitor: &mut V) {
-        self.parser_a.visit(visitor);
-        self.parser_b.visit(visitor);
+        self.choice.parsers.0.visit(visitor);
+        self.choice.parsers.1.visit(visitor);
     }
 }
 
@@ -177,7 +176,7 @@ where
     }
 }
 
-impl<A, OA, I: ?Sized, E> Visitable for Repeated<A, OA, I, E>
+impl<A, OA, I, E> Visitable for Repeated<A, OA, I, E>
 where
     A: Visitable,
 {
@@ -203,7 +202,7 @@ where
     }
 }
 
-impl<A, B, OA, OB, I: ?Sized, E> Visitable for SeparatedBy<A, B, OA, OB, I, E>
+impl<A, B, OA, OB, I, E> Visitable for SeparatedBy<A, B, OA, OB, I, E>
 where
     A: Visitable,
     B: Visitable,
@@ -244,22 +243,20 @@ where
     }
 }
 
-impl<A, B, OB, C, const N: usize> Visitable for SeparatedByExactly<A, B, OB, C, N>
+impl<A, O, C> Visitable for CollectExactly<A, O, C>
 where
     A: Visitable,
-    B: Visitable,
 {
     fn info(&self) -> ParserInfo<'_, Self> {
         ParserInfo::new(
             self,
-            "separated_by_exactly",
+            "collect_exactly",
             todo!(),
         )
     }
 
     fn visit_children<V: ParserVisitor>(&self, visitor: &mut V) {
         self.parser.visit(visitor);
-        self.separator.visit(visitor);
     }
 }
 

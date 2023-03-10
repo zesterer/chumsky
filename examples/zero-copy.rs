@@ -28,7 +28,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]>
         .collect_exactly()
 }
 
-fn bad_parser() -> impl for<'a> Parser<'a, str, Vec<()>, extra::Err<Rich<str>>> + Problems {
+fn bad_parser<'a>() -> impl Parser<'a, &'a str, Vec<()>, extra::Err<Rich<'a, char>>> + Problems {
     just("").or(just("b"))
         .or_not()
         .separated_by(just(""))

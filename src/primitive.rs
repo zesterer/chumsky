@@ -838,7 +838,7 @@ where
 /// See [`choice`].
 #[derive(Copy, Clone)]
 pub struct Choice<T> {
-    parsers: T,
+    pub(crate) parsers: T,
 }
 
 /// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
