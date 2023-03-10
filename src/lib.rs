@@ -688,6 +688,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Labelled {
             parser: self,
             label,
+            is_context: false,
         }
     }
 

@@ -2091,15 +2091,15 @@ where
         Self: Sized,
     {
         let before = inp.offset();
-        self.parser.go::<Emit>(inp).map(|out| {
-            let span = inp.span_since(before);
-            let mut emitter = Emitter::new();
-            let out = (self.validator)(out, span, &mut emitter);
-            for err in emitter.errors() {
-                inp.emit(err);
-            }
-            M::bind(|| out)
-        })
+        let out = self.parser.go::<Emit>(inp)?;
+
+        let span = inp.span_since(before);
+        let mut emitter = Emitter::new();
+        let out = (self.validator)(out, span, &mut emitter);
+        for err in emitter.errors() {
+            inp.emit(inp.offset, err);
+        }
+        Ok(M::bind(|| out))
     }
 
     go_extra!(U);
