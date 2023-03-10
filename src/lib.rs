@@ -8,7 +8,6 @@
     clippy::type_complexity,
     clippy::result_unit_err
 )]
-// TODO: docsrs feature flags for nice feature labels in crate docs
 // TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
@@ -101,7 +100,7 @@ use crate::input::InputOwn;
 use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     borrow::Borrow,
-    cell::UnsafeCell,
+    cell::{Cell, RefCell, UnsafeCell},
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,
@@ -794,7 +793,51 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// TODO
+    /// Parse input as part of a token-tree - using an input generated from within the current
+    /// input.
+    ///
+    /// The output of this parser is `O`, the output of the parser it is called on.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, util::MaybeRef, error::Simple};
+    /// #[derive(Debug, Clone, PartialEq)]
+    /// enum Token<'a> {
+    ///     Struct,
+    ///     Ident(&'a str),
+    ///     Item(&'a str),
+    ///     Group(Vec<Token<'a>>),
+    /// }
+    ///
+    /// let group = select_ref! { Token::Group(g) => g.as_slice() };
+    ///
+    /// let ident = select_ref! { Token::Ident(i) => *i };
+    ///
+    /// let items = select_ref! { Token::Item(i) => *i }
+    ///     .repeated()
+    ///     .collect::<Vec<_>>()
+    ///     .nested_in(group);
+    ///
+    /// let struc = just::<_, _, extra::Err<Simple<_>>>(&Token::Struct)
+    ///     .ignore_then(ident)
+    ///     .then(items);
+    ///
+    /// let tl = struc
+    ///     .repeated()
+    ///     .collect::<Vec<_>>();
+    ///
+    /// let tokens = [
+    ///     Token::Struct,
+    ///     Token::Ident("foo"),
+    ///     Token::Group(vec![
+    ///         Token::Item("a"),
+    ///         Token::Item("b"),
+    ///     ]),
+    /// ];
+    ///
+    /// assert_eq!(tl.parse(&tokens).into_result(), Ok(vec![("foo", vec!["a", "b"])]));
+    /// ```
     fn nested_in<B: Parser<'a, I, I, E>>(self, other: B) -> NestedIn<Self, B, O, E>
     where
         Self: Sized,
@@ -1597,12 +1640,6 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    // TODO: Unfortunately we can't constrain the trait above without a cycle. Figure out a way to have this associated
-    // type visible to the world without weirdness (maybe it should be a type param of `ConfigParser`?)
-
-    // /// Type used to configure the parser
-    // type Config: Default;
-
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
@@ -1651,7 +1688,6 @@ where
 }
 
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
-// TODO: Make sealed
 pub trait IterParser<'a, I, O, E = extra::Default>: IterParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
@@ -2016,7 +2052,6 @@ macro_rules! select {
 /// Useful if you want to extract elements from a token in a zero-copy manner.
 ///
 /// `select_ref` requires that the parser input implements [`BorrowInput`].
-// TODO: Remove this, somehow unify with `select`?
 #[macro_export]
 macro_rules! select_ref {
     ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({

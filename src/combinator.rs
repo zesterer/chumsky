@@ -883,7 +883,7 @@ where
         let mut memos = HashMap::default();
         let res = inp.with_input(
             &inp2,
-            |inp| self.then_ignore(end()).parser_a.go::<M>(inp),
+            |inp| (&self.parser_a).then_ignore(end()).go::<M>(inp),
             #[cfg(feature = "memoization")]
             &mut memos,
         );
@@ -1654,7 +1654,6 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
-        // TODO: Document safety invariants
         let before = inp.offset();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
@@ -1693,7 +1692,6 @@ pub struct OrNot<A> {
     pub(crate) parser: A,
 }
 
-// TODO: Maybe implement `IterParser` too?
 impl<'a, I, O, E, A> ParserSealed<'a, I, Option<O>, E> for OrNot<A>
 where
     I: Input<'a>,

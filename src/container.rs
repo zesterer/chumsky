@@ -5,7 +5,6 @@ use alloc::collections::LinkedList;
 use hashbrown::HashSet;
 
 /// A utility trait for types that can be constructed from a series of items.
-// TODO: Wrapper impls - Box, etc
 pub trait Container<T>: Default {
     /// Create a container, attempting to pre-allocate enough space for `n` items.
     ///
@@ -16,6 +15,45 @@ pub trait Container<T>: Default {
     }
     /// Add a value to the end of this container.
     fn push(&mut self, item: T);
+}
+
+impl<T, C> Container<T> for Box<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        Box::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        C::push(self, item)
+    }
+}
+
+impl<T, C> Container<T> for Cell<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        Cell::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        self.get_mut().push(item)
+    }
+}
+
+impl<T, C> Container<T> for RefCell<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        RefCell::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        self.get_mut().push(item)
+    }
 }
 
 impl<T> Container<T> for () {
