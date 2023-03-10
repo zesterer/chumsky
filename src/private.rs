@@ -200,7 +200,7 @@ pub trait ParserSealed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
 
     fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
-        Self: Sized + 'a + 'b,
+        Self: MaybeSync + Sized + 'a + 'b,
     {
         Boxed {
             inner: RefC::new(self),

@@ -65,6 +65,7 @@ use alloc::string::ToString;
 /// assert_eq!(numeral.parse("7").into_result(), Ok(7));
 /// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
+// TODO: Add support for more specialised kinds of error: unclosed delimiters, and more
 pub trait Error<'a, I: Input<'a>>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
@@ -358,7 +359,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.take(),
             RichReason::Custom(_) => None,
-            RichReason::Many(many) => many.into_iter().find_map(|r| r.take_found()),
+            RichReason::Many(many) => many.iter_mut().find_map(|r| r.take_found()),
         }
     }
 

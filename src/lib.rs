@@ -1,5 +1,5 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(feature = "nightly", feature(never_type, once_cell, rustc_attrs))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -54,6 +54,8 @@ pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
 pub mod extra;
+#[cfg(docsrs)]
+pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
@@ -133,24 +135,64 @@ use self::{
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
 
+/// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
+/// with `PhantomData`.
+struct EmptyPhantom<T>(core::marker::PhantomData<T>);
+
+impl<T> EmptyPhantom<T> {
+    const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<T> Copy for EmptyPhantom<T> {}
+impl<T> Clone for EmptyPhantom<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+// SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
+unsafe impl<T> Send for EmptyPhantom<T> {}
+// SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
+unsafe impl<T> Sync for EmptyPhantom<T> {}
+impl<T> Unpin for EmptyPhantom<T> {}
+impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
+impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
+
 #[cfg(feature = "sync")]
 mod sync {
+    use super::*;
+
     pub(crate) type RefC<T> = alloc::sync::Arc<T>;
     pub(crate) type RefW<T> = alloc::sync::Weak<T>;
+    pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + Send + Sync + 'b;
+
+    /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
+    /// enabled. Used to constrain API usage succinctly and easily.
+    pub trait MaybeSync: Send + Sync {}
+    impl<T: Send + Sync> MaybeSync for T {}
 }
 
 #[cfg(not(feature = "sync"))]
 mod sync {
+    use super::*;
+
     pub(crate) type RefC<T> = alloc::rc::Rc<T>;
     pub(crate) type RefW<T> = alloc::rc::Weak<T>;
+    pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + 'b;
+
+    /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
+    /// enabled. Used to constrain API usage succinctly and easily.
+    pub trait MaybeSync {}
+    impl<T> MaybeSync for T {}
 }
 
-use sync::*;
+use sync::{DynParser, MaybeSync, RefC, RefW};
 
 /// The result of running a [`Parser`]. Can be converted into a [`Result`] via
 /// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
 /// error and output via [`ParseResult::into_output_errors`]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ParseResult<T, E> {
     output: Option<T>,
     errs: Vec<E>,
@@ -342,7 +384,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         MapSlice {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -356,7 +398,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     {
         Slice {
             parser: self,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -422,7 +464,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Map {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -456,7 +498,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         MapWithSpan {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -493,7 +535,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         MapWithState {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -525,7 +567,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         TryMap {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -546,7 +588,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         TryMapWithState {
             parser: self,
             mapper: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -579,7 +621,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     {
         Ignored {
             parser: self,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -627,7 +669,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         To {
             parser: self,
             to,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -674,7 +716,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Then {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -705,7 +747,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         IgnoreThen {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -748,7 +790,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ThenIgnore {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -761,7 +803,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         NestedIn {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -800,7 +842,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ThenWithCtx {
             parser: self,
             then,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -858,7 +900,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         AndIs {
             parser_a: self,
             parser_b: other,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -920,7 +962,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             parser: self,
             start,
             end,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -948,7 +990,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         PaddedBy {
             parser: self,
             padding,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1071,7 +1113,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     {
         Not {
             parser: self,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1107,7 +1149,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             parser: self,
             at_least: 0,
             at_most: !0,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1144,7 +1186,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             at_most: !0,
             allow_leading: false,
             allow_trailing: false,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1179,7 +1221,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             parser_a: self,
             parser_b: other,
             folder: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1260,20 +1302,20 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Padded { parser: self }
     }
 
-    /// Flatten a nested collection.
-    ///
-    /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
-    ///
-    /// The output type of this parser is `Vec<T>`, where the original parser output was
-    /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
-    fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
-    where
-        Self: Sized,
-        O: IntoIterator<Item = Inner>,
-        Inner: IntoIterator<Item = T>,
-    {
-        self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
-    }
+    // /// Flatten a nested collection.
+    // ///
+    // /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
+    // ///
+    // /// The output type of this parser is `Vec<T>`, where the original parser output was
+    // /// `impl IntoIterator<Item = impl IntoIterator<Item = T>>`.
+    // fn flatten<T, Inner>(self) -> Map<Self, O, fn(O) -> Vec<T>>
+    // where
+    //     Self: Sized,
+    //     O: IntoIterator<Item = Inner>,
+    //     Inner: IntoIterator<Item = T>,
+    // {
+    //     self.map(|xs| xs.into_iter().flat_map(|xs| xs.into_iter()).collect())
+    // }
 
     /// Apply a fallback recovery strategy to this parser should it fail.
     ///
@@ -1354,25 +1396,25 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
-    /// to the point at which the error was encountered.
-    ///
-    /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
-    /// pattern, for example to add a "while parsing" clause to your error messages.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    // TODO: Map E -> D, not E -> E
-    fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
-    where
-        Self: Sized,
-        F: Fn(E::Error, I::Span) -> E::Error,
-    {
-        MapErrWithSpan {
-            parser: self,
-            mapper: f,
-        }
-    }
+    // /// Map the primary error of this parser to another value, making use of the span from the start of the attempted
+    // /// to the point at which the error was encountered.
+    // ///
+    // /// This function is useful for augmenting errors to allow them to display the span of the initial part of a
+    // /// pattern, for example to add a "while parsing" clause to your error messages.
+    // ///
+    // /// The output type of this parser is `O`, the same as the original parser.
+    // ///
+    // // TODO: Map E -> D, not E -> E
+    // fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
+    // where
+    //     Self: Sized,
+    //     F: Fn(E::Error, I::Span) -> E::Error,
+    // {
+    //     MapErrWithSpan {
+    //         parser: self,
+    //         mapper: f,
+    //     }
+    // }
 
     /// Map the primary error of this parser to another value, making use of the parser state.
     ///
@@ -1425,25 +1467,25 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Validate {
             parser: self,
             validator: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
-    /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
-    ///
-    /// Note that, if the closure returns [`Err`], the parser will not consume any input.
-    ///
-    /// The output type of this parser is `U`, the [`Ok`] type of the result.
-    fn or_else<F>(self, f: F) -> OrElse<Self, F>
-    where
-        Self: Sized,
-        F: Fn(E::Error) -> Result<O, E::Error>,
-    {
-        OrElse {
-            parser: self,
-            or_else: f,
-        }
-    }
+    // /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
+    // ///
+    // /// Note that, if the closure returns [`Err`], the parser will not consume any input.
+    // ///
+    // /// The output type of this parser is `U`, the [`Ok`] type of the result.
+    // fn or_else<F>(self, f: F) -> OrElse<Self, F>
+    // where
+    //     Self: Sized,
+    //     F: Fn(E::Error) -> Result<O, E::Error>,
+    // {
+    //     OrElse {
+    //         parser: self,
+    //         or_else: f,
+    //     }
+    // }
 
     /// Attempt to convert the output of this parser into something else using Rust's [`FromStr`] trait.
     ///
@@ -1506,7 +1548,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Unwrapped {
             parser: self,
             location: *Location::caller(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1530,7 +1572,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// The output type of this parser is `O`, the same as the original parser.
     fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
-        Self: Sized + 'a + 'b,
+        Self: MaybeSync + Sized + 'a + 'b,
     {
         ParserSealed::boxed(self)
     }
@@ -1578,7 +1620,8 @@ pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E:
     offset: I::Offset,
     own: InputOwn<'a, 'iter, I, E>,
     iter_state: Option<P::IterState<Emit>>,
-    phantom: PhantomData<&'a O>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(&'a (), O)>,
 }
 
 impl<'a, 'iter, P, I: Input<'a>, O, E: ParserExtra<'a, I>> Iterator
@@ -1637,7 +1680,7 @@ where
     {
         Collect {
             parser: self,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1666,7 +1709,7 @@ where
     {
         CollectExactly {
             parser: self,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1727,7 +1770,7 @@ where
             parser_a: self,
             parser_b: other,
             folder: f,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1746,7 +1789,7 @@ where
                 offset: input.start(),
                 own: InputOwn::new(input),
                 iter_state: None,
-                phantom: PhantomData,
+                phantom: EmptyPhantom::new(),
             }),
             Vec::new(),
         )
@@ -1770,7 +1813,7 @@ where
                 offset: input.start(),
                 own: InputOwn::new_state(input, state),
                 iter_state: None,
-                phantom: PhantomData,
+                phantom: EmptyPhantom::new(),
             }),
             Vec::new(),
         )
@@ -1794,7 +1837,7 @@ where
         IterConfigure {
             parser: self,
             cfg,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 
@@ -1808,7 +1851,7 @@ where
         TryIterConfigure {
             parser: self,
             cfg,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1820,7 +1863,7 @@ where
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 pub struct Boxed<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> {
-    inner: RefC<dyn Parser<'a, I, O, E> + 'b>,
+    inner: RefC<DynParser<'a, 'b, I, O, E>>,
 }
 
 impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, 'b, I, O, E> {
@@ -1842,7 +1885,7 @@ where
 
     fn boxed<'c>(self) -> Boxed<'a, 'c, I, O, E>
     where
-        Self: Sized + 'a + 'c,
+        Self: MaybeSync + Sized + 'a + 'c,
     {
         // Never double-box parsers
         self
@@ -2135,7 +2178,7 @@ mod tests {
         let mut inp = own.as_ref_start();
 
         while let Some(c) = inp.next() {
-            std::hint::black_box(c);
+            drop(c);
         }
     }
 

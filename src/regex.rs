@@ -3,7 +3,7 @@
 use super::*;
 
 /// See [`regex()`].
-pub struct Regex<C: Char, I: ?Sized, E> {
+pub struct Regex<C: Char, I, E> {
     regex: C::Regex,
     phantom: PhantomData<(E, I)>,
 }

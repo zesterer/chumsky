@@ -11,19 +11,27 @@ env:
 
 jobs:
   check:
-    name: Check Chumsky
+    name: Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
-            toolchain: stable
+            toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo check
-        run: cargo check --verbose --no-default-features
+        run: cargo check --verbose --all-features
+      - name: Run cargo clippy
+        run: cargo clippy --verbose --all-features -- -D warnings
+      - name: Run cargo fmt
+        run: cargo fmt --verbose --check
+      - name: Run cargo doc
+        run: cargo doc --all-features --verbose
+        env:
+            RUSTDOCFLAGS: --cfg docsrs
   test:
-    name: Test Chumsky
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -34,3 +42,17 @@ jobs:
             components: rustfmt, clippy
       - name: Run cargo test
         run: cargo test --verbose --all-features
+        env:
+            RUSTDOCFLAGS: --cfg docsrs
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install MSRV
+        uses: dtolnay/rust-toolchain@master
+        with:
+            toolchain: "1.65"
+            components: rustfmt, clippy
+      - name: Run cargo check
+        run: cargo check --verbose --features _test_stable
