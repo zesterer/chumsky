@@ -1136,6 +1136,7 @@ pub struct Repeated<A, OA, I, E> {
     pub(crate) at_least: usize,
     // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
     pub(crate) at_most: u64,
+    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E, I)>,
 }
@@ -1147,6 +1148,7 @@ impl<A: Clone, OA, I, E> Clone for Repeated<A, OA, I, E> {
             parser: self.parser.clone(),
             at_least: self.at_least,
             at_most: self.at_most,
+            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1228,11 +1230,22 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut prev_offset = inp.offset;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    prev_offset != inp.offset,
+                    "found Repeated combinator making no progress at {}",
+                    self.location,
+                );
+                prev_offset = inp.offset
             }
         }
     }
@@ -1330,6 +1343,7 @@ pub struct SeparatedBy<A, B, OA, OB, I, E> {
     pub(crate) at_most: u64,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
+    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, OB, E, I)>,
 }
@@ -1344,6 +1358,7 @@ impl<A: Clone, B: Clone, OA, OB, I, E> Clone for SeparatedBy<A, B, OA, OB, I, E>
             at_most: self.at_most,
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
+            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1574,11 +1589,22 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut prev_offset = inp.offset;
         loop {
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    prev_offset != inp.offset,
+                    "found SeparatedBy combinator making no progress at {}",
+                    self.location,
+                );
+                prev_offset = inp.offset
             }
         }
     }
@@ -1589,6 +1615,7 @@ where
 /// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,
+    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(O, C)>,
 }
@@ -1598,6 +1625,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
+            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1614,6 +1642,8 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut prev_offset = inp.offset;
         loop {
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
@@ -1621,6 +1651,15 @@ where
                 }
                 Ok(None) => break Ok(output),
                 Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    prev_offset != inp.offset,
+                    "found Collect combinator making no progress at {}",
+                    self.location,
+                );
+                prev_offset = inp.offset
             }
         }
     }
@@ -1825,6 +1864,7 @@ pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
+    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
@@ -1836,6 +1876,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
+            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1856,6 +1897,8 @@ where
     {
         let mut a_out = M::bind(|| Vec::new());
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut prev_offset = inp.offset;
         loop {
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
@@ -1863,6 +1906,15 @@ where
                 }
                 Ok(None) => break,
                 Err(()) => return Err(()),
+            }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    prev_offset != inp.offset,
+                    "found Foldr combinator making no progress at {}",
+                    self.location,
+                );
+                prev_offset = inp.offset
             }
         }
 
@@ -1881,6 +1933,7 @@ pub struct Foldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
+    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
@@ -1892,6 +1945,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
+            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1912,6 +1966,8 @@ where
     {
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut prev_offset = inp.offset;
         loop {
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
@@ -1919,6 +1975,15 @@ where
                 }
                 Ok(None) => break Ok(out),
                 Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    prev_offset != inp.offset,
+                    "found Foldl combinator making no progress at {}",
+                    self.location,
+                );
+                prev_offset = inp.offset
             }
         }
     }

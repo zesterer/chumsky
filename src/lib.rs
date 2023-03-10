@@ -1184,6 +1184,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// assert_eq!(sum.parse("2+13+4+0+5").into_result(), Ok(24));
     /// ```
+    #[track_caller]
     fn repeated(self) -> Repeated<Self, O, I, E>
     where
         Self: Sized,
@@ -1192,6 +1193,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             parser: self,
             at_least: 0,
             at_most: !0,
+            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1217,6 +1219,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     ///
     /// See [`SeparatedBy::allow_leading`] and [`SeparatedBy::allow_trailing`] for more examples.
+    #[track_caller]
     fn separated_by<U, B>(self, separator: B) -> SeparatedBy<Self, B, O, U, I, E>
     where
         Self: Sized,
@@ -1229,6 +1232,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             at_most: !0,
             allow_leading: false,
             allow_trailing: false,
+            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1254,6 +1258,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(sum.parse("1+12+3+9").into_result(), Ok(25));
     /// assert_eq!(sum.parse("6").into_result(), Ok(6));
     /// ```
+    #[track_caller]
     fn foldl<B, F, OB>(self, other: B, f: F) -> Foldl<F, Self, B, OB, E>
     where
         F: Fn(O, OB) -> O,
@@ -1264,6 +1269,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             parser_a: self,
             parser_b: other,
             folder: f,
+            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1710,12 +1716,14 @@ where
     ///
     /// assert_eq!(word.parse("hello").into_result(), Ok("hello".to_string()));
     /// ```
+    #[track_caller]
     fn collect<C: Container<O>>(self) -> Collect<Self, O, C>
     where
         Self: Sized,
     {
         Collect {
             parser: self,
+            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1796,6 +1804,7 @@ where
     /// assert_eq!(signed.parse("-17").into_result(), Ok(-17));
     /// assert_eq!(signed.parse("--+-+-5").into_result(), Ok(5));
     /// ```
+    #[track_caller]
     fn foldr<B, F, OA>(self, other: B, f: F) -> Foldr<F, Self, B, O, E>
     where
         F: Fn(O, OA) -> OA,
@@ -1806,6 +1815,7 @@ where
             parser_a: self,
             parser_b: other,
             folder: f,
+            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2289,5 +2299,82 @@ mod tests {
         }
 
         assert_eq!(parser().parse("a+b+c").into_result().unwrap(), "abc");
+    }
+
+    #[cfg(debug_assertions)]
+    mod debug_asserts {
+        use super::prelude::*;
+
+        // TODO panic when left recursive parser is detected
+        // #[test]
+        // #[should_panic]
+        // fn debug_assert_left_recursive() {
+        //     recursive(|expr| {
+        //         let atom = any::<&str, extra::Default>()
+        //             .filter(|c: &char| c.is_alphabetic())
+        //             .repeated()
+        //             .at_least(1)
+        //             .collect();
+
+        //         let sum = expr
+        //             .clone()
+        //             .then_ignore(just('+'))
+        //             .then(expr)
+        //             .map(|(a, b)| format!("{}{}", a, b));
+
+        //         sum.or(atom)
+        //     })
+        //     .then_ignore(end())
+        //     .parse("a+b+c");
+        // }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_collect() {
+            empty::<&str, extra::Default>()
+                .to(())
+                .repeated()
+                .collect::<()>()
+                .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_separated_by() {
+            empty::<&str, extra::Default>()
+                .to(())
+                .separated_by(just(','))
+                .collect::<()>()
+                .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_foldl() {
+            empty::<&str, extra::Default>()
+                .foldl(empty().to(()).repeated(), |_, _| ())
+                .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_foldr() {
+            empty::<&str, extra::Default>()
+                .to(())
+                .repeated()
+                .foldr(empty(), |_, _| ())
+                .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_repeated() {
+            empty::<&str, extra::Default>()
+                .to(())
+                .repeated()
+                .parse("a+b+c");
+        }
+
+        // TODO what about IterConfigure and TryIterConfigure?
     }
 }
