@@ -246,12 +246,16 @@ where
 impl<A, O, C> Visitable for CollectExactly<A, O, C>
 where
     A: Visitable,
+    C: ContainerExactly<O>,
 {
     fn info(&self) -> ParserInfo<'_, Self> {
         ParserInfo::new(
             self,
             "collect_exactly",
-            todo!(),
+            SizeHint::repeat(
+                self.parser.info().size_hint,
+                SizeHint::new(C::LEN, Some(C::LEN))
+            ),
         )
     }
 
