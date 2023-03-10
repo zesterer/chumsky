@@ -5,7 +5,6 @@ use alloc::collections::LinkedList;
 use hashbrown::HashSet;
 
 /// A utility trait for types that can be constructed from a series of items.
-// TODO: Wrapper impls - Box, etc
 pub trait Container<T>: Default {
     /// Create a container, attempting to pre-allocate enough space for `n` items.
     ///
