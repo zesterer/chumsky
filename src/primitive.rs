@@ -18,19 +18,19 @@
 use super::*;
 
 /// See [`end`].
-pub struct End<I, E>(PhantomData<(E, I)>);
+pub struct End<I, E>(EmptyPhantom<(E, I)>);
 
 /// A parser that accepts only the end of input.
 ///
 /// The output type of this parser is `()`.
 pub const fn end<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> End<I, E> {
-    End(PhantomData)
+    End(EmptyPhantom::new())
 }
 
 impl<I, E> Copy for End<I, E> {}
 impl<I, E> Clone for End<I, E> {
     fn clone(&self) -> Self {
-        End(PhantomData)
+        End(EmptyPhantom::new())
     }
 }
 
@@ -55,19 +55,19 @@ where
 }
 
 /// See [`empty`].
-pub struct Empty<I, E>(PhantomData<(E, I)>);
+pub struct Empty<I, E>(EmptyPhantom<(E, I)>);
 
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
 pub const fn empty<I, E>() -> Empty<I, E> {
-    Empty(PhantomData)
+    Empty(EmptyPhantom::new())
 }
 
 impl<I, E> Copy for Empty<I, E> {}
 impl<I, E> Clone for Empty<I, E> {
     fn clone(&self) -> Self {
-        Empty(PhantomData)
+        Empty(EmptyPhantom::new())
     }
 }
 
@@ -113,7 +113,8 @@ impl<T> Default for JustCfg<T> {
 /// See [`just`].
 pub struct Just<T, I, E = EmptyErr> {
     seq: T,
-    phantom: PhantomData<(E, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
 }
 
 impl<T: Copy, I, E> Copy for Just<T, I, E> {}
@@ -121,7 +122,7 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -151,7 +152,7 @@ where
 {
     Just {
         seq,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -214,7 +215,8 @@ where
 /// See [`one_of`].
 pub struct OneOf<T, I, E> {
     seq: T,
-    phantom: PhantomData<(E, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
 }
 
 impl<T: Copy, I, E> Copy for OneOf<T, I, E> {}
@@ -222,7 +224,7 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -252,7 +254,7 @@ where
 {
     OneOf {
         seq,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -287,7 +289,8 @@ where
 /// See [`none_of`].
 pub struct NoneOf<T, I, E> {
     seq: T,
-    phantom: PhantomData<(E, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
 }
 
 impl<T: Copy, I, E> Copy for NoneOf<T, I, E> {}
@@ -295,7 +298,7 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
     fn clone(&self) -> Self {
         Self {
             seq: self.seq.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -325,7 +328,7 @@ where
 {
     NoneOf {
         seq,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -355,7 +358,8 @@ where
 /// See [`custom`].
 pub struct Custom<F, I, O, E> {
     f: F,
-    phantom: PhantomData<(E, O, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, O, I)>,
 }
 
 impl<F: Copy, I, O, E> Copy for Custom<F, I, O, E> {}
@@ -363,7 +367,7 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             f: self.f.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -390,7 +394,7 @@ where
 {
     Custom {
         f,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -418,7 +422,8 @@ where
 /// See [`select!`].
 pub struct Select<F, I, O, E> {
     filter: F,
-    phantom: PhantomData<(E, O, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, O, I)>,
 }
 
 impl<F: Copy, I, O, E> Copy for Select<F, I, O, E> {}
@@ -426,7 +431,7 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             filter: self.filter.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -441,7 +446,7 @@ where
 {
     Select {
         filter,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -474,7 +479,8 @@ where
 /// See [`select_ref!`].
 pub struct SelectRef<F, I, O, E> {
     filter: F,
-    phantom: PhantomData<(E, O, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, O, I)>,
 }
 
 impl<F: Copy, I, O, E> Copy for SelectRef<F, I, O, E> {}
@@ -482,7 +488,7 @@ impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             filter: self.filter.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -497,7 +503,7 @@ where
 {
     SelectRef {
         filter,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -530,14 +536,15 @@ where
 
 /// See [`any`].
 pub struct Any<I, E> {
-    phantom: PhantomData<(E, I)>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
 }
 
 impl<I, E> Copy for Any<I, E> {}
 impl<I, E> Clone for Any<I, E> {
     fn clone(&self) -> Self {
         Self {
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -580,7 +587,7 @@ where
 /// ```
 pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
     Any {
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -590,7 +597,7 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
 pub struct TakeUntil<P, I, OP, E, C = ()> {
     until: P,
     // FIXME try remove OP? See comment in Map declaration
-    phantom: PhantomData<(OP, E, C, I)>,
+    #[allow(dead_code)] phantom: EmptyPhantom<(OP, E, C, I)>,
 }
 
 impl<'a, I, E, P, OP, C> TakeUntil<P, I, OP, E, C>
@@ -603,7 +610,7 @@ where
     pub fn collect<D: Container<OP>>(self) -> TakeUntil<P, I, OP, E, D> {
         TakeUntil {
             until: self.until,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -613,7 +620,7 @@ impl<P: Clone, I, C, E> Clone for TakeUntil<P, I, E, C> {
     fn clone(&self) -> Self {
         TakeUntil {
             until: self.until.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -667,7 +674,7 @@ where
 {
     TakeUntil {
         until,
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
@@ -777,7 +784,7 @@ where
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I, O, E>(PhantomData<(O, E, I)>);
+pub struct Todo<I, O, E>(EmptyPhantom<(O, E, I)>);
 
 impl<I, O, E> Copy for Todo<I, O, E> {}
 impl<I, O, E> Clone for Todo<I, O, E> {
@@ -812,7 +819,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// int.parse("0xd4");
 /// ```
 pub const fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
-    Todo(PhantomData)
+    Todo(EmptyPhantom::new())
 }
 
 impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Todo<I, O, E>

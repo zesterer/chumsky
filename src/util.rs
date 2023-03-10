@@ -8,6 +8,8 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
+pub use sync::MaybeSync;
+
 /// A value that may be a `T` or a mutable reference to a `T`.
 pub type MaybeMut<'a, T> = Maybe<T, &'a mut T>;
 

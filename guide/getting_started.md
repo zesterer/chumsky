@@ -2,6 +2,20 @@
 
 Setting yourself up to use chumsky can be done in a few easy steps.
 
+- [Adding chumsky as a dependency](#adding-chumsky-as-a-dependency)
+
+- [Creating parsers](#creating-parsers)
+
+- [Using parsers](#using-parsers)
+
+- [Advice](#advice)
+
+    - [Compiler errors](#compiler-errors)
+
+    - [Compilation times](#compilation-times)
+
+    - [Debugging parsers](#debugging-parsers)
+
 ## Adding chumsky as a dependency
 
 Chumsky can be added as a project dependency in one of two ways.
@@ -124,14 +138,51 @@ From here, the world is your lobster: you can move on to the tutorial sections o
 writing parsers. The main repository has [plenty of examples](https://github.com/zesterer/chumsky/tree/main/examples)
 to use as a reference and the crate has documentation that will help guide you, with many examples.
 
-## Compilation times
+## Advice
 
-TODO
+Chumsky is a powerful crate with a lot of bells and whistles. It makes sense that there also a lot of ways things can go
+wrong too.
 
-## Compiler errors
+### Compiler errors
 
-TODO
+Chumsky is a combinator crate and leans heavily into Rust's type system (traits, generics, etc.) in order to combine
+high performance and ergonomics. Unfortunately, the Rust compiler can still struggle to generate useful error messages
+for large chumsky parsers (although things have improved substantially in recent releases!). When you hit a compiler
+error you're struggling to understand, you should:
 
-## Debugging parsers
+1. Always solve the first error that Rust generates. Rust generates errors in the order that it finds them, so the first
+   error is usually reliably accurate while later errors tend to get increasingly speculative as the compiler needs to
+   make more and more assumptions about your program to handle prior errors. This often results in many additional
+   'phantom errors': errors that muddy the water and make it look like the problem is more complicated to solve than it
+   actually is.
+
+2. Reduce the size of types. Thankfully Rust has recently taken steps to avoid printing extremely long type signatures
+   out to the terminal. Even so, parser types can still be rather large. You can reduce this problem by commenting out
+   unnecessary parts of your parser, or using `.boxed()` on parsers above the error to simplify their types.
+
+3. Complaints about types 'not implementing [`Parser`]' are more often than not a failure to fulfil the obligations that
+   come with implementing the trait. For example, [`recursive`] requires that your types implement `Clone`: a parser
+   that doesn't (because, say, you moved a non-cloneable type into a closure with `.map(move |_| ...)`) can't be used
+   with [`recursive`] and so Rust will translate this, in its parlance, to the type not implementing [`Parser`].
+
+### Compilation times
+
+Chumsky's heavy use of Rust's type system can result in parsers taking some time to compile. In particular, a common
+cause of long compilation times are long chains of [`Parser::or`], which sadly tend to produce exponential behaviour in
+Rust's trait solver.
+
+**Don't fear! There are solutions.**
+
+1. Replace long (more than a handful of cases) [`Parser::or`] chains with [`choice`], which has identical behaviour but
+   gives Rust's trait solver a much easier time.
+
+2. Use [`Parser::boxed`] at the end of longer parser chains to perform type erasure, thereby reducing the amount of work
+   Rust needs to do to understand your parser. If you've been using Rust for a while, your first intention might be to
+   feel nauseous as such a suggestion: "*allocation?* In *my* high-performance code? *No thanks*". However, remember
+   that this allocation only occurs on parser *creation*, not during the parsing process. A few strategically placed
+   `.boxed()` calls has almost no effect on parsing performance (modern CPU branch predictors have absolutely no trouble
+   eliminating their cost), and in fact can sometimes *improve* performance!
+
+### Debugging parsers
 
 TODO

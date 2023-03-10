@@ -10,32 +10,53 @@
 
 use super::*;
 
-#[cfg(feature = "nightly")]
-use core::cell::OnceCell;
-
-// TODO: Remove when `OnceCell` is stable
-#[cfg(not(feature = "nightly"))]
-struct OnceCell<T>(core::cell::RefCell<Option<T>>);
-#[cfg(not(feature = "nightly"))]
+#[cfg(not(feature = "sync"))]
+struct OnceCell<T>(core::cell::Cell<Option<T>>);
+#[cfg(not(feature = "sync"))]
 impl<T> OnceCell<T> {
     pub fn new() -> Self {
-        Self(core::cell::RefCell::new(None))
+        Self(core::cell::Cell::new(None))
     }
     pub fn set(&self, x: T) -> Result<(), ()> {
-        let mut inner = self.0.try_borrow_mut().map_err(|_| ())?;
+        // SAFETY: Function is not reentrant so we have exclusive access to the inner data
+        unsafe {
+            let vacant = (&*self.0.as_ptr()).is_none();
+            if vacant {
+                self.0.as_ptr().write(Some(x));
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+    }
+    #[inline]
+    pub fn get(&self) -> Option<&T> {
+        // SAFETY: We ensure that we never insert twice (so the inner `T` always lives as long as us, if it exists) and
+        // neither function is possibly reentrant so there's no way we can invalidate mut xor shared aliasing
+        unsafe { (&*self.0.as_ptr()).as_ref() }
+    }
+}
 
-        if inner.is_none() {
-            *inner = Some(x);
+#[cfg(feature = "sync")]
+struct OnceCell<T>(spin::once::Once<T>);
+#[cfg(feature = "sync")]
+impl<T> OnceCell<T> {
+    pub fn new() -> Self {
+        Self(spin::once::Once::new())
+    }
+    pub fn set(&self, x: T) -> Result<(), ()> {
+        // TODO: Race condition here, possibility of `Err(())` not being returned even through once is already occupied
+        // We don't care enough about this right now to do anything though, it's not a safety violation
+        if !self.0.is_completed() {
+            self.0.call_once(move || x);
             Ok(())
         } else {
             Err(())
         }
     }
     #[inline]
-    pub fn get(&self) -> Option<core::cell::Ref<T>> {
-        Some(core::cell::Ref::map(self.0.borrow(), |x| {
-            x.as_ref().unwrap()
-        }))
+    pub fn get(&self) -> Option<&T> {
+        self.0.get()
     }
 }
 
@@ -47,12 +68,12 @@ enum RecursiveInner<T: ?Sized> {
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
-pub type Direct<'a, I, O, Extra> = dyn Parser<'a, I, O, Extra> + 'a;
+pub type Direct<'a, 'b, I, O, Extra> = DynParser<'a, 'b, I, O, Extra>;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'a, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
-    inner: OnceCell<Box<dyn Parser<'a, I, O, Extra> + 'a>>,
+pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
+    inner: OnceCell<Box<DynParser<'a, 'b, I, O, Extra>>>,
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -63,7 +84,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>> {
+impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -111,7 +132,8 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, I, O, E>
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    pub fn define<P: Parser<'a, I, O, E> + Clone + 'a>(&mut self, parser: P) {
+    // INFO: Clone bound not actually needed, but good to be safe for future compat
+    pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(&mut self, parser: P) {
         self.parser()
             .inner
             .set(Box::new(parser))
@@ -153,7 +175,7 @@ fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, I, O, E>>
+impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, 'b, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -175,7 +197,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, I, O, E>>
+impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, 'b, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -237,15 +259,16 @@ where
 ///     ]),
 /// ])));
 /// ```
-pub fn recursive<'a, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, I, O, E>>
+// INFO: Clone bound not actually needed, but good to be safe for future compat
+pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E> + Clone + 'a,
-    F: FnOnce(Recursive<Direct<'a, I, O, E>>) -> A,
+    A: Parser<'a, I, O, E> + Clone + MaybeSync + 'b,
+    F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
 {
     let rc = RefC::new_cyclic(|rc| {
-        let rc: RefW<dyn Parser<'a, I, O, E>> = rc.clone() as _;
+        let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };

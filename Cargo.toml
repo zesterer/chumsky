@@ -35,7 +35,7 @@ extension = []
 label = []
 
 # Make builtin parsers such as `Boxed` use atomic instead of non-atomic internals.
-sync = []
+sync = ["spin"]
 
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
@@ -51,6 +51,7 @@ hashbrown = "0.13"
 stacker = { version = "0.1", optional = true }
 # Enables regex combinators
 regex = { version = "1.7", optional = true }
+spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 
 [dev-dependencies]
 ariadne = "0.2"

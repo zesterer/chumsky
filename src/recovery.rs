@@ -205,8 +205,8 @@ pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
 ) -> impl Parser<'a, I, O, E> + Clone
 where
     I: ValueInput<'a> + 'a,
-    I::Token: PartialEq + Clone,
-    E: extra::ParserExtra<'a, I>,
+    I::Token: PartialEq + Clone + MaybeSync,
+    E: extra::ParserExtra<'a, I> + MaybeSync,
     F: Fn(I::Span) -> O + Clone,
 {
     // TODO: Does this actually work? TESTS!

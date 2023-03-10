@@ -41,7 +41,8 @@ where
 pub struct IterConfigure<A, F, OA> {
     pub(crate) parser: A,
     pub(crate) cfg: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, F: Copy, OA> Copy for IterConfigure<A, F, OA> {}
@@ -50,7 +51,7 @@ impl<A: Clone, F: Clone, OA> Clone for IterConfigure<A, F, OA> {
         IterConfigure {
             parser: self.parser.clone(),
             cfg: self.cfg.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -113,7 +114,8 @@ where
 pub struct TryIterConfigure<A, F, O> {
     pub(crate) parser: A,
     pub(crate) cfg: F,
-    pub(crate) phantom: PhantomData<O>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
 }
 
 impl<A: Copy, F: Copy, O> Copy for TryIterConfigure<A, F, O> {}
@@ -122,7 +124,7 @@ impl<A: Clone, F: Clone, O> Clone for TryIterConfigure<A, F, O> {
         TryIterConfigure {
             parser: self.parser.clone(),
             cfg: self.cfg.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -193,7 +195,8 @@ where
 {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<(I::Slice, O, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(I::Slice, O, E)>,
 }
 
 impl<'a, A: Copy, I, O, E, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, F, U>
@@ -215,7 +218,7 @@ where
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -242,7 +245,8 @@ where
 /// See [`Parser::slice`]
 pub struct Slice<A, O> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<O>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
 }
 
 impl<A: Copy, O> Copy for Slice<A, O> {}
@@ -250,7 +254,7 @@ impl<A: Clone, O> Clone for Slice<A, O> {
     fn clone(&self) -> Self {
         Slice {
             parser: self.parser.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -320,7 +324,8 @@ where
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for Map<A, OA, F> {}
@@ -329,7 +334,7 @@ impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -387,7 +392,8 @@ where
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for MapWithSpan<A, OA, F> {}
@@ -396,7 +402,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithSpan<A, OA, F> {
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -425,7 +431,8 @@ where
 pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for MapWithState<A, OA, F> {}
@@ -434,7 +441,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWithState<A, OA, F> {
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -464,7 +471,8 @@ where
 pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for TryMap<A, OA, F> {}
@@ -473,7 +481,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -506,7 +514,8 @@ where
 pub struct TryMapWithState<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for TryMapWithState<A, OA, F> {}
@@ -515,7 +524,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMapWithState<A, OA, F> {
         Self {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -548,7 +557,8 @@ where
 pub struct To<A, OA, O> {
     pub(crate) parser: A,
     pub(crate) to: O,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, O: Copy> Copy for To<A, OA, O> {}
@@ -557,7 +567,7 @@ impl<A: Clone, OA, O: Clone> Clone for To<A, OA, O> {
         Self {
             parser: self.parser.clone(),
             to: self.to.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -581,7 +591,8 @@ where
 /// See [`Parser::ignored`].
 pub struct Ignored<A, OA> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA> Copy for Ignored<A, OA> {}
@@ -589,7 +600,7 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -613,7 +624,8 @@ where
 pub struct Unwrapped<A, O> {
     pub(crate) parser: A,
     pub(crate) location: Location<'static>,
-    pub(crate) phantom: PhantomData<O>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
 }
 
 impl<A: Copy, O> Copy for Unwrapped<A, O> {}
@@ -622,7 +634,7 @@ impl<A: Clone, O> Clone for Unwrapped<A, O> {
         Self {
             parser: self.parser.clone(),
             location: self.location,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -731,7 +743,8 @@ where
 pub struct Then<A, B, OA, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(OA, OB, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, OB, E)>,
 }
 
 impl<A: Copy, B: Copy, OA, OB, E> Copy for Then<A, B, OA, OB, E> {}
@@ -740,7 +753,7 @@ impl<A: Clone, B: Clone, OA, OB, E> Clone for Then<A, B, OA, OB, E> {
         Self {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -766,7 +779,8 @@ where
 pub struct IgnoreThen<A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(OA, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
 
 impl<A: Copy, B: Copy, OA, E> Copy for IgnoreThen<A, B, OA, E> {}
@@ -775,7 +789,7 @@ impl<A: Clone, B: Clone, OA, E> Clone for IgnoreThen<A, B, OA, E> {
         Self {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -801,7 +815,8 @@ where
 pub struct ThenIgnore<A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(OB, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
 
 impl<A: Copy, B: Copy, OB, E> Copy for ThenIgnore<A, B, OB, E> {}
@@ -810,7 +825,7 @@ impl<A: Clone, B: Clone, OB, E> Clone for ThenIgnore<A, B, OB, E> {
         Self {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -836,7 +851,8 @@ where
 pub struct NestedIn<A, B, O, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<(O, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(O, E)>,
 }
 
 impl<A: Copy, B: Copy, O, E> Copy for NestedIn<A, B, O, E> {}
@@ -845,7 +861,7 @@ impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
         Self {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -886,19 +902,20 @@ where
 }
 
 /// See [`Parser::then_with_ctx`].
-pub struct ThenWithCtx<A, B, OA, I: ?Sized, E> {
+pub struct ThenWithCtx<A, B, OA, I, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
-    pub(crate) phantom: PhantomData<(B, OA, E, I)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(B, OA, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, I: ?Sized, E> Copy for ThenWithCtx<A, B, OA, I, E> {}
-impl<A: Clone, B: Clone, OA, I: ?Sized, E> Clone for ThenWithCtx<A, B, OA, I, E> {
+impl<A: Copy, B: Copy, OA, I, E> Copy for ThenWithCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             then: self.then.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -992,7 +1009,8 @@ pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
-    pub(crate) phantom: PhantomData<(OB, OC)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OB, OC)>,
 }
 
 impl<A: Copy, B: Copy, C: Copy, OB, OC> Copy for DelimitedBy<A, B, C, OB, OC> {}
@@ -1002,7 +1020,7 @@ impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC
             parser: self.parser.clone(),
             start: self.start.clone(),
             end: self.end.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1030,7 +1048,8 @@ where
 pub struct PaddedBy<A, B, OB> {
     pub(crate) parser: A,
     pub(crate) padding: B,
-    pub(crate) phantom: PhantomData<OB>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OB>,
 }
 
 impl<A: Copy, B: Copy, OB> Copy for PaddedBy<A, B, OB> {}
@@ -1039,7 +1058,7 @@ impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
         Self {
             parser: self.parser.clone(),
             padding: self.padding.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1112,22 +1131,23 @@ impl RepeatedCfg {
 }
 
 /// See [`Parser::repeated`].
-pub struct Repeated<A, OA, I: ?Sized, E> {
+pub struct Repeated<A, OA, I, E> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
     pub(crate) at_most: u64,
-    pub(crate) phantom: PhantomData<(OA, E, I)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, E, I)>,
 }
 
-impl<A: Copy, OA, I: ?Sized, E> Copy for Repeated<A, OA, I, E> {}
-impl<A: Clone, OA, I: ?Sized, E> Clone for Repeated<A, OA, I, E> {
+impl<A: Copy, OA, I, E> Copy for Repeated<A, OA, I, E> {}
+impl<A: Clone, OA, I, E> Clone for Repeated<A, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             at_least: self.at_least,
             at_most: self.at_most,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1302,7 +1322,7 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E> {
+pub struct SeparatedBy<A, B, OA, OB, I, E> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
@@ -1310,11 +1330,12 @@ pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E> {
     pub(crate) at_most: u64,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
-    pub(crate) phantom: PhantomData<(OA, OB, E, I)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, OB, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, OB, I: ?Sized, E> Copy for SeparatedBy<A, B, OA, OB, I, E> {}
-impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E> Clone for SeparatedBy<A, B, OA, OB, I, E> {
+impl<A: Copy, B: Copy, OA, OB, I, E> Copy for SeparatedBy<A, B, OA, OB, I, E> {}
+impl<A: Clone, B: Clone, OA, OB, I, E> Clone for SeparatedBy<A, B, OA, OB, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1323,7 +1344,7 @@ impl<A: Clone, B: Clone, OA, OB, I: ?Sized, E> Clone for SeparatedBy<A, B, OA, O
             at_most: self.at_most,
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1568,7 +1589,8 @@ where
 /// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<(O, C)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(O, C)>,
 }
 
 impl<A: Copy, O, C> Copy for Collect<A, O, C> {}
@@ -1576,7 +1598,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1609,7 +1631,8 @@ where
 /// See [`IterParser::collect_exactly`]
 pub struct CollectExactly<A, O, C> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<(O, C)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(O, C)>,
 }
 
 impl<A: Copy, O, C> Copy for CollectExactly<A, O, C> {}
@@ -1617,7 +1640,7 @@ impl<A: Clone, O, C> Clone for CollectExactly<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1695,7 +1718,8 @@ where
 /// See [`Parser::not`].
 pub struct Not<A, OA> {
     pub(crate) parser: A,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA> Copy for Not<A, OA> {}
@@ -1703,7 +1727,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1743,7 +1767,8 @@ where
 pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
-    pub(crate) phantom: PhantomData<OB>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OB>,
 }
 
 impl<A: Copy, B: Copy, OB> Copy for AndIs<A, B, OB> {}
@@ -1752,7 +1777,7 @@ impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
         Self {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1802,7 +1827,8 @@ pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    pub(crate) phantom: PhantomData<(OA, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
 
 impl<F: Copy, A: Copy, B: Copy, OA, E> Copy for Foldr<F, A, B, OA, E> {}
@@ -1812,7 +1838,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -1857,7 +1883,8 @@ pub struct Foldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    pub(crate) phantom: PhantomData<(OB, E)>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
 
 impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for Foldl<F, A, B, OB, E> {}
@@ -1867,7 +1894,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -2036,7 +2063,8 @@ where
 pub struct Validate<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) validator: F,
-    pub(crate) phantom: PhantomData<OA>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
 }
 
 impl<A: Copy, OA, F: Copy> Copy for Validate<A, OA, F> {}
@@ -2045,7 +2073,7 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
         Validate {
             parser: self.parser.clone(),
             validator: self.validator.clone(),
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
