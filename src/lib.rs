@@ -135,6 +135,8 @@ use self::{
 #[cfg(doc)]
 use self::{primitive::custom, stream::Stream};
 
+/// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
+/// with `PhantomData`.
 struct EmptyPhantom<T>(core::marker::PhantomData<T>, core::marker::PhantomPinned);
 
 impl<T> EmptyPhantom<T> {
