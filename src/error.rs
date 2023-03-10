@@ -512,6 +512,8 @@ where
 pub struct Rich<'a, T, S = SimpleSpan<usize>, L = &'static str> {
     span: S,
     reason: Box<RichReason<'a, T, L>>,
+    #[cfg(feature = "label")]
+    context: Vec<(L, S)>,
 }
 
 impl<'a, T, S, L> Rich<'a, T, S, L> {
@@ -540,6 +542,8 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         Rich {
             span,
             reason: Box::new(RichReason::Custom(msg.to_string())),
+            #[cfg(feature = "label")]
+            context: Vec::new(),
         }
     }
 
@@ -561,6 +565,14 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
     /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
     pub fn found(&self) -> Option<&T> {
         self.reason.found()
+    }
+
+    /// Return an iterator over the labelled contexts of this error, from least general to most.
+    ///
+    /// 'Context' here means parser patterns that the parser was in the process of parsing when the error occurred. To
+    /// add labelled contexts, see [`Parser::labelled`].
+    pub fn contexts(&self) -> impl Iterator<Item = (&L, &S)> {
+        self.context.iter().map(|(l, s)| (l, s))
     }
 
     /// Convert this error into an owned version of itself by cloning any borrowed internal tokens, if necessary.
@@ -602,6 +614,8 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         Rich {
             span: self.span,
             reason: Box::new(self.reason.map_token(f)),
+            #[cfg(feature = "label")]
+            context: self.context,
         }
     }
 }
@@ -629,6 +643,8 @@ where
                     .collect(),
                 found,
             }),
+            #[cfg(feature = "label")]
+            context: Vec::new(),
         }
     }
 
@@ -638,6 +654,8 @@ where
         Self {
             span: self.span,
             reason: Box::new(new_reason),
+            #[cfg(feature = "label")]
+            context: self.context, // TOOD: Merge contexts
         }
     }
 
@@ -686,6 +704,7 @@ where
                 ]));
             }
         }
+        // TOOD: Merge contexts
         self
     }
 
@@ -719,6 +738,8 @@ where
                 });
             }
         }
+        #[cfg(feature = "label")]
+        self.context.clear();
         self
     }
 }
@@ -743,6 +764,13 @@ where
                     found: self.reason.take_found(),
                 });
             }
+        }
+    }
+
+    #[inline]
+    fn in_context(&mut self, label: L, span: I::Span) {
+        if self.context.iter().all(|(l, _)| l != &label) {
+            self.context.push((label, span));
         }
     }
 }

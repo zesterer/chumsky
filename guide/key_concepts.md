@@ -128,7 +128,7 @@ token trees, iterators, and much more besides.
 
 ## The [`Error`] trait
 
-As discussed previously, parsers commonly need to be able to handle inputs that don't comform to the grammar rules that
+As discussed previously, parsers commonly need to be able to handle inputs that don't conform to the grammar rules that
 they implement. To do this, they need to be able to emit errors that can then be processed by either the system that
 invoked the parser, or by a human user, in order to communicate what went wrong.
 

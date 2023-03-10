@@ -311,7 +311,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span.into())
             });
 
-            compare.labelled("expression")
+            compare.labelled("expression").as_context()
         });
 
         // Blocks are expressions but delimited with braces
@@ -626,6 +626,11 @@ fn main() {
                         .with_message(e.reason().to_string())
                         .with_color(Color::Red),
                 )
+                .with_labels(e.contexts().map(|(label, span)| {
+                    Label::new((filename.clone(), span.into_range()))
+                        .with_message(format!("while parsing this {}", label))
+                        .with_color(Color::Yellow)
+                }))
                 .finish()
                 .print(sources([(filename.clone(), src.clone())]))
                 .unwrap()

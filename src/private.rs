@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct Located<E> {
-    pub(crate) pos: usize,
+pub(crate) struct Located<T, E> {
+    pub(crate) pos: T,
     pub(crate) err: E,
 }
 
-impl<E> Located<E> {
+impl<T, E> Located<T, E> {
     #[inline]
-    pub fn at(pos: usize, err: E) -> Self {
+    pub fn at(pos: T, err: E) -> Self {
         Self { pos, err }
     }
 }
