@@ -137,11 +137,11 @@ use self::{primitive::custom, stream::Stream};
 
 /// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
 /// with `PhantomData`.
-struct EmptyPhantom<T>(core::marker::PhantomData<T>, core::marker::PhantomPinned);
+struct EmptyPhantom<T>(core::marker::PhantomData<T>);
 
 impl<T> EmptyPhantom<T> {
     const fn new() -> Self {
-        Self(core::marker::PhantomData, core::marker::PhantomPinned)
+        Self(core::marker::PhantomData)
     }
 }
 
@@ -155,6 +155,7 @@ impl<T> Clone for EmptyPhantom<T> {
 unsafe impl<T> Send for EmptyPhantom<T> {}
 // SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
 unsafe impl<T> Sync for EmptyPhantom<T> {}
+impl<T> Unpin for EmptyPhantom<T> {}
 impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
 impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
 
