@@ -151,7 +151,9 @@ impl<T> Clone for EmptyPhantom<T> {
         *self
     }
 }
+// SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
 unsafe impl<T> Send for EmptyPhantom<T> {}
+// SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
 unsafe impl<T> Sync for EmptyPhantom<T> {}
 impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
 impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
