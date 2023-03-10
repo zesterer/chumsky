@@ -18,6 +18,45 @@ pub trait Container<T>: Default {
     fn push(&mut self, item: T);
 }
 
+impl<T, C> Container<T> for Box<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        Box::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        C::push(self, item)
+    }
+}
+
+impl<T, C> Container<T> for Cell<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        Cell::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        self.get_mut().push(item)
+    }
+}
+
+impl<T, C> Container<T> for RefCell<C>
+where
+    C: Container<T>,
+{
+    fn with_capacity(n: usize) -> Self {
+        RefCell::new(C::with_capacity(n))
+    }
+
+    fn push(&mut self, item: T) {
+        self.get_mut().push(item)
+    }
+}
+
 impl<T> Container<T> for () {
     fn push(&mut self, _: T) {}
 }
