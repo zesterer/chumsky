@@ -161,9 +161,9 @@ error you're struggling to understand, you should:
    unnecessary parts of your parser, or using `.boxed()` on parsers above the error to simplify their types.
 
 3. Complaints about types 'not implementing [`Parser`]' are more often than not a failure to fulfil the obligations that
-   come with implementing the trait. For example, [`recursive`] requires that your types implement `Clone`: a parser
-   that doesn't (because, say, you moved a non-cloneable type into a closure with `.map(move |_| ...)`) can't be used
-   with [`recursive`] and so Rust will translate this, in its parlance, to the type not implementing [`Parser`].
+   come with implementing the trait. For example, [`recursive()`] requires that the inner parser implements `Clone`: a
+   parser that doesn't (because, say, you moved a non-cloneable type into the closure) can't be used with
+   [`recursive()`] and so Rust will translate this, in its parlance, to the type not implementing [`Parser`].
 
 ### Compilation times
 
