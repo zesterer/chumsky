@@ -883,7 +883,7 @@ where
         let mut memos = HashMap::default();
         let res = inp.with_input(
             &inp2,
-            |inp| self.then_ignore(end()).parser_a.go::<M>(inp),
+            |inp| (&self.parser_a).then_ignore(end()).go::<M>(inp),
             #[cfg(feature = "memoization")]
             &mut memos,
         );
