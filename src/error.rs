@@ -571,7 +571,7 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
     ///
     /// 'Context' here means parser patterns that the parser was in the process of parsing when the error occurred. To
     /// add labelled contexts, see [`Parser::labelled`].
-    pub fn contexts(&self) -> impl ExactSizeIterator<Item = (&L, &S)> {
+    pub fn contexts(&self) -> impl Iterator<Item = (&L, &S)> {
         self.context.iter().map(|(l, s)| (l, s))
     }
 
