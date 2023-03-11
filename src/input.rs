@@ -539,7 +539,7 @@ where
 /// Markers can be created with [`InputRef::save`] and rewound to with [`InputRef::rewind`].
 pub struct Marker<'a, 'parse, I: Input<'a>> {
     pub(crate) offset: I::Offset,
-    err_count: usize,
+    pub(crate) err_count: usize,
     phantom: PhantomData<fn(&'parse ()) -> &'parse ()>, // Invariance
 }
 
@@ -577,12 +577,20 @@ impl<'a, 'parse, I: Input<'a>> Clone for Offset<'a, 'parse, I> {
     }
 }
 
-pub(crate) struct Errors<E> {
-    pub(crate) alt: Option<Located<E>>,
-    pub(crate) secondary: Vec<E>,
+pub(crate) struct Errors<T, E> {
+    pub(crate) alt: Option<Located<T, E>>,
+    pub(crate) secondary: Vec<Located<T, E>>,
 }
 
-impl<E> Default for Errors<E> {
+impl<T, E> Errors<T, E> {
+    /// Returns a slice of the secondary errors (if any) have been emitted since the given marker was created.
+    #[inline]
+    pub(crate) fn secondary_errors_since(&mut self, err_count: usize) -> &mut [Located<T, E>] {
+        self.secondary.get_mut(err_count..).unwrap_or(&mut [])
+    }
+}
+
+impl<T, E> Default for Errors<T, E> {
     fn default() -> Self {
         Self {
             alt: None,
@@ -595,11 +603,11 @@ impl<E> Default for Errors<E> {
 /// `parse`.
 pub(crate) struct InputOwn<'a, 's, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) input: I,
-    pub(crate) errors: Errors<E::Error>,
+    pub(crate) errors: Errors<I::Offset, E::Error>,
     pub(crate) state: MaybeMut<'s, E::State>,
     pub(crate) ctx: E::Context,
     #[cfg(feature = "memoization")]
-    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+    pub(crate) memos: HashMap<(I::Offset, usize), Option<Located<I::Offset, E::Error>>>,
 }
 
 impl<'a, 's, I, E> InputOwn<'a, 's, I, E>
@@ -668,7 +676,11 @@ where
     }
 
     pub(crate) fn into_errs(self) -> Vec<E::Error> {
-        self.errors.secondary
+        self.errors
+            .secondary
+            .into_iter()
+            .map(|err| err.err)
+            .collect()
     }
 }
 
@@ -676,13 +688,13 @@ where
 pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) offset: I::Offset,
     pub(crate) input: &'parse I,
-    pub(crate) errors: &'parse mut Errors<E::Error>,
+    pub(crate) errors: &'parse mut Errors<I::Offset, E::Error>,
     pub(crate) state: &'parse mut E::State,
     pub(crate) ctx: &'parse E::Context,
     #[cfg(debug_assertions)]
     pub(crate) rec_data: Option<(I::Offset, usize)>,
     #[cfg(feature = "memoization")]
-    pub(crate) memos: &'parse mut HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
+    pub(crate) memos: &'parse mut HashMap<(I::Offset, usize), Option<Located<I::Offset, E::Error>>>,
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
@@ -719,7 +731,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, E>) -> O,
         #[cfg(feature = "memoization")] memos: &'sub_parse mut HashMap<
             (I::Offset, usize),
-            Option<Located<E::Error>>,
+            Option<Located<I::Offset, E::Error>>,
         >,
     ) -> O
     where
@@ -983,28 +995,21 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline]
-    pub(crate) fn emit(&mut self, error: E::Error) {
-        self.errors.secondary.push(error);
-    }
-
-    /// Returns `true` if any secondary errors have been emitted since the given marker was created.
-    #[inline]
-    pub(crate) fn secondary_errors_since(&self, markers: Marker<'a, 'parse, I>) -> bool {
-        self.errors.secondary.len() > markers.err_count
+    pub(crate) fn emit(&mut self, pos: I::Offset, error: E::Error) {
+        self.errors.secondary.push(Located::at(pos, error));
     }
 
     #[inline]
     pub(crate) fn add_alt<Exp: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         &mut self,
-        at: impl Into<usize>,
+        at: I::Offset,
         expected: Exp,
         found: Option<MaybeRef<'a, I::Token>>,
         span: I::Span,
     ) {
-        let at = at.into();
         // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
         self.errors.alt = Some(match self.errors.alt.take() {
-            Some(alt) => match alt.pos.cmp(&at) {
+            Some(alt) => match alt.pos.into().cmp(&at.into()) {
                 Ordering::Equal => {
                     Located::at(alt.pos, alt.err.merge_expected_found(expected, found, span))
                 }
@@ -1018,11 +1023,10 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline]
-    pub(crate) fn add_alt_err(&mut self, at: impl Into<usize>, err: E::Error) {
-        let at = at.into();
+    pub(crate) fn add_alt_err(&mut self, at: I::Offset, err: E::Error) {
         // Prioritize errors
         self.errors.alt = Some(match self.errors.alt.take() {
-            Some(alt) => match alt.pos.cmp(&at) {
+            Some(alt) => match alt.pos.into().cmp(&at.into()) {
                 Ordering::Equal => Located::at(alt.pos, alt.err.merge(err)),
                 Ordering::Greater => alt,
                 Ordering::Less => Located::at(at, err),

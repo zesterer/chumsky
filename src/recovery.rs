@@ -42,7 +42,7 @@ where
                 return Err(());
             }
         };
-        inp.emit(alt.err);
+        inp.emit(inp.offset, alt.err);
         Ok(out)
     }
 }
@@ -119,12 +119,12 @@ where
             }
 
             let before = inp.save();
-            if let Some(out) = parser
-                .go::<M>(inp)
-                .ok()
-                .filter(|_| !inp.secondary_errors_since(before))
-            {
-                inp.emit(alt.err);
+            if let Some(out) = parser.go::<M>(inp).ok().filter(|_| {
+                inp.errors
+                    .secondary_errors_since(before.err_count)
+                    .is_empty()
+            }) {
+                inp.emit(inp.offset, alt.err);
                 break Ok(out);
             } else {
                 inp.errors.alt.take();
@@ -165,7 +165,7 @@ where
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
-                inp.emit(alt.err);
+                inp.emit(inp.offset, alt.err);
                 break Ok(M::bind(|| (self.fallback)()));
             }
             inp.rewind(before);
