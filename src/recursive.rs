@@ -82,6 +82,7 @@ pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
 pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
+    location: Location<'static>,
 }
 
 impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
@@ -123,11 +124,13 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     ///     Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
     /// );
     /// ```
+    #[track_caller]
     pub fn declare() -> Self {
         Recursive {
             inner: RecursiveInner::Owned(RefC::new(Indirect {
                 inner: OnceCell::new(),
             })),
+            location: *Location::caller(),
         }
     }
 
@@ -160,6 +163,7 @@ impl<P: ?Sized> Clone for Recursive<P> {
                 RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
                 RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
             },
+            location: self.location,
         }
     }
 }
@@ -182,6 +186,15 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        #[cfg(debug_assertions)]
+        {
+            // TODO: Don't use address, since this might not be constant?
+            let new_rec_data = Some((inp.offset, &self.inner as *const _ as *const () as usize));
+            if inp.rec_data == new_rec_data {
+                panic!("found left recursive parser at {}", self.location)
+            }
+            inp.rec_data = new_rec_data;
+        }
         recurse(move || {
             M::invoke(
                 self.parser()
@@ -204,6 +217,15 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        #[cfg(debug_assertions)]
+        {
+            // TODO: Don't use address, since this might not be constant?
+            let new_rec_data = Some((inp.offset, &self.inner as *const _ as *const () as usize));
+            if inp.rec_data == new_rec_data {
+                panic!("found left recursive parser at {}", self.location)
+            }
+            inp.rec_data = new_rec_data;
+        }
         recurse(move || M::invoke(&*self.parser(), inp))
     }
 
@@ -260,6 +282,7 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
+#[track_caller]
 pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>>
 where
     I: Input<'a>,
@@ -267,10 +290,12 @@ where
     A: Parser<'a, I, O, E> + Clone + MaybeSync + 'b,
     F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
 {
+    let location = *Location::caller();
     let rc = RefC::new_cyclic(|rc| {
         let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
+            location,
         };
 
         f(parser)
@@ -278,5 +303,6 @@ where
 
     Recursive {
         inner: RecursiveInner::Owned(rc),
+        location,
     }
 }

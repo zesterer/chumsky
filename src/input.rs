@@ -643,6 +643,8 @@ where
             errors: &mut self.errors,
             state: &mut self.state,
             ctx: &self.ctx,
+            #[cfg(debug_assertions)]
+            rec_data: None,
             #[cfg(feature = "memoization")]
             memos: &mut self.memos,
         }
@@ -658,6 +660,8 @@ where
             errors: &mut self.errors,
             state: &mut self.state,
             ctx: &self.ctx,
+            #[cfg(debug_assertions)]
+            rec_data: None,
             #[cfg(feature = "memoization")]
             memos: &mut self.memos,
         }
@@ -675,6 +679,8 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
     pub(crate) errors: &'parse mut Errors<E::Error>,
     pub(crate) state: &'parse mut E::State,
     pub(crate) ctx: &'parse E::Context,
+    #[cfg(debug_assertions)]
+    pub(crate) rec_data: Option<(I::Offset, usize)>,
     #[cfg(feature = "memoization")]
     pub(crate) memos: &'parse mut HashMap<(I::Offset, usize), Option<Located<E::Error>>>,
 }
@@ -696,6 +702,8 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             state: self.state,
             ctx: new_ctx,
             errors: self.errors,
+            #[cfg(debug_assertions)]
+            rec_data: self.rec_data,
             #[cfg(feature = "memoization")]
             memos: self.memos,
         };
@@ -723,6 +731,8 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             state: self.state,
             ctx: self.ctx,
             errors: self.errors,
+            #[cfg(debug_assertions)]
+            rec_data: None,
             #[cfg(feature = "memoization")]
             memos,
         };
