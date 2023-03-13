@@ -286,3 +286,5 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
         out
     }
 }
+
+pub trait Sealed {}

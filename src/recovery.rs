@@ -3,7 +3,11 @@
 use super::*;
 
 /// A trait implemented by error recovery strategies. See [`Parser::recover_with`].
-pub trait Strategy<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+///
+/// This trait is sealed and so cannot be implemented by other crates because it has an unstable API. This may
+/// eventually change. For now, if you wish to implement a new strategy, consider using [`via_parser`] or
+/// [opening an issue/PR](https://github.com/zesterer/chumsky/issues/new).
+pub trait Strategy<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>: Sealed {
     // Attempt to recover from a parsing failure.
     // The strategy should properly handle the alt error but is not required to handle rewinding.
     #[doc(hidden)]
@@ -23,6 +27,7 @@ pub fn via_parser<A>(parser: A) -> ViaParser<A> {
     ViaParser(parser)
 }
 
+impl<A> Sealed for ViaParser<A> {}
 impl<'a, I, O, E, A> Strategy<'a, I, O, E> for ViaParser<A>
 where
     I: Input<'a>,
@@ -90,6 +95,7 @@ pub struct SkipThenRetryUntil<S, U> {
     until: U,
 }
 
+impl<S, U> Sealed for SkipThenRetryUntil<S, U> {}
 impl<'a, I, O, E, S, U> Strategy<'a, I, O, E> for SkipThenRetryUntil<S, U>
 where
     I: ValueInput<'a>,
@@ -148,6 +154,7 @@ pub struct SkipUntil<S, U, F> {
     fallback: F,
 }
 
+impl<S, U, F> Sealed for SkipUntil<S, U, F> {}
 impl<'a, I, O, E, S, U, F> Strategy<'a, I, O, E> for SkipUntil<S, U, F>
 where
     I: ValueInput<'a>,

@@ -236,7 +236,7 @@ where
         self.parser.go::<Check>(inp)?;
         let after = inp.offset().offset;
 
-        Ok(M::bind(|| (self.mapper)(inp.slice(before..after))))
+        Ok(M::bind(|| (self.mapper)(inp.slice_inner(before..after))))
     }
 
     go_extra!(U);
@@ -274,7 +274,7 @@ where
         self.parser.go::<Check>(inp)?;
         let after = inp.offset().offset;
 
-        Ok(M::bind(|| inp.slice(before..after)))
+        Ok(M::bind(|| inp.slice_inner(before..after)))
     }
 
     go_extra!(I::Slice);

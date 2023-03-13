@@ -40,11 +40,26 @@ impl<I: Iterator> Stream<I> {
             tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
         }
     }
+
+    /// Like [`Stream::boxed`], but yields an [`BoxedExactSizeStream`], which implements [`ExactSizeInput`].
+    pub fn exact_size_boxed<'a>(self) -> BoxedExactSizeStream<'a, I::Item>
+    where
+        I: ExactSizeIterator + 'a,
+    {
+        let (vec, iter) = self.tokens.into_inner();
+        Stream {
+            tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
+        }
+    }
 }
 
 /// A stream containing a boxed iterator. See [`Stream::boxed`].
 pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 
+/// A stream containing a boxed exact-sized iterator. See [`Stream::exact_size_boxed`].
+pub type BoxedExactSizeStream<'a, T> = Stream<Box<dyn ExactSizeIterator<Item = T> + 'a>>;
+
+impl<I: Iterator> Sealed for Stream<I> {}
 impl<'a, I: Iterator + 'a> Input<'a> for Stream<I>
 where
     I::Item: Clone,
@@ -53,19 +68,19 @@ where
     type Token = I::Item;
     type Span = SimpleSpan<usize>;
 
-    #[inline]
+    #[inline(always)]
     fn start(&self) -> Self::Offset {
         0
     }
 
     type TokenMaybe = I::Item;
 
-    #[inline]
+    #[inline(always)]
     unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
         self.next(offset)
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
         range.into()
     }
@@ -73,6 +88,20 @@ where
     #[inline]
     fn prev(offs: Self::Offset) -> Self::Offset {
         offs.saturating_sub(1)
+    }
+}
+
+impl<'a, I: ExactSizeIterator + 'a> ExactSizeInput<'a> for Stream<I>
+where
+    I::Item: Clone,
+{
+    #[inline(always)]
+    unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Self::Span {
+        let mut other = Cell::new((Vec::new(), None));
+        self.tokens.swap(&other);
+        let len = other.get_mut().1.as_ref().expect("no iterator?!").len();
+        self.tokens.swap(&other);
+        (range.start..len).into()
     }
 }
 
@@ -97,7 +126,7 @@ where
 
         self.tokens.swap(&other);
 
-        (offset + 1, tok)
+        (offset + tok.is_some() as usize, tok)
     }
 }
 

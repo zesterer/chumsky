@@ -12,8 +12,9 @@ use super::*;
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
-/// Avoid implementing this trait yourself if you can: it's *very* likely to be expanded in future versions!
-pub trait Char: Sized + Copy + PartialEq + 'static {
+/// This trait is currently sealed to minimise the impact of breaking changes. If you find a type that you think should
+/// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
+pub trait Char: Sized + Copy + PartialEq + Sealed + 'static {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
     ///
     /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
@@ -49,6 +50,7 @@ pub trait Char: Sized + Copy + PartialEq + 'static {
     fn to_char(&self) -> char;
 }
 
+impl Sealed for char {}
 impl Char for char {
     type Str = str;
 
@@ -88,6 +90,7 @@ impl Char for char {
     }
 }
 
+impl Sealed for u8 {}
 impl Char for u8 {
     type Str = [u8];
 
