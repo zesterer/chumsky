@@ -64,5 +64,8 @@ jobs:
     name: SemVer
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - name: Check semver compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v1
+        with:
+            toolchain: nightly
