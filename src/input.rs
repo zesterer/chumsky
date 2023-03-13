@@ -5,7 +5,7 @@
 //! [`Input`] is the primary trait used to feed input data into a chumsky parser. You can create them in a number of
 //! ways: from strings, slices, arrays, etc.
 
-pub use crate::stream::{BoxedStream, Stream};
+pub use crate::stream::{BoxedExactSizeStream, BoxedStream, Stream};
 
 use super::*;
 #[cfg(feature = "memoization")]
