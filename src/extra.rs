@@ -11,11 +11,11 @@ pub trait ParserExtra<'a, I>: 'a + Sealed
 where
     I: Input<'a>,
 {
-    /// Error type to use for the parser
+    /// Error type to use for the parser.
     type Error: Error<'a, I> + 'a;
-    /// State type to use for the parser
+    /// State type to use for the parser.
     type State: 'a;
-    /// Context used for parser configuration
+    /// Context used for parser configuration.
     type Context: 'a;
 }
 
