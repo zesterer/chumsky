@@ -17,3 +17,8 @@ pub mod meet_the_parsers {
     #![doc = include_str!("../guide/meet_the_parsers.md")]
     use super::*;
 }
+
+pub mod technical_notes {
+    #![doc = include_str!("../guide/technical_notes.md")]
+    use super::*;
+}
