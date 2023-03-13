@@ -119,7 +119,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Emitter, InputRef, SliceInput, StrInput, ValueInput},
+    input::{BorrowInput, Emitter, ExactSizeInput, InputRef, SliceInput, StrInput, ValueInput},
     prelude::*,
     primitive::Any,
     private::{

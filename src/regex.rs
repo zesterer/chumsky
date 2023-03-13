@@ -25,12 +25,12 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
         let before = inp.offset();
-        match C::match_regex(&self.regex, inp.slice_trailing()) {
+        match C::match_regex(&self.regex, inp.slice_trailing_inner()) {
             Some(len) => {
                 let before = inp.offset();
                 inp.skip_bytes(len);
                 let after = inp.offset();
-                Ok(M::bind(|| inp.slice(before.offset..after.offset)))
+                Ok(M::bind(|| inp.slice_inner(before.offset..after.offset)))
             }
             None => {
                 // TODO: Improve error
