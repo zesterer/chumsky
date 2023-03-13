@@ -23,9 +23,9 @@ jobs:
             toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo check (all features)
-        run: cargo check --verbose --all-features
+        run: cargo check --tests --verbose --all-features
       - name: Run cargo check (no features)
-        run: cargo check --verbose --no-default-features
+        run: cargo check --tests --verbose --no-default-features
       - name: Run cargo clippy
         run: cargo clippy --verbose --all-features -- -D warnings
       - name: Run cargo fmt
@@ -58,12 +58,11 @@ jobs:
         with:
             toolchain: "1.65"
             components: rustfmt, clippy
-      - name: Run cargo check
-        run: cargo check --verbose --features _test_stable
+      - name: Check MSRV compatibility
+        run: cargo check --tests --verbose --features _test_stable
   semver:
     name: SemVer
     runs-on: ubuntu-latest
     steps:
-      - name: Check semver
+      - name: Check semver compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v1
-        run: cargo semver-checks check-release

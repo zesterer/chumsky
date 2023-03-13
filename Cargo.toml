@@ -75,6 +75,7 @@ debug = true
 [[bench]]
 name = "json"
 harness = false
+required-features = ["std"]
 
 [[bench]]
 name = "lex"
@@ -95,3 +96,7 @@ harness = false
 [[example]]
 name = "nano_rust"
 required-features = ["label"]
+
+[[example]]
+name = "json"
+required-features = ["std"]
