@@ -42,7 +42,7 @@ impl<I: Iterator> Stream<I> {
     }
 
     /// Like [`Stream::boxed`], but yields an [`BoxedExactSizeStream`], which implements [`ExactSizeInput`].
-    pub fn boxed_exact_sized<'a>(self) -> BoxedExactSizeStream<'a, I::Item>
+    pub fn exact_size_boxed<'a>(self) -> BoxedExactSizeStream<'a, I::Item>
     where
         I: ExactSizeIterator + 'a,
     {
@@ -56,7 +56,7 @@ impl<I: Iterator> Stream<I> {
 /// A stream containing a boxed iterator. See [`Stream::boxed`].
 pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 
-/// A stream containing a boxed exact-sized iterator. See [`Stream::boxed_exact`].
+/// A stream containing a boxed exact-sized iterator. See [`Stream::exact_size_boxed`].
 pub type BoxedExactSizeStream<'a, T> = Stream<Box<dyn ExactSizeIterator<Item = T> + 'a>>;
 
 impl<I: Iterator> Sealed for Stream<I> {}
