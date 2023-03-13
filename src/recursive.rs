@@ -154,6 +154,36 @@ impl<P: ?Sized> Recursive<P> {
                 .expect("Recursive parser used before being defined"),
         }
     }
+
+    #[inline(always)]
+    fn with_left_recursive_check<'a, I, E, R>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        f: impl FnOnce(&mut InputRef<'a, '_, I, E>) -> R,
+    ) -> R
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+    {
+        // TODO: Don't use address, since this might not be constant?
+        #[cfg(debug_assertions)]
+        let key = (
+            inp.offset().offset,
+            RefC::as_ptr(&self.parser()) as *const () as usize,
+        );
+
+        #[cfg(debug_assertions)]
+        if inp.memos.insert(key, None).is_some() {
+            panic!("Recursive parser defined at {} is left-recursive. Consider using `.memoized()` or restructuring this parser to be right-recursive.", self.location);
+        }
+
+        let res = f(inp);
+
+        #[cfg(debug_assertions)]
+        inp.memos.remove(&key);
+
+        res
+    }
 }
 
 impl<P: ?Sized> Clone for Recursive<P> {
@@ -186,24 +216,17 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        #[cfg(debug_assertions)]
-        {
-            // TODO: Don't use address, since this might not be constant?
-            let new_rec_data = Some((inp.offset, &self.inner as *const _ as *const () as usize));
-            if inp.rec_data == new_rec_data {
-                panic!("found left recursive parser at {}", self.location)
-            }
-            inp.rec_data = new_rec_data;
-        }
-        recurse(move || {
-            M::invoke(
-                self.parser()
-                    .inner
-                    .get()
-                    .expect("Recursive parser used before being defined")
-                    .as_ref(),
-                inp,
-            )
+        self.with_left_recursive_check(inp, |inp| {
+            recurse(move || {
+                M::invoke(
+                    self.parser()
+                        .inner
+                        .get()
+                        .expect("Recursive parser used before being defined")
+                        .as_ref(),
+                    inp,
+                )
+            })
         })
     }
 
@@ -217,16 +240,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        #[cfg(debug_assertions)]
-        {
-            // TODO: Don't use address, since this might not be constant?
-            let new_rec_data = Some((inp.offset, &self.inner as *const _ as *const () as usize));
-            if inp.rec_data == new_rec_data {
-                panic!("found left recursive parser at {}", self.location)
-            }
-            inp.rec_data = new_rec_data;
-        }
-        recurse(move || M::invoke(&*self.parser(), inp))
+        self.with_left_recursive_check(inp, |inp| recurse(move || M::invoke(&*self.parser(), inp)))
     }
 
     go_extra!(O);

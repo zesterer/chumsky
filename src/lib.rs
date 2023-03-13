@@ -635,11 +635,11 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// [left recursion](https://en.wikipedia.org/wiki/Left_recursion).
     // TODO: Example
     #[cfg(feature = "memoization")]
-    fn memoised(self) -> Memoised<Self>
+    fn memoized(self) -> Memoized<Self>
     where
         Self: Sized,
     {
-        Memoised { parser: self }
+        Memoized { parser: self }
     }
 
     /// Transform all outputs of this parser to a pretermined value.
@@ -2262,7 +2262,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(atom.clone())
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised()
+                    .memoized()
                     .or(atom)
             })
             .then_ignore(end())
@@ -2292,7 +2292,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(expr)
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised();
+                    .memoized();
 
                 sum.or(atom)
             })
@@ -2305,6 +2305,13 @@ mod tests {
     #[cfg(debug_assertions)]
     mod debug_asserts {
         use super::prelude::*;
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_double_left_recursive() {
+            recursive::<&str, char, extra::Default, _, _>(|a| recursive(move |_| a.or(just('a'))))
+                .parse("a");
+        }
 
         #[test]
         #[should_panic]
@@ -2324,7 +2331,6 @@ mod tests {
 
                 sum.or(atom)
             })
-            .then_ignore(end())
             .parse("a+b+c");
         }
 
@@ -2348,7 +2354,7 @@ mod tests {
                 sum.or(atom)
             });
 
-            expr.then_ignore(end()).parse("a+b+c");
+            expr.parse("a+b+c");
         }
 
         #[test]
