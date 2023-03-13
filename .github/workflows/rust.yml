@@ -60,3 +60,11 @@ jobs:
             components: rustfmt, clippy
       - name: Run cargo check
         run: cargo check --verbose --features _test_stable
+
+  semver:
+    name: SemVer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v1
+        run: cargo semver-checks check-release
