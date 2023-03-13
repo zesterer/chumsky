@@ -60,7 +60,6 @@ jobs:
             components: rustfmt, clippy
       - name: Run cargo check
         run: cargo check --verbose --features _test_stable
-
   semver:
     name: SemVer
     runs-on: ubuntu-latest
