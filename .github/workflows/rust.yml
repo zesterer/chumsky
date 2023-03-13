@@ -9,6 +9,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions: read-all
+
 jobs:
   check:
     name: Check
