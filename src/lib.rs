@@ -124,7 +124,7 @@ use self::{
     primitive::Any,
     private::{
         Check, ConfigIterParserSealed, ConfigParserSealed, Emit, IPResult, IterParserSealed,
-        Located, MaybeUninitExt, Mode, PResult, ParserSealed,
+        Located, MaybeUninitExt, Mode, PResult, ParserSealed, Sealed,
     },
     recovery::{RecoverWith, Strategy},
     span::Span,

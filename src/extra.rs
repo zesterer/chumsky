@@ -2,21 +2,12 @@
 
 use super::*;
 
-mod internal {
-    use super::*;
-
-    pub trait ExtraSealed {}
-    impl<E, S, C> ExtraSealed for Full<E, S, C> {}
-}
-
-use internal::ExtraSealed;
-
 type DefaultErr = EmptyErr;
 type DefaultState = ();
 type DefaultCtx = ();
 
 /// Sealed trait for parser extra information - error type, state type, etc.
-pub trait ParserExtra<'a, I>: 'a + ExtraSealed
+pub trait ParserExtra<'a, I>: 'a + Sealed
 where
     I: Input<'a>,
 {
@@ -43,6 +34,7 @@ pub type Context<C> = Full<DefaultErr, DefaultState, C>;
 /// Specify all extra types
 pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 
+impl<E, S, C> Sealed for Full<E, S, C> {}
 impl<'a, I, E, S, C> ParserExtra<'a, I> for Full<E, S, C>
 where
     I: Input<'a>,

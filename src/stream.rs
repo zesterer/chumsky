@@ -45,6 +45,7 @@ impl<I: Iterator> Stream<I> {
 /// A stream containing a boxed iterator. See [`Stream::boxed`].
 pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 
+impl<I: Iterator> Sealed for Stream<I> {}
 impl<'a, I: Iterator + 'a> Input<'a> for Stream<I>
 where
     I::Item: Clone,
