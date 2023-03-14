@@ -115,9 +115,137 @@ fn bench_or(c: &mut Criterion) {
     });
 }
 
+fn bench_group(c: &mut Criterion) {
+    let alphabet_group = group((
+        just::<_, &str, extra::Default>('A'),
+        just('B'),
+        just('C'),
+        just('D'),
+        just('E'),
+        just('F'),
+        just('G'),
+        just('H'),
+        just('I'),
+        just('J'),
+        just('K'),
+        just('L'),
+        just('M'),
+        just('N'),
+        just('O'),
+        just('P'),
+        just('Q'),
+        just('R'),
+        just('S'),
+        just('T'),
+        just('U'),
+        just('V'),
+        just('W'),
+        just('X'),
+        just('Y'),
+        just('Z'),
+    ));
+
+    let mut group = c.benchmark_group("group");
+
+    group.bench_function(
+        BenchmarkId::new("group::<(A..Z)>", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        |b| {
+            b.iter(|| {
+                black_box(alphabet_group.parse(black_box("ABCDEFGHIJKLMNOPQRSTUVWXYZ")))
+                    .into_result()
+                    .unwrap();
+            })
+        },
+    );
+
+    group.bench_function(
+        BenchmarkId::new("group::<(A..Z)>", "ABCDEFGHIJKLMNOPQRSTUVWXY0"),
+        |b| {
+            b.iter(|| {
+                assert!(
+                    black_box(alphabet_group.parse(black_box("ABCDEFGHIJKLMNOPQRSTUVWXY0")))
+                        .into_result()
+                        .is_err()
+                );
+            })
+        },
+    );
+
+    group.bench_function(BenchmarkId::new("group::<(A..Z)>", "0"), |b| {
+        b.iter(|| {
+            assert!(black_box(alphabet_group.parse(black_box("0")))
+                .into_result()
+                .is_err());
+        })
+    });
+}
+
+fn bench_then(c: &mut Criterion) {
+    let alphabet_then = just::<_, _, extra::Default>('A')
+        .then(just('B'))
+        .then(just('C'))
+        .then(just('D'))
+        .then(just('E'))
+        .then(just('F'))
+        .then(just('G'))
+        .then(just('H'))
+        .then(just('I'))
+        .then(just('J'))
+        .then(just('K'))
+        .then(just('L'))
+        .then(just('M'))
+        .then(just('N'))
+        .then(just('O'))
+        .then(just('P'))
+        .then(just('Q'))
+        .then(just('R'))
+        .then(just('S'))
+        .then(just('T'))
+        .then(just('U'))
+        .then(just('V'))
+        .then(just('W'))
+        .then(just('X'))
+        .then(just('Y'))
+        .then(just('Z'));
+
+    let mut group = c.benchmark_group("then");
+
+    group.bench_function(
+        BenchmarkId::new("A.then(B)...then(Z)", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        |b| {
+            b.iter(|| {
+                black_box(alphabet_then.parse(black_box("ABCDEFGHIJKLMNOPQRSTUVWXYZ")))
+                    .into_result()
+                    .unwrap();
+            })
+        },
+    );
+
+    group.bench_function(
+        BenchmarkId::new("A.then(B)...then(Z)", "ABCDEFGHIJKLMNOPQRSTUVWXY0"),
+        |b| {
+            b.iter(|| {
+                assert!(
+                    black_box(alphabet_then.parse(black_box("ABCDEFGHIJKLMNOPQRSTUVWXY0")))
+                        .into_result()
+                        .is_err()
+                );
+            })
+        },
+    );
+
+    group.bench_function(BenchmarkId::new("A.then(B)...then(Z)", "0"), |b| {
+        b.iter(|| {
+            assert!(black_box(alphabet_then.parse(black_box("0")))
+                .into_result()
+                .is_err());
+        })
+    });
+}
+
 criterion_group!(
     name = benches;
     config = utils::make_criterion();
-    targets = bench_choice, bench_or,
+    targets = bench_choice, bench_or, bench_group, bench_then,
 );
 criterion_main!(benches);
