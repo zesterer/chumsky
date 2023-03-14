@@ -37,7 +37,7 @@ fn bench_choice(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "A"), |b| {
         b.iter(|| {
-            black_box(Parser::parse(&alphabet_choice, black_box("A")))
+            black_box(alphabet_choice.parse(black_box("A")))
                 .into_result()
                 .unwrap();
         })
@@ -53,17 +53,15 @@ fn bench_choice(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "0"), |b| {
         b.iter(|| {
-            black_box(alphabet_choice.parse(black_box("0")))
+            assert!(black_box(alphabet_choice.parse(black_box("0")))
                 .into_result()
-                .unwrap_err();
+                .is_err());
         })
     });
 }
 
-pub fn bench_or(c: &mut Criterion) {
-    let mut group = c.benchmark_group("or");
-
-    let many_or = just::<_, _, extra::Default>('A')
+fn bench_or(c: &mut Criterion) {
+    let alphabet_or = just::<_, _, extra::Default>('A')
         .or(just('B'))
         .or(just('C'))
         .or(just('D'))
@@ -75,29 +73,44 @@ pub fn bench_or(c: &mut Criterion) {
         .or(just('J'))
         .or(just('K'))
         .or(just('L'))
-        .or(just('M'));
+        .or(just('M'))
+        .or(just('N'))
+        .or(just('O'))
+        .or(just('P'))
+        .or(just('Q'))
+        .or(just('R'))
+        .or(just('S'))
+        .or(just('T'))
+        .or(just('U'))
+        .or(just('V'))
+        .or(just('W'))
+        .or(just('X'))
+        .or(just('Y'))
+        .or(just('Z'));
 
-    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "A"), |b| {
+    let mut group = c.benchmark_group("or");
+
+    group.bench_function(BenchmarkId::new("A.or(B)...or(Z)", "A"), |b| {
         b.iter(|| {
-            black_box(many_or.parse(black_box("A")))
+            black_box(alphabet_or.parse(black_box("A")))
                 .into_result()
                 .unwrap();
         })
     });
 
-    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "M"), |b| {
+    group.bench_function(BenchmarkId::new("A.or(B)...or(Z)", "Z"), |b| {
         b.iter(|| {
-            black_box(many_or.parse(black_box("M")))
+            black_box(alphabet_or.parse(black_box("Z")))
                 .into_result()
                 .unwrap();
         })
     });
 
-    group.bench_function(BenchmarkId::new("A.or(B)...or(M)", "0"), |b| {
+    group.bench_function(BenchmarkId::new("A.or(B)...or(Z)", "0"), |b| {
         b.iter(|| {
-            black_box(many_or.parse(black_box("0")))
+            assert!(black_box(alphabet_or.parse(black_box("0")))
                 .into_result()
-                .unwrap_err();
+                .is_err());
         })
     });
 }
