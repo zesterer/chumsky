@@ -2378,4 +2378,34 @@ mod tests {
 
         // TODO what about IterConfigure and TryIterConfigure?
     }
+
+    #[test]
+    #[should_panic]
+    fn recursive_define_twice() {
+        let mut expr = Recursive::declare();
+        expr.define({
+            let atom = any::<&str, extra::Default>()
+                .filter(|c: &char| c.is_alphabetic())
+                .repeated()
+                .at_least(1)
+                .collect();
+            let sum = expr
+                .clone()
+                .then_ignore(just('+'))
+                .then(expr.clone())
+                .map(|(a, b)| format!("{}{}", a, b));
+
+            sum.or(atom)
+        });
+        expr.define(expr.clone());
+
+        expr.then_ignore(end()).parse("a+b+c");
+    }
+
+    #[test]
+    #[should_panic]
+    fn todo_err() {
+        let expr = todo::<&str, String, extra::Default>();
+        expr.then_ignore(end()).parse("a+b+c");
+    }
 }
