@@ -133,11 +133,18 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
+    #[track_caller]
     pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(&mut self, parser: P) {
+        let location = *Location::caller();
         self.parser()
             .inner
             .set(Box::new(parser))
-            .unwrap_or_else(|_| panic!("recursive parser already declared"));
+            .unwrap_or_else(|_| {
+                panic!(
+                    "recursive parsers can only be defined once, trying to redefine it at {}",
+                    location
+                )
+            });
     }
 }
 

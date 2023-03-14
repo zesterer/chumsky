@@ -661,7 +661,11 @@ where
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I, O, E>(EmptyPhantom<(O, E, I)>);
+pub struct Todo<I, O, E> {
+    location: Location<'static>,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(O, E, I)>,
+}
 
 impl<I, O, E> Copy for Todo<I, O, E> {}
 impl<I, O, E> Clone for Todo<I, O, E> {
@@ -695,8 +699,12 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// // Parsing hexidecimal numbers results in a panic because the parser is unimplemented
 /// int.parse("0xd4");
 /// ```
-pub const fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
-    Todo(EmptyPhantom::new())
+#[track_caller]
+pub fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
+    Todo {
+        location: *Location::caller(),
+        phantom: EmptyPhantom::new(),
+    }
 }
 
 impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Todo<I, O, E>
@@ -706,7 +714,10 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        todo!("Attempted to use an unimplemented parser")
+        todo!(
+            "Attempted to use an unimplemented parser at {}",
+            self.location
+        )
     }
 
     go_extra!(O);
