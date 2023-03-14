@@ -274,7 +274,7 @@ impl<T, E> ParseResult<T, E> {
     rustc_on_unimplemented(
         message = "`{Self}` is not a parser from `{I}` to `{O}`",
         label = "This parser is not compatible because it does not implement `Parser<{I}, {O}>`",
-        note = "You should check that the output types of your parsers are consistent with combinator you're using",
+        note = "You should check that the output types of your parsers are consistent with the combinators you're using",
     )
 )]
 pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
