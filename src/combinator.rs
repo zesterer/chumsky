@@ -1235,32 +1235,35 @@ where
             loop {
                 let before = inp.save();
                 match self.parser.go::<Check>(inp) {
-                    Ok(item) => {}
+                    Ok(()) => {}
                     Err(()) => {
                         inp.rewind(before);
                         break Ok(M::bind(|| ()));
                     }
                 }
+                #[cfg(debug_assertions)]
+                debug_assert!(
+                    before.offset() != inp.offset(),
+                    "found Repeated combinator making no progress at {}",
+                    self.location,
+                );
             }
         } else {
             let mut state = self.make_iter::<Check>(inp)?;
-            #[cfg(debug_assertions)]
-            let mut prev_offset = inp.offset;
             loop {
+                #[cfg(debug_assertions)]
+                let before = inp.offset();
                 match self.next::<Check>(inp, &mut state) {
                     Ok(Some(())) => {}
                     Ok(None) => break Ok(M::bind(|| ())),
                     Err(()) => break Err(()),
                 }
                 #[cfg(debug_assertions)]
-                {
-                    debug_assert!(
-                        prev_offset != inp.offset,
-                        "found Repeated combinator making no progress at {}",
-                        self.location,
-                    );
-                    prev_offset = inp.offset
-                }
+                debug_assert!(
+                    before != inp.offset(),
+                    "found Repeated combinator making no progress at {}",
+                    self.location,
+                );
             }
         }
     }
@@ -1611,23 +1614,20 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut prev_offset = inp.offset;
         loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    prev_offset != inp.offset,
-                    "found SeparatedBy combinator making no progress at {}",
-                    self.location,
-                );
-                prev_offset = inp.offset
-            }
+            debug_assert!(
+                before != inp.offset(),
+                "found SeparatedBy combinator making no progress at {}",
+                self.location,
+            );
         }
     }
 
@@ -1666,9 +1666,9 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut prev_offset = inp.offset;
         loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut output, out, |output: &mut C, item| output.push(item));
@@ -1677,14 +1677,11 @@ where
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    prev_offset != inp.offset,
-                    "found Collect combinator making no progress at {}",
-                    self.location,
-                );
-                prev_offset = inp.offset
-            }
+            debug_assert!(
+                before != inp.offset(),
+                "found Collect combinator making no progress at {}",
+                self.location,
+            );
         }
     }
 
@@ -1923,9 +1920,9 @@ where
     {
         let mut a_out = M::bind(|| Vec::new());
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut prev_offset = inp.offset;
         loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
@@ -1934,14 +1931,11 @@ where
                 Err(()) => return Err(()),
             }
             #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    prev_offset != inp.offset,
-                    "found Foldr combinator making no progress at {}",
-                    self.location,
-                );
-                prev_offset = inp.offset
-            }
+            debug_assert!(
+                before != inp.offset(),
+                "found Foldr combinator making no progress at {}",
+                self.location,
+            );
         }
 
         let b_out = self.parser_b.go::<M>(inp)?;
@@ -1994,9 +1988,9 @@ where
     {
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut prev_offset = inp.offset;
         loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out));
@@ -2005,14 +1999,11 @@ where
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    prev_offset != inp.offset,
-                    "found Foldl combinator making no progress at {}",
-                    self.location,
-                );
-                prev_offset = inp.offset
-            }
+            debug_assert!(
+                before != inp.offset(),
+                "found Foldl combinator making no progress at {}",
+                self.location,
+            );
         }
     }
 

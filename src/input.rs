@@ -656,6 +656,12 @@ impl<'a, 'parse, I: Input<'a>> Clone for Offset<'a, 'parse, I> {
     }
 }
 
+impl<'a, 'parse, I: Input<'a>> PartialEq for Offset<'a, 'parse, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.offset == other.offset
+    }
+}
+
 pub(crate) struct Errors<T, E> {
     pub(crate) alt: Option<Located<T, E>>,
     pub(crate) secondary: Vec<Located<T, E>>,

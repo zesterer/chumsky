@@ -2329,6 +2329,7 @@ mod tests {
 
         #[test]
         #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_collect() {
             empty::<&str, extra::Default>()
                 .to(())
@@ -2339,6 +2340,7 @@ mod tests {
 
         #[test]
         #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_separated_by() {
             empty::<&str, extra::Default>()
                 .to(())
@@ -2349,6 +2351,7 @@ mod tests {
 
         #[test]
         #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_foldl() {
             empty::<&str, extra::Default>()
                 .foldl(empty().to(()).repeated(), |_, _| ())
@@ -2357,6 +2360,7 @@ mod tests {
 
         #[test]
         #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_foldr() {
             empty::<&str, extra::Default>()
                 .to(())
@@ -2367,6 +2371,7 @@ mod tests {
 
         #[test]
         #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_repeated() {
             empty::<&str, extra::Default>()
                 .to(())
