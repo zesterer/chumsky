@@ -1256,6 +1256,9 @@ where
                 match self.next::<Check>(inp, &mut state) {
                     Ok(Some(())) => {}
                     Ok(None) => break Ok(M::bind(|| ())),
+                    // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
+                    // are permitted to leave input state unspecified. Really, unwinding should occur *here* and not in
+                    // `next`.
                     Err(()) => break Err(()),
                 }
                 #[cfg(debug_assertions)]
@@ -1620,6 +1623,9 @@ where
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
+                // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
+                // are permitted to leave input state unspecified. Really, unwinding should occur *here* and not in
+                // `next`.
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
