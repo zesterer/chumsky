@@ -125,7 +125,7 @@ use self::{
     util::{MaybeMut, MaybeRef},
 };
 #[cfg(doc)]
-use self::{primitive::custom, stream::Stream};
+use self::{extension::v1::*, primitive::custom, stream::Stream};
 
 /// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
 /// with `PhantomData`.
