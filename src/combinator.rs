@@ -1136,6 +1136,7 @@ pub struct Repeated<A, OA, I, E> {
     pub(crate) at_least: usize,
     // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
     pub(crate) at_most: u64,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E, I)>,
@@ -1148,6 +1149,7 @@ impl<A: Clone, OA, I, E> Clone for Repeated<A, OA, I, E> {
             parser: self.parser.clone(),
             at_least: self.at_least,
             at_most: self.at_most,
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
@@ -1229,23 +1231,36 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut prev_offset = inp.offset;
-        loop {
-            match self.next::<Check>(inp, &mut state) {
-                Ok(Some(())) => {}
-                Ok(None) => break Ok(M::bind(|| ())),
-                Err(()) => break Err(()),
+        if self.at_most == !0 && self.at_least == 0 {
+            loop {
+                let before = inp.save();
+                match self.parser.go::<Check>(inp) {
+                    Ok(item) => {}
+                    Err(()) => {
+                        inp.rewind(before);
+                        break Ok(M::bind(|| ()));
+                    }
+                }
             }
+        } else {
+            let mut state = self.make_iter::<Check>(inp)?;
             #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    prev_offset != inp.offset,
-                    "found Repeated combinator making no progress at {}",
-                    self.location,
-                );
-                prev_offset = inp.offset
+            let mut prev_offset = inp.offset;
+            loop {
+                match self.next::<Check>(inp, &mut state) {
+                    Ok(Some(())) => {}
+                    Ok(None) => break Ok(M::bind(|| ())),
+                    Err(()) => break Err(()),
+                }
+                #[cfg(debug_assertions)]
+                {
+                    debug_assert!(
+                        prev_offset != inp.offset,
+                        "found Repeated combinator making no progress at {}",
+                        self.location,
+                    );
+                    prev_offset = inp.offset
+                }
             }
         }
     }
@@ -1261,6 +1276,7 @@ where
 {
     type IterState<M: Mode> = usize;
 
+    #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
         _inp: &mut InputRef<'a, '_, I, E>,
@@ -1268,6 +1284,7 @@ where
         Ok(0)
     }
 
+    #[inline(always)]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -1303,6 +1320,7 @@ where
 {
     type Config = RepeatedCfg;
 
+    #[inline(always)]
     fn next_cfg<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -1343,6 +1361,7 @@ pub struct SeparatedBy<A, B, OA, OB, I, E> {
     pub(crate) at_most: u64,
     pub(crate) allow_leading: bool,
     pub(crate) allow_trailing: bool,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, OB, E, I)>,
@@ -1358,6 +1377,7 @@ impl<A: Clone, B: Clone, OA, OB, I, E> Clone for SeparatedBy<A, B, OA, OB, I, E>
             at_most: self.at_most,
             allow_leading: self.allow_leading,
             allow_trailing: self.allow_trailing,
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
@@ -1512,6 +1532,7 @@ where
     where
         I: 'a;
 
+    #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
         _inp: &mut InputRef<'a, '_, I, E>,
@@ -1519,6 +1540,7 @@ where
         Ok(0)
     }
 
+    #[inline(always)]
     fn next<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
@@ -1615,6 +1637,7 @@ where
 /// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(O, C)>,
@@ -1625,6 +1648,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
@@ -1864,6 +1888,7 @@ pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E)>,
@@ -1876,6 +1901,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
@@ -1933,6 +1959,7 @@ pub struct Foldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
@@ -1945,6 +1972,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
