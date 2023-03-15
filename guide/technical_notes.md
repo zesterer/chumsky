@@ -20,6 +20,9 @@ for more information.
 The term 'PEG++' might be an appropriate description of chumsky, with 'CFG + left context' being a description of the
 grammars that it can parse.
 
+Chumsky can also be extended via [`custom`] and [`ExtParser`], permitting it to theoretically parse any parseable
+grammar: but this is probably cheating since doing so requires manually implementing such parser logic.
+
 # Purity and optimisation
 
 Chumsky uses a plethora of techniques to improve parser performance. For example, it may skip generating output values
