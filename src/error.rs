@@ -324,6 +324,8 @@ pub enum RichReason<'a, T, L = &'static str> {
     /// An error with a custom message
     Custom(String),
     /// Multiple unrelated reasons were merged
+    // TODO: Should we really do this? Possibly better to just unify the unrelated reasons. It's not like consumers
+    // probably care about reporting 5 different errors for the same location anyway!
     Many(Vec<Self>),
 }
 
