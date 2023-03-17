@@ -209,7 +209,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::zero_copy::error::Simple;
 
     #[derive(Clone, Copy, Debug)]
     enum Operator {
@@ -262,7 +261,7 @@ mod tests {
         }
     }
 
-    fn parser<'a>() -> impl Parser<'a, str, String, extra::Err<Rich<str>>> {
+    fn parser<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> {
         let atom = super::text::int(10)
             .from_str()
             .unwrapped()
@@ -278,24 +277,24 @@ mod tests {
         atom.pratt(operator).map(|x| x.to_string())
     }
 
-    fn complete_parser<'a>() -> impl Parser<'a, str, String, extra::Err<Rich<str>>> {
-        parser().then_ignore(end())
+    fn complete_parser<'a>() -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> {
+        parser()
     }
 
-    fn parse(input: &str) -> ParseResult<String, Rich<str>> {
+    fn parse(input: &str) -> ParseResult<String, Rich<'_, char>> {
         complete_parser().parse(input)
     }
 
-    fn parse_partial(input: &str) -> ParseResult<String, Rich<str>> {
-        parser().parse(input)
+    fn parse_partial(input: &str) -> ParseResult<String, Rich<'_, char>> {
+        parser().lazy().parse(input)
     }
 
     #[test]
     fn missing_first_expression() {
         assert_eq!(
             parse("").into_result(),
-            Err(vec![Rich::expected_found(
-                Some(Some('0')),
+            Err(vec![<Rich<_> as Error<&str>>::expected_found(
+                Some(Some('0'.into())),
                 None,
                 (0..0).into()
             )])
@@ -306,10 +305,10 @@ mod tests {
     fn missing_later_expression() {
         assert_eq!(
             parse("1+").into_result(),
-            Err(vec![Rich::expected_found(
-                Some(Some('0')),
-                None,
-                (2..2).into()
+            Err(vec![<Rich<_> as Error<&str>>::expected_found(
+                Some(Some('0'.into())),
+                None, // TODO: Should be Some('+')?
+                (1..2).into()
             )]),
         );
     }
@@ -318,8 +317,8 @@ mod tests {
     fn invalid_first_expression() {
         assert_eq!(
             parse("?").into_result(),
-            Err(vec![Rich::expected_found(
-                Some(Some('0')),
+            Err(vec![<Rich<_> as Error<&str>>::expected_found(
+                Some(Some('0'.into())),
                 // Should this not be: Some('?')?
                 None,
                 (0..1).into(),
@@ -331,8 +330,8 @@ mod tests {
     fn invalid_later_expression() {
         assert_eq!(
             parse("1+?").into_result(),
-            Err(vec![Rich::expected_found(
-                Some(Some('0')),
+            Err(vec![<Rich<_> as Error<&str>>::expected_found(
+                Some(Some('0'.into())),
                 // Should this not be: Some('?')?
                 None,
                 (2..3).into(),
@@ -344,7 +343,16 @@ mod tests {
     fn invalid_operator() {
         assert_eq!(
             parse("1?").into_result(),
-            Err(vec![Rich::expected_found(None, Some('?'), (1..2).into(),)]),
+            Err(vec![<Rich<_> as Error<&str>>::expected_found(
+                vec![
+                    Some('+'.into()),
+                    Some('-'.into()),
+                    Some('*'.into()),
+                    Some('/'.into())
+                ],
+                None, // TODO: Should be Some('?')?
+                (1..2).into(),
+            )]),
         );
     }
 

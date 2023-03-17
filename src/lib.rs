@@ -114,8 +114,8 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{BorrowInput, Emitter, ExactSizeInput, InputRef, SliceInput, StrInput, ValueInput},
-    prelude::*,
     pratt::Pratt,
+    prelude::*,
     primitive::Any,
     private::{
         Check, ConfigIterParserSealed, ConfigParserSealed, Emit, IPResult, IterParserSealed,
@@ -1634,8 +1634,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// # Examples
     ///
     /// ```
-    /// use chumsky::zero_copy::prelude::*;
-    /// use chumsky::zero_copy::pratt::{InfixOperator, InfixPrecedence, Associativity};
+    /// use chumsky::prelude::*;
+    /// use chumsky::pratt::{InfixOperator, InfixPrecedence, Associativity};
     ///
     /// #[derive(Clone, Copy, Debug)]
     /// enum Operator {
