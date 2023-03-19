@@ -446,18 +446,20 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         .map(|(((name, args), span), body)| (name, Func { args, span, body }))
         .labelled("function");
 
-    func.repeated().collect::<Vec<_>>().try_map(|fs, _| {
-        let mut funcs = HashMap::new();
-        for ((name, name_span), f) in fs {
-            if funcs.insert(name.clone(), f).is_some() {
-                return Err(Rich::custom(
-                    name_span.clone(),
-                    format!("Function '{}' already exists", name),
-                ));
+    func.repeated()
+        .collect::<Vec<_>>()
+        .validate(|fs, _, emitter| {
+            let mut funcs = HashMap::new();
+            for ((name, name_span), f) in fs {
+                if funcs.insert(name.clone(), f).is_some() {
+                    emitter.emit(Rich::custom(
+                        name_span.clone(),
+                        format!("Function '{}' already exists", name),
+                    ));
+                }
             }
-        }
-        Ok(funcs)
-    })
+            funcs
+        })
 }
 
 struct Error {
