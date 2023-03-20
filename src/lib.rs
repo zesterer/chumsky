@@ -1281,7 +1281,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, _>>(10)
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1290,8 +1290,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     .foldl_with_state(just('+').ignore_then(int).repeated(), |a, b, state| (a + b) * *state);
     ///
     /// let mut multiplier = 2i32;
-    /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(38));
-    /// assert_eq!(sum.parse_with_state("6", &mut multiplier).into_result(), Ok(12));
+    /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(134));
+    /// assert_eq!(sum.parse_with_state("6", &mut multiplier).into_result(), Ok(6));
     /// ```
     // TODO: Add examples of interning/arena allocation
     #[cfg_attr(debug_assertions, track_caller)]
@@ -1870,7 +1870,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, _>>(10)
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
