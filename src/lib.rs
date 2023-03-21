@@ -1271,6 +1271,46 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Left-fold the output of the parser into a single value, making use of the parser's state when doing so.
+    ///
+    /// The output of the original parser must be of type `(A, impl IntoIterator<Item = B>)`.
+    ///
+    /// The output type of this parser is `A`, the left-hand component of the original parser's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// let sum = int
+    ///     .clone()
+    ///     .foldl_with_state(just('+').ignore_then(int).repeated(), |a, b, state| (a + b) * *state);
+    ///
+    /// let mut multiplier = 2i32;
+    /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(134));
+    /// assert_eq!(sum.parse_with_state("6", &mut multiplier).into_result(), Ok(6));
+    /// ```
+    // TODO: Add examples of interning/arena allocation
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn foldl_with_state<B, F, OB>(self, other: B, f: F) -> FoldlWithState<F, Self, B, OB, E>
+    where
+        F: Fn(O, OB, &mut E::State) -> O,
+        B: IterParser<'a, I, OB, E>,
+        Self: Sized,
+    {
+        FoldlWithState {
+            parser_a: self,
+            parser_b: other,
+            folder: f,
+            #[cfg(debug_assertions)]
+            location: *Location::caller(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Parse a pattern. Afterwards, the input stream will be rewound to its original state, as if parsing had not
     /// occurred.
     ///
@@ -1810,6 +1850,51 @@ where
         Self: Sized,
     {
         Foldr {
+            parser_a: self,
+            parser_b: other,
+            folder: f,
+            #[cfg(debug_assertions)]
+            location: *Location::caller(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Right-fold the output of the parser into a single value, making use of the parser's state when doing so.
+    ///
+    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
+    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
+    ///
+    /// The output type of this parser is `B`, the right-hand component of the original parser's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// let signed = just('+').to(1)
+    ///     .or(just('-').to(-1))
+    ///     .repeated()
+    ///     .foldr_with_state(int, |a, b, state| {
+    ///         (*state) += 1;
+    ///         (a * b)
+    ///     });
+    /// let mut folds = 0i32;
+    /// assert_eq!(signed.parse_with_state("3", &mut folds).into_result(), Ok(3));
+    /// assert_eq!(signed.parse_with_state("-17", &mut folds).into_result(), Ok(-17));
+    /// assert_eq!(signed.parse_with_state("--+-+-5", &mut folds).into_result(), Ok(5));
+    /// ```
+    // TODO: Add examples of interning/arena allocation
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn foldr_with_state<B, F, OA>(self, other: B, f: F) -> FoldrWithState<F, Self, B, OA, E>
+    where
+        F: Fn(O, OA, &mut E::State) -> OA,
+        B: Parser<'a, I, OA, E>,
+        Self: Sized,
+    {
+        FoldrWithState {
             parser_a: self,
             parser_b: other,
             folder: f,
@@ -2361,12 +2446,33 @@ mod tests {
         #[test]
         #[should_panic]
         #[cfg(debug_assertions)]
+        fn debug_assert_foldl_with_state() {
+            let mut state = 100;
+            empty::<&str, extra::Full<EmptyErr, i32, ()>>()
+                .foldl_with_state(empty().to(()).repeated(), |_, _, _| ())
+                .parse_with_state("a+b+c", &mut state);
+        }
+
+        #[test]
+        #[should_panic]
+        #[cfg(debug_assertions)]
         fn debug_assert_foldr() {
             empty::<&str, extra::Default>()
                 .to(())
                 .repeated()
                 .foldr(empty(), |_, _| ())
                 .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        #[cfg(debug_assertions)]
+        fn debug_assert_foldr_with_state() {
+            empty::<&str, extra::Default>()
+                .to(())
+                .repeated()
+                .foldr_with_state(empty(), |_, _, _| ())
+                .parse_with_state("a+b+c", &mut ());
         }
 
         #[test]

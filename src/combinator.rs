@@ -1954,6 +1954,77 @@ where
     go_extra!(O);
 }
 
+/// See [`IterParser::foldr_with_state`].
+pub struct FoldrWithState<F, A, B, OA, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+    pub(crate) folder: F,
+    #[cfg(debug_assertions)]
+    pub(crate) location: Location<'static>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OA, E)>,
+}
+
+impl<F: Copy, A: Copy, B: Copy, OA, E> Copy for FoldrWithState<F, A, B, OA, E> {}
+impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWithState<F, A, B, OA, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            folder: self.folder.clone(),
+            #[cfg(debug_assertions)]
+            location: self.location,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, F, A, B, O, OA, E> ParserSealed<'a, I, O, E> for FoldrWithState<F, A, B, OA, E>
+where
+    I: Input<'a>,
+    A: IterParser<'a, I, OA, E>,
+    B: Parser<'a, I, O, E>,
+    E: ParserExtra<'a, I>,
+    F: Fn(OA, O, &mut E::State) -> O,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        let mut a_out = M::bind(|| Vec::new());
+        let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
+        loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
+            match self.parser_a.next::<M>(inp, &mut iter_state) {
+                Ok(Some(out)) => {
+                    M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
+                }
+                Ok(None) => break,
+                Err(()) => return Err(()),
+            }
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                before != inp.offset(),
+                "found FoldrWithState combinator making no progress at {}",
+                self.location,
+            );
+        }
+
+        let b_out = self.parser_b.go::<M>(inp)?;
+
+        Ok(M::combine(a_out, b_out, |a_out, b_out| {
+            let state = inp.state();
+            a_out
+                .into_iter()
+                .rfold(b_out, |b, a| (self.folder)(a, b, state))
+        }))
+    }
+
+    go_extra!(O);
+}
+
 /// See [`Parser::foldl`].
 pub struct Foldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
@@ -2008,6 +2079,69 @@ where
             debug_assert!(
                 before != inp.offset(),
                 "found Foldl combinator making no progress at {}",
+                self.location,
+            );
+        }
+    }
+
+    go_extra!(O);
+}
+
+/// See [`Parser::foldl_with_state`].
+pub struct FoldlWithState<F, A, B, OB, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+    pub(crate) folder: F,
+    #[cfg(debug_assertions)]
+    pub(crate) location: Location<'static>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OB, E)>,
+}
+
+impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for FoldlWithState<F, A, B, OB, E> {}
+impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWithState<F, A, B, OB, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            folder: self.folder.clone(),
+            #[cfg(debug_assertions)]
+            location: self.location,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, F, A, B, O, OB, E> ParserSealed<'a, I, O, E> for FoldlWithState<F, A, B, OB, E>
+where
+    I: Input<'a>,
+    A: Parser<'a, I, O, E>,
+    B: IterParser<'a, I, OB, E>,
+    E: ParserExtra<'a, I>,
+    F: Fn(O, OB, &mut E::State) -> O,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        let mut out = self.parser_a.go::<M>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
+        loop {
+            #[cfg(debug_assertions)]
+            let before = inp.offset();
+            match self.parser_b.next::<M>(inp, &mut iter_state) {
+                Ok(Some(b_out)) => {
+                    let state = inp.state();
+                    out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out, state));
+                }
+                Ok(None) => break Ok(out),
+                Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            debug_assert!(
+                before != inp.offset(),
+                "found FoldlWithState combinator making no progress at {}",
                 self.location,
             );
         }
