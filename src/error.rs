@@ -470,7 +470,7 @@ where
                     core::mem::swap(&mut this_expected, &mut other_expected);
                 }
                 for expected in other_expected {
-                    if this_expected[..].contains(&expected) {
+                    if !this_expected[..].contains(&expected) {
                         this_expected.push(expected);
                     }
                 }
