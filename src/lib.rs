@@ -912,7 +912,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// let escape = just("\\n").to('\n');
     ///
-    /// // C-style tring literal
+    /// // C-style string literal
     /// let string = none_of::<_, _, extra::Err<Simple<char>>>('"')
     ///     .and_is(escape.not())
     ///     .or(escape)
