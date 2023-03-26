@@ -275,6 +275,7 @@ pub(crate) trait MaybeUninitExt<T>: Sized {
 }
 
 impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
+    #[allow(clippy::uninit_assumed_init)]
     fn uninit_array<const N: usize>() -> [Self; N] {
         // SAFETY: Output type is entirely uninhabited - IE, it's made up entirely of `MaybeUninit`
         unsafe { MaybeUninit::uninit().assume_init() }
