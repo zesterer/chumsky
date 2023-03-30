@@ -142,17 +142,3 @@ Combinators that allow the parsing of context-sensitive grammars (usually beyond
 |---------------------------------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [`Parser::then_with_ctx`]       | `a.then_with_ctx(b)`                  | Parse one pattern and use its output as context for another pattern. See [`ConfigParser::configure`] for information about context-sensitive parsing.                                   |
 | [`Parser::with_ctx`]            | `a.with_ctx(ctx)`                     | Parse a pattern with the provided context. See [`ConfigParser::configure`] for information about context-sensitive parsing.                                                             |
-
-
-
-
-
-
-
-
-
-
-
-
-
-

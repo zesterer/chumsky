@@ -3,22 +3,32 @@
 #![doc = include_str!("../guide/intro.md")]
 use super::*;
 
-pub mod getting_started {
+pub mod _00_getting_started {
     #![doc = include_str!("../guide/getting_started.md")]
     use super::*;
 }
 
-pub mod key_concepts {
+pub mod _01_key_concepts {
     #![doc = include_str!("../guide/key_concepts.md")]
     use super::*;
 }
 
-pub mod meet_the_parsers {
+pub mod _02_meet_the_parsers {
     #![doc = include_str!("../guide/meet_the_parsers.md")]
     use super::*;
 }
 
-pub mod technical_notes {
+pub mod _03_recursion {
+    #![doc = include_str!("../guide/recursion.md")]
+    use super::*;
+}
+
+pub mod _04_debugging {
+    #![doc = include_str!("../guide/debugging.md")]
+    use super::*;
+}
+
+pub mod _05_technical_notes {
     #![doc = include_str!("../guide/technical_notes.md")]
     use super::*;
 }
