@@ -700,6 +700,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    /*
     pub(crate) fn new(input: I) -> InputOwn<'a, 's, I, E>
     where
         E::State: Default,
@@ -714,6 +715,7 @@ where
             memos: HashMap::default(),
         }
     }
+    */
 
     pub(crate) fn new_state(input: I, state: &'s mut E::State) -> InputOwn<'a, 's, I, E>
     where
