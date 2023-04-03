@@ -1640,6 +1640,56 @@ where
     go_extra!(());
 }
 
+/// See [`IterParser::enumerate`].
+pub struct Enumerate<A, O> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
+}
+
+impl<A: Copy, O> Copy for Enumerate<A, O> {}
+impl<A: Clone, O> Clone for Enumerate<A, O> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A> IterParserSealed<'a, I, (usize, O), E> for Enumerate<A, O>
+where
+    A: IterParser<'a, I, O, E>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    type IterState<M: Mode> = (usize, A::IterState<M>)
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok((0, A::make_iter(&self.parser, inp)?))
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, (usize, O)> {
+        let out = self
+            .parser
+            .next(inp, &mut state.1)?
+            .map(|out| M::map(out, |out| (state.0, out)));
+        state.0 += 1;
+        Ok(out)
+    }
+}
+
 /// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,

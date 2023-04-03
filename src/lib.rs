@@ -1741,7 +1741,7 @@ where
     /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
     /// [`Vec`]s, [`String`]s, or even [`HashMap`]s. This method is analogous to [`Iterator::collect`].
     ///
-    /// The output type of this parser is `C`, the type being collected into.
+    /// The output type of this iterable parser is `C`, the type being collected into.
     ///
     /// # Examples
     ///
@@ -1771,7 +1771,7 @@ where
     /// This is useful for situations where the number of items to consume is statically known.
     /// A common use-case is collecting into an array.
     ///
-    /// The output type of this parser if `C`, the type being collected into.
+    /// The output type of this iterable parser if `C`, the type being collected into.
     ///
     /// # Exmaples
     ///
@@ -1818,12 +1818,40 @@ where
         self.collect()
     }
 
+    /// Enumerate outputs of this iterable parser.
+    ///
+    /// This function behaves in a similar way to [`Iterator::enumerate`].
+    ///
+    /// The output type of this iterable parser is `(usize, O)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let word = text::ident::<_, _, extra::Err<Simple<char>>>()
+    ///     .padded()
+    ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
+    ///     .enumerate()
+    ///     .collect::<Vec<(usize, &str)>>();
+    ///
+    /// assert_eq!(word.parse("hello world").into_result(), Ok(vec![(0, "hello"), (1, "world")]));
+    /// ```
+    fn enumerate(self) -> Enumerate<Self, O>
+    where
+        Self: Sized,
+    {
+        Enumerate {
+            parser: self,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Right-fold the output of the parser into a single value.
     ///
     /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
     /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
     ///
-    /// The output type of this parser is `B`, the right-hand component of the original parser's output.
+    /// The output type of this iterable parser is `B`, the right-hand component of the original parser's output.
     ///
     /// # Examples
     ///
