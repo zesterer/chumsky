@@ -18,17 +18,22 @@ pub mod _02_meet_the_parsers {
     use super::*;
 }
 
-pub mod _03_recursion {
+pub mod _03_error_and_recovery {
+    #![doc = include_str!("../guide/error_and_recovery.md")]
+    use super::*;
+}
+
+pub mod _04_recursion {
     #![doc = include_str!("../guide/recursion.md")]
     use super::*;
 }
 
-pub mod _04_debugging {
+pub mod _05_debugging {
     #![doc = include_str!("../guide/debugging.md")]
     use super::*;
 }
 
-pub mod _05_technical_notes {
+pub mod _06_technical_notes {
     #![doc = include_str!("../guide/technical_notes.md")]
     use super::*;
 }

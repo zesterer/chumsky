@@ -204,6 +204,7 @@ pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F>
 /// this can aid in detecting delimiter mismatches.
 ///
 /// A function that generates a fallback output on recovery is also required.
+// TODO: Make this a strategy, add an unclosed_delimiter error
 pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
     start: I::Token,
     end: I::Token,
