@@ -700,7 +700,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    /*
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(input: I) -> InputOwn<'a, 's, I, E>
     where
         E::State: Default,
@@ -715,7 +715,6 @@ where
             memos: HashMap::default(),
         }
     }
-    */
 
     pub(crate) fn new_state(input: I, state: &'s mut E::State) -> InputOwn<'a, 's, I, E>
     where
@@ -743,6 +742,7 @@ where
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn as_ref_at<'parse>(
         &'parse mut self,
         offset: I::Offset,
