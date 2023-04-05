@@ -190,6 +190,9 @@ impl Mode for Check {
     }
 }
 
+// TODO: Consider removing these sealed traits in favour of `Sealed`, with the given methods just being on `Parser`
+// with doc(hidden)
+
 pub trait ParserSealed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where

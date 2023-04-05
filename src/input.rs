@@ -700,6 +700,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(input: I) -> InputOwn<'a, 's, I, E>
     where
         E::State: Default,
@@ -741,6 +742,7 @@ where
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn as_ref_at<'parse>(
         &'parse mut self,
         offset: I::Offset,
