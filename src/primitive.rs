@@ -993,3 +993,25 @@ impl_group_for_tuple! {
     Y_ OY
     Z_ OZ
 }
+
+#[test]
+#[cfg(debug_assertions)]
+#[cfg_attr(debug_assertions, should_panic)]
+fn test_empty_separated_no_progress() {
+    fn empty_separated<'a>() -> impl Parser<'a, &'a str, Vec<()>, extra::Err<Rich<'a, char>>> {
+        empty().separated_by(empty()).collect()
+    }
+    let input = ";";
+    let _ = empty_separated().parse(input);
+}
+
+#[test]
+fn test_empty_separated() {
+    fn empty_separated<'a>() -> impl Parser<'a, &'a str, Vec<()>, extra::Err<Rich<'a, char>>> {
+        empty().separated_by(just(";")).collect()
+    }
+    let input = ";";
+    let (result, errs) = empty_separated().parse(input).into_output_errors();
+    assert_eq!(result.unwrap().len(), 2);
+    assert_eq!(errs.len(), 0);
+}

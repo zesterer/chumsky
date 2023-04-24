@@ -1722,6 +1722,8 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut i = 0;
         loop {
             #[cfg(debug_assertions)]
             let before = inp.offset();
@@ -1732,12 +1734,19 @@ where
                 Ok(None) => break Ok(output),
                 Err(()) => break Err(()),
             }
+            // We only check after the second iteration because that's when we *must* have consumed both item
+            // and separator.
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.offset(),
-                "found Collect combinator making no progress at {}",
-                self.location,
-            );
+            {
+                if i >= 1 {
+                    debug_assert!(
+                        before != inp.offset(),
+                        "found Collect combinator making no progress at {}",
+                        self.location,
+                    );
+                }
+                i += 1;
+            }
         }
     }
 
