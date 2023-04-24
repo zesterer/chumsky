@@ -241,6 +241,24 @@ impl<T, E> ParseResult<T, E> {
             Err(self.errs)
         }
     }
+
+    /// If the parse succeeded (i.e: no errors were produced), this function returns the output value, `T`.
+    ///
+    /// If parsing generated errors, this function panics (even if these errors were non-fatal).
+    #[track_caller]
+    pub fn unwrap(self) -> T
+    where
+        E: fmt::Debug,
+    {
+        if self.errs.is_empty() {
+            self.output.expect("parser generated no errors or output")
+        } else {
+            panic!(
+                "called `ParseResult::unwrap()` on a parse result with errors: {:?}",
+                self.errs
+            )
+        }
+    }
 }
 
 /// A trait implemented by parsers.
@@ -2454,7 +2472,8 @@ mod tests {
                 .to(())
                 .repeated()
                 .collect::<()>()
-                .parse("a+b+c");
+                .parse("a+b+c")
+                .unwrap();
         }
 
         #[test]
@@ -2463,18 +2482,36 @@ mod tests {
         fn debug_assert_separated_by() {
             empty::<&str, extra::Default>()
                 .to(())
-                .separated_by(just(','))
+                .separated_by(empty())
                 .collect::<()>()
                 .parse("a+b+c");
+        }
+
+        #[test]
+        fn debug_assert_separated_by2() {
+            assert_eq!(
+                empty::<&str, extra::Default>()
+                    .to(())
+                    .separated_by(just(','))
+                    .count()
+                    .parse(",")
+                    .unwrap(),
+                2
+            );
         }
 
         #[test]
         #[should_panic]
         #[cfg(debug_assertions)]
         fn debug_assert_foldl() {
-            empty::<&str, extra::Default>()
-                .foldl(empty().to(()).repeated(), |_, _| ())
-                .parse("a+b+c");
+            assert_eq!(
+                empty::<&str, extra::Default>()
+                    .to(1)
+                    .foldl(empty().repeated(), |n, ()| n + 1)
+                    .parse("a+b+c")
+                    .unwrap(),
+                3
+            );
         }
 
         #[test]
