@@ -10,7 +10,7 @@ where
     where
         Self: Sized,
     {
-        M::invoke(self, inp)
+        M::invoke(*self, inp)
     }
 
     go_extra!(O);
@@ -28,7 +28,7 @@ where
     where
         Self: Sized,
     {
-        M::invoke_cfg(self, inp, cfg)
+        M::invoke_cfg(*self, inp, cfg)
     }
 
     go_cfg_extra!(O);
