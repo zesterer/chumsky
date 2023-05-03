@@ -65,11 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install latest nightly
-        uses: dtolnay/rust-toolchain@master
-        with:
-            toolchain: nightly
-      - name: Install cargo-semver-checks
-        run: cargo install cargo-semver-checks --locked
       - name: Check semver compatibility
-        run: cargo semver-checks check-release
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          rust-toolchain: nightly
