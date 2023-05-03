@@ -2,7 +2,7 @@ use super::*;
 
 impl<'a, 'b, T, I, O, E> ParserSealed<'a, I, O, E> for &'b T
 where
-    T: Parser<'a, I, O, E>,
+    T: ?Sized + Parser<'a, I, O, E>,
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
@@ -10,7 +10,7 @@ where
     where
         Self: Sized,
     {
-        (*self).go::<M>(inp)
+        M::invoke(*self, inp)
     }
 
     go_extra!(O);
@@ -18,7 +18,7 @@ where
 
 impl<'a, 'b, T, I, O, E> ConfigParserSealed<'a, I, O, E> for &'b T
 where
-    T: ConfigParser<'a, I, O, E>,
+    T: ?Sized + ConfigParser<'a, I, O, E>,
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
@@ -28,7 +28,7 @@ where
     where
         Self: Sized,
     {
-        (*self).go_cfg::<M>(inp, cfg)
+        M::invoke_cfg(*self, inp, cfg)
     }
 
     go_cfg_extra!(O);
@@ -38,7 +38,7 @@ impl<'a, I, O, E, P> Parser<'a, I, O, E> for P
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    P: ParserSealed<'a, I, O, E>,
+    P: ?Sized + ParserSealed<'a, I, O, E>,
 {
 }
 
@@ -46,7 +46,7 @@ impl<'a, I, O, E, P> ConfigParser<'a, I, O, E> for P
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    P: ConfigParserSealed<'a, I, O, E>,
+    P: ?Sized + ConfigParserSealed<'a, I, O, E>,
 {
 }
 
