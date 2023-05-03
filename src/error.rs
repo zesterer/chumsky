@@ -289,8 +289,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Token(t) => write!(f, "{:?}", t),
-            Self::Label(label) => write!(f, "{:?}", label),
+            Self::Token(t) => write!(f, "{t:?}"),
+            Self::Label(label) => write!(f, "{label:?}"),
             Self::EndOfInput => write!(f, "end of input"),
         }
     }
@@ -304,7 +304,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Token(t) => write!(f, "'{}'", &**t),
-            Self::Label(s) => write!(f, "{}", s),
+            Self::Label(s) => write!(f, "{s}"),
             Self::EndOfInput => write!(f, "end of input"),
         }
     }
@@ -429,7 +429,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
                 }
             }
             RichReason::Custom(msg) => {
-                write!(f, "{}", msg)?;
+                write!(f, "{msg}")?;
                 if let Some(span) = span {
                     write!(f, " at ")?;
                     fmt_span(span, f)?;

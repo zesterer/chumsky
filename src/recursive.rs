@@ -20,7 +20,7 @@ impl<T> OnceCell<T> {
     pub fn set(&self, x: T) -> Result<(), ()> {
         // SAFETY: Function is not reentrant so we have exclusive access to the inner data
         unsafe {
-            let vacant = (&*self.0.as_ptr()).is_none();
+            let vacant = (*self.0.as_ptr()).is_none();
             if vacant {
                 self.0.as_ptr().write(Some(x));
                 Ok(())
@@ -33,7 +33,7 @@ impl<T> OnceCell<T> {
     pub fn get(&self) -> Option<&T> {
         // SAFETY: We ensure that we never insert twice (so the inner `T` always lives as long as us, if it exists) and
         // neither function is possibly reentrant so there's no way we can invalidate mut xor shared aliasing
-        unsafe { (&*self.0.as_ptr()).as_ref() }
+        unsafe { (*self.0.as_ptr()).as_ref() }
     }
 }
 
@@ -140,10 +140,7 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
             .inner
             .set(Box::new(parser))
             .unwrap_or_else(|_| {
-                panic!(
-                    "recursive parsers can only be defined once, trying to redefine it at {}",
-                    location
-                )
+                panic!("recursive parsers can only be defined once, trying to redefine it at {location}")
             });
     }
 }

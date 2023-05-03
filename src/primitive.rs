@@ -269,6 +269,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next_inner() {
+            #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             (_, Some(tok)) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 let err_span = inp.span_since(before);
@@ -343,6 +344,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.offset();
         match inp.next_inner() {
+            #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             (_, Some(tok)) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             (at, found) => {
                 let err_span = inp.span_since(before);
