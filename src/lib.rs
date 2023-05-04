@@ -524,16 +524,61 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// # use chumsky::prelude::*;
     /// use std::ops::Range;
     ///
-    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
-    /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
+    /// # mod intern {
+    /// #     #[derive(Copy, Clone, Debug, PartialEq)]
+    /// #     pub struct Key(usize);
+    /// #     pub struct Interner {
+    /// #         strings: Vec<String>,
+    /// #     }
+    /// #     impl Interner {
+    /// #         pub fn new() -> Interner { Interner { strings: Vec::new() } }
+    /// #         pub fn intern(&mut self, str: &str) -> Key {
+    /// #             let pos = self.strings.iter().position(|s| s == str);
+    /// #             match pos {
+    /// #                 Some(pos) => Key(pos),
+    /// #                 None => {
+    /// #                     self.strings.push(str.to_string());
+    /// #                     Key(self.strings.len() - 1)
+    /// #                 }
+    /// #             }
+    /// #         }
+    /// #         pub fn get(&self, key: Key) -> &str {
+    /// #             &self.strings[key.0]
+    /// #         }
+    /// #     }
+    /// # }
     ///
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
-    ///     .map_with_span(|ident, span| Spanned(ident, span))
-    ///     .padded();
+    /// // <insert interner library such as `lasso`>
+    /// type Interner = intern::Interner;
+    /// type Key = intern::Key;
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
+    /// // It's common for AST nodes to use interned versions of identifiers
+    /// // Keys are generally smaller, faster to compare, and can be `Copy`
+    /// #[derive(Copy, Clone)]
+    /// pub struct Ident(Key);
+    ///
+    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Interner, ()>>()
+    ///     .map_with_state(|ident, span, state| Ident(state.intern(ident)))
+    ///     .padded()
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<Vec<_>>();
+    ///
+    /// let mut interner = Interner::new();
+    ///
+    /// match ident.parse_with_state("hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(interner.get(idents[0].0), "hello");
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
+    ///
+    /// match ident.parse_with_state("hello hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(idents[0].0, idents[1].0);
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
     /// ```
     fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
         self,
