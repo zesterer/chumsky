@@ -263,11 +263,22 @@ impl<T, E> ParseResult<T, E> {
 
 /// A trait implemented by parsers.
 ///
-/// Parsers take inputs of type `I` (implementing [`Input`]) and attempt to parse them into a value of type `O`. In
-/// doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
-/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along
-/// the way. Usually, this output comes in the form of an
+/// Parsers take inputs of type `I`, which will implement [`Input`]. Refer to the documentation on [`Input`] for examples
+/// of common input types. It will then attempt to parse them into a value of type `O`, which may be just about any type.
+/// In doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
+/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along the
+/// way. Usually, this output comes in the form of an
 /// [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
+///
+/// The final type parameter, `E`, is expected to be one of the type in the [`extra`] module,
+/// implementing [`ParserExtra`]. This trait is used to encapsulate the various types a parser
+/// uses that are not simply its input and output. Refer to the documentation on the [`ParserExtra`] trait
+/// for more detail on the contained types. If not provided, it will default to [`extra::Default`],
+/// which will have the least overhead, but also the least meaningful errors.
+///
+/// The lifetime of the parser is used for zero-copy output - the input is bound by the lifetime,
+/// and returned values or parser state may take advantage of this to borrow tokens or slices of the
+/// input and hold on to them, if the input supports this.
 ///
 /// You cannot directly implement this trait yourself. If you feel like the built-in parsers are not enough for you,
 /// there are several options in increasing order of complexity:
