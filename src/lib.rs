@@ -1919,13 +1919,60 @@ where
     go_extra!(O);
 }
 
-/// A parser that can be configured with runtime context
+/// A [`Parser`] that can be configured with runtime context. This allows for context-sensitive parsing
+/// of input. Note that chumsky only supports 'left'-sensitive parsing, where the context for a parser
+/// is derived from earlier in the input.
+///
+/// Chumsky distinguishes 'state' from 'context'. State is not able to change what input a parser
+/// accepts, but may be used to change the contents of the type it emits. In this way state is expected
+/// to be idempotent - combinators such as [`Parser::map_with_state`] are allowed to not call the
+/// provided closure at all if they don't emit any output. Context and configuration, on the other hand,
+/// is used to change what kind of input a parser may accept, and thus must always be evaluated. Context
+/// isn't usable in any map combinator however - while it may affect accepted input, it is not expected
+/// to change the final result outside of how it changes what the parser itself returns.
+///
+/// Not all parsers currently support configuration. If you feel like you need a parser to be configurable
+/// and it isn't currently, please open an issue on the issue tracker of the main repository.
 pub trait ConfigParser<'a, I, O, E>: ConfigParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    /// A combinator that allows configuration of the parser from the current context
+    /// A combinator that allows configuration of the parser from the current context. Context
+    /// is most often derived from [`Parser::then_with_ctx`] or [`map_ctx`], and is how chumsky
+    /// supports parsing things such as indentation-sensitive grammars.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// // By default, accepts any number of items
+    /// let item = text::ident()
+    ///     .padded()
+    ///     .repeated();
+    ///
+    /// // With configuration, we can declare an exact number of items based on a prefix length
+    /// let len_prefixed_arr = int
+    ///     .then_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
+    ///
+    /// assert_eq!(
+    ///     len_prefixed_arr.parse("2 foo bar").into_result(),
+    ///     Ok(vec!["foo", "bar"]),
+    /// );
+    ///
+    /// assert_eq!(
+    ///     len_prefixed_arr.parse("0").into_result(),
+    ///     Ok(vec![]),
+    /// );
+    ///
+    /// len_prefixed_arr.parse("3 foo bar baz bam").into_result().unwrap_err();
+    /// len_prefixed_arr.parse("3 foo bar").into_result().unwrap_err();
+    /// ```
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
         Self: Sized,
