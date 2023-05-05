@@ -1828,6 +1828,76 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// When not using `boxed`, the following patterns are either impossible or very difficult to express:
+    ///
+    /// ```compile_fail
+    /// # use chumsky::prelude::*;
+    ///
+    /// pub trait Parseable: Sized {
+    ///     type Parser<'a>: Parser<'a, &'a str, Self>;
+    ///
+    ///     fn parser<'a>() -> Self::Parser<'a>;
+    /// }
+    ///
+    /// impl Parseable for i32 {
+    ///     // We *can* write this type, but it will be very impractical, and change on any alterations
+    ///     // to the implementation
+    ///     type Parser<'a> = ???;
+    ///
+    ///     fn parser<'a>() -> Self::Parser<'a> {
+    ///         todo()
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use chumsky::prelude::*;
+    /// # fn user_input<'a>() -> impl IntoIterator<Item = impl Parser<'a, &'a str, char>> { [just('b')] }
+    ///
+    /// let user_input = user_input();
+    ///
+    /// let mut parser = just('a');
+    /// for i in user_input {
+    ///     // Doesn't work due to type mismatch - since every combinator creates a unique type
+    ///     parser = parser.or(i);
+    /// }
+    ///
+    /// let parser = parser.then(just('z'));
+    /// let _ = parser.parse("b").into_result();
+    /// ```
+    ///
+    /// However, with `boxed`, we can express them by making the parsers all share a common type:
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    ///
+    /// pub trait Parseable: Sized {
+    ///     fn parser<'a>() -> Boxed<'a, 'a, &'a str, Self, extra::Default>;
+    /// }
+    ///
+    /// impl Parseable for i32 {
+    ///     fn parser<'a>() -> Boxed<'a, 'a, &'a str, Self, extra::Default> {
+    ///         todo().boxed()
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// # fn user_input<'a>() -> impl IntoIterator<Item = impl Parser<'a, &'a str, char>> { [just('b'), just('c')] }
+    /// let user_input = user_input();
+    /// let mut parser = just('a').boxed();
+    /// for i in user_input {
+    ///     // Doesn't work due to type mismatch - since every combinator creates a unique type
+    ///     parser = parser.or(i).boxed();
+    /// }
+    /// let parser = parser.then(just('z'));
+    /// parser.parse("az").into_result().unwrap();
+    /// ```
+    ///
     fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
         Self: MaybeSync + Sized + 'a + 'b,
