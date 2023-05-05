@@ -863,7 +863,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 
     /// Parse input as part of a token-tree - using an input generated from within the current
     /// input. In other words, this parser will attempt to create a *new* input stream from within
-    /// the one it is being run on, and the parser is was called on will be provided this *new* input.
+    /// the one it is being run on, and the parser it was called on will be provided this *new* input.
     /// By default, the original parser is expected to consume up to the end of the new stream. To
     /// allow only consuming part of the stream, use [`Parser::lazy`] to ignore trailing tokens.
     ///
