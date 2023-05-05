@@ -989,6 +989,18 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         WithCtx { parser: self, ctx }
     }
 
+    /// Applies both parsers to the same position in the input, succeeding
+    /// only if both succeed. The returned value will be that of the first parser,
+    /// and the input will be at the end of the first parser if `and_is` succeeds.
+    ///
+    /// The second parser is allowed to consume more or less input than the first parser,
+    /// but like its output, how much it consumes won't affect the final result.
+    ///
+    /// The motivating use-case is in combination with [`Parser::not`], allowing a parser
+    /// to consume something only if it isn't also something like an escape sequence or a nested block.
+    ///
+    /// # Examples
+    ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     ///
@@ -1181,6 +1193,19 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         OrNot { parser: self }
     }
 
+    /// Invert the result of the contained parser, failing if it succeeds and succeeding if it fails.
+    /// The output of this parser is always `()`, the unit type.
+    ///
+    /// The motivating case for this is in combination with [`Parser::and_is`], allowing a parser
+    /// to consume something only if it isn't also something like an escape sequence or a nested block.
+    ///
+    /// Caveats:
+    /// - The error message produced by `not` by default will likely be fairly unhelpful - it can
+    ///   only tell the span that was wrong.
+    /// - If not careful, it's fairly easy to create non-intuitive behavior due to end-of-input
+    ///   being a valid token for a parser to consume, and as most parsers fail at end of input,
+    ///   `not` will succeed on it.
+    ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     ///
