@@ -294,10 +294,12 @@ where
 {
     any()
         // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| if c.is_digit(radix) {
-            Ok(c)
-        } else {
-            Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+        .try_map(move |c: C, span| {
+            if c.is_digit(radix) {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
         })
         .repeated()
         .at_least(1)
@@ -339,10 +341,12 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
         // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| if c.is_digit(radix) && c != C::digit_zero() {
-            Ok(c)
-        } else {
-            Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+        .try_map(move |c: C, span| {
+            if c.is_digit(radix) && c != C::digit_zero() {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
         })
         // This error never appears due to `repeated` so can use `filter`
         .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
@@ -363,10 +367,12 @@ pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
         // Use try_map over filter to get a better error on failure
-        .try_map(|c: C, span| if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
-            Ok(c)
-        } else {
-            Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+        .try_map(|c: C, span| {
+            if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
         })
         .then(
             any()
