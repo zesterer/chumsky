@@ -1604,6 +1604,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    /// The errors will not immediately halt parsing on this path, but instead it will continue,
+    /// potentially emitting one or more other errors, only failing after the pattern has otherwise
+    /// successfully, or emitted another terminal error.
     ///
     /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
     ///
@@ -1627,6 +1630,68 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(large_int.parse("537").into_result(), Ok(537));
     /// assert!(large_int.parse("243").into_result().is_err());
     /// ```
+    ///
+    /// To show the difference in behavior from [`Parser::try_map`]:
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// # use chumsky::util::MaybeRef;
+    /// # use chumsky::error::Error;
+    /// // start with the same large_int validator
+    /// let large_int_val = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///         .from_str()
+    ///         .unwrapped()
+    ///         .validate(|x: u32, span, emitter| {
+    ///             if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher", x))) }
+    ///             x
+    ///         });
+    ///
+    /// // A try_map version of the same parser
+    /// let large_int_tm = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///         .from_str()
+    ///         .unwrapped()
+    ///         .try_map(|x: u32, span| {
+    ///             if x < 256 {
+    ///                 Err(Rich::custom(span, format!("{} must be 256 or higher", x)))
+    ///             } else {
+    ///                 Ok(x)
+    ///             }
+    ///         });
+    ///
+    /// // Parser that uses the validation version
+    /// let multi_step_val = large_int_val.then(text::ident().padded());
+    /// // Parser that uses the try_map version
+    /// let multi_step_tm = large_int_tm.then(text::ident().padded());
+    ///
+    /// // On success, both parsers are equivalent
+    /// assert_eq!(
+    ///     multi_step_val.parse("512 foo").into_result(),
+    ///     Ok((512, "foo"))
+    /// );
+    ///
+    /// assert_eq!(
+    ///     multi_step_tm.parse("512 foo").into_result(),
+    ///     Ok((512, "foo"))
+    /// );
+    ///
+    /// // However, on failure, they may produce different errors:
+    /// assert_eq!(
+    ///     multi_step_val.parse("100 2").into_result(),
+    ///     Err(vec![
+    ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
+    ///         <Rich<char> as Error<&str>>::expected_found([], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///     ])
+    /// );
+    ///
+    /// assert_eq!(
+    ///     multi_step_tm.parse("100 2").into_result(),
+    ///     Err(vec![Rich::<char>::custom((0..3).into(), "100 must be 256 or higher")])
+    /// );
+    /// ```
+    ///
+    /// As is seen in the above example, validation doesn't prevent the emission of later errors in the
+    /// same parser, but still produces an error in the output.
+    ///
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
