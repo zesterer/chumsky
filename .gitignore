@@ -1,3 +1,7 @@
+# IDE projects
+.idea/
+
+# Project output
 /target
 Cargo.lock
 flamegraph.svg
