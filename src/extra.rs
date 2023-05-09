@@ -1,4 +1,5 @@
-//! TODO
+//! Generic error, state and context types for parsers
+//! Useful for custom allocation, error handling, context-specific parsers, and more.
 
 use super::*;
 
@@ -26,6 +27,21 @@ pub type Default = Full<DefaultErr, DefaultState, DefaultCtx>;
 pub type Err<E> = Full<E, DefaultState, DefaultCtx>;
 
 /// Use specified state type, but default other types
+///
+/// Use `State<S>` or `Full<E, S, C>` as the `E` type parameter of a parser to use a custom state type.
+/// You can then use `parser().parse_with_state(&mut S)` to parse with a custom state
+///
+/// # Examples
+///
+/// One common use case for this is arena allocation of AST Nodes or tokens.
+///
+/// ```
+/// // Use a slotmap to allocate AST nodes, returning an id from each parser instead of a node
+/// pub fn parser<'src>() -> impl Parser<'src, BoxedStream<'src, Token>, NodeId, State<SlotMap<NodeId, ASTNode>> {
+///     // ...
+/// }
+/// ```
+///
 pub type State<S> = Full<DefaultErr, S, DefaultCtx>;
 
 /// Use specified context type, but default other types
