@@ -520,6 +520,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// # Examples
     ///
+    /// ## General
+    ///
     /// ```
     /// # use chumsky::prelude::*;
     /// use std::ops::Range;
@@ -535,6 +537,44 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
     /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
     /// ```
+    ///
+    /// ## Interning / Arena Allocation
+    ///
+    /// This example assumes use of the `slotmap` crate for arena allocation.
+    ///
+    /// ```
+    /// // Metadata type for node Ids for extra type safety
+    /// new_key_type! {
+    ///    pub struct NodeId;
+    /// }
+    /// type NodeArena = SlotMap<NodeId, Expr>;
+    ///
+    /// // AST nodes reference other nodes with `NodeId`s instead of containing boxed/owned values
+    /// enum Expr {
+    ///     Unary {
+    ///         op: Operator,
+    ///         operand: NodeId
+    ///     },
+    ///     Int {
+    ///         value: i32
+    ///     }
+    ///     // etc...
+    /// }
+    ///
+    /// // In your parser definition
+    ///
+    /// let int = text::int::<_, _, extra::State<NodeArena>>(10);
+    /// let hex = text::int::<_, _, extra::State<NodeArena>>(16);
+    ///
+    /// let unary = int
+    ///     .or(hex)
+    ///     .map_with_state(|value, _span, state: &mut NodeArena| {
+    ///         // Return the ID of the new integer node
+    ///         state.insert(Expr::Literal(lex::Literal::Int(*value)))
+    ///     });
+    ///
+    /// ```
+    ///
     fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
         self,
         f: F,
@@ -1976,7 +2016,8 @@ where
     /// assert_eq!(signed.parse_with_state("-17", &mut folds).into_result(), Ok(-17));
     /// assert_eq!(signed.parse_with_state("--+-+-5", &mut folds).into_result(), Ok(5));
     /// ```
-    // TODO: Add examples of interning/arena allocation
+    ///
+    ///
     #[cfg_attr(debug_assertions, track_caller)]
     fn foldr_with_state<B, F, OA>(self, other: B, f: F) -> FoldrWithState<F, Self, B, OA, E>
     where

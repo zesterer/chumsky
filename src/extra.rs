@@ -28,7 +28,7 @@ pub type Err<E> = Full<E, DefaultState, DefaultCtx>;
 
 /// Use specified state type, but default other types
 ///
-/// Use `State<S>` or `Full<E, S, C>` as the `E` type parameter of a parser to use a custom state type.
+/// Use `State<S>` or `Full<E, S, C>` as the `Extra` type parameter of a parser to use a custom state type.
 /// You can then use `parser().parse_with_state(&mut S)` to parse with a custom state
 ///
 /// # Examples
@@ -36,8 +36,10 @@ pub type Err<E> = Full<E, DefaultState, DefaultCtx>;
 /// One common use case for this is arena allocation of AST Nodes or tokens.
 ///
 /// ```
+/// type ParserState = SlotMap<NodeId, ASTNode>;
+///
 /// // Use a slotmap to allocate AST nodes, returning an id from each parser instead of a node
-/// pub fn parser<'src>() -> impl Parser<'src, BoxedStream<'src, Token>, NodeId, State<SlotMap<NodeId, ASTNode>> {
+/// pub fn parser<'src>() -> impl Parser<'src, &'src [Token], NodeId, extra::State<ParserState>> {
 ///     // ...
 /// }
 /// ```
