@@ -534,52 +534,25 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::prelude::*;
     /// use std::ops::Range;
-    ///
-    /// # mod intern {
-    /// #     #[derive(Copy, Clone, Debug, PartialEq)]
-    /// #     pub struct Key(usize);
-    /// #     pub struct Interner {
-    /// #         strings: Vec<String>,
-    /// #     }
-    /// #     impl Interner {
-    /// #         pub fn new() -> Interner { Interner { strings: Vec::new() } }
-    /// #         pub fn intern(&mut self, str: &str) -> Key {
-    /// #             let pos = self.strings.iter().position(|s| s == str);
-    /// #             match pos {
-    /// #                 Some(pos) => Key(pos),
-    /// #                 None => {
-    /// #                     self.strings.push(str.to_string());
-    /// #                     Key(self.strings.len() - 1)
-    /// #                 }
-    /// #             }
-    /// #         }
-    /// #         pub fn get(&self, key: Key) -> &str {
-    /// #             &self.strings[key.0]
-    /// #         }
-    /// #     }
-    /// # }
-    ///
-    /// // <insert interner library such as `lasso`>
-    /// type Interner = intern::Interner;
-    /// type Key = intern::Key;
+    /// use lasso::{Rodeo, Spur};
     ///
     /// // It's common for AST nodes to use interned versions of identifiers
     /// // Keys are generally smaller, faster to compare, and can be `Copy`
     /// #[derive(Copy, Clone)]
-    /// pub struct Ident(Key);
+    /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Interner, ()>>()
-    ///     .map_with_state(|ident, span, state| Ident(state.intern(ident)))
+    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    ///     .map_with_state(|ident, span, state| Ident(state.get_or_intern(ident)))
     ///     .padded()
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<Vec<_>>();
     ///
-    /// let mut interner = Interner::new();
+    /// let mut interner = Rodeo::new();
     ///
     /// match ident.parse_with_state("hello", &mut interner).into_result() {
     ///     Ok(idents) => {
-    ///         assert_eq!(interner.get(idents[0].0), "hello");
+    ///         assert_eq!(interner.resolve(&idents[0].0), "hello");
     ///     }
     ///     Err(e) => panic!("Parsing Failed: {:?}", e),
     /// }
