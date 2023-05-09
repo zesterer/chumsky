@@ -6,32 +6,47 @@ type DefaultErr = EmptyErr;
 type DefaultState = ();
 type DefaultCtx = ();
 
-/// Sealed trait for parser extra information - error type, state type, etc.
+/// A trait for extra types on a [`Parser`] that control the behavior of certain combinators and output.
+/// Currently, this consists of the error type emitted, the state type used in the `*_state` combinators,
+/// and the context type used in the `*_ctx` and `*configure` parsers.
+///
+/// This trait is sealed and so cannot be implemented by other crates because all uses should instead
+/// go through the types defined in this module.
 pub trait ParserExtra<'a, I>: 'a + Sealed
 where
     I: Input<'a>,
 {
-    /// Error type to use for the parser.
+    /// Error type to use for the parser. This type must implement [`Error`], and when it fails,
+    /// the parser will return a set of this type to describe why the failure occurred.
     type Error: Error<'a, I> + 'a;
-    /// State type to use for the parser.
+    /// State type to use for the parser. This is used to provide stateful *output* of the parser,
+    /// such as interned identifiers or position-dependent name resolution, however *cannot* influence
+    /// the actual progress of the parser - for that, use [`Self::Context`].
+    ///
+    /// For examples of using this type, see [`Parser::map_with_state`] or [`Parser::foldl_with_state`].
     type State: 'a;
-    /// Context used for parser configuration.
+    /// Context used for parser configuration. This is used to provide context-sensitive parsing of *input*.
+    /// Context-sensitive parsing in chumsky is always left-hand sensitive - context for the parse must originate
+    /// from an earlier point in the stream than the parser relying on it. This can affect the output of a parser,
+    /// but for things that don't wish to alter the actual rules of parsing, one should instead prefer [`Self::State`].
+    ///
+    /// For examples of using this type, see [`Parser::then_with_ctx`] and [`ConfigParser::configure`].
     type Context: 'a;
 }
 
-/// Use all default extra types
+/// Use all default extra types. See [`ParserExtra`] for more details.
 pub type Default = Full<DefaultErr, DefaultState, DefaultCtx>;
 
-/// Use specified error type, but default other types
+/// Use specified error type, but default other types. See [`ParserExtra`] for more details.
 pub type Err<E> = Full<E, DefaultState, DefaultCtx>;
 
-/// Use specified state type, but default other types
+/// Use specified state type, but default other types. See [`ParserExtra`] for more details.
 pub type State<S> = Full<DefaultErr, S, DefaultCtx>;
 
-/// Use specified context type, but default other types
+/// Use specified context type, but default other types. See [`ParserExtra`] for more details.
 pub type Context<C> = Full<DefaultErr, DefaultState, C>;
 
-/// Specify all extra types
+/// Specify all extra types. See [`ParserExtra`] for more details.
 pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 
 impl<E, S, C> Sealed for Full<E, S, C> {}

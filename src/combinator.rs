@@ -1237,6 +1237,8 @@ where
                 match self.parser.go::<Check>(inp) {
                     Ok(()) => {}
                     Err(()) => {
+                        // TODO: Helper for this? Rewind does this? (seconds one may be bad for other cases)
+                        inp.errors.alt = None;
                         inp.rewind(before);
                         break Ok(M::bind(|| ()));
                     }
