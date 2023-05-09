@@ -1297,6 +1297,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// # Examples
     ///
+    /// ## General
+    ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
@@ -1311,7 +1313,47 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(134));
     /// assert_eq!(sum.parse_with_state("6", &mut multiplier).into_result(), Ok(6));
     /// ```
-    // TODO: Add examples of interning/arena allocation
+    ///
+    /// ## Interning / Arena Allocation
+    ///
+    /// This example assumes use of the `slotmap` crate for arena allocation.
+    ///
+    /// ```
+    /// // Metadata type for node Ids for extra type safety
+    /// new_key_type! {
+    ///    pub struct NodeId;
+    /// }
+    /// type NodeArena = SlotMap<NodeId, ASTNode>;
+    ///
+    /// // AST nodes reference other nodes with `NodeId`s instead of containing boxed/owned values
+    /// enum ASTNode {
+    ///     BinExpr {
+    ///         lhs: NodeId,
+    ///         rhs: NodeId,
+    ///         op: Operator
+    ///     },
+    ///     Int {
+    ///         value: i32
+    ///     }
+    ///     // etc...
+    /// }
+    ///
+    /// // In your parser definition
+    ///
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, NodeArena, ()>>(10)
+    ///     .map_with_state(just('+').ignore_then(int).repeated(), |value, state: &mut NodeArena|
+    ///         // Return the ID of the new integer node
+    ///         state.insert(ASTNode::Int { value })
+    ///     )
+    ///
+    /// let sum = int
+    ///     .clone()
+    ///     .foldl_with_state(just('+').ignore_then(int).repeated(), |lhs: NodeId, rhs: NodeId, state: &mut NodeArena|
+    ///         // Returns the ID of the new binexp node
+    ///         state.insert(ASTNode::BinExp(lhs, rhs, Operator::Add))
+    ///     )
+    ///
+    /// ```
     #[cfg_attr(debug_assertions, track_caller)]
     fn foldl_with_state<B, F, OB>(self, other: B, f: F) -> FoldlWithState<F, Self, B, OB, E>
     where
