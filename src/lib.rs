@@ -263,11 +263,22 @@ impl<T, E> ParseResult<T, E> {
 
 /// A trait implemented by parsers.
 ///
-/// Parsers take inputs of type `I` (implementing [`Input`]) and attempt to parse them into a value of type `O`. In
-/// doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
-/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along
-/// the way. Usually, this output comes in the form of an
+/// Parsers take inputs of type `I`, which will implement [`Input`]. Refer to the documentation on [`Input`] for examples
+/// of common input types. It will then attempt to parse them into a value of type `O`, which may be just about any type.
+/// In doing so, they may encounter errors. These need not be fatal to the parsing process: syntactic errors can be
+/// recovered from and a valid output may still be generated alongside any syntax errors that were encountered along the
+/// way. Usually, this output comes in the form of an
 /// [Abstract Syntax Tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) (AST).
+///
+/// The final type parameter, `E`, is expected to be one of the type in the [`extra`] module,
+/// implementing [`ParserExtra`]. This trait is used to encapsulate the various types a parser
+/// uses that are not simply its input and output. Refer to the documentation on the [`ParserExtra`] trait
+/// for more detail on the contained types. If not provided, it will default to [`extra::Default`],
+/// which will have the least overhead, but also the least meaningful errors.
+///
+/// The lifetime of the parser is used for zero-copy output - the input is bound by the lifetime,
+/// and returned values or parser state may take advantage of this to borrow tokens or slices of the
+/// input and hold on to them, if the input supports this.
 ///
 /// You cannot directly implement this trait yourself. If you feel like the built-in parsers are not enough for you,
 /// there are several options in increasing order of complexity:
@@ -525,17 +536,35 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::prelude::*;
     /// use std::ops::Range;
+    /// use lasso::{Rodeo, Spur};
     ///
-    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
-    /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
+    /// // It's common for AST nodes to use interned versions of identifiers
+    /// // Keys are generally smaller, faster to compare, and can be `Copy`
+    /// #[derive(Copy, Clone)]
+    /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
-    ///     .map_with_span(|ident, span| Spanned(ident, span))
-    ///     .padded();
+    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    ///     .map_with_state(|ident, span, state| Ident(state.get_or_intern(ident)))
+    ///     .padded()
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<Vec<_>>();
     ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
+    /// let mut interner = Rodeo::new();
+    ///
+    /// match ident.parse_with_state("hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(interner.resolve(&idents[0].0), "hello");
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
+    ///
+    /// match ident.parse_with_state("hello hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(idents[0].0, idents[1].0);
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
     /// ```
     ///
     /// ## Interning / Arena Allocation
@@ -846,7 +875,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Parse input as part of a token-tree - using an input generated from within the current
-    /// input.
+    /// input. In other words, this parser will attempt to create a *new* input stream from within
+    /// the one it is being run on, and the parser it was called on will be provided this *new* input.
+    /// By default, the original parser is expected to consume up to the end of the new stream. To
+    /// allow only consuming part of the stream, use [`Parser::lazy`] to ignore trailing tokens.
+    ///
+    /// The provided parser `P` is expected to have both an input and output type which match the input
+    /// type of the parser it is called on. As an example, if the original parser takes an input of
+    /// `Stream<Iterator<Item = T>>`, `P` will be run first against that input, and is expected to
+    /// output a new `Stream<Iterator<Item = T>>` which the original parser will be run against.
     ///
     /// The output of this parser is `O`, the output of the parser it is called on.
     ///
@@ -965,6 +1002,18 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         WithCtx { parser: self, ctx }
     }
 
+    /// Applies both parsers to the same position in the input, succeeding
+    /// only if both succeed. The returned value will be that of the first parser,
+    /// and the input will be at the end of the first parser if `and_is` succeeds.
+    ///
+    /// The second parser is allowed to consume more or less input than the first parser,
+    /// but like its output, how much it consumes won't affect the final result.
+    ///
+    /// The motivating use-case is in combination with [`Parser::not`], allowing a parser
+    /// to consume something only if it isn't also something like an escape sequence or a nested block.
+    ///
+    /// # Examples
+    ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     ///
@@ -1157,6 +1206,19 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         OrNot { parser: self }
     }
 
+    /// Invert the result of the contained parser, failing if it succeeds and succeeding if it fails.
+    /// The output of this parser is always `()`, the unit type.
+    ///
+    /// The motivating case for this is in combination with [`Parser::and_is`], allowing a parser
+    /// to consume something only if it isn't also something like an escape sequence or a nested block.
+    ///
+    /// Caveats:
+    /// - The error message produced by `not` by default will likely be fairly unhelpful - it can
+    ///   only tell the span that was wrong.
+    /// - If not careful, it's fairly easy to create non-intuitive behavior due to end-of-input
+    ///   being a valid token for a parser to consume, and as most parsers fail at end of input,
+    ///   `not` will succeed on it.
+    ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     ///
@@ -1622,6 +1684,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    /// The errors will not immediately halt parsing on this path, but instead it will continue,
+    /// potentially emitting one or more other errors, only failing after the pattern has otherwise
+    /// successfully, or emitted another terminal error.
     ///
     /// This function also permits mapping the output to a value of another type, similar to [`Parser::map`].
     ///
@@ -1645,6 +1710,68 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(large_int.parse("537").into_result(), Ok(537));
     /// assert!(large_int.parse("243").into_result().is_err());
     /// ```
+    ///
+    /// To show the difference in behavior from [`Parser::try_map`]:
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// # use chumsky::util::MaybeRef;
+    /// # use chumsky::error::Error;
+    /// // start with the same large_int validator
+    /// let large_int_val = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///         .from_str()
+    ///         .unwrapped()
+    ///         .validate(|x: u32, span, emitter| {
+    ///             if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher", x))) }
+    ///             x
+    ///         });
+    ///
+    /// // A try_map version of the same parser
+    /// let large_int_tm = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///         .from_str()
+    ///         .unwrapped()
+    ///         .try_map(|x: u32, span| {
+    ///             if x < 256 {
+    ///                 Err(Rich::custom(span, format!("{} must be 256 or higher", x)))
+    ///             } else {
+    ///                 Ok(x)
+    ///             }
+    ///         });
+    ///
+    /// // Parser that uses the validation version
+    /// let multi_step_val = large_int_val.then(text::ident().padded());
+    /// // Parser that uses the try_map version
+    /// let multi_step_tm = large_int_tm.then(text::ident().padded());
+    ///
+    /// // On success, both parsers are equivalent
+    /// assert_eq!(
+    ///     multi_step_val.parse("512 foo").into_result(),
+    ///     Ok((512, "foo"))
+    /// );
+    ///
+    /// assert_eq!(
+    ///     multi_step_tm.parse("512 foo").into_result(),
+    ///     Ok((512, "foo"))
+    /// );
+    ///
+    /// // However, on failure, they may produce different errors:
+    /// assert_eq!(
+    ///     multi_step_val.parse("100 2").into_result(),
+    ///     Err(vec![
+    ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
+    ///         <Rich<char> as Error<&str>>::expected_found([], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///     ])
+    /// );
+    ///
+    /// assert_eq!(
+    ///     multi_step_tm.parse("100 2").into_result(),
+    ///     Err(vec![Rich::<char>::custom((0..3).into(), "100 must be 256 or higher")])
+    /// );
+    /// ```
+    ///
+    /// As is seen in the above example, validation doesn't prevent the emission of later errors in the
+    /// same parser, but still produces an error in the output.
+    ///
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
@@ -1756,6 +1883,76 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Boxing a parser is broadly equivalent to boxing other combinators via dynamic dispatch, such as [`Iterator`].
     ///
     /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// # Examples
+    ///
+    /// When not using `boxed`, the following patterns are either impossible or very difficult to express:
+    ///
+    /// ```compile_fail
+    /// # use chumsky::prelude::*;
+    ///
+    /// pub trait Parseable: Sized {
+    ///     type Parser<'a>: Parser<'a, &'a str, Self>;
+    ///
+    ///     fn parser<'a>() -> Self::Parser<'a>;
+    /// }
+    ///
+    /// impl Parseable for i32 {
+    ///     // We *can* write this type, but it will be very impractical, and change on any alterations
+    ///     // to the implementation
+    ///     type Parser<'a> = ???;
+    ///
+    ///     fn parser<'a>() -> Self::Parser<'a> {
+    ///         todo()
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use chumsky::prelude::*;
+    /// # fn user_input<'a>() -> impl IntoIterator<Item = impl Parser<'a, &'a str, char>> { [just('b')] }
+    ///
+    /// let user_input = user_input();
+    ///
+    /// let mut parser = just('a');
+    /// for i in user_input {
+    ///     // Doesn't work due to type mismatch - since every combinator creates a unique type
+    ///     parser = parser.or(i);
+    /// }
+    ///
+    /// let parser = parser.then(just('z'));
+    /// let _ = parser.parse("b").into_result();
+    /// ```
+    ///
+    /// However, with `boxed`, we can express them by making the parsers all share a common type:
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    ///
+    /// pub trait Parseable: Sized {
+    ///     fn parser<'a>() -> Boxed<'a, 'a, &'a str, Self, extra::Default>;
+    /// }
+    ///
+    /// impl Parseable for i32 {
+    ///     fn parser<'a>() -> Boxed<'a, 'a, &'a str, Self, extra::Default> {
+    ///         todo().boxed()
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// # fn user_input<'a>() -> impl IntoIterator<Item = impl Parser<'a, &'a str, char>> { [just('b'), just('c')] }
+    /// let user_input = user_input();
+    /// let mut parser = just('a').boxed();
+    /// for i in user_input {
+    ///     // Doesn't work due to type mismatch - since every combinator creates a unique type
+    ///     parser = parser.or(i).boxed();
+    /// }
+    /// let parser = parser.then(just('z'));
+    /// parser.parse("az").into_result().unwrap();
+    /// ```
+    ///
     fn boxed<'b>(self) -> Boxed<'a, 'b, I, O, E>
     where
         Self: MaybeSync + Sized + 'a + 'b,
@@ -1777,13 +1974,60 @@ where
     go_extra!(O);
 }
 
-/// A parser that can be configured with runtime context
+/// A [`Parser`] that can be configured with runtime context. This allows for context-sensitive parsing
+/// of input. Note that chumsky only supports 'left'-sensitive parsing, where the context for a parser
+/// is derived from earlier in the input.
+///
+/// Chumsky distinguishes 'state' from 'context'. State is not able to change what input a parser
+/// accepts, but may be used to change the contents of the type it emits. In this way state is expected
+/// to be idempotent - combinators such as [`Parser::map_with_state`] are allowed to not call the
+/// provided closure at all if they don't emit any output. Context and configuration, on the other hand,
+/// is used to change what kind of input a parser may accept, and thus must always be evaluated. Context
+/// isn't usable in any map combinator however - while it may affect accepted input, it is not expected
+/// to change the final result outside of how it changes what the parser itself returns.
+///
+/// Not all parsers currently support configuration. If you feel like you need a parser to be configurable
+/// and it isn't currently, please open an issue on the issue tracker of the main repository.
 pub trait ConfigParser<'a, I, O, E>: ConfigParserSealed<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    /// A combinator that allows configuration of the parser from the current context
+    /// A combinator that allows configuration of the parser from the current context. Context
+    /// is most often derived from [`Parser::then_with_ctx`] or [`map_ctx`], and is how chumsky
+    /// supports parsing things such as indentation-sensitive grammars.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    ///     .from_str()
+    ///     .unwrapped();
+    ///
+    /// // By default, accepts any number of items
+    /// let item = text::ident()
+    ///     .padded()
+    ///     .repeated();
+    ///
+    /// // With configuration, we can declare an exact number of items based on a prefix length
+    /// let len_prefixed_arr = int
+    ///     .then_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
+    ///
+    /// assert_eq!(
+    ///     len_prefixed_arr.parse("2 foo bar").into_result(),
+    ///     Ok(vec!["foo", "bar"]),
+    /// );
+    ///
+    /// assert_eq!(
+    ///     len_prefixed_arr.parse("0").into_result(),
+    ///     Ok(vec![]),
+    /// );
+    ///
+    /// len_prefixed_arr.parse("3 foo bar baz bam").into_result().unwrap_err();
+    /// len_prefixed_arr.parse("3 foo bar").into_result().unwrap_err();
+    /// ```
     fn configure<F>(self, cfg: F) -> Configure<Self, F>
     where
         Self: Sized,

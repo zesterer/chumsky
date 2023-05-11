@@ -293,7 +293,14 @@ where
     E: ParserExtra<'a, I>,
 {
     any()
-        .filter(move |c: &C| c.is_digit(radix))
+        // Use try_map over filter to get a better error on failure
+        .try_map(move |c: C, span| {
+            if c.is_digit(radix) {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
+        })
         .repeated()
         .at_least(1)
 }
@@ -333,8 +340,15 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
     radix: u32,
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
-        .filter(move |c: &C| c.is_digit(radix) && c != &C::digit_zero())
-        .map(Some)
+        // Use try_map over filter to get a better error on failure
+        .try_map(move |c: C, span| {
+            if c.is_digit(radix) && c != C::digit_zero() {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
+        })
+        // This error never appears due to `repeated` so can use `filter`
         .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
         .ignored()
         .or(just(C::digit_zero()).ignored())
@@ -352,9 +366,17 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
 pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()
-        .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_')
+        // Use try_map over filter to get a better error on failure
+        .try_map(|c: C, span| {
+            if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
+        })
         .then(
             any()
+                // This error never appears due to `repeated` so can use `filter`
                 .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
                 .repeated(),
         )
@@ -394,13 +416,12 @@ pub fn keyword<
 where
     C::Str: PartialEq,
 {
-    // TODO: use .filter(...), improve error messages
     ident()
         .try_map(move |s: &C::Str, span| {
             if s == keyword.as_ref() {
                 Ok(())
             } else {
-                Err(E::Error::expected_found(None, None, span))
+                Err(Error::expected_found(None, None, span))
             }
         })
         .slice()

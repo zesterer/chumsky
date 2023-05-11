@@ -14,6 +14,16 @@ use hashbrown::HashMap;
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 ///
+/// `Input` abstracts over streams which yield tokens by value or reference, and which may or may not have
+/// slices of tokens taken from them for use in parser output. There are multiple traits that inherit from
+/// `Input` and are implemented by types to indicate support for these specific abilities. Various combinators
+/// on the [`Parser`] trait may require that the input type implement one or more of these more specific traits.
+///
+/// Some common input types, and which traits they implement are:
+/// - `&str`: [`SliceInput`], [`StrInput`], [`ValueInput`], [`ExactSizeInput`]
+/// - `&[T]`: [`SliceInput`], [`ValueInput`], [`BorrowInput`], [`ExactSizeInput`]
+/// - `Stream<I>`: [`ValueInput`], [`ExactSizeInput`] if `I: ExactSizeIterator`
+///
 /// This trait is sealed and so cannot be implemented by other crates because it has an unstable API. This may
 /// eventually change. For now, if you wish to use a type that chumsky does not know about as an input, consider using
 /// [`Stream`] or [opening an issue/PR](https://github.com/zesterer/chumsky/issues/new).
