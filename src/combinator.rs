@@ -427,6 +427,39 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::to_span`].
+pub struct ToSpan<A, OA> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+impl<A: Copy, OA> Copy for ToSpan<A, OA> {}
+impl<A: Clone, OA> Clone for ToSpan<A, OA> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, OA, E, A> ParserSealed<'a, I, I::Span, E> for ToSpan<A, OA>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Span> {
+        let before = inp.offset();
+        self.parser.go::<M>(inp)?;
+        Ok(M::bind(|| inp.span_since(before)))
+    }
+
+    go_extra!(I::Span);
+}
+
 /// See [`Parser::map_with_state`].
 pub struct MapWithState<A, OA, F> {
     pub(crate) parser: A,

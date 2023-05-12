@@ -499,14 +499,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// use std::ops::Range;
     ///
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
     /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
-    ///     .map_with_span(|ident, span| Spanned(ident, span))
+    ///     .map_with_span(Spanned) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
     ///     .padded();
     ///
     /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
@@ -519,6 +518,57 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         MapWithSpan {
             parser: self,
             mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Transform the output of this parser to the pattern's span.
+    ///
+    /// This is commonly used when you know what pattern you've parsed and are only interested in the span of the
+    /// pattern.
+    ///
+    /// The output type of this parser is `I::Span`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
+    /// #[derive(Debug, PartialEq)]
+    /// pub enum Expr<'a> {
+    ///     Int(&'a str, SimpleSpan),
+    ///     // The span is that of the operator, '+'
+    ///     Add(Box<Expr<'a>>, SimpleSpan, Box<Expr<'a>>),
+    /// }
+    ///
+    /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    ///     .slice()
+    ///     .map_with_span(Expr::Int)
+    ///     .padded();
+    ///
+    /// let add_op = just('+').to_span().padded();
+    /// let sum = int.foldl(
+    ///     add_op.then(int).repeated(),
+    ///     |a, (op_span, b)| Expr::Add(Box::new(a), op_span, Box::new(b)),
+    /// );
+    ///
+    /// assert_eq!(sum.parse("42 + 7 + 13").into_result(), Ok(Expr::Add(
+    ///     Box::new(Expr::Add(
+    ///         Box::new(Expr::Int("42", (0..2).into())),
+    ///         (3..4).into(),
+    ///         Box::new(Expr::Int("7", (5..6).into())),
+    ///     )),
+    ///     (7..8).into(),
+    ///     Box::new(Expr::Int("13", (9..11).into())),
+    /// )));
+    /// ```
+    fn to_span(self) -> ToSpan<Self, O>
+    where
+        Self: Sized,
+    {
+        ToSpan {
+            parser: self,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -550,6 +600,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     .at_least(1)
     ///     .collect::<Vec<_>>();
     ///
+    /// // Test out parser
+    ///
     /// let mut interner = Rodeo::new();
     ///
     /// match ident.parse_with_state("hello", &mut interner).into_result() {
@@ -567,43 +619,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// }
     /// ```
     ///
-    /// ## Interning / Arena Allocation
-    ///
-    /// This example assumes use of the `slotmap` crate for arena allocation.
-    ///
-    /// ```
-    /// // Metadata type for node Ids for extra type safety
-    /// new_key_type! {
-    ///    pub struct NodeId;
-    /// }
-    /// type NodeArena = SlotMap<NodeId, Expr>;
-    ///
-    /// // AST nodes reference other nodes with `NodeId`s instead of containing boxed/owned values
-    /// enum Expr {
-    ///     Unary {
-    ///         op: Operator,
-    ///         operand: NodeId
-    ///     },
-    ///     Int {
-    ///         value: i32
-    ///     }
-    ///     // etc...
-    /// }
-    ///
-    /// // In your parser definition
-    ///
-    /// let int = text::int::<_, _, extra::State<NodeArena>>(10);
-    /// let hex = text::int::<_, _, extra::State<NodeArena>>(16);
-    ///
-    /// let unary = int
-    ///     .or(hex)
-    ///     .map_with_state(|value, _span, state: &mut NodeArena| {
-    ///         // Return the ID of the new integer node
-    ///         state.insert(Expr::Literal(lex::Literal::Int(*value)))
-    ///     });
-    ///
-    /// ```
-    ///
+    /// See [`Parser::foldl_with_state`] for an example showing arena allocation via parser state.
     fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
         self,
         f: F,
@@ -1421,40 +1437,48 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// This example assumes use of the `slotmap` crate for arena allocation.
     ///
     /// ```
+    /// # use chumsky::prelude::*;
+    /// use slotmap::{new_key_type, SlotMap};
+    ///
     /// // Metadata type for node Ids for extra type safety
     /// new_key_type! {
     ///    pub struct NodeId;
     /// }
-    /// type NodeArena = SlotMap<NodeId, ASTNode>;
     ///
     /// // AST nodes reference other nodes with `NodeId`s instead of containing boxed/owned values
-    /// enum ASTNode {
-    ///     BinExpr {
-    ///         lhs: NodeId,
-    ///         rhs: NodeId,
-    ///         op: Operator
-    ///     },
-    ///     Int {
-    ///         value: i32
-    ///     }
-    ///     // etc...
+    /// #[derive(Copy, Clone, Debug, PartialEq)]
+    /// enum Expr {
+    ///     Int(i32),
+    ///     Add(NodeId, NodeId),
     /// }
     ///
-    /// // In your parser definition
+    /// type NodeArena = SlotMap<NodeId, Expr>;
     ///
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, NodeArena, ()>>(10)
-    ///     .map_with_state(just('+').ignore_then(int).repeated(), |value, state: &mut NodeArena|
+    /// // Now, define our parser
+    /// let int = text::int::<&str, _, extra::Full<Simple<char>, NodeArena, ()>>(10)
+    ///     .padded()
+    ///     .map_with_state(|s, _, state: &mut NodeArena|
     ///         // Return the ID of the new integer node
-    ///         state.insert(ASTNode::Int { value })
-    ///     )
+    ///         state.insert(Expr::Int(s.parse().unwrap()))
+    ///     );
     ///
-    /// let sum = int
-    ///     .clone()
-    ///     .foldl_with_state(just('+').ignore_then(int).repeated(), |lhs: NodeId, rhs: NodeId, state: &mut NodeArena|
-    ///         // Returns the ID of the new binexp node
-    ///         state.insert(ASTNode::BinExp(lhs, rhs, Operator::Add))
-    ///     )
+    /// let sum = int.foldl_with_state(
+    ///     just('+').padded().ignore_then(int).repeated(),
+    ///     |a: NodeId, b: NodeId, state: &mut NodeArena| {
+    ///         // Inserting an item into the arena returns its ID
+    ///         state.insert(Expr::Add(a, b))
+    ///     }
+    /// );
     ///
+    /// // Test our parser
+    /// let mut arena = NodeArena::default();
+    /// let four_plus_eight = sum.parse_with_state("4 + 8", &mut arena).unwrap();
+    /// if let Expr::Add(a, b) = arena[four_plus_eight] {
+    ///     assert_eq!(arena[a], Expr::Int(4));
+    ///     assert_eq!(arena[b], Expr::Int(8));
+    /// } else {
+    ///     panic!("Not an Expr::Add");
+    /// }
     /// ```
     #[cfg_attr(debug_assertions, track_caller)]
     fn foldl_with_state<B, F, OB>(self, other: B, f: F) -> FoldlWithState<F, Self, B, OB, E>
@@ -2255,6 +2279,8 @@ where
     ///         (*state) += 1;
     ///         (a * b)
     ///     });
+    ///
+    /// // Test our parser
     /// let mut folds = 0i32;
     /// assert_eq!(signed.parse_with_state("3", &mut folds).into_result(), Ok(3));
     /// assert_eq!(signed.parse_with_state("-17", &mut folds).into_result(), Ok(-17));
