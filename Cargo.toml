@@ -66,6 +66,7 @@ pest_derive = "2.5"
 sn = "0.1"
 logos = "0.12"
 lasso = "0.7"
+slotmap = "1.0"
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11", features = ["flamegraph", "criterion"] }
