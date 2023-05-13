@@ -5,6 +5,7 @@ use super::*;
 /// See [`regex()`].
 pub struct Regex<C: Char, I, E> {
     regex: C::Regex,
+    #[allow(dead_code)]
     phantom: EmptyPhantom<(E, I)>,
 }
 
