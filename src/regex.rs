@@ -5,14 +5,27 @@ use super::*;
 /// See [`regex()`].
 pub struct Regex<C: Char, I, E> {
     regex: C::Regex,
-    phantom: PhantomData<(E, I)>,
+    phantom: EmptyPhantom<(E, I)>,
+}
+
+impl<C: Char, I, E> Copy for Regex<C, I, E> where C::Regex: Copy {}
+impl<C: Char, I, E> Clone for Regex<C, I, E>
+where
+    C::Regex: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            regex: self.regex.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
 }
 
 /// Match input based on a provided regex pattern
 pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     Regex {
         regex: C::new_regex(pattern),
-        phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
