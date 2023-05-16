@@ -1084,6 +1084,37 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::with_state`].
+pub struct WithState<A, State> {
+    pub(crate) parser: A,
+    pub(crate) state: State,
+}
+
+impl<A: Copy, Ctx: Copy> Copy for WithState<A, Ctx> {}
+impl<A: Clone, Ctx: Clone> Clone for WithState<A, Ctx> {
+    fn clone(&self) -> Self {
+        WithState {
+            parser: self.parser.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, State> ParserSealed<'a, I, O, E> for WithState<A, State>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, extra::Full<E::Error, State, E::Context>>,
+    State: 'a + Clone,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        inp.with_state(&mut self.state.clone(), |inp| self.parser.go::<M>(inp))
+    }
+
+    go_extra!(O);
+}
+
 /// See [`Parser::delimited_by`].
 pub struct DelimitedBy<A, B, C, OB, OC> {
     pub(crate) parser: A,

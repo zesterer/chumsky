@@ -814,6 +814,30 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline]
+    pub(crate) fn with_state<'sub_parse, S, O>(
+        &'sub_parse mut self,
+        new_state: &'sub_parse mut S,
+        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, S, E::Context>>) -> O,
+    ) -> O
+    where
+        'parse: 'sub_parse,
+        S: 'a,
+    {
+        let mut new_inp = InputRef {
+            input: self.input,
+            offset: self.offset,
+            state: new_state,
+            ctx: self.ctx,
+            errors: self.errors,
+            #[cfg(feature = "memoization")]
+            memos: self.memos,
+        };
+        let res = f(&mut new_inp);
+        self.offset = new_inp.offset;
+        res
+    }
+
+    #[inline]
     pub(crate) fn with_input<'sub_parse, O>(
         &'sub_parse mut self,
         new_input: &'sub_parse I,

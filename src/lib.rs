@@ -1018,6 +1018,17 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         WithCtx { parser: self, ctx }
     }
 
+    fn with_state<State>(self, state: State) -> WithState<Self, State>
+    where
+        Self: Sized,
+        State: 'a + Clone,
+    {
+        WithState {
+            parser: self,
+            state,
+        }
+    }
+
     /// Applies both parsers to the same position in the input, succeeding
     /// only if both succeed. The returned value will be that of the first parser,
     /// and the input will be at the end of the first parser if `and_is` succeeds.
