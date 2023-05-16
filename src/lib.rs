@@ -1018,6 +1018,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         WithCtx { parser: self, ctx }
     }
 
+    /// TODO
     fn with_state<State>(self, state: State) -> WithState<Self, State>
     where
         Self: Sized,
