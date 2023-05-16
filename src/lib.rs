@@ -1889,6 +1889,23 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Turn this [`Parser`] into an [`IterParser`] if its output type implements [`IntoIterator`].
+    ///
+    /// The resulting iterable parser will emit each element of the output type in turn.
+    ///
+    /// This is *broadly* analgous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
+    // TODO: Example
+    fn into_iter(self) -> IntoIter<Self, O>
+    where
+        Self: Sized,
+        O: IntoIterator,
+    {
+        IntoIter {
+            parser: self,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Box the parser, yielding a parser that performs parsing through dynamic dispatch.
     ///
     /// Boxing a parser might be useful for:

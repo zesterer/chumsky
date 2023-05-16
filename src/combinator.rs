@@ -621,6 +621,53 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::into_iter`].
+pub struct IntoIter<A, O> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
+}
+
+impl<A: Copy, O> Copy for IntoIter<A, O> {}
+impl<A: Clone, O> Clone for IntoIter<A, O> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, A, O, I, E> IterParserSealed<'a, I, O::Item, E> for IntoIter<A, O>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    O: IntoIterator,
+{
+    // TODO: Don't always produce output for non-emitting modes, but needed due to length. Use some way to 'select'
+    // between iterator and usize at compile time.
+    type IterState<M: Mode> = O::IntoIter; //M::Output<O::IntoIter>;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        // M::map(self.parser.go::<M>(inp)?, |out| out.into_iter())
+        self.parser.go::<Emit>(inp).map(|out| out.into_iter())
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+        iter: &mut Self::IterState<M>,
+    ) -> IPResult<M, O::Item> {
+        Ok(iter.next().map(|out| M::bind(|| out)))
+    }
+}
+
 /// See [`Parser::ignored`].
 pub struct Ignored<A, OA> {
     pub(crate) parser: A,
