@@ -14,11 +14,11 @@ use super::*;
 ///
 /// This trait is currently sealed to minimise the impact of breaking changes. If you find a type that you think should
 /// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Char: Sized + Copy + PartialEq + Sealed + 'static {
+pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
     ///
     /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-    type Str: ?Sized + 'static;
+    type Str: ?Sized + AsRef<Self::Str> + 'static;
 
     /// The type of a regex expression which can match on this type
     #[cfg(feature = "regex")]
@@ -48,6 +48,12 @@ pub trait Char: Sized + Copy + PartialEq + Sealed + 'static {
 
     /// Returns this character as a [`char`].
     fn to_char(&self) -> char;
+
+    /// The iterator returned by `Self::str_to_chars`.
+    type StrCharIter<'a>: Iterator<Item = Self>;
+
+    /// Turn a string of this character type into an iterator over those characters.
+    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_>;
 }
 
 impl Sealed for char {}
@@ -88,6 +94,11 @@ impl Char for char {
     fn to_char(&self) -> char {
         *self
     }
+
+    type StrCharIter<'a> = core::str::Chars<'a>;
+    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
+        s.chars()
+    }
 }
 
 impl Sealed for u8 {}
@@ -127,6 +138,11 @@ impl Char for u8 {
     }
     fn to_char(&self) -> char {
         *self as char
+    }
+
+    type StrCharIter<'a> = core::iter::Copied<core::slice::Iter<'a, u8>>;
+    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
+        s.iter().copied()
     }
 }
 
@@ -404,6 +420,7 @@ pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a
 /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
 /// assert!(def.lazy().parse("define").has_errors());
 /// ```
+#[track_caller]
 pub fn keyword<
     'a,
     I: ValueInput<'a> + StrInput<'a, C>,
@@ -416,6 +433,18 @@ pub fn keyword<
 where
     C::Str: PartialEq,
 {
+    #[cfg(debug_assertions)]
+    {
+        let mut cs = C::str_to_chars(keyword.as_ref());
+        if let Some(c) = cs.next() {
+            assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {:?}", c);
+        } else {
+            panic!("Keyword must have at least one character");
+        }
+        for c in cs {
+            assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {:?}", c);
+        }
+    }
     ident()
         .try_map(move |s: &C::Str, span| {
             if s == keyword.as_ref() {
@@ -425,4 +454,42 @@ where
             }
         })
         .slice()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+
+    fn make_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
+        s: &'a C::Str,
+    ) -> impl Parser<'a, I, ()>
+    where
+        C::Str: PartialEq,
+    {
+        text::keyword(s).ignored()
+    }
+
+    #[test]
+    fn keyword_good() {
+        make_kw_parser::<char, &str>("hello");
+        make_kw_parser::<char, &str>("_42");
+    }
+
+    #[test]
+    #[should_panic]
+    fn keyword_numeric() {
+        make_kw_parser::<char, &str>("42");
+    }
+
+    #[test]
+    #[should_panic]
+    fn keyword_empty() {
+        make_kw_parser::<char, &str>("");
+    }
+
+    #[test]
+    #[should_panic]
+    fn keyword_not_alphanum() {
+        make_kw_parser::<char, &str>("hi\n");
+    }
 }
