@@ -46,6 +46,14 @@ pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     /// Returns true if the character is canonically considered to be a numeric digit.
     fn is_digit(&self, radix: u32) -> bool;
 
+    #[cfg(feature = "unicode")]
+    /// Returns true if the character is canonically considered to be valid for starting an identifier.
+    fn is_ident_start(&self) -> bool;
+
+    #[cfg(feature = "unicode")]
+    /// Returns true if the character is canonically considered to be a valid within an identifier.
+    fn is_ident_continue(&self) -> bool;
+
     /// Returns this character as a [`char`].
     fn to_char(&self) -> char;
 
@@ -99,6 +107,16 @@ impl Char for char {
     fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
         s.chars()
     }
+
+    #[cfg(feature = "unicode")]
+    fn is_ident_start(&self) -> bool {
+        unicode_ident::is_xid_start(*self)
+    }
+
+    #[cfg(feature = "unicode")]
+    fn is_ident_continue(&self) -> bool {
+        unicode_ident::is_xid_continue(*self)
+    }
 }
 
 impl Sealed for u8 {}
@@ -134,7 +152,7 @@ impl Char for u8 {
         b'0'
     }
     fn is_digit(&self, radix: u32) -> bool {
-        (*self as char).is_digit(radix)
+        self.to_char().is_digit(radix)
     }
     fn to_char(&self) -> char {
         *self as char
@@ -143,6 +161,16 @@ impl Char for u8 {
     type StrCharIter<'a> = core::iter::Copied<core::slice::Iter<'a, u8>>;
     fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
         s.iter().copied()
+    }
+
+    #[cfg(feature = "unicode")]
+    fn is_ident_start(&self) -> bool {
+        self.to_char().is_ascii_alphabetic() || self.to_char() == '_'
+    }
+
+    #[cfg(feature = "unicode")]
+    fn is_ident_continue(&self) -> bool {
+        self.to_char().is_ascii_alphanumeric() || self.to_char() == '_'
     }
 }
 
@@ -371,6 +399,34 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
         .slice()
 }
 
+/// A parser that accepts an identifier.
+///
+/// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
+/// [`u8`]).
+///
+/// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
+#[must_use]
+#[cfg(feature = "unicode")]
+pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    any()
+        // Use try_map over filter to get a better error on failure
+        .try_map(|c: C, span| {
+            if c.is_ident_start() {
+                Ok(c)
+            } else {
+                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+            }
+        })
+        .then(
+            any()
+                // This error never appears due to `repeated` so can use `filter`
+                .filter(|c: &C| c.is_ident_continue())
+                .repeated(),
+        )
+        .slice()
+}
+
 /// A parser that accepts a C-style identifier.
 ///
 /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
@@ -379,6 +435,7 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
 /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
 /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
 #[must_use]
+#[cfg(not(feature = "unicode"))]
 pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
     any()

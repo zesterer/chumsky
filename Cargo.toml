@@ -39,6 +39,8 @@ sync = ["spin"]
 
 # Adds impl of Parser for either::Either
 either = ["dep:either"]
+# Enable support for unicode identifiers
+unicode = ["dep:unicode-ident"]
 
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
@@ -56,6 +58,7 @@ stacker = { version = "0.1", optional = true }
 regex = { version = "1.7", optional = true }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 either = { version = "1.8.1", optional = true }
+unicode-ident = {version = "1.0.9", optional = true}
 
 [dev-dependencies]
 ariadne = "0.2"
