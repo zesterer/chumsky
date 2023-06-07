@@ -64,7 +64,7 @@ criterion = "0.4.0"
 pest = "2.5"
 pest_derive = "2.5"
 sn = "0.1"
-logos = "0.12"
+logos = "0.13"
 lasso = "0.7"
 slotmap = "1.0"
 
