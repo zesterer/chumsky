@@ -53,8 +53,6 @@ pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
 pub mod extra;
-#[cfg(docsrs)]
-pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
