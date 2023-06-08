@@ -2468,7 +2468,7 @@ where
     where
         Self: Sized,
     {
-        T::go::<M>(&*self, inp)
+        T::go::<M>(self, inp)
     }
 
     go_extra!(O);
@@ -2484,7 +2484,7 @@ where
     where
         Self: Sized,
     {
-        T::go::<M>(&*self, inp)
+        T::go::<M>(self, inp)
     }
 
     go_extra!(O);
@@ -2500,7 +2500,7 @@ where
     where
         Self: Sized,
     {
-        T::go::<M>(&*self, inp)
+        T::go::<M>(self, inp)
     }
 
     go_extra!(O);
