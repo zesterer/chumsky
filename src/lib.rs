@@ -2458,7 +2458,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for Box<T>
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::boxed::Box<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2474,7 +2474,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::std::rc::Rc<T>
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::rc::Rc<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2490,7 +2490,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::std::sync::Arc<T>
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::sync::Arc<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
