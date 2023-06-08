@@ -12,7 +12,7 @@
 
 * ## nightly
   
-  Enable nightly-only features like better compiler diagnostics and a [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) impl for [`!`](https://doc.rust-lang.org/std/primitive.never.html)
+  Enable nightly-only features like better compiler diagnostics and a [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html) impl for [`!`](https://doc.rust-lang.org/std/primitive.never.html)
 
 * ## memoization
   

@@ -4,7 +4,7 @@
 details may differ!*
 
 Before getting our hands dirty with Chumsky, we are going to take a quick look at
-what a parser for the [Brainfuck]() language looks like. 
+what a parser for the [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) language looks like. 
 
 ## The Language
 <hr>
@@ -61,20 +61,20 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>> {
 
 Let's start off with the smallest bits that make up the parser: the `just(X).to(Y)`
 parsers. The `just` primitive is a parser that only accepts the argument passed,
-and returns it when successfully parsed. The [`to`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.to)
+and returns it when successfully parsed. The [`to`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.to)
 method discards the output of the parser, and instead returns the value that
 was passed to it. In the case of `just('<').to(Instr::Left)`, the value `'<'`
-that is returned by [`just`](https://docs.rs/chumsky/latest/chumsky/primitive/fn.just.html)
+that is returned by [`just`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/fn.just.html)
 on a successful parse is discarded, and a `Instr::Left` is returned instead.
 
-Let's skip over the loop parsing for now, and take a quick look at [`choice`](https://docs.rs/chumsky/latest/chumsky/primitive/fn.choice.html).
+Let's skip over the loop parsing for now, and take a quick look at [`choice`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/fn.choice.html).
 This primitive receives a tuple of parsers, and returns the value returned by
 the first successful parser.
 
 Now we can look at parsing the loop. Loops can be thought of as a `[`
 followed by a series of `Instr` which is followed by a `]`. Better yet, a loop
 is a series of `Instr` that is surrounded by `[` and `]`. This "surrounded by"
-can be solved using the [`delimited_by`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.delimited_by)
+can be solved using the [`delimited_by`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.delimited_by)
 method, as seen on this line:
 
 ```rust
@@ -83,15 +83,15 @@ bf.delimited_by(just('['), just(']')).map(Instr::Loop),
 
 The nature of loops is recursive though, as Brainfuck allows for arbitrarily
 nested loops. So, we will also need a way to define a recursive parser. Chumsky
-has two ways to go about this, the simplest being the [`recursive`](https://docs.rs/chumsky/latest/chumsky/primitive/fn.recursive.html)
-primitive. The parameter to [`recursive`](https://docs.rs/chumsky/latest/chumsky/primitive/fn.recursive.html)
+has two ways to go about this, the simplest being the [`recursive`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/recursive/fn.recursive.html)
+primitive. The parameter to [`recursive`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/recursive/fn.recursive.html)
 is a closure, which receives the recursive parser itself as a parameter. In this
-case `bf` represents the [`choice`](https://docs.rs/chumsky/latest/chumsky/primitive/fn.choice.html)
+case `bf` represents the [`choice`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/fn.choice.html)
 between the `just(X).to(Y)` parsers, and the recursive loop parser.
 
-The final bits of the parser are the [`repeated`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.repeated),
+The final bits of the parser are the [`repeated`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.repeated),
 which just repeats the recursive parser until it can no longer parse an
-instruction successfully and [`collect`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.collect)
+instruction successfully and [`collect`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.IterParser.html#method.collect)
 which similar to [`Iterator::collect`](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.collect),
 collects all of the intermediate `Instr` into a `Vec<Instr>`.
 

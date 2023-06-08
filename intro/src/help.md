@@ -1,7 +1,7 @@
 # Getting Help
 
-If you feel that you are needing to implement [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html)
-or [`Strategy`](https://docs.rs/chumsky/latest/chumsky/recovery/trait.Strategy.html) by hand
+If you feel that you are needing to implement [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html)
+or [`Strategy`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/recovery/trait.Strategy.html) by hand
 then Chumsky is missing some batteries, and an issue should be raised on [GitHub](https://github.com/zesterer/chumsky/issues/new).
 
 Otherwise, feel free to drop an issue on [GitHub](https://github.com/zesterer/chumsky/issues/new) or reach out for help at the following places:

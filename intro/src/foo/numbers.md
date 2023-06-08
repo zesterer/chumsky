@@ -2,7 +2,7 @@
 
 Chumsky is a 'parser combinator' library. It allows the creation of parsers by combining together many smaller
 parsers. The very smallest parsers are called 'primitives' and live in the
-[`primitive`](https://docs.rs/chumsky/latest/chumsky/primitive/index.html) module.
+[`primitive`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/index.html) module.
 
 We're going to want to start by parsing the simplest element of Foo's syntax: numbers.
 

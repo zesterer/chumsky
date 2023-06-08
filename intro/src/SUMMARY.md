@@ -17,11 +17,15 @@
    - [Assignment](./foo/assignment.md)
    - [Functions](./foo/functions.md)
    - [Conclusion](./foo/conclusion.md)
+- [Getting Started](./getting_started.md)
+- [Key Concepts](./key_concepts.md)
 
 # Resources
 
-- [Examples](./examples.md)
 - [Help](./help.md)
+- [Examples](./examples.md)
+- [Meet the Parsers](./parsers.md)
+- [Technical Notes](./technical_notes.md)
 
 # Extras
 - [Features](./features.md)

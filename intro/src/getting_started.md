@@ -17,6 +17,7 @@ Setting yourself up to use chumsky can be done in a few easy steps.
     - [Debugging parsers](#debugging-parsers)
 
 ## Adding chumsky as a dependency
+<hr>
 
 Chumsky can be added as a project dependency in one of two ways.
 
@@ -58,6 +59,7 @@ The prelude contains all of the pieces you need to get started, although more co
 explicitly import less commonly used items.
 
 ## Creating parsers
+<hr>
 
 Because chumsky uses typed combinators to express parsers, parser type signatures can become a little unwieldy. For this
 reason, it's common practice to leave the heavy work of dealing with types to the compiler by making use of Rust's
@@ -85,35 +87,36 @@ fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
    *type erasure*, which would require performing [dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)
    while your code is running.
 
-3. The first type parameter (i.e: ignoring the lifetime parameter) of the [`Parser`] trait is the input type. Inputs
-   must implement the [`Input`] trait. Examples of inputs include strings, slices, arrays, [`Stream`]s, and much more.
+3. The first type parameter (i.e: ignoring the lifetime parameter) of the [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#) trait is the input type. Inputs
+   must implement the [`Input`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/input/trait.Input.html) trait. Examples of inputs include strings, slices, arrays, [`Stream`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/input/struct.Stream.html)s, and much more.
    For now we specify that this parser can only operate upon string slices: but it is also possible to introduce the
    input type as a generic type parameter like `I: Input<'src>` instead if you want your parser to be generic across
    more than just string slices.
 
-4. The second type parameter of the [`Parser`] trait is the output type. This is the type of the value that your parser
-   will eventually give you, assuming that parsing was successful. For now, we just use an output type of [`()`], i.e:
+4. The second type parameter of the [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#) trait is the output type. This is the type of the value that your parser
+   will eventually give you, assuming that parsing was successful. For now, we just use an output type of [`()`](https://doc.rust-lang.org/std/primitive.unit.html), i.e:
    nothing.
 
-5. Because this is just an example parser, the implementation is just a single parser primitive, [`end`]. This is a
+5. Because this is just an example parser, the implementation is just a single parser primitive, [`end`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/fn.end.html). This is a
    primitive that recognises only the end of the input and generates an error if it does not find it. This means that
    our parser effectively just checks that we pass it an empty string: anything else will generate an error.
 
 Note that this function only *creates* the parser: it does not, by itself, perform any parsing.
 
 ## Using parsers
+<hr>
 
 It's all very well creating parsers but in order to write useful programs, we need to invoke them. Chumsky provides
 several functions for this, but the main two are:
 
-- [`Parser::parse`]: parses an input, generating an output value and/or any errors that were encountered along the way
+- [`Parser::parse`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.parse): parses an input, generating an output value and/or any errors that were encountered along the way
 
-- [`Parser::check`]: checks that an input is valid, generating any errors that were encountered along the way
+- [`Parser::check`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.check): checks that an input is valid, generating any errors that were encountered along the way
 
-Both functions give us back a [`ParseResult`]. You can think of this sort of like Rust's regular [`Result`] type, except
+Both functions give us back a [`ParseResult`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/struct.ParseResult.html). You can think of this sort of like Rust's regular [`Result`](https://doc.rust-lang.org/nightly/core/result/enum.Result.html) type, except
 it allows both outputs and errors to be generated at the same time (although we won't yet use this functionality). If
-you just want parsing to be an all-or-nothing affair, you can use [`ParseResult::into_result`] to convert this into a
-regular [`Result`].
+you just want parsing to be an all-or-nothing affair, you can use [`ParseResult::into_result`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/struct.ParseResult.html) to convert this into a
+regular [`Result`](https://doc.rust-lang.org/nightly/core/result/enum.Result.html).
 
 Let's write some tests for the parser we wrote in the last section.
 
@@ -131,7 +134,7 @@ fn test_parser() {
 ```
 
 Hopefully, this code is fairly self-explanatory. We call `parse()` (the function we wrote in the previous section) to
-create an instance of our parsers, and then we call [`Parser::parse`] on it with the desired input to actually do some
+create an instance of our parsers, and then we call [`Parser::parse`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.parse) on it with the desired input to actually do some
 parsing. The return value is the result of the parse.
 
 From here, the world is your lobster: you can move on to the tutorial sections of this guide or you can jump write into
@@ -139,6 +142,7 @@ writing parsers. The main repository has [plenty of examples](https://github.com
 to use as a reference and the crate has documentation that will help guide you, with many examples.
 
 ## Advice
+<hr>
 
 Chumsky is a powerful crate with a lot of bells and whistles. It makes sense that there also a lot of ways things can go
 wrong too.
@@ -160,23 +164,23 @@ error you're struggling to understand, you should:
    out to the terminal. Even so, parser types can still be rather large. You can reduce this problem by commenting out
    unnecessary parts of your parser, or using `.boxed()` on parsers above the error to simplify their types.
 
-3. Complaints about types 'not implementing [`Parser`]' are more often than not a failure to fulfil the obligations that
-   come with implementing the trait. For example, [`recursive()`] requires that the inner parser implements `Clone`: a
+3. Complaints about types 'not implementing [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#)' are more often than not a failure to fulfil the obligations that
+   come with implementing the trait. For example, [`recursive()`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/recursive/fn.recursive.html) requires that the inner parser implements `Clone`: a
    parser that doesn't (because, say, you moved a non-cloneable type into the closure) can't be used with
-   [`recursive()`] and so Rust will translate this, in its parlance, to the type not implementing [`Parser`].
+   [`recursive()`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/recursive/fn.recursive.html) and so Rust will translate this, in its parlance, to the type not implementing [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#).
 
 ### Compilation times
 
 Chumsky's heavy use of Rust's type system can result in parsers taking some time to compile. In particular, a common
-cause of long compilation times are long chains of [`Parser::or`], which sadly tend to produce exponential behaviour in
+cause of long compilation times are long chains of [`Parser::or`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.or), which sadly tend to produce exponential behaviour in
 Rust's trait solver.
 
 **Don't fear! There are solutions.**
 
-1. Replace long (more than a handful of cases) [`Parser::or`] chains with [`choice`], which has identical behaviour but
+1. Replace long (more than a handful of cases) [`Parser::or`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.or) chains with [`choice`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/fn.choice.html), which has identical behaviour but
    gives Rust's trait solver a much easier time.
 
-2. Use [`Parser::boxed`] at the end of longer parser chains to perform type erasure, thereby reducing the amount of work
+2. Use [`Parser::boxed`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.boxed) at the end of longer parser chains to perform type erasure, thereby reducing the amount of work
    Rust needs to do to understand your parser. If you've been using Rust for a while, your first intention might be to
    feel nauseous as such a suggestion: "*allocation?* In *my* high-performance code? *No thanks*". However, remember
    that this allocation only occurs on parser *creation*, not during the parsing process. A few strategically placed

@@ -34,7 +34,7 @@ This tutorial is here to show you how to use Chumsky: it's not a general-purpose
 ## Documentation
 <hr>
 
-As we go, we'll be encountering many functions and concepts from Chumsky. I strongly recommend you keep [Chumsky's documentation](https://docs.rs/chumsky/) open in another browser tab and use it to cross-reference your understanding or gain more insight into specific things that you'd like more clarification on. In particular, most of the functions we'll be using come from the [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) trait. Chumsky's docs include extensive doc examples for almost every function, so be sure to make use of them!
+As we go, we'll be encountering many functions and concepts from Chumsky. I strongly recommend you keep [Chumsky's documentation](https://docs.rs/chumsky/) open in another browser tab and use it to cross-reference your understanding or gain more insight into specific things that you'd like more clarification on. In particular, most of the functions we'll be using come from the [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html) trait. Chumsky's docs include extensive doc examples for almost every function, so be sure to make use of them!
 
 Chumsky also has [several longer examples](https://github.com/zesterer/chumsky/tree/master/examples) in the main repository: looking at these may help improve your understanding if you get stuck.
 
@@ -52,7 +52,7 @@ Another consequence of creating parsers in a declarative style is that *defining
 ## Similarities between `Parser` and `Iterator`
 <hr>
 
-The most important API in Chumsky is the [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) trait, implemented by all parsers. Because parsers don't do anything by themselves, writing Chumsky parsers often feels very similar to writing iterators in Rust using the [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait. If you've enjoyed writing iterators in Rust before, you'll hopefully find the same satisfaction writing parsers with Chumsky. They even [share](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.map) [several](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.flatten) [functions](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html#method.collect) with each other!
+The most important API in Chumsky is the [`Parser`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html) trait, implemented by all parsers. Because parsers don't do anything by themselves, writing Chumsky parsers often feels very similar to writing iterators in Rust using the [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) trait. If you've enjoyed writing iterators in Rust before, you'll hopefully find the same satisfaction writing parsers with Chumsky. They even [share](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.Parser.html#method.map) [functions](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/trait.IterParser.html#method.collect) with each other!
 
 ## Setting up
 <hr>
@@ -150,7 +150,7 @@ println!("{:?}", parser().parse(src));
 
 Chumsky is a 'parser combinator' library. It allows the creation of parsers by combining together many smaller
 parsers. The very smallest parsers are called 'primitives' and live in the
-[`primitive`](https://docs.rs/chumsky/latest/chumsky/primitive/index.html) module.
+[`primitive`](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/primitive/index.html) module.
 
 We're going to want to start by parsing the simplest element of Foo's syntax: numbers.
 
