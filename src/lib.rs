@@ -49,6 +49,8 @@ macro_rules! go_cfg_extra {
 mod blanket;
 pub mod combinator;
 pub mod container;
+#[cfg(feature = "either")]
+pub mod either;
 pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
