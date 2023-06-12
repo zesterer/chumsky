@@ -2460,6 +2460,54 @@ where
     go_extra!(O);
 }
 
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::boxed::Box<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::rc::Rc<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::sync::Arc<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
 /// Create a parser that selects one or more input patterns and map them to an output value.
 ///
 /// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
@@ -2971,5 +3019,101 @@ mod tests {
     fn todo_err() {
         let expr = todo::<&str, String, extra::Default>();
         expr.then_ignore(end()).parse("a+b+c");
+    }
+
+    #[test]
+    fn arc_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Arc::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+    }
+
+    #[test]
+    fn box_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Box::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+    }
+
+    #[test]
+    fn rc_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Rc::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
     }
 }
