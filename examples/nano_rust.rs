@@ -67,7 +67,7 @@ fn lexer<'src>(
     let ctrl = one_of("()[]{};,").map(Token::Ctrl);
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: &str| match ident {
+    let ident = text::ascii::ident().map(|ident: &str| match ident {
         "fn" => Token::Fn,
         "let" => Token::Let,
         "print" => Token::Print,

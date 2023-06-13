@@ -506,7 +506,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .map_with_span(Spanned) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
     ///     .padded();
     ///
@@ -595,7 +595,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Copy, Clone)]
     /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
     ///     .map_with_state(|ident, span, state| Ident(state.get_or_intern(ident)))
     ///     .padded()
     ///     .repeated()
@@ -1148,7 +1148,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
@@ -1354,7 +1354,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let shopping = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
@@ -1572,7 +1572,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>().padded();
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
@@ -1777,9 +1777,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///         });
     ///
     /// // Parser that uses the validation version
-    /// let multi_step_val = large_int_val.then(text::ident().padded());
+    /// let multi_step_val = large_int_val.then(text::ascii::ident().padded());
     /// // Parser that uses the try_map version
-    /// let multi_step_tm = large_int_tm.then(text::ident().padded());
+    /// let multi_step_tm = large_int_tm.then(text::ascii::ident().padded());
     ///
     /// // On success, both parsers are equivalent
     /// assert_eq!(
@@ -2062,7 +2062,7 @@ where
     ///     .unwrapped();
     ///
     /// // By default, accepts any number of items
-    /// let item = text::ident()
+    /// let item = text::ascii::ident()
     ///     .padded()
     ///     .repeated();
     ///
@@ -2229,7 +2229,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let word = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let word = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
     ///     .enumerate()

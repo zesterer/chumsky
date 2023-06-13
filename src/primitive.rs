@@ -765,7 +765,7 @@ pub struct Choice<T> {
 ///     text::keyword("while").to(Token::While),
 ///     text::keyword("fn").to(Token::Fn),
 ///     text::int(10).from_str().unwrapped().map(Token::Int),
-///     text::ident().map(Token::Ident),
+///     text::ascii::ident().map(Token::Ident),
 /// ))
 ///     .padded()
 ///     .repeated()

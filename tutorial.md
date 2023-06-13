@@ -539,7 +539,7 @@ expression definition. However, we also want to be able to chain `let`s together
 definition. We call it `decl` ('declaration') because we're eventually going to be adding `fn` syntax too.
 
 ```rust
-let ident = text::ident()
+let ident = text::ascii::ident()
     .padded();
 
 let expr = recursive(|expr| {

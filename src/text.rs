@@ -548,7 +548,11 @@ pub mod unicode {
         {
             let mut cs = C::str_to_chars(keyword.as_ref());
             if let Some(c) = cs.next() {
-                assert!(c.is_ident_start(), "The first character of a keyword must be a valid unicode XID_START, not {:?}", c);
+                assert!(
+                    c.is_ident_start(),
+                    "The first character of a keyword must be a valid unicode XID_START, not {:?}",
+                    c
+                );
             } else {
                 panic!("Keyword must have at least one character");
             }
