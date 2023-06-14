@@ -28,7 +28,7 @@ enum Expr<'a> {
 }
 
 fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
-    let ident = text::ident().padded();
+    let ident = text::ascii::ident().padded();
 
     let expr = recursive(|expr| {
         let int = text::int(10)
@@ -80,7 +80,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     });
 
     let decl = recursive(|decl| {
-        let r#let = text::keyword("let")
+        let r#let = text::ascii::keyword("let")
             .ignore_then(ident)
             .then_ignore(just('='))
             .then(expr.clone())
@@ -92,7 +92,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
                 then: Box::new(then),
             });
 
-        let r#fn = text::keyword("fn")
+        let r#fn = text::ascii::keyword("fn")
             .ignore_then(ident)
             .then(ident.repeated().collect::<Vec<_>>())
             .then_ignore(just('='))

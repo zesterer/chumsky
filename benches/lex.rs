@@ -174,7 +174,7 @@ mod chumsky_zero_copy {
             .delimited_by(just(b'"'), just(b'"'))
             .boxed();
 
-        let ident = text::ident().map_slice(Token::Ident);
+        let ident = text::ascii::ident().map_slice(Token::Ident);
 
         choice((
             just(b"null").to(Token::Null),

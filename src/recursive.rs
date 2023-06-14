@@ -238,7 +238,7 @@ where
 ///     .collect::<Vec<_>>()
 ///     .delimited_by(just('['), just(']'))
 ///     .map(Tree::Branch)
-///     .or(text::ident().map(Tree::Leaf))
+///     .or(text::ascii::ident().map(Tree::Leaf))
 ///     .padded());
 ///
 /// assert_eq!(tree.parse("hello").into_result(), Ok(Tree::Leaf("hello")));

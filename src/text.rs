@@ -46,6 +46,12 @@ pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     /// Returns true if the character is canonically considered to be a numeric digit.
     fn is_digit(&self, radix: u32) -> bool;
 
+    /// Returns true if the character is canonically considered to be valid for starting an identifier.
+    fn is_ident_start(&self) -> bool;
+
+    /// Returns true if the character is canonically considered to be a valid within an identifier.
+    fn is_ident_continue(&self) -> bool;
+
     /// Returns this character as a [`char`].
     fn to_char(&self) -> char;
 
@@ -99,6 +105,14 @@ impl Char for char {
     fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
         s.chars()
     }
+
+    fn is_ident_start(&self) -> bool {
+        unicode_ident::is_xid_start(*self)
+    }
+
+    fn is_ident_continue(&self) -> bool {
+        unicode_ident::is_xid_continue(*self)
+    }
 }
 
 impl Sealed for u8 {}
@@ -143,6 +157,14 @@ impl Char for u8 {
     type StrCharIter<'a> = core::iter::Copied<core::slice::Iter<'a, u8>>;
     fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
         s.iter().copied()
+    }
+
+    fn is_ident_start(&self) -> bool {
+        self.to_char().is_ident_start()
+    }
+
+    fn is_ident_continue(&self) -> bool {
+        self.to_char().is_ident_continue()
     }
 }
 
@@ -371,125 +393,240 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
         .slice()
 }
 
-/// A parser that accepts a C-style identifier.
-///
-/// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-/// [`u8`]).
-///
-/// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
-/// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-#[must_use]
-pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
-    any()
-        // Use try_map over filter to get a better error on failure
-        .try_map(|c: C, span| {
-            if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
-                Ok(c)
+/// Parsers and utilities for working with ASCII inputs.
+pub mod ascii {
+    use super::*;
+
+    /// A parser that accepts a C-style identifier.
+    ///
+    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
+    /// [`u8`]).
+    ///
+    /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
+    /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
+    #[must_use]
+    pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+        any()
+            // Use try_map over filter to get a better error on failure
+            .try_map(|c: C, span| {
+                if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
+                    Ok(c)
+                } else {
+                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                }
+            })
+            .then(
+                any()
+                    // This error never appears due to `repeated` so can use `filter`
+                    .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                    .repeated(),
+            )
+            .slice()
+    }
+
+    /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
+    ///
+    /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+    /// when `I::Slice` is [`&[u8]`]).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    ///
+    /// // Exactly 'def' was found
+    /// assert_eq!(def.parse("def").into_result(), Ok("def"));
+    /// // Exactly 'def' was found, with non-identifier trailing characters
+    /// // This works because we made the parser lazy: it parses 'def' and ignores the rest
+    /// assert_eq!(def.clone().lazy().parse("def(foo, bar)").into_result(), Ok("def"));
+    /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
+    /// assert!(def.lazy().parse("define").has_errors());
+    /// ```
+    #[track_caller]
+    pub fn keyword<
+        'a,
+        I: ValueInput<'a> + StrInput<'a, C>,
+        C: Char + 'a,
+        Str: AsRef<C::Str> + 'a + Clone,
+        E: ParserExtra<'a, I> + 'a,
+    >(
+        keyword: Str,
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
+    where
+        C::Str: PartialEq,
+    {
+        #[cfg(debug_assertions)]
+        {
+            let mut cs = C::str_to_chars(keyword.as_ref());
+            if let Some(c) = cs.next() {
+                assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {:?}", c);
             } else {
-                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                panic!("Keyword must have at least one character");
             }
-        })
-        .then(
-            any()
-                // This error never appears due to `repeated` so can use `filter`
-                .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
-                .repeated(),
-        )
-        .slice()
+            for c in cs {
+                assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {:?}", c);
+            }
+        }
+        ident()
+            .try_map(move |s: &C::Str, span| {
+                if s == keyword.as_ref() {
+                    Ok(())
+                } else {
+                    Err(Error::expected_found(None, None, span))
+                }
+            })
+            .slice()
+    }
+}
+
+/// Parsers and utilities for working with unicode inputs.
+pub mod unicode {
+    use super::*;
+
+    /// A parser that accepts an identifier.
+    ///
+    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
+    /// [`u8`]).
+    ///
+    /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
+    #[must_use]
+    pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+        any()
+            // Use try_map over filter to get a better error on failure
+            .try_map(|c: C, span| {
+                if c.is_ident_start() {
+                    Ok(c)
+                } else {
+                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                }
+            })
+            .then(
+                any()
+                    // This error never appears due to `repeated` so can use `filter`
+                    .filter(|c: &C| c.is_ident_continue())
+                    .repeated(),
+            )
+            .slice()
+    }
+
+    /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
+    ///
+    /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+    /// when `I::Slice` is [`&[u8]`]).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    ///
+    /// // Exactly 'def' was found
+    /// assert_eq!(def.parse("def").into_result(), Ok("def"));
+    /// // Exactly 'def' was found, with non-identifier trailing characters
+    /// // This works because we made the parser lazy: it parses 'def' and ignores the rest
+    /// assert_eq!(def.clone().lazy().parse("def(foo, bar)").into_result(), Ok("def"));
+    /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
+    /// assert!(def.lazy().parse("define").has_errors());
+    /// ```
+    #[track_caller]
+    pub fn keyword<
+        'a,
+        I: ValueInput<'a> + StrInput<'a, C>,
+        C: Char + 'a,
+        Str: AsRef<C::Str> + 'a + Clone,
+        E: ParserExtra<'a, I> + 'a,
+    >(
+        keyword: Str,
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
+    where
+        C::Str: PartialEq,
+    {
+        #[cfg(debug_assertions)]
+        {
+            let mut cs = C::str_to_chars(keyword.as_ref());
+            if let Some(c) = cs.next() {
+                assert!(
+                    c.is_ident_start(),
+                    "The first character of a keyword must be a valid unicode XID_START, not {:?}",
+                    c
+                );
+            } else {
+                panic!("Keyword must have at least one character");
+            }
+            for c in cs {
+                assert!(c.is_ident_continue(), "Trailing characters of a keyword must be valid as unicode XID_CONTINUE, not {:?}", c);
+            }
+        }
+        ident()
+            .try_map(move |s: &C::Str, span| {
+                if s == keyword.as_ref() {
+                    Ok(())
+                } else {
+                    Err(Error::expected_found(None, None, span))
+                }
+            })
+            .slice()
+    }
 }
 
 // TODO: Better native form of semantic indentation that uses the context system?
-
-/// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
-///
-/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
-/// when `I::Slice` is [`&[u8]`]).
-///
-/// # Examples
-///
-/// ```
-/// # use chumsky::prelude::*;
-/// let def = text::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
-///
-/// // Exactly 'def' was found
-/// assert_eq!(def.parse("def").into_result(), Ok("def"));
-/// // Exactly 'def' was found, with non-identifier trailing characters
-/// // This works because we made the parser lazy: it parses 'def' and ignores the rest
-/// assert_eq!(def.clone().lazy().parse("def(foo, bar)").into_result(), Ok("def"));
-/// // 'def' was found, but only as part of a larger identifier, so this fails to parse
-/// assert!(def.lazy().parse("define").has_errors());
-/// ```
-#[track_caller]
-pub fn keyword<
-    'a,
-    I: ValueInput<'a> + StrInput<'a, C>,
-    C: Char + 'a,
-    Str: AsRef<C::Str> + 'a + Clone,
-    E: ParserExtra<'a, I> + 'a,
->(
-    keyword: Str,
-) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
-where
-    C::Str: PartialEq,
-{
-    #[cfg(debug_assertions)]
-    {
-        let mut cs = C::str_to_chars(keyword.as_ref());
-        if let Some(c) = cs.next() {
-            assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {:?}", c);
-        } else {
-            panic!("Keyword must have at least one character");
-        }
-        for c in cs {
-            assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {:?}", c);
-        }
-    }
-    ident()
-        .try_map(move |s: &C::Str, span| {
-            if s == keyword.as_ref() {
-                Ok(())
-            } else {
-                Err(Error::expected_found(None, None, span))
-            }
-        })
-        .slice()
-}
 
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;
 
-    fn make_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
+    fn make_ascii_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
         s: &'a C::Str,
     ) -> impl Parser<'a, I, ()>
     where
         C::Str: PartialEq,
     {
-        text::keyword(s).ignored()
+        text::ascii::keyword(s).ignored()
+    }
+
+    fn make_unicode_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
+        s: &'a C::Str,
+    ) -> impl Parser<'a, I, ()>
+    where
+        C::Str: PartialEq,
+    {
+        text::unicode::keyword(s).ignored()
     }
 
     #[test]
     fn keyword_good() {
-        make_kw_parser::<char, &str>("hello");
-        make_kw_parser::<char, &str>("_42");
+        make_ascii_kw_parser::<char, &str>("hello");
+        make_ascii_kw_parser::<char, &str>("_42");
+
+        make_unicode_kw_parser::<char, &str>("שלום");
+        make_unicode_kw_parser::<char, &str>("привет");
+        make_unicode_kw_parser::<char, &str>("你好");
     }
 
     #[test]
     #[should_panic]
     fn keyword_numeric() {
-        make_kw_parser::<char, &str>("42");
+        make_ascii_kw_parser::<char, &str>("42");
     }
 
     #[test]
     #[should_panic]
     fn keyword_empty() {
-        make_kw_parser::<char, &str>("");
+        make_ascii_kw_parser::<char, &str>("");
     }
 
     #[test]
     #[should_panic]
     fn keyword_not_alphanum() {
-        make_kw_parser::<char, &str>("hi\n");
+        make_ascii_kw_parser::<char, &str>("hi\n");
+    }
+
+    #[test]
+    #[should_panic]
+    fn keyword_unicode_in_ascii() {
+        make_ascii_kw_parser::<char, &str>("שלום");
     }
 }
