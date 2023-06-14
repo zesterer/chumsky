@@ -1592,7 +1592,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
+    /// let r#enum = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ascii::ident()
     ///         .padded()

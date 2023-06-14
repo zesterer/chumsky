@@ -760,10 +760,10 @@ pub struct Choice<T> {
 /// }
 ///
 /// let tokens = choice((
-///     text::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
-///     text::keyword("for").to(Token::For),
-///     text::keyword("while").to(Token::While),
-///     text::keyword("fn").to(Token::Fn),
+///     text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
+///     text::ascii::keyword("for").to(Token::For),
+///     text::ascii::keyword("while").to(Token::While),
+///     text::ascii::keyword("fn").to(Token::Fn),
 ///     text::int(10).from_str().unwrapped().map(Token::Int),
 ///     text::ascii::ident().map(Token::Ident),
 /// ))

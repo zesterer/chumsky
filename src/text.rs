@@ -434,7 +434,7 @@ pub mod ascii {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let def = text::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
     ///
     /// // Exactly 'def' was found
     /// assert_eq!(def.parse("def").into_result(), Ok("def"));
@@ -521,7 +521,7 @@ pub mod unicode {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let def = text::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
     ///
     /// // Exactly 'def' was found
     /// assert_eq!(def.parse("def").into_result(), Ok("def"));

@@ -576,7 +576,7 @@ let expr = recursive(|expr| {
 });
 
 let decl = recursive(|decl| {
-    let r#let = text::keyword("let")
+    let r#let = text::ascii::keyword("let")
         .ignore_then(ident)
         .then_ignore(just('='))
         .then(expr.clone())
@@ -685,7 +685,7 @@ looks very much like the existing definition of `r#let`:
 
 ```rust
 let decl = recursive(|decl| {
-    let r#let = text::keyword("let")
+    let r#let = text::ascii::keyword("let")
         .ignore_then(ident)
         .then_ignore(just('='))
         .then(expr.clone())
@@ -697,7 +697,7 @@ let decl = recursive(|decl| {
             then: Box::new(then),
         });
 
-    let r#fn = text::keyword("fn")
+    let r#fn = text::ascii::keyword("fn")
         .ignore_then(ident)
         .then(ident.repeated())
         .then_ignore(just('='))
