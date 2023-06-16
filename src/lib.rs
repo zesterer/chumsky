@@ -958,7 +958,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Parse one thing and then another thing, creating the second parser from the result of
-    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
+    /// the first. If you don't need the context in the output, use [`Parser::then_with_ctx`].
     ///
     /// The output of this parser is `U`, the result of the second parser
     ///
@@ -975,11 +975,37 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// // A parser that parses a single letter and then its successor
     /// let successive_letters = one_of::<_, _, extra::Err<Simple<u8>>>(b'a'..=b'z')
-    ///     .then_with_ctx(successor);
+    ///     .ignore_with_ctx(successor);
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
+    fn ignore_with_ctx<U, P>(
+        self,
+        then: P,
+    ) -> IgnoreWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, O>>
+    where
+        Self: Sized,
+        O: 'a,
+        P: Parser<'a, I, U, extra::Full<E::Error, E::State, O>>,
+    {
+        IgnoreWithCtx {
+            parser: self,
+            then,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Parse one thing and then another thing, creating the second parser from the result of
+    /// the first. If you don't need the context in the output, prefer [`Parser::ignore_with_ctx`].
+    /// 
+    /// The output of this parser is `(E::Context, O)`,
+    /// a combination of the context and the output of the parser.
+    ///
+    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
+    /// recovery then the second produces an error, the primary error will point to the location in
+    /// the second parser which failed, ignoring that the first parser may be the root cause. There
+    /// may be other pathological errors cases as well.
     fn then_with_ctx<U, P>(
         self,
         then: P,
@@ -2049,8 +2075,8 @@ where
     E: ParserExtra<'a, I>,
 {
     /// A combinator that allows configuration of the parser from the current context. Context
-    /// is most often derived from [`Parser::then_with_ctx`] or [`map_ctx`], and is how chumsky
-    /// supports parsing things such as indentation-sensitive grammars.
+    /// is most often derived from [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] or [`map_ctx`],
+    /// and is how chumsky supports parsing things such as indentation-sensitive grammars.
     ///
     /// # Examples
     ///
@@ -2068,7 +2094,7 @@ where
     ///
     /// // With configuration, we can declare an exact number of items based on a prefix length
     /// let len_prefixed_arr = int
-    ///     .then_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
+    ///     .ignore_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
     ///
     /// assert_eq!(
     ///     len_prefixed_arr.parse("2 foo bar").into_result(),

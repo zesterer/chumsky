@@ -116,7 +116,7 @@ mod chumsky_zero_copy {
                         Err(Error::default())
                     }
                 })
-                .then_with_ctx(any().repeated().configure(|cfg, ctx| {
+                .ignore_with_ctx(any().repeated().configure(|cfg, ctx| {
                     let info = *ctx & 0b1_1111;
                     let num = if info < 24 {
                         0
@@ -130,21 +130,21 @@ mod chumsky_zero_copy {
             let uint = read_int.map(CborZero::Int);
             let nint = read_int.map(|i| CborZero::Int(-1 - i));
             // TODO: Handle indefinite lengths
-            let bstr = read_int.then_with_ctx(
+            let bstr = read_int.ignore_with_ctx(
                 any()
                     .repeated()
                     .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
                     .map_slice(CborZero::Bytes),
             );
 
-            let str = read_int.then_with_ctx(
+            let str = read_int.ignore_with_ctx(
                 any()
                     .repeated()
                     .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
                     .map_slice(|slice| CborZero::String(std::str::from_utf8(slice).unwrap())),
             );
 
-            let array = read_int.then_with_ctx(
+            let array = read_int.ignore_with_ctx(
                 data.clone()
                     .with_ctx(())
                     .repeated()
@@ -153,7 +153,7 @@ mod chumsky_zero_copy {
                     .map(CborZero::Array),
             );
 
-            let map = read_int.then_with_ctx(
+            let map = read_int.ignore_with_ctx(
                 data.clone()
                     .then(data.clone())
                     .with_ctx(())
