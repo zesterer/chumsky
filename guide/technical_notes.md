@@ -3,19 +3,19 @@
 This section contains assorted details about chumsky. Most of this information is irrelevant to beginners, but we
 consider it important enough to include for advanced users.
 
+- [Technical Notes](#technical-notes)
 - [Classification](#classification)
-
 - [Purity and optimisation](#purity-and-optimisation)
 
 # Classification
 
 Chumsky is a PEG parser by nature. That is to say, it is possible to parse all known context-free grammars with chumsky.
-It has not yet been formally proven that PEG parsers can parse *all* context-free grammars but, for the sake of using
+It has not yet been formally proven that PEG parsers can parse _all_ context-free grammars but, for the sake of using
 the library, it is reasonable to assume as much.
 
 Chumsky also has limited support for context-sensitive parsing. Chumsky's context-sensitive parsing allows previously
-parsed elements of the grammar to inform the parsing of future elements in a limited way. See [`Parser::then_with_ctx`]
-for more information.
+parsed elements of the grammar to inform the parsing of future elements in a limited way.
+See [`Parser::ignore_with_ctx`] and [`Parser::then_with_ctx`]for more information.
 
 The term 'PEG++' might be an appropriate description of chumsky, with 'CFG + left context' being a description of the
 grammars that it can parse.

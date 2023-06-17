@@ -633,7 +633,8 @@ where
 /// More technically, if all combinators form a 'tree' of parsers, where each node executes
 /// its children in turn, normal maps apply up the tree. This means a parent mapper gets the
 /// result of its children, applies the map, then passes the new result to its parent. This map,
-/// however, applies down the tree. Context is provided from the parent, such as [`Parser::then_with_ctx`],
+/// however, applies down the tree. Context is provided from the parent,
+/// such as [`Parser::ignore_with_ctx`] and [`Parser::then_with_ctx`],
 /// and gets altered before being provided to the children.
 ///
 /// ```
@@ -642,7 +643,7 @@ where
 /// let upper = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
 ///
 /// let inc = one_of::<_, _, extra::Default>(b'a'..=b'z')
-///     .then_with_ctx(map_ctx(|c: &u8| c.to_ascii_uppercase(), upper))
+///     .ignore_with_ctx(map_ctx(|c: &u8| c.to_ascii_uppercase(), upper))
 ///     .slice()
 ///     .repeated()
 ///     .at_least(1)

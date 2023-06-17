@@ -981,6 +981,78 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::ignore_with_ctx`].
+pub struct IgnoreWithCtx<A, B, OA, I, E> {
+    pub(crate) parser: A,
+    pub(crate) then: B,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(B, OA, E, I)>,
+}
+
+impl<A: Copy, B: Copy, OA, I, E> Copy for IgnoreWithCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            then: self.then.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
+    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
+        let p1 = self.parser.go::<Emit>(inp)?;
+        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
+    }
+
+    go_extra!(OB);
+}
+
+impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
+    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
+{
+    type IterState<M: Mode> = (OA, B::IterState<M>)
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        let out = self.parser.go::<Emit>(inp)?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
+        Ok((out, then))
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, OB> {
+        let (ctx, inner_state) = state;
+
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
+    }
+}
+
 /// See [`Parser::then_with_ctx`].
 pub struct ThenWithCtx<A, B, OA, I, E> {
     pub(crate) parser: A,
@@ -1000,7 +1072,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, (OA, OB), E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
@@ -1010,12 +1082,13 @@ where
     OA: 'a,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (OA, OB)> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
+        let p2 = inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))?;
+        Ok(M::map(p2, |p2| (p1, p2)))
     }
 
-    go_extra!(OB);
+    go_extra!((OA, OB));
 }
 
 impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
