@@ -998,7 +998,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 
     /// Parse one thing and then another thing, creating the second parser from the result of
     /// the first. If you don't need the context in the output, prefer [`Parser::ignore_with_ctx`].
-    /// 
+    ///
     /// The output of this parser is `(E::Context, O)`,
     /// a combination of the context and the output of the parser.
     ///
