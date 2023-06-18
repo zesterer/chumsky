@@ -1,0 +1,6 @@
+[workspace]
+members = ["chumsky"]
+resolver = "2"
+
+[profile.bench]
+debug = true
