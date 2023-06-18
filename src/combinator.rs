@@ -1604,6 +1604,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let row_4 = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
@@ -1636,6 +1637,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let coordinate_3d = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))
@@ -1665,6 +1667,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let r#enum = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
     ///     .padded()
     ///     .ignore_then(text::ascii::ident()
@@ -1695,6 +1698,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let numbers = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .padded()
     ///     .separated_by(just(','))

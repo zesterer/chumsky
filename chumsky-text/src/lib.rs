@@ -11,5 +11,5 @@ pub mod prelude {
     pub use crate::{char::Char, ext::ParserExt, text};
 
     #[cfg(feature = "regex")]
-    pub use crate::regex;
+    pub use crate::regex::regex;
 }

@@ -226,6 +226,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
+/// # use chumsky_text::prelude::*;
 /// #[derive(Debug, PartialEq)]
 /// enum Tree<'a> {
 ///     Leaf(&'a str),

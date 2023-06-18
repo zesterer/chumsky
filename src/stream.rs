@@ -17,6 +17,7 @@ impl<I: Iterator> Stream<I> {
     ///
     /// ```
     /// # use chumsky::{prelude::*, input::Stream};
+    /// # use chumsky_text::prelude::*;
     /// let stream = Stream::from_iter((0..10).map(|i| char::from_digit(i, 10).unwrap()));
     ///
     /// let parser = text::digits::<_, _, extra::Err<Simple<_>>>(10).collect::<String>();

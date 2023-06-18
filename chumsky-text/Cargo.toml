@@ -11,6 +11,3 @@ chumsky-util = { path = "../chumsky-util" }
 # Enables regex combinators
 regex = { version = "1.7", optional = true }
 unicode-ident = "1.0.9"
-
-[features]
-default = ["regex"]

@@ -20,7 +20,7 @@ use hashbrown::HashMap;
 /// on the [`Parser`] trait may require that the input type implement one or more of these more specific traits.
 ///
 /// Some common input types, and which traits they implement are:
-/// - `&str`: [`SliceInput`], [`StrInput`], [`ValueInput`], [`ExactSizeInput`]
+/// - `&str`: [`SliceInput`], [`ValueInput`], [`ExactSizeInput`]
 /// - `&[T]`: [`SliceInput`], [`ValueInput`], [`BorrowInput`], [`ExactSizeInput`]
 /// - `Stream<I>`: [`ValueInput`], [`ExactSizeInput`] if `I: ExactSizeIterator`
 ///

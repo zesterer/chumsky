@@ -53,43 +53,7 @@ where
                 let after = inp.offset();
                 Ok(inp.slice(before..after))
             }
-            None => {
-                Err(Error::expected_found(None, None, inp.span_since(before)))
-            }
+            None => Err(Error::expected_found(None, None, inp.span_since(before))),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn regex_parser() {
-        use crate::prelude::*;
-        use chumsky::prelude::*;
-
-        fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
-            regex("[a-zA-Z_][a-zA-Z0-9_]*")
-                .padded()
-                .repeated()
-                .collect()
-        }
-        assert_eq!(
-            parser().parse("hello world this works").into_result(),
-            Ok(vec!["hello", "world", "this", "works"]),
-        );
-
-        assert_eq!(
-            parser()
-                .parse(b"hello world this works" as &[_])
-                .into_result(),
-            Ok(vec![
-                b"hello" as &[_],
-                b"world" as &[_],
-                b"this" as &[_],
-                b"works" as &[_],
-            ]),
-        );
     }
 }

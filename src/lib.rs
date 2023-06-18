@@ -90,6 +90,7 @@ pub mod prelude {
 
 use crate::input::InputOwn;
 use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
+use chumsky_util::EmptyPhantom;
 use core::{
     borrow::Borrow,
     cell::{Cell, RefCell, UnsafeCell},
@@ -103,7 +104,6 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
-use chumsky_util::EmptyPhantom;
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -474,7 +474,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
+    /// # use chumsky_text::prelude::*;
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
@@ -508,7 +508,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
+    /// # use chumsky_text::prelude::*;
     /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
     /// #[derive(Debug, PartialEq)]
     /// pub enum Expr<'a> {
@@ -560,6 +560,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// use std::ops::Range;
     /// use lasso::{Rodeo, Spur};
     ///
@@ -621,6 +622,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let byte = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .try_map(|s: &str, span| s
     ///         .parse::<u8>()
@@ -667,7 +669,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// This can be used to reduce the cost of parsing by avoiding unnecessary allocations (most collections containing
     /// [ZSTs](https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts)
     /// [do not allocate](https://doc.rust-lang.org/std/vec/struct.Vec.html#guarantees)). For example, it's common to
-    /// want to ignore whitespace in many grammars (see [`text::whitespace`]).
+    /// want to ignore whitespace in many grammars.
     ///
     /// The output type of this parser is `()`.
     ///
@@ -830,6 +832,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let word = any::<_, extra::Err<Simple<char>>>()
     ///     .filter(|c: &char| c.is_alphabetic())
     ///     .repeated()
@@ -1085,6 +1088,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// // A LISP-style S-expression
     /// #[derive(Debug, PartialEq)]
     /// enum SExpr {
@@ -1147,6 +1151,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded_by(just('!'));
     ///
@@ -1353,6 +1358,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let shopping = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .separated_by(just(','))
@@ -1392,6 +1398,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
@@ -1432,6 +1439,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
@@ -1451,6 +1459,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// use slotmap::{new_key_type, SlotMap};
     ///
     /// // Metadata type for node Ids for extra type safety
@@ -1523,6 +1532,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let just_numbers = text::digits::<_, _, extra::Err<Simple<char>>>(10)
     ///     .slice()
     ///     .padded()
@@ -1596,6 +1606,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// #[derive(Debug, PartialEq)]
     /// enum Expr<'a> {
     ///     Error,
@@ -1712,6 +1723,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let large_int = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
@@ -1730,6 +1742,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// # use chumsky::prelude::*;
     /// # use chumsky::util::MaybeRef;
     /// # use chumsky::error::Error;
+    /// # use chumsky_text::prelude::*;
     /// // start with the same large_int validator
     /// let large_int_val = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///         .from_str()
@@ -1825,6 +1838,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
+    /// # use chumsky_text::prelude::*;
     /// let uint64 = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
@@ -2031,7 +2045,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
+    /// # use chumsky_text::prelude::*;
     /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
@@ -2179,7 +2193,7 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    ///
+    /// # use chumsky_text::prelude::*;
     /// // Counts how many chess squares are in the input.
     /// let squares = one_of::<_, _, extra::Err<Simple<char>>>('a'..='z').then(one_of('1'..='8')).padded().repeated().count();
     ///
@@ -2204,6 +2218,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let word = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
@@ -2233,6 +2248,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
@@ -2274,6 +2290,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
+    /// # use chumsky_text::prelude::*;
     /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
@@ -2615,481 +2632,4 @@ macro_rules! select_ref {
             }
         )
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chumsky_text::prelude::*;
-
-    #[test]
-    fn zero_copy() {
-        use self::input::WithContext;
-        use self::prelude::*;
-
-        #[derive(PartialEq, Debug)]
-        enum Token<'a> {
-            Ident(&'a str),
-            String(&'a str),
-        }
-
-        type FileId = u32;
-
-        type Span = (FileId, SimpleSpan<usize>);
-
-        fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
-            let ident = any()
-                .filter(|c: &char| c.is_alphanumeric())
-                .repeated()
-                .at_least(1)
-                .map_slice(Token::Ident);
-
-            let string = just('"')
-                .then(any().filter(|c: &char| *c != '"').repeated())
-                .then(just('"'))
-                .map_slice(Token::String);
-
-            ident
-                .or(string)
-                .map_with_span(|token, span| (span, token))
-                .padded()
-                .repeated()
-                .collect_exactly()
-        }
-
-        assert_eq!(
-            parser()
-                .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
-                .into_result(),
-            Ok([
-                ((42, (0..5).into()), Token::Ident("hello")),
-                ((42, (6..13).into()), Token::String("\"world\"")),
-                ((42, (14..19).into()), Token::Ident("these")),
-                ((42, (20..23).into()), Token::Ident("are")),
-                ((42, (24..30).into()), Token::String("\"test\"")),
-                ((42, (31..37).into()), Token::Ident("tokens")),
-            ]),
-        );
-    }
-
-    #[test]
-    fn zero_copy_repetition() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
-            any()
-                .filter(|c: &char| c.is_ascii_digit())
-                .repeated()
-                .at_least(1)
-                .at_most(3)
-                .map_slice(|b: &str| b.parse::<u64>().unwrap())
-                .padded()
-                .separated_by(just(',').padded())
-                .allow_trailing()
-                .collect()
-                .delimited_by(just('['), just(']'))
-        }
-
-        assert_eq!(
-            parser().parse("[122 , 23,43,    4, ]").into_result(),
-            Ok(vec![122, 23, 43, 4]),
-        );
-        assert_eq!(
-            parser().parse("[0, 3, 6, 900,120]").into_result(),
-            Ok(vec![0, 3, 6, 900, 120]),
-        );
-        assert_eq!(
-            parser().parse("[200,400,50  ,0,0, ]").into_result(),
-            Ok(vec![200, 400, 50, 0, 0]),
-        );
-
-        assert!(parser().parse("[1234,123,12,1]").has_errors());
-        assert!(parser().parse("[,0, 1, 456]").has_errors());
-        assert!(parser().parse("[3, 4, 5, 67 89,]").has_errors());
-    }
-
-    #[test]
-    fn zero_copy_group() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
-            group((
-                any()
-                    .filter(|c: &char| c.is_ascii_alphabetic())
-                    .repeated()
-                    .at_least(1)
-                    .slice()
-                    .padded(),
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .map_slice(|s: &str| s.parse::<u64>().unwrap())
-                    .padded(),
-                any().filter(|c: &char| !c.is_whitespace()).padded(),
-            ))
-        }
-
-        assert_eq!(
-            parser().parse("abc 123 [").into_result(),
-            Ok(("abc", 123, '[')),
-        );
-        assert_eq!(
-            parser().parse("among3d").into_result(),
-            Ok(("among", 3, 'd')),
-        );
-        assert_eq!(
-            parser().parse("cba321,").into_result(),
-            Ok(("cba", 321, ',')),
-        );
-
-        assert!(parser().parse("abc 123  ").has_errors());
-        assert!(parser().parse("123abc ]").has_errors());
-        assert!(parser().parse("and one &").has_errors());
-    }
-
-    #[test]
-    fn zero_copy_group_array() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl Parser<'a, &'a str, [char; 3]> {
-            group([just('a'), just('b'), just('c')])
-        }
-
-        assert_eq!(parser().parse("abc").into_result(), Ok(['a', 'b', 'c']));
-        assert!(parser().parse("abd").has_errors());
-    }
-
-    #[test]
-    fn unicode_str() {
-        let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
-        let mut own = InputOwn::<_, extra::Default>::new(input);
-        let mut inp = own.as_ref_start();
-
-        while let Some(c) = inp.next() {
-            drop(c);
-        }
-    }
-
-    #[test]
-    fn iter() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl IterParser<'a, &'a str, char> {
-            any().repeated()
-        }
-
-        let mut chars = String::new();
-        for c in parser().parse_iter(&"abcdefg").into_result().unwrap() {
-            chars.push(c);
-        }
-
-        assert_eq!(&chars, "abcdefg");
-    }
-
-    #[test]
-    #[cfg(feature = "memoization")]
-    fn exponential() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl Parser<'a, &'a str, String> {
-            recursive(|expr| {
-                let atom = any()
-                    .filter(|c: &char| c.is_alphabetic())
-                    .repeated()
-                    .at_least(1)
-                    .collect()
-                    .or(expr.delimited_by(just('('), just(')')));
-
-                atom.clone()
-                    .then_ignore(just('+'))
-                    .then(atom.clone())
-                    .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised()
-                    .or(atom)
-            })
-            .then_ignore(end())
-        }
-
-        parser()
-            .parse("((((((((((((((((((((((((((((((a+b))))))))))))))))))))))))))))))")
-            .into_result()
-            .unwrap();
-    }
-
-    #[test]
-    #[cfg(feature = "memoization")]
-    fn left_recursive() {
-        use self::prelude::*;
-
-        fn parser<'a>() -> impl Parser<'a, &'a str, String> {
-            recursive(|expr| {
-                let atom = any()
-                    .filter(|c: &char| c.is_alphabetic())
-                    .repeated()
-                    .at_least(1)
-                    .collect();
-
-                let sum = expr
-                    .clone()
-                    .then_ignore(just('+'))
-                    .then(expr)
-                    .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised();
-
-                sum.or(atom)
-            })
-            .then_ignore(end())
-        }
-
-        assert_eq!(parser().parse("a+b+c").into_result().unwrap(), "abc");
-    }
-
-    #[cfg(debug_assertions)]
-    mod debug_asserts {
-        use super::prelude::*;
-
-        // TODO panic when left recursive parser is detected
-        // #[test]
-        // #[should_panic]
-        // fn debug_assert_left_recursive() {
-        //     recursive(|expr| {
-        //         let atom = any::<&str, extra::Default>()
-        //             .filter(|c: &char| c.is_alphabetic())
-        //             .repeated()
-        //             .at_least(1)
-        //             .collect();
-
-        //         let sum = expr
-        //             .clone()
-        //             .then_ignore(just('+'))
-        //             .then(expr)
-        //             .map(|(a, b)| format!("{}{}", a, b));
-
-        //         sum.or(atom)
-        //     })
-        //     .then_ignore(end())
-        //     .parse("a+b+c");
-        // }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_collect() {
-            empty::<&str, extra::Default>()
-                .to(())
-                .repeated()
-                .collect::<()>()
-                .parse("a+b+c")
-                .unwrap();
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_separated_by() {
-            empty::<&str, extra::Default>()
-                .to(())
-                .separated_by(empty())
-                .collect::<()>()
-                .parse("a+b+c");
-        }
-
-        #[test]
-        fn debug_assert_separated_by2() {
-            assert_eq!(
-                empty::<&str, extra::Default>()
-                    .to(())
-                    .separated_by(just(','))
-                    .count()
-                    .parse(",")
-                    .unwrap(),
-                2
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_foldl() {
-            assert_eq!(
-                empty::<&str, extra::Default>()
-                    .to(1)
-                    .foldl(empty().repeated(), |n, ()| n + 1)
-                    .parse("a+b+c")
-                    .unwrap(),
-                3
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_foldl_with_state() {
-            let mut state = 100;
-            empty::<&str, extra::Full<EmptyErr, i32, ()>>()
-                .foldl_with_state(empty().to(()).repeated(), |_, _, _| ())
-                .parse_with_state("a+b+c", &mut state);
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_foldr() {
-            empty::<&str, extra::Default>()
-                .to(())
-                .repeated()
-                .foldr(empty(), |_, _| ())
-                .parse("a+b+c");
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_foldr_with_state() {
-            empty::<&str, extra::Default>()
-                .to(())
-                .repeated()
-                .foldr_with_state(empty(), |_, _, _| ())
-                .parse_with_state("a+b+c", &mut ());
-        }
-
-        #[test]
-        #[should_panic]
-        #[cfg(debug_assertions)]
-        fn debug_assert_repeated() {
-            empty::<&str, extra::Default>()
-                .to(())
-                .repeated()
-                .parse("a+b+c");
-        }
-
-        // TODO what about IterConfigure and TryIterConfigure?
-    }
-
-    #[test]
-    #[should_panic]
-    fn recursive_define_twice() {
-        let mut expr = Recursive::declare();
-        expr.define({
-            let atom = any::<&str, extra::Default>()
-                .filter(|c: &char| c.is_alphabetic())
-                .repeated()
-                .at_least(1)
-                .collect();
-            let sum = expr
-                .clone()
-                .then_ignore(just('+'))
-                .then(expr.clone())
-                .map(|(a, b)| format!("{}{}", a, b));
-
-            sum.or(atom)
-        });
-        expr.define(expr.clone());
-
-        expr.then_ignore(end()).parse("a+b+c");
-    }
-
-    #[test]
-    #[should_panic]
-    fn todo_err() {
-        let expr = todo::<&str, String, extra::Default>();
-        expr.then_ignore(end()).parse("a+b+c");
-    }
-
-    #[test]
-    fn arc_impl() {
-        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
-            Arc::new(
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
-                    .padded()
-                    .separated_by(just(',').padded())
-                    .allow_trailing()
-                    .collect()
-                    .delimited_by(just('['), just(']')),
-            )
-        }
-
-        assert_eq!(
-            parser().parse("[122 , 23,43,    4, ]").into_result(),
-            Ok(vec![122, 23, 43, 4]),
-        );
-        assert_eq!(
-            parser().parse("[0, 3, 6, 900,120]").into_result(),
-            Ok(vec![0, 3, 6, 900, 120]),
-        );
-        assert_eq!(
-            parser().parse("[200,400,50  ,0,0, ]").into_result(),
-            Ok(vec![200, 400, 50, 0, 0]),
-        );
-    }
-
-    #[test]
-    fn box_impl() {
-        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
-            Box::new(
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
-                    .padded()
-                    .separated_by(just(',').padded())
-                    .allow_trailing()
-                    .collect()
-                    .delimited_by(just('['), just(']')),
-            )
-        }
-
-        assert_eq!(
-            parser().parse("[122 , 23,43,    4, ]").into_result(),
-            Ok(vec![122, 23, 43, 4]),
-        );
-        assert_eq!(
-            parser().parse("[0, 3, 6, 900,120]").into_result(),
-            Ok(vec![0, 3, 6, 900, 120]),
-        );
-        assert_eq!(
-            parser().parse("[200,400,50  ,0,0, ]").into_result(),
-            Ok(vec![200, 400, 50, 0, 0]),
-        );
-    }
-
-    #[test]
-    fn rc_impl() {
-        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
-            Rc::new(
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
-                    .padded()
-                    .separated_by(just(',').padded())
-                    .allow_trailing()
-                    .collect()
-                    .delimited_by(just('['), just(']')),
-            )
-        }
-
-        assert_eq!(
-            parser().parse("[122 , 23,43,    4, ]").into_result(),
-            Ok(vec![122, 23, 43, 4]),
-        );
-        assert_eq!(
-            parser().parse("[0, 3, 6, 900,120]").into_result(),
-            Ok(vec![0, 3, 6, 900, 120]),
-        );
-        assert_eq!(
-            parser().parse("[200,400,50  ,0,0, ]").into_result(),
-            Ok(vec![200, 400, 50, 0, 0]),
-        );
-    }
 }

@@ -109,3 +109,11 @@ required-features = ["label"]
 [[example]]
 name = "json"
 required-features = ["std"]
+
+[[test]]
+name = "either"
+required-features = ["either"]
+
+[[test]]
+name = "regex"
+required-features = ["chumsky-text/regex"]

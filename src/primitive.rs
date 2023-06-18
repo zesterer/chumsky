@@ -691,6 +691,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 ///
 /// ```should_panic
 /// # use chumsky::prelude::*;
+/// # use chumsky_text::prelude::*;
 /// let int = just::<_, _, extra::Err<Simple<char>>>("0x").ignore_then(todo())
 ///     .or(just("0b").ignore_then(text::digits(2).slice()))
 ///     .or(text::int(10).slice());
@@ -750,6 +751,7 @@ pub struct Choice<T> {
 ///
 /// ```
 /// # use chumsky::prelude::*;
+/// # use chumsky_text::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
 /// enum Token<'a> {
 ///     If,
