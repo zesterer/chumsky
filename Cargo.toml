@@ -1,5 +1,5 @@
 [workspace]
-members = ["chumsky-text"]
+members = ["chumsky-text", "chumsky-util"]
 
 [package]
 name = "chumsky"
@@ -57,7 +57,7 @@ hashbrown = "0.13"
 stacker = { version = "0.1", optional = true }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 either = { version = "1.8.1", optional = true }
-
+chumsky-util = { path = "chumsky-util" }
 
 [dev-dependencies]
 ariadne = "0.2"

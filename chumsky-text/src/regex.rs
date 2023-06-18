@@ -1,6 +1,13 @@
 //! Implementations of regex-based parsers
 
-use chumsky::prelude::*;
+use crate::{char::Char, input::StrInput};
+use chumsky::{
+    error::Error,
+    extension::v1::{Ext, ExtParser},
+    input::InputRef,
+    prelude::*,
+};
+use chumsky_util::EmptyPhantom;
 
 /// See [`regex()`].
 pub struct Regex<C: Char, I, E> {
@@ -23,38 +30,34 @@ where
 }
 
 /// Match input based on a provided regex pattern
-pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
-    Regex {
+pub fn regex<C: Char, I, E>(pattern: &str) -> Ext<Regex<C, I, E>> {
+    Ext(Regex {
         regex: C::new_regex(pattern),
         phantom: EmptyPhantom::new(),
-    }
+    })
 }
 
-impl<'a, C, I, E> ParserSealed<'a, I, &'a C::Str, E> for Regex<C, I, E>
+impl<'a, C, I, E> ExtParser<'a, I, &'a C::Str, E> for Regex<C, I, E>
 where
     C: Char,
     I: StrInput<'a, C>,
-    E: ParserExtra<'a, I>,
+    E: extra::ParserExtra<'a, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
+    fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<&'a C::Str, E::Error> {
         let before = inp.offset();
-        match C::match_regex(&self.regex, inp.slice_trailing_inner()) {
+        match C::match_regex(&self.regex, inp.slice_from(before..)) {
             Some(len) => {
                 let before = inp.offset();
                 inp.skip_offset(len);
                 let after = inp.offset();
-                Ok(M::bind(|| inp.slice_inner(before.offset..after.offset)))
+                Ok(inp.slice(before..after))
             }
             None => {
-                // TODO: Improve error
-                inp.add_alt(inp.offset().offset, None, None, inp.span_since(before));
-                Err(())
+                Err(Error::expected_found(None, None, inp.span_since(before)))
             }
         }
     }
-
-    go_extra!(&'a C::Str);
 }
 
 #[cfg(test)]
@@ -63,8 +66,8 @@ mod tests {
 
     #[test]
     fn regex_parser() {
-        use self::prelude::*;
-        use self::regex::*;
+        use crate::prelude::*;
+        use chumsky::prelude::*;
 
         fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
             regex("[a-zA-Z_][a-zA-Z0-9_]*")
