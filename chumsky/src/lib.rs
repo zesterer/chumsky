@@ -1,7 +1,7 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(feature = "nightly", feature(never_type, rustc_attrs))]
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
     clippy::should_implement_trait,
