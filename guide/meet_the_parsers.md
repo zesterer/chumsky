@@ -109,7 +109,6 @@ Combinators intended only for the parsing and manipulation of text-like inputs.
 
 | Name                            | Example                               | Description                                                                                                                                                                             |
 |---------------------------------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`Parser::padded`]              | `a.padded()`                          | Skips whitespace on either side of a pattern for text-like inputs specifically (i.e: those with [`u8`] or [`char`] tokens). A more specialised version of [`Parser::padded_by`].        |
 | [`Parser::from_str`]            | `just("true").from_str().unwrapped()` | Parse a pattern that outputs a string, then use Rust's [`FromStr`] trait to parse it. Often paired with [`Parser::unwrapped`] to unwrap any errors.                                     |
 
 ### Utility and error recovery

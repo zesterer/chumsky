@@ -96,7 +96,7 @@ it and the combinator methods on it are the primary way through which a parser i
 [`Parser`] also provides several *invocation* methods such as [`Parser::parse`] and [`Parser::check`]: these functions
 allow you to actually give inputs to your parser and have it generate outputs and/or errors.
 
-Check out the [`primitive`], [`combinator`], [`mod@recursive`], and [`mod@regex`] modules for examples of some of the parsers
+Check out the [`primitive`], [`combinator`], and [`mod@recursive`] modules for examples of some of the parsers
 that chumsky provides.
 
 ## The [`Input`] trait
@@ -120,8 +120,6 @@ traits that add extra functionality on top of the base [`Input`] trait:
 - [`BorrowInput`]: for inputs that can have individual tokens borrowed from them
 
 - [`SliceInput`]: for inputs that can have entire sub-slices of tokens borrowed from them
-
-- [`StrInput`]: for inputs that 'look like' text strings: ASCII byte slices (`&[u8]`) and UTF-8 string slices (`&str`)
 
 Taken together, these traits give chumsky the power to use many different types as input: bytes, strings, tokens,
 token trees, iterators, and much more besides.
