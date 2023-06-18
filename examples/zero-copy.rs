@@ -1,4 +1,5 @@
 use chumsky::prelude::*;
+use chumsky_text::prelude::*;
 
 #[derive(PartialEq, Debug)]
 enum Token<'a> {

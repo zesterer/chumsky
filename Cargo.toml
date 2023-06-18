@@ -1,3 +1,6 @@
+[workspace]
+members = ["chumsky-text"]
+
 [package]
 name = "chumsky"
 version = "1.0.0-alpha.4"
@@ -52,11 +55,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 hashbrown = "0.13"
 stacker = { version = "0.1", optional = true }
-# Enables regex combinators
-regex = { version = "1.7", optional = true }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 either = { version = "1.8.1", optional = true }
-unicode-ident =  "1.0.9"
+
 
 [dev-dependencies]
 ariadne = "0.2"
@@ -72,6 +73,7 @@ sn = "0.1"
 logos = "0.12"
 lasso = "0.7"
 slotmap = "1.0"
+chumsky-text = { path = "chumsky-text" }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11", features = ["flamegraph", "criterion"] }

@@ -6,190 +6,8 @@
 //! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
 //! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
 
-use crate::prelude::*;
-
-use super::*;
-
-/// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
-///
-/// This trait is currently sealed to minimise the impact of breaking changes. If you find a type that you think should
-/// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
-    /// The default unsized [`str`]-like type of a linear sequence of this character.
-    ///
-    /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-    type Str: ?Sized + AsRef<Self::Str> + 'static;
-
-    /// The type of a regex expression which can match on this type
-    #[cfg(feature = "regex")]
-    type Regex;
-
-    #[cfg(feature = "regex")]
-    #[doc(hidden)]
-    fn new_regex(pattern: &str) -> Self::Regex;
-    #[cfg(feature = "regex")]
-    #[doc(hidden)]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize>;
-
-    /// Convert the given ASCII character to this character type.
-    fn from_ascii(c: u8) -> Self;
-
-    /// Returns true if the character is canonically considered to be inline whitespace (i.e: not part of a newline).
-    fn is_inline_whitespace(&self) -> bool;
-
-    /// Returns true if the character is canonically considered to be whitespace.
-    fn is_whitespace(&self) -> bool;
-
-    /// Return the '0' digit of the character.
-    fn digit_zero() -> Self;
-
-    /// Returns true if the character is canonically considered to be a numeric digit.
-    fn is_digit(&self, radix: u32) -> bool;
-
-    /// Returns true if the character is canonically considered to be valid for starting an identifier.
-    fn is_ident_start(&self) -> bool;
-
-    /// Returns true if the character is canonically considered to be a valid within an identifier.
-    fn is_ident_continue(&self) -> bool;
-
-    /// Returns this character as a [`char`].
-    fn to_char(&self) -> char;
-
-    /// The iterator returned by `Self::str_to_chars`.
-    type StrCharIter<'a>: Iterator<Item = Self>;
-
-    /// Turn a string of this character type into an iterator over those characters.
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_>;
-}
-
-impl Sealed for char {}
-impl Char for char {
-    type Str = str;
-
-    #[cfg(feature = "regex")]
-    type Regex = ::regex::Regex;
-
-    #[cfg(feature = "regex")]
-    fn new_regex(pattern: &str) -> Self::Regex {
-        ::regex::Regex::new(pattern).expect("Failed to compile regex")
-    }
-    #[cfg(feature = "regex")]
-    #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
-        regex
-            .find(trailing)
-            .filter(|m| m.start() == 0)
-            .map(|m| m.end())
-    }
-
-    fn from_ascii(c: u8) -> Self {
-        c as char
-    }
-    fn is_inline_whitespace(&self) -> bool {
-        *self == ' ' || *self == '\t'
-    }
-    fn is_whitespace(&self) -> bool {
-        char::is_whitespace(*self)
-    }
-    fn digit_zero() -> Self {
-        '0'
-    }
-    fn is_digit(&self, radix: u32) -> bool {
-        char::is_digit(*self, radix)
-    }
-    fn to_char(&self) -> char {
-        *self
-    }
-
-    type StrCharIter<'a> = core::str::Chars<'a>;
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
-        s.chars()
-    }
-
-    fn is_ident_start(&self) -> bool {
-        unicode_ident::is_xid_start(*self)
-    }
-
-    fn is_ident_continue(&self) -> bool {
-        unicode_ident::is_xid_continue(*self)
-    }
-}
-
-impl Sealed for u8 {}
-impl Char for u8 {
-    type Str = [u8];
-
-    #[cfg(feature = "regex")]
-    type Regex = ::regex::bytes::Regex;
-
-    #[cfg(feature = "regex")]
-    fn new_regex(pattern: &str) -> Self::Regex {
-        ::regex::bytes::Regex::new(pattern).expect("Failed to compile regex")
-    }
-    #[cfg(feature = "regex")]
-    #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
-        regex
-            .find(trailing)
-            .filter(|m| m.start() == 0)
-            .map(|m| m.end())
-    }
-
-    fn from_ascii(c: u8) -> Self {
-        c
-    }
-    fn is_inline_whitespace(&self) -> bool {
-        *self == b' ' || *self == b'\t'
-    }
-    fn is_whitespace(&self) -> bool {
-        self.is_ascii_whitespace()
-    }
-    fn digit_zero() -> Self {
-        b'0'
-    }
-    fn is_digit(&self, radix: u32) -> bool {
-        (*self as char).is_digit(radix)
-    }
-    fn to_char(&self) -> char {
-        *self as char
-    }
-
-    type StrCharIter<'a> = core::iter::Copied<core::slice::Iter<'a, u8>>;
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
-        s.iter().copied()
-    }
-
-    fn is_ident_start(&self) -> bool {
-        self.to_char().is_ident_start()
-    }
-
-    fn is_ident_continue(&self) -> bool {
-        self.to_char().is_ident_continue()
-    }
-}
-
-/// A parser that accepts (and ignores) any number of whitespace characters before or after another pattern.
-#[derive(Copy, Clone)]
-pub struct Padded<A> {
-    pub(crate) parser: A,
-}
-
-impl<'a, I, O, E, A> ParserSealed<'a, I, O, E> for Padded<A>
-where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
-    I::Token: Char,
-    A: Parser<'a, I, O, E>,
-{
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        inp.skip_while(|c| c.is_whitespace());
-        let out = self.parser.go::<M>(inp)?;
-        inp.skip_while(|c| c.is_whitespace());
-        Ok(out)
-    }
-
-    go_extra!(O);
-}
+use crate::{input::StrInput, prelude::*};
+use chumsky::{combinator::Repeated, error::Error, input::ValueInput, prelude::*, util::MaybeRef};
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
 ///
@@ -208,10 +26,12 @@ where
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
+pub fn whitespace<'a, C, I, E>() -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
+    C: Char,
+    I: ValueInput<'a> + StrInput<'a, C>,
+    E: extra::ParserExtra<'a, I>,
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
@@ -238,10 +58,13 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
+pub fn inline_whitespace<'a, C, I, E>(
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
+    C: Char,
+    I: ValueInput<'a> + StrInput<'a, C>,
+    E: extra::ParserExtra<'a, I>,
 {
     any()
         .filter(|c: &I::Token| c.is_inline_whitespace())
@@ -280,10 +103,11 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: ValueInput<'a>, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, (), E> + Copy + Clone
+pub fn newline<'a, I, E>() -> impl Parser<'a, I, (), E> + Copy + Clone
 where
     I::Token: Char,
+    I: ValueInput<'a>,
+    E: extra::ParserExtra<'a, I>,
 {
     just(I::Token::from_ascii(b'\r'))
         .or_not()
@@ -328,7 +152,7 @@ pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Co
 where
     C: Char,
     I: ValueInput<'a> + Input<'a, Token = C>,
-    E: ParserExtra<'a, I>,
+    E: extra::ParserExtra<'a, I>,
 {
     any()
         // Use try_map over filter to get a better error on failure
@@ -374,9 +198,12 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    radix: u32,
-) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+pub fn int<'a, I, C, E>(radix: u32) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+where
+    I: ValueInput<'a> + StrInput<'a, C>,
+    C: Char,
+    E: extra::ParserExtra<'a, I>,
+{
     any()
         // Use try_map over filter to get a better error on failure
         .try_map(move |c: C, span| {
@@ -405,8 +232,12 @@ pub mod ascii {
     /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
-    pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    pub fn ident<'a, I, C, E>() -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+    where
+        I: ValueInput<'a> + StrInput<'a, C>,
+        C: Char,
+        E: extra::ParserExtra<'a, I>,
+    {
         any()
             // Use try_map over filter to get a better error on failure
             .try_map(|c: C, span| {
@@ -445,17 +276,13 @@ pub mod ascii {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<
-        'a,
+    pub fn keyword<'a, I, C, Str, E>(keyword: Str) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
+    where
+        C::Str: PartialEq,
         I: ValueInput<'a> + StrInput<'a, C>,
         C: Char + 'a,
         Str: AsRef<C::Str> + 'a + Clone,
-        E: ParserExtra<'a, I> + 'a,
-    >(
-        keyword: Str,
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
-    where
-        C::Str: PartialEq,
+        E: extra::ParserExtra<'a, I> + 'a,
     {
         #[cfg(debug_assertions)]
         {
@@ -492,8 +319,12 @@ pub mod unicode {
     ///
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
-    pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    pub fn ident<'a, I, C, E>() -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+    where
+        I: ValueInput<'a> + StrInput<'a, C>,
+        C: Char,
+        E: extra::ParserExtra<'a, I>,
+    {
         any()
             // Use try_map over filter to get a better error on failure
             .try_map(|c: C, span| {
@@ -532,17 +363,13 @@ pub mod unicode {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<
-        'a,
+    pub fn keyword<'a, I, C, Str, E>(keyword: Str) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
+    where
+        C::Str: PartialEq,
         I: ValueInput<'a> + StrInput<'a, C>,
         C: Char + 'a,
         Str: AsRef<C::Str> + 'a + Clone,
-        E: ParserExtra<'a, I> + 'a,
-    >(
-        keyword: Str,
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
-    where
-        C::Str: PartialEq,
+        E: extra::ParserExtra<'a, I> + 'a,
     {
         #[cfg(debug_assertions)]
         {
@@ -576,9 +403,10 @@ pub mod unicode {
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate::{input::StrInput, prelude::*};
+    use chumsky::prelude::*;
 
-    fn make_ascii_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
+    fn make_ascii_kw_parser<'a, C: text::Char, I: StrInput<'a, C>>(
         s: &'a C::Str,
     ) -> impl Parser<'a, I, ()>
     where
@@ -587,7 +415,7 @@ mod tests {
         text::ascii::keyword(s).ignored()
     }
 
-    fn make_unicode_kw_parser<'a, C: text::Char, I: crate::StrInput<'a, C>>(
+    fn make_unicode_kw_parser<'a, C: text::Char, I: StrInput<'a, C>>(
         s: &'a C::Str,
     ) -> impl Parser<'a, I, ()>
     where

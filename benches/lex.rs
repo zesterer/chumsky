@@ -122,6 +122,7 @@ mod logos {
 
 mod chumsky_zero_copy {
     use chumsky::prelude::*;
+    use chumsky_text::prelude::*;
 
     use super::Token;
     use std::str;

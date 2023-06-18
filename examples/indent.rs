@@ -1,4 +1,5 @@
 use chumsky::prelude::*;
+use chumsky_text::prelude::*;
 
 #[derive(Clone, Debug)]
 enum Stmt {

@@ -1,6 +1,7 @@
 //! This is the parser and interpreter for the 'Foo' language. See `tutorial.md` in the repository's root to learn
 //! about it.
 use chumsky::prelude::*;
+use chumsky_text::prelude::*;
 
 #[derive(Debug)]
 enum Expr<'a> {

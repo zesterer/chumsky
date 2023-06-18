@@ -111,6 +111,7 @@ criterion_main!(benches);
 
 mod chumsky_zero_copy {
     use chumsky::{error::Error, prelude::*};
+    use chumsky_text::prelude::*;
 
     use super::JsonZero;
     use std::str;

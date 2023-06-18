@@ -37,6 +37,7 @@ mod tests {
         prelude::{any, just},
         IterParser, Parser,
     };
+    use chumsky_text::prelude::*;
     use either::Either;
 
     fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {

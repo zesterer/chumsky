@@ -4,6 +4,7 @@
 
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use chumsky::prelude::*;
+use chumsky_text::prelude::*;
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]

@@ -64,11 +64,8 @@ pub mod primitive;
 mod private;
 pub mod recovery;
 pub mod recursive;
-#[cfg(feature = "regex")]
-pub mod regex;
 pub mod span;
 mod stream;
-pub mod text;
 pub mod util;
 
 /// Commonly used functions, traits and types.
@@ -86,7 +83,7 @@ pub mod prelude {
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
         span::{SimpleSpan, Span as _},
-        text, Boxed, ConfigIterParser, ConfigParser, IterParser, ParseResult, Parser,
+        Boxed, ConfigIterParser, ConfigParser, IterParser, ParseResult, Parser,
     };
     pub use crate::{select, select_ref};
 }
@@ -114,7 +111,7 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Emitter, ExactSizeInput, InputRef, SliceInput, StrInput, ValueInput},
+    input::{BorrowInput, Emitter, ExactSizeInput, InputRef, SliceInput, ValueInput},
     prelude::*,
     primitive::Any,
     private::{
@@ -123,7 +120,6 @@ use self::{
     },
     recovery::{RecoverWith, Strategy},
     span::Span,
-    text::*,
     util::{MaybeMut, MaybeRef},
 };
 #[cfg(all(feature = "extension", doc))]
@@ -1590,30 +1586,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         self.then_ignore(any().repeated())
     }
 
-    /// Parse a pattern, ignoring any amount of whitespace both before and after the pattern.
-    ///
-    /// The output type of this parser is `O`, the same as the original parser.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>().padded();
-    ///
-    /// // A pattern with no whitespace surrounding it is accepted
-    /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
-    /// // A pattern with arbitrary whitespace surrounding it is also accepted
-    /// assert_eq!(ident.parse(" \t \n  \t   world  \t  ").into_result(), Ok("world"));
-    /// ```
-    fn padded(self) -> Padded<Self>
-    where
-        Self: Sized,
-        I: Input<'a>,
-        I::Token: Char,
-    {
-        Padded { parser: self }
-    }
-
     // /// Flatten a nested collection.
     // ///
     // /// This use-cases of this method are broadly similar to those of [`Iterator::flatten`].
@@ -2671,6 +2643,7 @@ macro_rules! select_ref {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chumsky_text::prelude::*;
 
     #[test]
     fn zero_copy() {

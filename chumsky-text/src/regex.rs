@@ -1,6 +1,6 @@
 //! Implementations of regex-based parsers
 
-use super::*;
+use chumsky::prelude::*;
 
 /// See [`regex()`].
 pub struct Regex<C: Char, I, E> {
@@ -42,7 +42,7 @@ where
         match C::match_regex(&self.regex, inp.slice_trailing_inner()) {
             Some(len) => {
                 let before = inp.offset();
-                inp.skip_bytes(len);
+                inp.skip_offset(len);
                 let after = inp.offset();
                 Ok(M::bind(|| inp.slice_inner(before.offset..after.offset)))
             }

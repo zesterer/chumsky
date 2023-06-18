@@ -140,13 +140,6 @@ pub trait SliceInput<'a>: ExactSizeInput<'a> {
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice;
 }
 
-// Implemented by inputs that reference a string slice and use byte indices as their offset.
-/// A trait for types that represent string-like streams of input tokens
-pub trait StrInput<'a, C: Char>:
-    ValueInput<'a, Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
-{
-}
-
 /// Implemented by inputs that can have tokens borrowed from them.
 pub trait ValueInput<'a>: Input<'a> {
     /// Get the next offset from the provided one, and the next token if it exists
@@ -224,8 +217,6 @@ impl<'a> ValueInput<'a> for &'a str {
     }
 }
 
-impl<'a> StrInput<'a, char> for &'a str {}
-
 impl<'a> SliceInput<'a> for &'a str {
     type Slice = &'a str;
 
@@ -275,8 +266,6 @@ impl<'a, T> ExactSizeInput<'a> for &'a [T] {
         (range.start..self.len()).into()
     }
 }
-
-impl<'a> StrInput<'a, u8> for &'a [u8] {}
 
 impl<'a, T> SliceInput<'a> for &'a [T] {
     type Slice = &'a [T];
@@ -349,8 +338,6 @@ impl<'a, T: 'a, const N: usize> ExactSizeInput<'a> for &'a [T; N] {
         (range.start..N).into()
     }
 }
-
-impl<'a, const N: usize> StrInput<'a, u8> for &'a [u8; N] {}
 
 impl<'a, T: 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
     type Slice = &'a [T];
@@ -612,15 +599,6 @@ where
     fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice_from(&self.input, from)
     }
-}
-
-impl<'a, Ctx, C, I> StrInput<'a, C> for WithContext<Ctx, I>
-where
-    I: StrInput<'a, C>,
-    I::Span: Span<Context = ()>,
-    Ctx: Clone + 'a,
-    C: Char,
-{
 }
 
 /// Represents a location in an input that can be rewound to.
@@ -910,8 +888,9 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.ctx
     }
 
+    /// Skip while `f` returns [`false`].
     #[inline]
-    pub(crate) fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F)
+    pub fn skip_while<F: FnMut(&I::Token) -> bool>(&mut self, mut f: F)
     where
         I: ValueInput<'a>,
     {
@@ -924,6 +903,15 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
                 self.offset = offset;
             }
         }
+    }
+
+    /// Skip the offset by `n`.
+    #[inline(always)]
+    pub fn skip_offset(&mut self, n: usize)
+    where
+        I: Input<'a, Offset = usize>,
+    {
+        self.offset += n;
     }
 
     #[inline(always)]
@@ -1135,16 +1123,6 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         // SAFETY: `Offset` is invariant over 'parse, so we know that this offset came from the same input
         // See `https://plv.mpi-sws.org/rustbelt/ghostcell/`
         unsafe { self.input.span(before.offset..self.offset) }
-    }
-
-    #[cfg(feature = "regex")]
-    #[inline(always)]
-    pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
-    where
-        C: Char,
-        I: StrInput<'a, C>,
-    {
-        self.offset += skip;
     }
 
     #[inline]

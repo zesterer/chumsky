@@ -5,6 +5,7 @@
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
+use chumsky_text::prelude::*;
 use std::{collections::HashMap, env, fmt, fs};
 
 pub type Span = SimpleSpan<usize>;
