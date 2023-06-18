@@ -2684,10 +2684,9 @@ mod tests {
         }
 
         type FileId = u32;
+        type Span = SimpleSpan<usize, FileId>;
 
-        type Span = (FileId, SimpleSpan<usize>);
-
-        fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
+        fn parser<'a>() -> impl Parser<'a, WithContext<Span, &'a str>, [(Span, Token<'a>); 6]> {
             let ident = any()
                 .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
@@ -2712,12 +2711,12 @@ mod tests {
                 .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
                 .into_result(),
             Ok([
-                ((42, (0..5).into()), Token::Ident("hello")),
-                ((42, (6..13).into()), Token::String("\"world\"")),
-                ((42, (14..19).into()), Token::Ident("these")),
-                ((42, (20..23).into()), Token::Ident("are")),
-                ((42, (24..30).into()), Token::String("\"test\"")),
-                ((42, (31..37).into()), Token::Ident("tokens")),
+                (Span::new(42, 0..5), Token::Ident("hello")),
+                (Span::new(42, 6..13), Token::String("\"world\"")),
+                (Span::new(42, 14..19), Token::Ident("these")),
+                (Span::new(42, 20..23), Token::Ident("are")),
+                (Span::new(42, 24..30), Token::String("\"test\"")),
+                (Span::new(42, 31..37), Token::Ident("tokens")),
             ]),
         );
     }

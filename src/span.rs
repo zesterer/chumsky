@@ -91,7 +91,7 @@ impl<T> From<SimpleSpan<T>> for Range<T> {
     }
 }
 
-impl<T> fmt::Debug for SimpleSpan<T>
+impl<T, C> fmt::Debug for SimpleSpan<T, C>
 where
     T: fmt::Debug,
 {
@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<T> fmt::Display for SimpleSpan<T>
+impl<T, C> fmt::Display for SimpleSpan<T, C>
 where
     T: fmt::Display,
 {
