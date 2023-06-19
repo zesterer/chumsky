@@ -21,7 +21,7 @@ where
     T: Parser<'a, I, O, E> + Clone,
     F: Fn(Vec<O>, S) -> O + Clone,
 {
-    fn collapse<'a, O, S>(
+    fn collapse<O, S>(
         mut tree: Vec<(Vec<char>, Vec<O>, Option<S>)>,
         make_group: impl Fn(Vec<O>, S) -> O,
     ) -> Option<O> {
