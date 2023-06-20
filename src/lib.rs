@@ -1,6 +1,7 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(feature = "nightly", feature(never_type, rustc_attrs))]
+#![cfg_attr(feature = "nightly", feature(fn_traits, tuple_trait, unboxed_closures))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
@@ -93,6 +94,8 @@ pub mod prelude {
 
 use crate::input::InputOwn;
 use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
+#[cfg(feature = "nightly")]
+use core::marker::Tuple;
 use core::{
     borrow::Borrow,
     cell::{Cell, RefCell, UnsafeCell},
@@ -485,6 +488,59 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Self: Sized,
     {
         Map {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Map the tuple output of this parser to another value.
+    /// If the output of this parser isn't a tuple, prefer [`Parser::map`].
+    ///
+    /// The output type of this parser is `U`, the same as the function's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    ///  pub enum Value {
+    ///       One(u8),
+    ///      Two(u8, u8),
+    ///      Three(u8, u8, u8),
+    /// }
+    ///
+    /// fn parser<'a>() -> impl Parser<'a, &'a [u8], Vec<Value>> {
+    ///     choice((
+    ///         just(1).ignore_then(any()).map(Value::One),
+    ///         just(2)
+    ///             .ignore_then(group((any(), any())))
+    ///             .map_group(Value::Two),
+    ///         just(3)
+    ///             .ignore_then(group((any(), any(), any())))
+    ///             .map_group(Value::Three),
+    ///     ))
+    ///     .repeated()
+    ///     .collect()
+    /// }
+    ///
+    /// let bytes = &[3, 1, 2, 3, 1, 127, 2, 21, 69];
+    /// assert_eq!(
+    ///     parser().parse(bytes).into_result(),
+    ///     Ok(vec![
+    ///         Value::Three(1, 2, 3),
+    ///         Value::One(127),
+    ///         Value::Two(21, 69)
+    ///     ])
+    /// );
+    /// ```
+    #[cfg(feature = "nightly")]
+    fn map_group<F: Fn<O>>(self, f: F) -> MapGroup<Self, O, F>
+    where
+        Self: Sized,
+        O: Tuple,
+    {
+        MapGroup {
             parser: self,
             mapper: f,
             phantom: EmptyPhantom::new(),

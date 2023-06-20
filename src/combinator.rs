@@ -388,6 +388,81 @@ where
     }
 }
 
+/// See [`Parser::map_group`].
+#[cfg(feature = "nightly")]
+pub struct MapGroup<A, OA, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+#[cfg(feature = "nightly")]
+impl<A: Copy, OA, F: Copy> Copy for MapGroup<A, OA, F> {}
+#[cfg(feature = "nightly")]
+impl<A: Clone, OA, F: Clone> Clone for MapGroup<A, OA, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapGroup<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    F: Fn<OA, Output = O>,
+    OA: Tuple,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, |out| self.mapper.call(out)))
+    }
+
+    go_extra!(O);
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, I, O, E, A, OA, F> IterParserSealed<'a, I, O, E> for MapGroup<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, OA, E>,
+    F: Fn<OA, Output = O>,
+    OA: Tuple,
+{
+    type IterState<M: Mode> = A::IterState<M>
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        self.parser.make_iter(inp)
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        match self.parser.next::<M>(inp, state) {
+            Ok(Some(o)) => Ok(Some(M::map(o, |o| self.mapper.call(o)))),
+            Ok(None) => Ok(None),
+            Err(()) => Err(()),
+        }
+    }
+}
+
 /// See [`Parser::map_with_span`].
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
