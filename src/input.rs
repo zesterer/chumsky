@@ -528,7 +528,7 @@ where
 }
 
 /// An input wrapper that returns a custom span, with the user-defined context
-/// contained in the Span::Context. See [`Input::with_span_context`].
+/// contained in the Span::Context. See [`Input::with_context`].
 #[derive(Copy, Clone)]
 pub struct WithContext<S: Span, I> {
     input: I,
