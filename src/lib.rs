@@ -2722,6 +2722,62 @@ mod tests {
     }
 
     #[test]
+    fn zero_copy_map_span() {
+        use self::input::MappedSpan;
+        use self::prelude::*;
+
+        #[derive(PartialEq, Debug)]
+        enum Token<'a> {
+            Ident(&'a str),
+            String(&'a str),
+        }
+
+        type FileId<'a> = &'a str;
+        type Span<'a> = SimpleSpan<usize, FileId<'a>>;
+
+        fn parser<'a, F: Fn(SimpleSpan) -> Span<'a> + 'a>(
+        ) -> impl Parser<'a, MappedSpan<Span<'a>, &'a str, F>, [(Span<'a>, Token<'a>); 6]> {
+            let ident = any()
+                .filter(|c: &char| c.is_alphanumeric())
+                .repeated()
+                .at_least(1)
+                .map_slice(Token::Ident);
+
+            let string = just('"')
+                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(just('"'))
+                .map_slice(Token::String);
+
+            ident
+                .or(string)
+                .map_with_span(|token, span| (span, token))
+                .padded()
+                .repeated()
+                .collect_exactly()
+        }
+
+        let filename = "file.txt".to_string();
+        let fstr = filename.as_str();
+
+        assert_eq!(
+            parser()
+                .parse(
+                    r#"hello "world" these are "test" tokens"#
+                        .map_span(|span| Span::new(fstr, span.start()..span.end()))
+                )
+                .into_result(),
+            Ok([
+                (Span::new("file.txt", 0..5), Token::Ident("hello")),
+                (Span::new("file.txt", 6..13), Token::String("\"world\"")),
+                (Span::new("file.txt", 14..19), Token::Ident("these")),
+                (Span::new("file.txt", 20..23), Token::Ident("are")),
+                (Span::new("file.txt", 24..30), Token::String("\"test\"")),
+                (Span::new("file.txt", 31..37), Token::Ident("tokens")),
+            ]),
+        );
+    }
+
+    #[test]
     fn zero_copy_repetition() {
         use self::prelude::*;
 

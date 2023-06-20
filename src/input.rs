@@ -116,6 +116,22 @@ pub trait Input<'a>: Sealed + 'a {
             phantom: PhantomData,
         }
     }
+
+    /// Map the spans output for this input to a different output span.
+    ///
+    /// This is useful if you wish to include extra context that applies to all spans emitted during a parse, such as
+    /// an identifier that corresponds to the file the spans originated from.
+    fn map_span<S: Span, F>(self, map_fn: F) -> MappedSpan<S, Self, F>
+    where
+        Self: Input<'a> + Sized,
+        F: Fn(Self::Span) -> S,
+    {
+        MappedSpan {
+            input: self,
+            map_fn,
+            phantom: PhantomData,
+        }
+    }
 }
 
 /// Implement by inputs that have a known size (including spans)
@@ -640,6 +656,123 @@ where
     S: Span + Clone + 'a,
     S::Context: Clone + 'a,
     S::Offset: From<<I::Span as Span>::Offset>,
+    C: Char,
+{
+}
+
+/// An input wrapper that maps the span type of your input
+/// into your custom span [`Input::map_span`].
+#[derive(Copy, Clone)]
+pub struct MappedSpan<S: Span, I, F> {
+    input: I,
+    map_fn: F,
+    phantom: PhantomData<S>,
+}
+
+impl<'a, S: Span, I: Input<'a>, F> Sealed for MappedSpan<S, I, F> {}
+impl<'a, S, I: Input<'a>, F: 'a> Input<'a> for MappedSpan<S, I, F>
+where
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
+{
+    type Offset = I::Offset;
+    type Token = I::Token;
+    type Span = S;
+
+    #[inline(always)]
+    fn start(&self) -> Self::Offset {
+        self.input.start()
+    }
+
+    type TokenMaybe = I::TokenMaybe;
+
+    #[inline(always)]
+    unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
+        self.input.next_maybe(offset)
+    }
+
+    #[inline(always)]
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        let inner_span = self.input.span(range);
+        (self.map_fn)(inner_span)
+    }
+
+    #[inline(always)]
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        I::prev(offs)
+    }
+}
+
+impl<'a, S, I: Input<'a>, F: 'a> ExactSizeInput<'a> for MappedSpan<S, I, F>
+where
+    I: ExactSizeInput<'a>,
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
+{
+    #[inline(always)]
+    unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Self::Span {
+        let inner_span = self.input.span_from(range);
+        (self.map_fn)(inner_span)
+    }
+}
+
+impl<'a, S, I: ValueInput<'a>, F: 'a> ValueInput<'a> for MappedSpan<S, I, F>
+where
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
+{
+    #[inline(always)]
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        self.input.next(offset)
+    }
+}
+
+impl<'a, S, I: BorrowInput<'a>, F: 'a> BorrowInput<'a> for MappedSpan<S, I, F>
+where
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
+{
+    #[inline(always)]
+    unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>) {
+        self.input.next_ref(offset)
+    }
+}
+
+impl<'a, S, I: SliceInput<'a>, F: 'a> SliceInput<'a> for MappedSpan<S, I, F>
+where
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
+{
+    type Slice = I::Slice;
+
+    #[inline(always)]
+    fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice(&self.input, range)
+    }
+
+    #[inline(always)]
+    fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        <I as SliceInput>::slice_from(&self.input, from)
+    }
+}
+
+impl<'a, C, S, I, F: 'a> StrInput<'a, C> for MappedSpan<S, I, F>
+where
+    I: StrInput<'a, C>,
+    S: Span + Clone + 'a,
+    S::Context: Clone + 'a,
+    S::Offset: From<<I::Span as Span>::Offset>,
+    F: Fn(I::Span) -> S,
     C: Char,
 {
 }
