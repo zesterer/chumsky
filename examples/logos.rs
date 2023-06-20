@@ -145,16 +145,16 @@ fn main() {
         .spanned((SRC.len()..SRC.len()).into());
 
     // Parse the token stream with our chumsky parser
-    match parser().parse(token_stream).into_output_errors() {
+    match parser().parse(token_stream).into_result() {
         // If parsing was successful, attempt to evaluate the s-expression
-        (Some(sexpr), errs) if errs.is_empty() => match sexpr.eval() {
+        Ok(sexpr) => match sexpr.eval() {
             Ok(out) => println!("Result = {}", out),
             Err(err) => println!("Runtime error: {}", err),
         },
         // If parsing was unsuccessful, generate a nice user-friendly diagnostic with ariadne. You could also use
         // codespan, or whatever other diagnostic library you care about. You could even just display-print the errors
         // with Rust's built-in `Display` trait, but it's a little crude
-        (sexpr, errs) => {
+        Err(errs) => {
             for err in errs {
                 Report::build(ReportKind::Error, (), err.span().start)
                     .with_code(3)
@@ -167,12 +167,6 @@ fn main() {
                     .finish()
                     .eprint(Source::from(SRC))
                     .unwrap();
-            }
-            if let Some(sexpr) = sexpr {
-                println!(
-                    "Despite these error(s), the following AST was recovered: {:#?}",
-                    sexpr
-                );
             }
         }
     }

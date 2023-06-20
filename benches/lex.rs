@@ -59,7 +59,7 @@ fn bench_lex(c: &mut Criterion) {
 
     c.bench_function("lex_logos", |b| {
         b.iter(|| {
-            assert!(black_box(logos::lexer(black_box(SAMPLE))).all(|t| t != logos::Token::Error))
+            assert!(black_box(logos::lexer(black_box(SAMPLE))).all(|t| t != Ok(logos::Token::Error)))
         })
     });
 }
@@ -111,7 +111,6 @@ mod logos {
         Comma,
 
         #[regex(br"\s", logos::skip)]
-        #[error]
         Error,
     }
 

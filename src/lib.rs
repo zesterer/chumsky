@@ -2872,9 +2872,7 @@ mod tests {
         let mut own = InputOwn::<_, extra::Default>::new(input);
         let mut inp = own.as_ref_start();
 
-        while let Some(c) = inp.next() {
-            drop(c);
-        }
+        while let Some(_c) = inp.next() {}
     }
 
     #[test]
