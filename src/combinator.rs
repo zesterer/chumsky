@@ -1056,16 +1056,16 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::ignore_with_ctx`].
-pub struct IgnoreWithCtx<A, B, OA, I, E> {
+/// See [`Parser::ignore_then_ctx`].
+pub struct IgnoreThenCtx<A, B, OA, I, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(B, OA, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, I, E> Copy for IgnoreWithCtx<A, B, OA, I, E> {}
-impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
+impl<A: Copy, B: Copy, OA, I, E> Copy for IgnoreThenCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreThenCtx<A, B, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1076,7 +1076,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
 }
 
 impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
-    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+    for IgnoreThenCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1094,7 +1094,7 @@ where
 }
 
 impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
-    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+    for IgnoreThenCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1128,16 +1128,16 @@ where
     }
 }
 
-/// See [`Parser::then_with_ctx`].
-pub struct ThenWithCtx<A, B, OA, I, E> {
+/// See [`Parser::then_ctx`].
+pub struct ThenCtx<A, B, OA, I, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(B, OA, E, I)>,
 }
 
-impl<A: Copy, B: Copy, OA, I, E> Copy for ThenWithCtx<A, B, OA, I, E> {}
-impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
+impl<A: Copy, B: Copy, OA, I, E> Copy for ThenCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I, E> Clone for ThenCtx<A, B, OA, I, E> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -1148,7 +1148,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
 }
 
 impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, (OA, OB), E>
-    for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+    for ThenCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1167,7 +1167,7 @@ where
 }
 
 impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
-    for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+    for ThenCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
