@@ -494,8 +494,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Map the tuple output of this parser to another value.
-    /// If the output of this parser isn't a tuple, prefer [`Parser::map`].
+    /// Map the output of this parser to another value.
+    /// If the output of this parser isn't a tuple, use [`Parser::map`].
     ///
     /// The output type of this parser is `U`, the same as the function's output.
     ///
