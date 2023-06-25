@@ -67,7 +67,7 @@ impl<T> SimpleSpan<T> {
     }
 
     /// Create a new `SimpleSpan` from a single offset, useful for an EOI (End Of Input) span.
-    pub fn splat(offset: T) -> SimpleSPan<T> {
+    pub fn splat(offset: T) -> SimpleSpan<T> {
         Self::new(offset, offset)
     }
     
