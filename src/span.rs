@@ -71,7 +71,7 @@ impl<T> SimpleSpan<T> {
     where
         T: Clone 
     {
-        Self::new(offset, offset)
+        Self::new(offset, offset.clone())
     }
     
     /// Convert this span into a [`std::ops::Range`].
