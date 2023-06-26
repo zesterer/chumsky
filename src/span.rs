@@ -66,6 +66,14 @@ impl<T> SimpleSpan<T> {
         }
     }
 
+    /// Create a new `SimpleSpan` from a single offset, useful for an EOI (End Of Input) span.
+    pub fn splat(offset: T) -> SimpleSpan<T>
+    where
+        T: Clone,
+    {
+        Self::new(offset.clone(), offset)
+    }
+
     /// Convert this span into a [`std::ops::Range`].
     pub fn into_range(self) -> Range<T> {
         self.into()
