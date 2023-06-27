@@ -1,3 +1,5 @@
+//! TODO: Add documentation when approved
+
 use crate::extra::ParserExtra;
 use crate::input::{InputRef, SliceInput};
 use crate::private::{Check, Emit, Mode, PResult, ParserSealed};
@@ -6,14 +8,14 @@ use crate::EmptyPhantom;
 use lexical::parse_partial;
 use lexical::FromLexical;
 
-/// TODO
+/// TODO: Add documentation when approved
 #[derive(Clone, Copy)]
 pub struct Number<const F: u128, I, E, O> {
     #[allow(dead_code)]
     phantom: EmptyPhantom<(I, E, O)>,
 }
 
-/// TODO
+/// TODO: Add documentation when approved
 pub const fn number<const F: u128, I, E, O>() -> Number<F, I, E, O> {
     Number::<F, I, E, O> {
         phantom: EmptyPhantom::new(),
