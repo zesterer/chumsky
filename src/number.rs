@@ -1,5 +1,7 @@
 //! TODO: Add documentation when approved
 
+pub use lexical::format;
+
 use crate::extra::ParserExtra;
 use crate::input::{InputRef, SliceInput};
 use crate::private::{Check, Emit, Mode, PResult, ParserSealed};
