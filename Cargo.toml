@@ -37,8 +37,11 @@ label = []
 # Make builtin parsers such as `Boxed` use atomic instead of non-atomic internals.
 sync = ["spin"]
 
+# Allow the use of unstable features (aka features where the API is not settled)
+unstable = []
+
 # Allows use of the `Number` parser, which is backed by the `lexical` crate
-lexical-numbers = ["lexical"]
+lexical-numbers = ["lexical", "unstable"]
 
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
