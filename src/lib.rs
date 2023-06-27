@@ -778,22 +778,22 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Memoise the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
+    /// Memoize the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
     ///
     /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
-    /// memoisation to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
-    /// way to solve the problem. At the limit, applying memoisation to all combinators will turn any parser into one
+    /// memoization to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
+    /// way to solve the problem. At the limit, applying memoization to all combinators will turn any parser into one
     /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
     ///
-    /// Memoisation also works with recursion, so this can be used to write parsers using
+    /// Memoization also works with recursion, so this can be used to write parsers using
     /// [left recursion](https://en.wikipedia.org/wiki/Left_recursion).
     // TODO: Example
     #[cfg(feature = "memoization")]
-    fn memoised(self) -> Memoised<Self>
+    fn memoized(self) -> Memoized<Self>
     where
         Self: Sized,
     {
-        Memoised { parser: self }
+        Memoized { parser: self }
     }
 
     /// Transform all outputs of this parser to a pretermined value.
@@ -2964,7 +2964,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(atom.clone())
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised()
+                    .memoized()
                     .or(atom)
             })
             .then_ignore(end())
@@ -2994,7 +2994,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(expr)
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised();
+                    .memoized();
 
                 sum.or(atom)
             })

@@ -25,7 +25,7 @@ nightly = []
 # Allows deeper recursion by dynamically spilling stack state on to the heap.
 spill-stack = ["stacker", "std"]
 
-# Allows parser memoisation, speeding up heavily back-tracking parsers and allowing left recursion.
+# Allows parser memoization, speeding up heavily back-tracking parsers and allowing left recursion.
 memoization = []
 
 # Allows extending chumsky by writing your own parser implementations.
