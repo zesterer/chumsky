@@ -12,19 +12,19 @@ use lexical::FromLexical;
 
 /// TODO: Add documentation when approved
 #[derive(Clone, Copy)]
-pub struct Number<const F: u128, I, E, O> {
+pub struct Number<const F: u128, I, O, E> {
     #[allow(dead_code)]
     phantom: EmptyPhantom<(I, E, O)>,
 }
 
 /// TODO: Add documentation when approved
-pub const fn number<const F: u128, I, E, O>() -> Number<F, I, E, O> {
-    Number::<F, I, E, O> {
+pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
+    Number::<F, I, O, E> {
         phantom: EmptyPhantom::new(),
     }
 }
 
-impl<'a, const F: u128, I, E, O> ParserSealed<'a, I, O, E> for Number<F, I, E, O>
+impl<'a, const F: u128, I, O, E> ParserSealed<'a, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
     I: SliceInput<'a, Offset = usize>,
@@ -63,7 +63,7 @@ mod tests {
     mod rust {
         use super::*;
 
-        const FLOAT: Number<RUST_LITERAL, &str, extra::Default, f64> = number();
+        const FLOAT: Number<RUST_LITERAL, &str, f64, extra::Default> = number();
 
         fn validate(test: &str) {
             FLOAT.parse(test).unwrap();
