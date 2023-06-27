@@ -25,7 +25,7 @@ nightly = []
 # Allows deeper recursion by dynamically spilling stack state on to the heap.
 spill-stack = ["stacker", "std"]
 
-# Allows parser memoisation, speeding up heavily back-tracking parsers and allowing left recursion.
+# Allows parser memoization, speeding up heavily back-tracking parsers and allowing left recursion.
 memoization = []
 
 # Allows extending chumsky by writing your own parser implementations.
@@ -43,6 +43,9 @@ unstable = []
 # Allows use of the `Number` parser, which is backed by the `lexical` crate
 lexical-numbers = ["lexical", "unstable"]
 
+# Adds impl of Parser for either::Either
+either = ["dep:either"]
+
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
 # If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
@@ -59,6 +62,8 @@ stacker = { version = "0.1", optional = true }
 regex = { version = "1.7", optional = true }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
+either = { version = "1.8.1", optional = true }
+unicode-ident =  "1.0.9"
 
 [dev-dependencies]
 ariadne = "0.2"
@@ -71,7 +76,7 @@ criterion = "0.4.0"
 pest = "2.5"
 pest_derive = "2.5"
 sn = "0.1"
-logos = "0.12"
+logos = "0.13"
 lasso = "0.7"
 slotmap = "1.0"
 

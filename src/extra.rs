@@ -31,7 +31,7 @@ where
     /// from an earlier point in the stream than the parser relying on it. This can affect the output of a parser,
     /// but for things that don't wish to alter the actual rules of parsing, one should instead prefer [`Self::State`].
     ///
-    /// For examples of using this type, see [`Parser::then_with_ctx`] and [`ConfigParser::configure`].
+    /// For examples of using this type, see [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] and [`ConfigParser::configure`].
     type Context: 'a;
 }
 

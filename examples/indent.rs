@@ -23,7 +23,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Stmt>> {
 
         text::whitespace()
             .count()
-            .then_with_ctx(stmt.separated_by(indent).collect())
+            .ignore_with_ctx(stmt.separated_by(indent).collect())
     });
 
     block.with_ctx(0)

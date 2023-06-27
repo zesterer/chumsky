@@ -388,6 +388,81 @@ where
     }
 }
 
+/// See [`Parser::map_group`].
+#[cfg(feature = "nightly")]
+pub struct MapGroup<A, OA, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+#[cfg(feature = "nightly")]
+impl<A: Copy, OA, F: Copy> Copy for MapGroup<A, OA, F> {}
+#[cfg(feature = "nightly")]
+impl<A: Clone, OA, F: Clone> Clone for MapGroup<A, OA, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapGroup<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    F: Fn<OA, Output = O>,
+    OA: Tuple,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, |out| self.mapper.call(out)))
+    }
+
+    go_extra!(O);
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, I, O, E, A, OA, F> IterParserSealed<'a, I, O, E> for MapGroup<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, OA, E>,
+    F: Fn<OA, Output = O>,
+    OA: Tuple,
+{
+    type IterState<M: Mode> = A::IterState<M>
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        self.parser.make_iter(inp)
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        match self.parser.next::<M>(inp, state) {
+            Ok(Some(o)) => Ok(Some(M::map(o, |o| self.mapper.call(o)))),
+            Ok(None) => Ok(None),
+            Err(()) => Err(()),
+        }
+    }
+}
+
 /// See [`Parser::map_with_span`].
 pub struct MapWithSpan<A, OA, F> {
     pub(crate) parser: A,
@@ -762,15 +837,15 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::memoised`].
+/// See [`Parser::memoized`].
 #[cfg(feature = "memoization")]
 #[derive(Copy, Clone)]
-pub struct Memoised<A> {
+pub struct Memoized<A> {
     pub(crate) parser: A,
 }
 
 #[cfg(feature = "memoization")]
-impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Memoised<A>
+impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Memoized<A>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -981,6 +1056,78 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::ignore_with_ctx`].
+pub struct IgnoreWithCtx<A, B, OA, I, E> {
+    pub(crate) parser: A,
+    pub(crate) then: B,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(B, OA, E, I)>,
+}
+
+impl<A: Copy, B: Copy, OA, I, E> Copy for IgnoreWithCtx<A, B, OA, I, E> {}
+impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            then: self.then.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
+    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: Parser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
+        let p1 = self.parser.go::<Emit>(inp)?;
+        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
+    }
+
+    go_extra!(OB);
+}
+
+impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
+    for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
+    OA: 'a,
+{
+    type IterState<M: Mode> = (OA, B::IterState<M>)
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        let out = self.parser.go::<Emit>(inp)?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
+        Ok((out, then))
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, OB> {
+        let (ctx, inner_state) = state;
+
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
+    }
+}
+
 /// See [`Parser::then_with_ctx`].
 pub struct ThenWithCtx<A, B, OA, I, E> {
     pub(crate) parser: A,
@@ -1000,7 +1147,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
     }
 }
 
-impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, OB, E>
+impl<'a, I, E, A, B, OA, OB> ParserSealed<'a, I, (OA, OB), E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
     I: Input<'a>,
@@ -1010,12 +1157,13 @@ where
     OA: 'a,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OB> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, (OA, OB)> {
         let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
+        let p2 = inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))?;
+        Ok(M::map(p2, |p2| (p1, p2)))
     }
 
-    go_extra!(OB);
+    go_extra!((OA, OB));
 }
 
 impl<'a, I, E, A, B, OA, OB> IterParserSealed<'a, I, OB, E>
@@ -1592,9 +1740,9 @@ where
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let r#enum = text::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
+    /// let r#enum = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("enum")
     ///     .padded()
-    ///     .ignore_then(text::ident()
+    ///     .ignore_then(text::ascii::ident()
     ///         .padded()
     ///         .separated_by(just('|'))
     ///         .allow_leading()
