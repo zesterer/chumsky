@@ -1137,8 +1137,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     }
 
     #[inline(always)]
-    #[cfg(feature = "regex")]
-    #[cfg(feature = "lexical-numbers")]
+    #[cfg(any(feature = "regex", feature = "lexical-numbers"))]
     pub(crate) fn skip_bytes(&mut self, skip: usize)
     where
         I: SliceInput<'a, Offset = usize>,
