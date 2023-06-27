@@ -762,15 +762,15 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::memoised`].
+/// See [`Parser::memoized`].
 #[cfg(feature = "memoization")]
 #[derive(Copy, Clone)]
-pub struct Memoised<A> {
+pub struct Memoized<A> {
     pub(crate) parser: A,
 }
 
 #[cfg(feature = "memoization")]
-impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Memoised<A>
+impl<'a, I, E, A, O> ParserSealed<'a, I, O, E> for Memoized<A>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
