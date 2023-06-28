@@ -61,6 +61,8 @@ pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
+#[cfg(feature = "lexical-numbers")]
+pub mod number;
 pub mod primitive;
 mod private;
 pub mod recovery;
@@ -77,6 +79,8 @@ pub mod util;
 /// *Listen, three eyes,” he said, “don’t you try to outweird me, I get stranger things than you free with my breakfast
 /// cereal.”*
 pub mod prelude {
+    #[cfg(feature = "lexical-numbers")]
+    pub use super::number::number;
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{

@@ -1291,12 +1291,11 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         unsafe { self.input.span(before.offset..self.offset) }
     }
 
-    #[cfg(feature = "regex")]
     #[inline(always)]
-    pub(crate) fn skip_bytes<C>(&mut self, skip: usize)
+    #[cfg(any(feature = "regex", feature = "lexical-numbers"))]
+    pub(crate) fn skip_bytes(&mut self, skip: usize)
     where
-        C: Char,
-        I: StrInput<'a, C>,
+        I: SliceInput<'a, Offset = usize>,
     {
         self.offset += skip;
     }
