@@ -58,6 +58,7 @@ pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
+#[cfg(feature = "pratt")]
 pub mod pratt;
 pub mod primitive;
 mod private;
@@ -75,6 +76,7 @@ pub mod util;
 /// *Listen, three eyes,” he said, “don’t you try to outweird me, I get stranger things than you free with my breakfast
 /// cereal.”*
 pub mod prelude {
+    #[cfg(feature = "pratt")]
     pub use super::pratt::{Pratt, PrattOp};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
@@ -2070,6 +2072,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // `*` is right-associative (in this example)
     /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
     /// ```
+    #[cfg(feature = "pratt")]
     fn pratt<Ops, Op>(self, ops: Ops) -> Pratt<Self, Ops, O, Op, E>
     where
         I: Input<'a>,
