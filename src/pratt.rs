@@ -96,13 +96,13 @@ where
 
 /// DOCUMENT
 #[derive(Copy, Clone)]
-pub struct PrattParser<Atom, Ops, Expr, Op, Ex> {
+pub struct Pratt<Atom, Ops, Expr, Op, Ex> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
     pub(crate) phantom: PhantomData<(Expr, Op, Ex)>,
 }
 
-impl<Atom, Ops, Expr, Op, Ex> PrattParser<Atom, Ops, Expr, Op, Ex> {
+impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
     fn pratt_parse<'a, M, I>(
         &self,
         inp: &mut InputRef<'a, '_, I, Ex>,
@@ -138,8 +138,7 @@ impl<Atom, Ops, Expr, Op, Ex> PrattParser<Atom, Ops, Expr, Op, Ex> {
     }
 }
 
-impl<'a, I, Op, E, Expr, Atom, Ops> ParserSealed<'a, I, Expr, E>
-    for PrattParser<Atom, Ops, Expr, Op, E>
+impl<'a, I, Op, E, Expr, Atom, Ops> ParserSealed<'a, I, Expr, E> for Pratt<Atom, Ops, Expr, Op, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

@@ -75,6 +75,7 @@ pub mod util;
 /// *Listen, three eyes,” he said, “don’t you try to outweird me, I get stranger things than you free with my breakfast
 /// cereal.”*
 pub mod prelude {
+    pub use super::pratt::{Pratt, PrattOp};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -2069,14 +2070,14 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // `*` is right-associative (in this example)
     /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
     /// ```
-    fn pratt<Ops, Op>(self, ops: Ops) -> pratt::PrattParser<Self, Ops, O, Op, E>
+    fn pratt<Ops, Op>(self, ops: Ops) -> Pratt<Self, Ops, O, Op, E>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
         Ops: Parser<'a, I, Op, E>,
         Self: Sized,
     {
-        pratt::PrattParser {
+        Pratt {
             atom: self,
             ops,
             phantom: PhantomData,
