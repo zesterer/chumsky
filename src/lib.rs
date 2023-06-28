@@ -80,7 +80,7 @@ pub mod util;
 /// cereal.”*
 pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
-    pub use super::number::number;
+    pub use super::number::{self, number};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
