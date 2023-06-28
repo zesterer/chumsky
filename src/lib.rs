@@ -1,6 +1,7 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(feature = "nightly", feature(never_type, rustc_attrs))]
+#![cfg_attr(feature = "nightly", feature(fn_traits, tuple_trait, unboxed_closures))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
@@ -49,6 +50,8 @@ macro_rules! go_cfg_extra {
 mod blanket;
 pub mod combinator;
 pub mod container;
+#[cfg(feature = "either")]
+pub mod either;
 pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
@@ -60,6 +63,8 @@ pub mod input;
 pub mod label;
 #[cfg(feature = "pratt")]
 pub mod pratt;
+#[cfg(feature = "lexical-numbers")]
+pub mod number;
 pub mod primitive;
 mod private;
 pub mod recovery;
@@ -78,6 +83,8 @@ pub mod util;
 pub mod prelude {
     #[cfg(feature = "pratt")]
     pub use super::pratt::{Pratt, PrattOp};
+    #[cfg(feature = "lexical-numbers")]
+    pub use super::number::number;
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -95,6 +102,8 @@ pub mod prelude {
 
 use crate::input::InputOwn;
 use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
+#[cfg(feature = "nightly")]
+use core::marker::Tuple;
 use core::{
     borrow::Borrow,
     cell::{Cell, RefCell, UnsafeCell},
@@ -493,6 +502,59 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Map the output of this parser to another value.
+    /// If the output of this parser isn't a tuple, use [`Parser::map`].
+    ///
+    /// The output type of this parser is `U`, the same as the function's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    ///  pub enum Value {
+    ///       One(u8),
+    ///      Two(u8, u8),
+    ///      Three(u8, u8, u8),
+    /// }
+    ///
+    /// fn parser<'a>() -> impl Parser<'a, &'a [u8], Vec<Value>> {
+    ///     choice((
+    ///         just(1).ignore_then(any()).map(Value::One),
+    ///         just(2)
+    ///             .ignore_then(group((any(), any())))
+    ///             .map_group(Value::Two),
+    ///         just(3)
+    ///             .ignore_then(group((any(), any(), any())))
+    ///             .map_group(Value::Three),
+    ///     ))
+    ///     .repeated()
+    ///     .collect()
+    /// }
+    ///
+    /// let bytes = &[3, 1, 2, 3, 1, 127, 2, 21, 69];
+    /// assert_eq!(
+    ///     parser().parse(bytes).into_result(),
+    ///     Ok(vec![
+    ///         Value::Three(1, 2, 3),
+    ///         Value::One(127),
+    ///         Value::Two(21, 69)
+    ///     ])
+    /// );
+    /// ```
+    #[cfg(feature = "nightly")]
+    fn map_group<F: Fn<O>>(self, f: F) -> MapGroup<Self, O, F>
+    where
+        Self: Sized,
+        O: Tuple,
+    {
+        MapGroup {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Map the output of this parser to another value, making use of the pattern's span when doing so.
     ///
     /// This is very useful when generating an AST that attaches a span to each AST node.
@@ -508,7 +570,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .map_with_span(Spanned) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
     ///     .padded();
     ///
@@ -597,7 +659,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Copy, Clone)]
     /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
     ///     .map_with_state(|ident, span, state| Ident(state.get_or_intern(ident)))
     ///     .padded()
     ///     .repeated()
@@ -724,22 +786,22 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Memoise the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
+    /// Memoize the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
     ///
     /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
-    /// memoisation to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
-    /// way to solve the problem. At the limit, applying memoisation to all combinators will turn any parser into one
+    /// memoization to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
+    /// way to solve the problem. At the limit, applying memoization to all combinators will turn any parser into one
     /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
     ///
-    /// Memoisation also works with recursion, so this can be used to write parsers using
+    /// Memoization also works with recursion, so this can be used to write parsers using
     /// [left recursion](https://en.wikipedia.org/wiki/Left_recursion).
     // TODO: Example
     #[cfg(feature = "memoization")]
-    fn memoised(self) -> Memoised<Self>
+    fn memoized(self) -> Memoized<Self>
     where
         Self: Sized,
     {
-        Memoised { parser: self }
+        Memoized { parser: self }
     }
 
     /// Transform all outputs of this parser to a pretermined value.
@@ -960,7 +1022,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Parse one thing and then another thing, creating the second parser from the result of
-    /// the first. If you only have a couple cases to handle, prefer [`Parser::or`].
+    /// the first. If you don't need the context in the output, use [`Parser::then_with_ctx`].
     ///
     /// The output of this parser is `U`, the result of the second parser
     ///
@@ -977,11 +1039,37 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// // A parser that parses a single letter and then its successor
     /// let successive_letters = one_of::<_, _, extra::Err<Simple<u8>>>(b'a'..=b'z')
-    ///     .then_with_ctx(successor);
+    ///     .ignore_with_ctx(successor);
     ///
     /// assert_eq!(successive_letters.parse(b"ab").into_result(), Ok(b'b')); // 'b' follows 'a'
     /// assert!(successive_letters.parse(b"ac").has_errors()); // 'c' does not follow 'a'
     /// ```
+    fn ignore_with_ctx<U, P>(
+        self,
+        then: P,
+    ) -> IgnoreWithCtx<Self, P, O, I, extra::Full<E::Error, E::State, O>>
+    where
+        Self: Sized,
+        O: 'a,
+        P: Parser<'a, I, U, extra::Full<E::Error, E::State, O>>,
+    {
+        IgnoreWithCtx {
+            parser: self,
+            then,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Parse one thing and then another thing, creating the second parser from the result of
+    /// the first. If you don't need the context in the output, prefer [`Parser::ignore_with_ctx`].
+    ///
+    /// The output of this parser is `(E::Context, O)`,
+    /// a combination of the context and the output of the parser.
+    ///
+    /// Error recovery for this parser may be sub-optimal, as if the first parser succeeds on
+    /// recovery then the second produces an error, the primary error will point to the location in
+    /// the second parser which failed, ignoring that the first parser may be the root cause. There
+    /// may be other pathological errors cases as well.
     fn then_with_ctx<U, P>(
         self,
         then: P,
@@ -1150,7 +1238,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
@@ -1356,7 +1444,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let shopping = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let shopping = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
@@ -1574,7 +1662,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let ident = text::ident::<_, _, extra::Err<Simple<char>>>().padded();
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
@@ -1779,9 +1867,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///         });
     ///
     /// // Parser that uses the validation version
-    /// let multi_step_val = large_int_val.then(text::ident().padded());
+    /// let multi_step_val = large_int_val.then(text::ascii::ident().padded());
     /// // Parser that uses the try_map version
-    /// let multi_step_tm = large_int_tm.then(text::ident().padded());
+    /// let multi_step_tm = large_int_tm.then(text::ascii::ident().padded());
     ///
     /// // On success, both parsers are equivalent
     /// assert_eq!(
@@ -2121,8 +2209,8 @@ where
     E: ParserExtra<'a, I>,
 {
     /// A combinator that allows configuration of the parser from the current context. Context
-    /// is most often derived from [`Parser::then_with_ctx`] or [`map_ctx`], and is how chumsky
-    /// supports parsing things such as indentation-sensitive grammars.
+    /// is most often derived from [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] or [`map_ctx`],
+    /// and is how chumsky supports parsing things such as indentation-sensitive grammars.
     ///
     /// # Examples
     ///
@@ -2134,13 +2222,13 @@ where
     ///     .unwrapped();
     ///
     /// // By default, accepts any number of items
-    /// let item = text::ident()
+    /// let item = text::ascii::ident()
     ///     .padded()
     ///     .repeated();
     ///
     /// // With configuration, we can declare an exact number of items based on a prefix length
     /// let len_prefixed_arr = int
-    ///     .then_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
+    ///     .ignore_with_ctx(item.configure(|repeat, ctx| repeat.exactly(*ctx)).collect::<Vec<_>>());
     ///
     /// assert_eq!(
     ///     len_prefixed_arr.parse("2 foo bar").into_result(),
@@ -2301,7 +2389,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let word = text::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let word = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
     ///     .enumerate()
@@ -2532,6 +2620,54 @@ where
     go_extra!(O);
 }
 
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::boxed::Box<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::rc::Rc<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::sync::Arc<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        T::go::<M>(self, inp)
+    }
+
+    go_extra!(O);
+}
+
 /// Create a parser that selects one or more input patterns and map them to an output value.
 ///
 /// This is most useful when turning the tokens of a previous compilation pass (such as lexing) into data that can be
@@ -2682,10 +2818,9 @@ mod tests {
         }
 
         type FileId = u32;
+        type Span = SimpleSpan<usize, FileId>;
 
-        type Span = (FileId, SimpleSpan<usize>);
-
-        fn parser<'a>() -> impl Parser<'a, WithContext<FileId, &'a str>, [(Span, Token<'a>); 6]> {
+        fn parser<'a>() -> impl Parser<'a, WithContext<Span, &'a str>, [(Span, Token<'a>); 6]> {
             let ident = any()
                 .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
@@ -2710,12 +2845,68 @@ mod tests {
                 .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
                 .into_result(),
             Ok([
-                ((42, (0..5).into()), Token::Ident("hello")),
-                ((42, (6..13).into()), Token::String("\"world\"")),
-                ((42, (14..19).into()), Token::Ident("these")),
-                ((42, (20..23).into()), Token::Ident("are")),
-                ((42, (24..30).into()), Token::String("\"test\"")),
-                ((42, (31..37).into()), Token::Ident("tokens")),
+                (Span::new(42, 0..5), Token::Ident("hello")),
+                (Span::new(42, 6..13), Token::String("\"world\"")),
+                (Span::new(42, 14..19), Token::Ident("these")),
+                (Span::new(42, 20..23), Token::Ident("are")),
+                (Span::new(42, 24..30), Token::String("\"test\"")),
+                (Span::new(42, 31..37), Token::Ident("tokens")),
+            ]),
+        );
+    }
+
+    #[test]
+    fn zero_copy_map_span() {
+        use self::input::MappedSpan;
+        use self::prelude::*;
+
+        #[derive(PartialEq, Debug)]
+        enum Token<'a> {
+            Ident(&'a str),
+            String(&'a str),
+        }
+
+        type FileId<'a> = &'a str;
+        type Span<'a> = SimpleSpan<usize, FileId<'a>>;
+
+        fn parser<'a, F: Fn(SimpleSpan) -> Span<'a> + 'a>(
+        ) -> impl Parser<'a, MappedSpan<Span<'a>, &'a str, F>, [(Span<'a>, Token<'a>); 6]> {
+            let ident = any()
+                .filter(|c: &char| c.is_alphanumeric())
+                .repeated()
+                .at_least(1)
+                .map_slice(Token::Ident);
+
+            let string = just('"')
+                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(just('"'))
+                .map_slice(Token::String);
+
+            ident
+                .or(string)
+                .map_with_span(|token, span| (span, token))
+                .padded()
+                .repeated()
+                .collect_exactly()
+        }
+
+        let filename = "file.txt".to_string();
+        let fstr = filename.as_str();
+
+        assert_eq!(
+            parser()
+                .parse(
+                    r#"hello "world" these are "test" tokens"#
+                        .map_span(|span| Span::new(fstr, span.start()..span.end()))
+                )
+                .into_result(),
+            Ok([
+                (Span::new("file.txt", 0..5), Token::Ident("hello")),
+                (Span::new("file.txt", 6..13), Token::String("\"world\"")),
+                (Span::new("file.txt", 14..19), Token::Ident("these")),
+                (Span::new("file.txt", 20..23), Token::Ident("are")),
+                (Span::new("file.txt", 24..30), Token::String("\"test\"")),
+                (Span::new("file.txt", 31..37), Token::Ident("tokens")),
             ]),
         );
     }
@@ -2814,9 +3005,7 @@ mod tests {
         let mut own = InputOwn::<_, extra::Default>::new(input);
         let mut inp = own.as_ref_start();
 
-        while let Some(c) = inp.next() {
-            drop(c);
-        }
+        while let Some(_c) = inp.next() {}
     }
 
     #[test]
@@ -2853,7 +3042,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(atom.clone())
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised()
+                    .memoized()
                     .or(atom)
             })
             .then_ignore(end())
@@ -2883,7 +3072,7 @@ mod tests {
                     .then_ignore(just('+'))
                     .then(expr)
                     .map(|(a, b)| format!("{}{}", a, b))
-                    .memoised();
+                    .memoized();
 
                 sum.or(atom)
             })
@@ -3043,5 +3232,101 @@ mod tests {
     fn todo_err() {
         let expr = todo::<&str, String, extra::Default>();
         expr.then_ignore(end()).parse("a+b+c");
+    }
+
+    #[test]
+    fn arc_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Arc::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+    }
+
+    #[test]
+    fn box_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Box::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
+    }
+
+    #[test]
+    fn rc_impl() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+            Rc::new(
+                any()
+                    .filter(|c: &char| c.is_ascii_digit())
+                    .repeated()
+                    .at_least(1)
+                    .at_most(3)
+                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .padded()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('['), just(']')),
+            )
+        }
+
+        assert_eq!(
+            parser().parse("[122 , 23,43,    4, ]").into_result(),
+            Ok(vec![122, 23, 43, 4]),
+        );
+        assert_eq!(
+            parser().parse("[0, 3, 6, 900,120]").into_result(),
+            Ok(vec![0, 3, 6, 900, 120]),
+        );
+        assert_eq!(
+            parser().parse("[200,400,50  ,0,0, ]").into_result(),
+            Ok(vec![200, 400, 50, 0, 0]),
+        );
     }
 }

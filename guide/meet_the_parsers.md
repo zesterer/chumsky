@@ -120,7 +120,7 @@ Miscellaneous combinators and those that relate to error recovery.
 |---------------------------------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [`Parser::boxed`]               | `a.boxed()`                           | Performs type-erasure on a parser, allocating it on the heap. Stategically boxing of parsers can improve compilation times and allows dynamically building up parsers at runtime.       |
 | [`Parser::recover_with`]        | `a.recover_with(r)`                   | Attempt to parse a pattern. On failure, the given recovery strategy is used to attempt to recovery from the error. See the documentation for more information.                          |
-| [`Parser::memoised`]            | `a.memoised()`                        | Parse a pattern, but remember whether it succeeded or failed and reuse that information when parsing the same input again. Allows expressing left-recursive or exponential patterns.    |
+| [`Parser::memoized`]            | `a.memoized()`                        | Parse a pattern, but remember whether it succeeded or failed and reuse that information when parsing the same input again. Allows expressing left-recursive or exponential patterns.    |
 
 ### Backtracking and input manipulation
 
@@ -140,5 +140,6 @@ Combinators that allow the parsing of context-sensitive grammars (usually beyond
 
 | Name                            | Example                               | Description                                                                                                                                                                             |
 |---------------------------------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`Parser::then_with_ctx`]       | `a.then_with_ctx(b)`                  | Parse one pattern and use its output as context for another pattern. See [`ConfigParser::configure`] for information about context-sensitive parsing.                                   |
+| [`Parser::ignore_with_ctx`]     | `a.ignore_with_ctx(b)`                | Parse one pattern and use its output as context for another pattern, doesn't return the context. See [`ConfigParser::configure`] for information about context-sensitive parsing.       |
+| [`Parser::then_with_ctx`]       | `a.then_with_ctx(b)`                  | Parse one pattern and use its output as context for another pattern. returns the context. See [`ConfigParser::configure`] for information about context-sensitive parsing.              |
 | [`Parser::with_ctx`]            | `a.with_ctx(ctx)`                     | Parse a pattern with the provided context. See [`ConfigParser::configure`] for information about context-sensitive parsing.                                                             |
