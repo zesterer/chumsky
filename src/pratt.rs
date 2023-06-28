@@ -1,3 +1,11 @@
+//! Pratt parser for binary infix operators.
+//!
+//! Pratt parsing is an algorithm that allows efficient
+//! parsing of binary infix operators.
+//!
+//! The [`Parser::pratt`] method creates a Pratt parser.
+//! Its documentation contains an example of how it can be used.
+
 use core::{
     cmp::{self, Ordering},
     marker::PhantomData,
