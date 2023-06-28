@@ -11,11 +11,20 @@ use lexical::parse_partial;
 use lexical::FromLexical;
 
 /// TODO: Add documentation when approved
-#[derive(Clone, Copy)]
 pub struct Number<const F: u128, I, O, E> {
     #[allow(dead_code)]
     phantom: EmptyPhantom<(I, E, O)>,
 }
+
+impl<const F: u128, I, O, E> Clone for Number<F, I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<const F: u128, I, O, E> Copy for Number<F, I, O, E> {}
 
 /// TODO: Add documentation when approved
 pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
