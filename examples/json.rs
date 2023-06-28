@@ -19,22 +19,28 @@ enum Json {
 
 fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
     recursive(|value| {
-        let digits = text::digits(10).slice();
+        #[cfg(not(feature = "lexical-numbers"))]
+        let number = {
+            let digits = text::digits(10).slice();
 
-        let frac = just('.').then(digits.clone());
+            let frac = just('.').then(digits.clone());
 
-        let exp = just('e')
-            .or(just('E'))
-            .then(one_of("+-").or_not())
-            .then(digits.clone());
+            let exp = just('e')
+                .or(just('E'))
+                .then(one_of("+-").or_not())
+                .then(digits.clone());
 
-        let number = just('-')
-            .or_not()
-            .then(text::int(10))
-            .then(frac.or_not())
-            .then(exp.or_not())
-            .map_slice(|s: &str| s.parse().unwrap())
-            .boxed();
+            just('-')
+                .or_not()
+                .then(text::int(10))
+                .then(frac.or_not())
+                .then(exp.or_not())
+                .map_slice(|s: &str| s.parse().unwrap())
+                .boxed()
+        };
+
+        #[cfg(feature = "lexical-numbers")]
+        let number = number::<{ number::format::JSON }, _, _, _>();
 
         let escape = just('\\')
             .then(choice((
