@@ -58,6 +58,7 @@ pub mod guide;
 pub mod input;
 #[cfg(feature = "label")]
 pub mod label;
+/// a
 pub mod pratt;
 pub mod primitive;
 mod private;
@@ -105,7 +106,6 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
-use pratt::{InfixOperator, Pratt};
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -2025,15 +2025,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// use chumsky::prelude::*;
-    /// use chumsky::pratt::{InfixOperator, InfixPrecedence, Associativity};
-    ///
-    /// #[derive(Clone, Copy, Debug)]
-    /// enum Operator {
-    ///     Add,
-    ///     Sub,
-    ///     Mul,
-    ///     Div,
-    /// }
+    /// use chumsky::pratt::PrattOp;
     ///
     /// enum Expr {
     ///     Literal(i64),
@@ -2055,44 +2047,16 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     }
     /// }
     ///
-    /// impl InfixOperator<Expr> for Operator {
-    ///     type Strength = u8;
-    ///
-    ///     fn precedence(&self) -> InfixPrecedence<Self::Strength> {
-    ///         // NOTE: Usually, in Rust for example, all these operators
-    ///         // are left-associative. However, in this example we define
-    ///         // then with different associativities for demonstration purposes.
-    ///         // (Although it doesn't really matter here since these operations
-    ///         // are commutative for integers anyway.)
-    ///         match self {
-    ///             Self::Add => InfixPrecedence::new(0, Associativity::Left),
-    ///             Self::Sub => InfixPrecedence::new(0, Associativity::Left),
-    ///             Self::Mul => InfixPrecedence::new(1, Associativity::Right),
-    ///             Self::Div => InfixPrecedence::new(1, Associativity::Right),
-    ///         }
-    ///     }
-    ///
-    ///     fn build_expression(self, left: Expr, right: Expr) -> Expr {
-    ///         let (left, right) = (Box::new(left), Box::new(right));
-    ///         match self {
-    ///             Self::Add => Expr::Add(left, right),
-    ///             Self::Sub => Expr::Sub(left, right),
-    ///             Self::Mul => Expr::Mul(left, right),
-    ///             Self::Div => Expr::Div(left, right),
-    ///         }
-    ///     }
-    /// }
-    ///
     /// let atom = text::int::<_, _, extra::Default>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .map(Expr::Literal);
     ///
     /// let operator = choice((
-    ///     just('+').to(Operator::Add),
-    ///     just('-').to(Operator::Sub),
-    ///     just('*').to(Operator::Mul),
-    ///     just('/').to(Operator::Div),
+    ///     PrattOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     PrattOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     PrattOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+    ///     PrattOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
     /// ));
     ///
     /// let expr = atom.pratt(operator.padded_by(just(' ')));
@@ -2106,15 +2070,16 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // `*` is right-associative (in this example)
     /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
     /// ```
-    fn pratt<OpParser, Op>(self, op_parser: OpParser) -> Pratt<E, Self, O, OpParser, Op>
+    fn pratt<Ops, Op>(self, ops: Ops) -> pratt::PrattParser<Self, Ops, O, Op, E>
     where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Ops: Parser<'a, I, Op, E>,
         Self: Sized,
-        OpParser: Parser<'a, I, Op, E>,
-        Op: InfixOperator<O>,
     {
-        Pratt {
-            parser_atom: self,
-            parser_op: op_parser,
+        pratt::PrattParser {
+            atom: self,
+            ops,
             phantom: PhantomData,
         }
     }
