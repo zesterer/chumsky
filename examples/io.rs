@@ -1,8 +1,8 @@
+use chumsky::extra::ParserExtra;
+use chumsky::input::IoInput;
+use chumsky::prelude::*;
 use std::env;
 use std::fs::File;
-use chumsky::extra::ParserExtra;
-use chumsky::prelude::*;
-use chumsky::input::IoInput;
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -30,11 +30,7 @@ fn digits<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<Fi
 }
 
 fn parser<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<File>, Vec<Foo>, E> {
-    group((
-        ident(),
-        just(b':').padded(),
-        digits(),
-    ))
+    group((ident(), just(b':').padded(), digits()))
         .map(|(name, _, digits)| Foo {
             name,
             val: digits.parse().unwrap(),
@@ -48,7 +44,8 @@ fn main() {
     let src = File::open(env::args().nth(1).expect("Expected file argument"))
         .expect("Failed to open file");
 
-    let json = parser::<extra::Err<Rich<_>>>().parse(IoInput::new(src))
+    let json = parser::<extra::Err<Rich<_>>>()
+        .parse(IoInput::new(src))
         .into_result();
     println!("{:#?}", json);
 }

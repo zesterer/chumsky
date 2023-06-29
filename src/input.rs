@@ -9,10 +9,10 @@ pub use crate::stream::{BoxedExactSizeStream, BoxedStream, Stream};
 use core::cell::RefCell;
 
 use super::*;
-#[cfg(feature = "std")]
-use std::io::{BufReader, Seek, Read};
 #[cfg(feature = "memoization")]
 use hashbrown::HashMap;
+#[cfg(feature = "std")]
+use std::io::{BufReader, Read, Seek};
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
@@ -788,9 +788,9 @@ struct IoInner<R> {
 
 /// Input type which supports seekable readers. Uses a [`BufReader`] internally to buffer input and
 /// avoid unecessary IO calls.
-/// 
+///
 /// Only available with the `std` feature
-#[cfg(feature = "std")] 
+#[cfg(feature = "std")]
 pub struct IoInput<R>(RefCell<IoInner<R>>);
 
 #[cfg(feature = "std")]
@@ -838,24 +838,21 @@ impl<'a, R: Read + Seek + 'a> ValueInput<'a> for IoInput<R> {
 
         if offset != inner.last_offset {
             let seek = offset as i64 - inner.last_offset as i64;
-            
-            inner.reader
-                .seek_relative(seek)
-                .unwrap();
+
+            inner.reader.seek_relative(seek).unwrap();
 
             inner.last_offset = offset;
         }
-        
+
         let mut out = 0;
 
-        let r = inner.reader
-            .read_exact(std::slice::from_mut(&mut out));
+        let r = inner.reader.read_exact(std::slice::from_mut(&mut out));
 
         match r {
             Ok(()) => {
                 inner.last_offset += 1;
                 (offset + 1, Some(out))
-            },
+            }
             Err(_) => (offset, None),
         }
     }
