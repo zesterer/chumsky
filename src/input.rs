@@ -6,8 +6,11 @@
 //! ways: from strings, slices, arrays, etc.
 
 pub use crate::stream::{BoxedExactSizeStream, BoxedStream, Stream};
+use core::cell::RefCell;
 
 use super::*;
+#[cfg(feature = "std")]
+use std::io::{BufReader, Seek, Read};
 #[cfg(feature = "memoization")]
 use hashbrown::HashMap;
 
@@ -775,6 +778,87 @@ where
     F: Fn(I::Span) -> S,
     C: Char,
 {
+}
+
+#[cfg(feature = "std")]
+struct IoInner<R> {
+    reader: BufReader<R>,
+    last_offset: usize,
+}
+
+/// Input type which supports seekable readers. Uses a [`BufReader`] internally to buffer input and
+/// avoid unecessary IO calls.
+/// 
+/// Only available with the `std` feature
+#[cfg(feature = "std")] 
+pub struct IoInput<R>(RefCell<IoInner<R>>);
+
+#[cfg(feature = "std")]
+impl<R: Read + Seek> IoInput<R> {
+    /// Create a new `IoReader` from a seekable reader.
+    pub fn new(reader: R) -> IoInput<R> {
+        IoInput(RefCell::new(IoInner {
+            reader: BufReader::new(reader),
+            last_offset: 0,
+        }))
+    }
+}
+
+#[cfg(feature = "std")]
+impl<R: Read + Seek> Sealed for IoInput<R> {}
+#[cfg(feature = "std")]
+impl<'a, R: Read + Seek + 'a> Input<'a> for IoInput<R> {
+    type Offset = usize;
+    type Token = u8;
+    type Span = SimpleSpan;
+
+    fn start(&self) -> Self::Offset {
+        0
+    }
+
+    type TokenMaybe = u8;
+
+    unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
+        Self::next(self, offset)
+    }
+
+    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
+        SimpleSpan::from(range)
+    }
+
+    fn prev(offs: Self::Offset) -> Self::Offset {
+        offs.saturating_sub(1)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, R: Read + Seek + 'a> ValueInput<'a> for IoInput<R> {
+    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        let mut inner = self.0.borrow_mut();
+
+        if offset != inner.last_offset {
+            let seek = offset as i64 - inner.last_offset as i64;
+            
+            inner.reader
+                .seek_relative(seek)
+                .unwrap();
+
+            inner.last_offset = offset;
+        }
+        
+        let mut out = 0;
+
+        let r = inner.reader
+            .read_exact(std::slice::from_mut(&mut out));
+
+        match r {
+            Ok(()) => {
+                inner.last_offset += 1;
+                (offset + 1, Some(out))
+            },
+            Err(_) => (offset, None),
+        }
+    }
 }
 
 /// Represents a location in an input that can be rewound to.
