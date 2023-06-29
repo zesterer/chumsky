@@ -2115,7 +2115,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// use chumsky::prelude::*;
-    /// use chumsky::pratt::InfixOp;
+    /// use chumsky::pratt::{left_infix, right_infix};
     ///
     /// enum Expr {
     ///     Literal(i64),
@@ -2143,10 +2143,10 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     .map(Expr::Literal);
     ///
     /// let operator = choice((
-    ///     InfixOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     InfixOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-    ///     InfixOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-    ///     InfixOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+    ///     left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+    ///     right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
     /// ));
     ///
     /// let expr = atom.pratt(operator.padded_by(just(' ')));

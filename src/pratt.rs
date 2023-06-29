@@ -19,6 +19,16 @@ use crate::{
     Parser,
 };
 
+/// DOCUMENT
+pub fn left_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
+    InfixOp::new_left(parser, strength, build)
+}
+
+/// DOCUMENT
+pub fn right_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
+    InfixOp::new_right(parser, strength, build)
+}
+
 /// Document
 pub type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
 
@@ -283,10 +293,10 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         let operator = choice((
-            InfixOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            InfixOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            InfixOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            InfixOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+            left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+            right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+            right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
         ));
 
         atom.pratt(operator).map(|x| x.to_string())
