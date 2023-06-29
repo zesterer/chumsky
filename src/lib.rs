@@ -84,7 +84,7 @@ pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
     pub use super::number::number;
     #[cfg(feature = "pratt")]
-    pub use super::pratt::{Pratt, PrattOp};
+    pub use super::pratt::{InfixOp, Pratt};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -2115,7 +2115,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// use chumsky::prelude::*;
-    /// use chumsky::pratt::PrattOp;
+    /// use chumsky::pratt::InfixOp;
     ///
     /// enum Expr {
     ///     Literal(i64),
@@ -2143,10 +2143,10 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     .map(Expr::Literal);
     ///
     /// let operator = choice((
-    ///     PrattOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     PrattOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-    ///     PrattOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-    ///     PrattOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+    ///     InfixOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     InfixOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     InfixOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+    ///     InfixOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
     /// ));
     ///
     /// let expr = atom.pratt(operator.padded_by(just(' ')));
@@ -2170,7 +2170,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     {
         Pratt {
             atom: self,
-            ops,
+            infix_ops: ops,
             phantom: PhantomData,
         }
     }

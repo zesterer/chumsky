@@ -19,22 +19,23 @@ use crate::{
     Parser,
 };
 
-type ExprBuilder<E> = fn(lhs: E, rhs: E) -> E;
+/// Document
+pub type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
 
 /// This type is only used so that InfixPrecedence doesn't have to be
 /// public... it's a bit awkward.
-pub struct PrattOpOutput<Expr>(InfixPrecedence, ExprBuilder<Expr>);
+pub struct PrattOpOutput<Builder>(InfixPrecedence, Builder);
 
 /// DOCUMENT
-pub struct PrattOp<P, E, PO> {
+pub struct InfixOp<P, E, PO> {
     strength: u8,
     assoc: Assoc,
     parser: P,
-    build: ExprBuilder<E>,
+    build: InfixBuilder<E>,
     phantom: PhantomData<(PO,)>,
 }
 
-impl<P: Clone, E, PO> Clone for PrattOp<P, E, PO> {
+impl<P: Clone, E, PO> Clone for InfixOp<P, E, PO> {
     fn clone(&self) -> Self {
         Self {
             strength: self.strength,
@@ -46,9 +47,9 @@ impl<P: Clone, E, PO> Clone for PrattOp<P, E, PO> {
     }
 }
 
-impl<P, E, PO> PrattOp<P, E, PO> {
+impl<P, E, PO> InfixOp<P, E, PO> {
     /// DOCUMENT
-    pub fn new_left(parser: P, strength: u8, build: ExprBuilder<E>) -> Self {
+    pub fn new_left(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
         Self {
             strength,
             assoc: Assoc::Left,
@@ -59,7 +60,7 @@ impl<P, E, PO> PrattOp<P, E, PO> {
     }
 
     /// DOCUMENT
-    pub fn new_right(parser: P, strength: u8, build: ExprBuilder<E>) -> Self {
+    pub fn new_right(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
         Self {
             strength,
             assoc: Assoc::Right,
@@ -70,16 +71,17 @@ impl<P, E, PO> PrattOp<P, E, PO> {
     }
 }
 
-impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<Expr>, E> for PrattOp<P, Expr, O>
+impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>
+    for InfixOp<P, Expr, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     P: Parser<'a, I, O, E>,
 {
-    fn go<'b, M: Mode>(
-        &'b self,
+    fn go<M: Mode>(
+        &self,
         inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, PrattOpOutput<Expr>>
+    ) -> PResult<M, PrattOpOutput<InfixBuilder<Expr>>>
     where
         Self: Sized,
     {
@@ -91,14 +93,14 @@ where
         }
     }
 
-    go_extra!(PrattOpOutput<Expr>);
+    go_extra!(PrattOpOutput<InfixBuilder<Expr>>);
 }
 
 /// DOCUMENT
 #[derive(Copy, Clone)]
-pub struct Pratt<Atom, Ops, Expr, Op, Ex> {
+pub struct Pratt<Atom, InfixOps, Expr, Op, Ex> {
     pub(crate) atom: Atom,
-    pub(crate) ops: Ops,
+    pub(crate) infix_ops: InfixOps,
     pub(crate) phantom: PhantomData<(Expr, Op, Ex)>,
 }
 
@@ -113,12 +115,12 @@ impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
         I: Input<'a>,
         Ex: ParserExtra<'a, I>,
         Atom: Parser<'a, I, Expr, Ex>,
-        Ops: Parser<'a, I, PrattOpOutput<Expr>, Ex>,
+        Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, Ex>,
     {
         let mut left = self.atom.go::<M>(inp)?;
         loop {
             let pre_op = inp.save();
-            let (op, prec) = match self.ops.go::<Emit>(inp) {
+            let (op, prec) = match self.infix_ops.go::<Emit>(inp) {
                 Ok(PrattOpOutput(prec, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
@@ -143,7 +145,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, Expr, E>,
-    Ops: Parser<'a, I, PrattOpOutput<Expr>, E>,
+    Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Expr>
     where
@@ -281,10 +283,10 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         let operator = choice((
-            PrattOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            PrattOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            PrattOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            PrattOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            InfixOp::new_left(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+            InfixOp::new_left(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+            InfixOp::new_right(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+            InfixOp::new_right(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
         ));
 
         atom.pratt(operator).map(|x| x.to_string())
