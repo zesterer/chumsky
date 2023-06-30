@@ -107,6 +107,19 @@ where
 }
 
 /// DOCUMENT
+
+trait PrattParser<'a, I, Expr, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn pratt_parse<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_strength: Option<Strength>,
+    ) -> PResult<M, Expr>;
+}
+
 #[derive(Copy, Clone)]
 pub struct Pratt<Atom, InfixOps, Expr, Op, Ex> {
     pub(crate) atom: Atom,
@@ -114,18 +127,20 @@ pub struct Pratt<Atom, InfixOps, Expr, Op, Ex> {
     pub(crate) phantom: PhantomData<(Expr, Op, Ex)>,
 }
 
-impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
-    fn pratt_parse<'a, M, I>(
+impl<'a, Atom, Ops, I, Expr, Op, E> PrattParser<'a, I, Expr, E> for Pratt<Atom, Ops, Expr, Op, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    Atom: Parser<'a, I, Expr, E>,
+    Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>,
+{
+    fn pratt_parse<M>(
         &self,
-        inp: &mut InputRef<'a, '_, I, Ex>,
+        inp: &mut InputRef<'a, '_, I, E>,
         min_strength: Option<Strength>,
     ) -> PResult<M, Expr>
     where
         M: Mode,
-        I: Input<'a>,
-        Ex: ParserExtra<'a, I>,
-        Atom: Parser<'a, I, Expr, Ex>,
-        Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, Ex>,
     {
         let mut left = self.atom.go::<M>(inp)?;
         loop {
@@ -147,6 +162,24 @@ impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
             let right = self.pratt_parse::<M, _>(inp, Some(prec.strength_right()))?;
             left = M::combine(left, right, op);
         }
+    }
+}
+
+impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
+    fn pratt_parse<'a, M, I>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, Ex>,
+        min_strength: Option<Strength>,
+    ) -> PResult<M, Expr>
+    where
+        M: Mode,
+        I: Input<'a>,
+        Ex: ParserExtra<'a, I>,
+        Atom: Parser<'a, I, Expr, Ex>,
+        Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, Ex>,
+        Self: PrattParser<'a, I, Expr, Ex>,
+    {
+        <Self as PrattParser<_, _, _>>::pratt_parse::<M>(&self, inp, min_strength)
     }
 }
 
