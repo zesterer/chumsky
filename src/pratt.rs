@@ -159,27 +159,9 @@ where
                 }
             };
 
-            let right = self.pratt_parse::<M, _>(inp, Some(prec.strength_right()))?;
+            let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
             left = M::combine(left, right, op);
         }
-    }
-}
-
-impl<Atom, Ops, Expr, Op, Ex> Pratt<Atom, Ops, Expr, Op, Ex> {
-    fn pratt_parse<'a, M, I>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, Ex>,
-        min_strength: Option<Strength>,
-    ) -> PResult<M, Expr>
-    where
-        M: Mode,
-        I: Input<'a>,
-        Ex: ParserExtra<'a, I>,
-        Atom: Parser<'a, I, Expr, Ex>,
-        Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, Ex>,
-        Self: PrattParser<'a, I, Expr, Ex>,
-    {
-        <Self as PrattParser<_, _, _>>::pratt_parse::<M>(&self, inp, min_strength)
     }
 }
 
@@ -188,13 +170,13 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, Expr, E>,
-    Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>,
+    Self: PrattParser<'a, I, Expr, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Expr>
     where
         Self: Sized,
     {
-        self.pratt_parse::<M, _>(inp, None)
+        self.pratt_parse::<M>(inp, None)
     }
 
     go_extra!(Expr);
