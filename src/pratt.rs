@@ -34,7 +34,7 @@ pub type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
 
 /// This type is only used so that InfixPrecedence doesn't have to be
 /// public... it's a bit awkward.
-pub struct PrattOpOutput<Builder>(InfixPrecedence, Builder);
+pub struct PrattOpOutput<Builder>(Precedence, Builder);
 
 /// DOCUMENT
 pub struct InfixOp<P, E, PO> {
@@ -97,7 +97,7 @@ where
     {
         match self.parser.go::<Check>(inp) {
             Ok(()) => Ok(M::bind(|| {
-                PrattOpOutput(InfixPrecedence::new(self.strength, self.assoc), self.build)
+                PrattOpOutput(Precedence::new(self.strength, self.assoc), self.build)
             })),
             Err(()) => Err(()),
         }
@@ -227,12 +227,12 @@ impl PartialOrd for Strength {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-struct InfixPrecedence {
+struct Precedence {
     strength: u8,
     associativity: Assoc,
 }
 
-impl InfixPrecedence {
+impl Precedence {
     /// Create a new precedence value.
     pub fn new(strength: u8, associativity: Assoc) -> Self {
         Self {
@@ -242,7 +242,7 @@ impl InfixPrecedence {
     }
 }
 
-impl InfixPrecedence {
+impl Precedence {
     /// Get the binding power of this operator with an argument on the left.
     fn strength_left(&self) -> Strength {
         match self.associativity {
