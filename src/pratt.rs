@@ -349,7 +349,7 @@ mod tests {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::Literal(literal) => write!(f, "{literal}"),
-                Self::Not(right) => write!(f, "(!{right})"),
+                Self::Not(right) => write!(f, "(~{right})"),
                 Self::Negate(right) => write!(f, "(-{right})"),
                 Self::Confusion(right) => write!(f, "(§{right})"),
                 Self::Factorial(right) => write!(f, "({right}!)"),
@@ -462,15 +462,15 @@ mod tests {
                 // in order to get these to function as expected, their strength
                 // must be higher
                 prefix(just('-'), 2, |rhs| Expr::Negate(Box::new(rhs))),
-                prefix(just('!'), 2, |rhs| Expr::Not(Box::new(rhs))),
+                prefix(just('~'), 2, |rhs| Expr::Not(Box::new(rhs))),
                 // This is what happens when not
                 prefix(just('§'), 1, |rhs| Expr::Confusion(Box::new(rhs))),
             )))
             .map(|x| x.to_string());
 
         assert_eq!(
-            parser.parse("-1+§!2*3").into_result(),
-            Ok("((-1) + (§((!2) * 3)))".to_string()),
+            parser.parse("-1+§~2*3").into_result(),
+            Ok("((-1) + (§((~2) * 3)))".to_string()),
         )
     }
 
