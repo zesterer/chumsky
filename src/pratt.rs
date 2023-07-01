@@ -436,102 +436,34 @@ where
     }
 }
 
-impl<
-        'a,
-        I,
-        O,
-        E,
-        Atom,
-        InfixOps,
-        InfixOpsOut,
-        PrefixOps,
-        PrefixOpsOut,
-        PostfixOps,
-        PostfixOpsOut,
-    > ParserSealed<'a, I, O, E>
-    for Pratt<
-        I,
-        O,
-        E,
-        Atom,
-        InfixPrefixPostfix<
-            InfixOps,
-            InfixOpsOut,
-            PrefixOps,
-            PrefixOpsOut,
-            PostfixOps,
-            PostfixOpsOut,
-        >,
-    >
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Self: PrattParser<'a, I, O, E>,
-{
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        self.pratt_parse::<M>(inp, None)
-    }
+macro_rules! impl_parse {
+    ($Parser:ident < $($Gen:ident),+ $(,)?>) => {
+        impl<'a, I, O, E, Atom, $($Gen),+> ParserSealed<'a, I, O, E> for Pratt<I, O, E, Atom, $Parser<$($Gen),+>>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            Atom: Parser<'a, I, O, E>,
+            Self: PrattParser<'a, I, O, E>,
+        {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+            where
+                Self: Sized,
+            {
+                self.pratt_parse::<M>(inp, None)
+            }
 
-    go_extra!(O);
+            go_extra!(O);
+        }
+    };
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> ParserSealed<'a, I, O, E>
-    for Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Self: PrattParser<'a, I, O, E>,
-{
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        self.pratt_parse::<M>(inp, None)
-    }
+impl_parse!(Infix<InfixOps, InfixOpsOut>);
 
-    go_extra!(O);
-}
+impl_parse!(InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>);
 
-impl<'a, I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> ParserSealed<'a, I, O, E>
-    for Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Self: PrattParser<'a, I, O, E>,
-{
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        self.pratt_parse::<M>(inp, None)
-    }
+impl_parse!(InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>);
 
-    go_extra!(O);
-}
-
-impl<'a, I, O, E, Atom, PostfixOps, PostfixOpsOut, InfixOps, InfixOpsOut> ParserSealed<'a, I, O, E>
-    for Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Self: PrattParser<'a, I, O, E>,
-{
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
-    where
-        Self: Sized,
-    {
-        self.pratt_parse::<M>(inp, None)
-    }
-
-    go_extra!(O);
-}
+impl_parse!(InfixPrefixPostfix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut, PostfixOps, PostfixOpsOut,>);
 
 #[cfg(test)]
 mod tests {
