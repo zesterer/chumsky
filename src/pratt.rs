@@ -26,6 +26,13 @@ use crate::{
     Parser,
 };
 
+mod private {
+    use super::Precedence;
+    pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
+}
+
+use private::PrattOpOutput;
+
 /// DOCUMENT
 pub fn left_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
     InfixOp::new_left(parser, strength, build)
@@ -44,31 +51,6 @@ pub fn prefix<P, E, PO>(parser: P, strength: u8, build: PrefixBuilder<E>) -> Pre
 /// DOCUMENT
 pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> PostfixOp<P, E, PO> {
     PostfixOp::new(parser, strength, build)
-}
-
-mod private {
-    use super::Precedence;
-    pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
-}
-
-use private::PrattOpOutput;
-
-type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
-
-type PrefixBuilder<E> = fn(rhs: E) -> E;
-
-type PostfixBuilder<E> = fn(rhs: E) -> E;
-
-trait PrattParser<'a, I, Expr, E>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-{
-    fn pratt_parse<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        min_strength: Option<Strength>,
-    ) -> PResult<M, Expr>;
 }
 
 /// DOCUMENT
@@ -199,6 +181,24 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>
             phantom: PhantomData,
         }
     }
+}
+
+type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
+
+type PrefixBuilder<E> = fn(rhs: E) -> E;
+
+type PostfixBuilder<E> = fn(rhs: E) -> E;
+
+trait PrattParser<'a, I, Expr, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn pratt_parse<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_strength: Option<Strength>,
+    ) -> PResult<M, Expr>;
 }
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
