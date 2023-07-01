@@ -1,5 +1,31 @@
 use super::*;
 
+pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
+
+pub struct Infix<P, PO> {
+    pub(crate) infix: P,
+    pub(crate) phantom: PhantomData<PO>,
+}
+
+pub struct InfixPrefix<P1, P1O, P2, P2O> {
+    pub(crate) infix: P1,
+    pub(crate) prefix: P2,
+    pub(crate) phantom: PhantomData<(P1O, P2O)>,
+}
+
+pub struct InfixPostfix<P1, P1O, P2, P2O> {
+    pub(crate) infix: P1,
+    pub(crate) postfix: P2,
+    pub(crate) phantom: PhantomData<(P1O, P2O)>,
+}
+
+pub struct InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O> {
+    pub(crate) infix: P1,
+    pub(crate) prefix: P2,
+    pub(crate) postfix: P3,
+    pub(crate) phantom: PhantomData<(P1O, P2O, P3O)>,
+}
+
 /// DOCUMENT
 pub struct InfixOp<P, E, PO> {
     strength: u8,

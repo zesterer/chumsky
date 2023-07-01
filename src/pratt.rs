@@ -7,8 +7,8 @@
 //! Its documentation contains an example of how it can be used.
 
 mod ops;
+use ops::Strength;
 pub use ops::{InfixOp, PostfixOp, PrefixOp};
-use ops::{Precedence, Strength};
 
 use core::{
     cmp::{self, Ordering},
@@ -23,38 +23,7 @@ use crate::{
     Parser,
 };
 
-mod private {
-    use super::PhantomData;
-    use super::Precedence;
-
-    pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
-
-    pub struct Infix<P, PO> {
-        pub(crate) infix: P,
-        pub(crate) phantom: PhantomData<PO>,
-    }
-
-    pub struct InfixPrefix<P1, P1O, P2, P2O> {
-        pub(crate) infix: P1,
-        pub(crate) prefix: P2,
-        pub(crate) phantom: PhantomData<(P1O, P2O)>,
-    }
-
-    pub struct InfixPostfix<P1, P1O, P2, P2O> {
-        pub(crate) infix: P1,
-        pub(crate) postfix: P2,
-        pub(crate) phantom: PhantomData<(P1O, P2O)>,
-    }
-
-    pub struct InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O> {
-        pub(crate) infix: P1,
-        pub(crate) prefix: P2,
-        pub(crate) postfix: P3,
-        pub(crate) phantom: PhantomData<(P1O, P2O, P3O)>,
-    }
-}
-
-pub(super) use private::{Infix, InfixPostfix, InfixPrefix, InfixPrefixPostfix, PrattOpOutput};
+pub(super) use ops::{Infix, InfixPostfix, InfixPrefix, InfixPrefixPostfix, PrattOpOutput};
 
 /// DOCUMENT
 pub fn left_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
