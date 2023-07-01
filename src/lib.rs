@@ -117,6 +117,7 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
+use pratt::Infix;
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -2161,16 +2162,22 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
     /// ```
     #[cfg(feature = "pratt")]
-    fn pratt<Ops, Op>(self, ops: Ops) -> Pratt<Self, Ops, O, Op, E>
+    fn pratt<InfixOps, InfixOpsOut>(
+        self,
+        ops: InfixOps,
+    ) -> Pratt<I, O, E, Self, Infix<InfixOps, InfixOpsOut>>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        Ops: Parser<'a, I, Op, E>,
+        InfixOps: Parser<'a, I, InfixOpsOut, E>,
         Self: Sized,
     {
         Pratt {
             atom: self,
-            infix_ops: ops,
+            ops: Infix {
+                infix: ops,
+                phantom: PhantomData,
+            },
             phantom: PhantomData,
         }
     }
