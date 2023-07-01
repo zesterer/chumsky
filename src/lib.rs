@@ -84,7 +84,7 @@ pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
     pub use super::number::number;
     #[cfg(feature = "pratt")]
-    pub use super::pratt::{Infix, InfixOp, Pratt};
+    pub use super::pratt::{InfixOp, Pratt};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -2164,7 +2164,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     fn pratt<InfixOps, InfixOpsOut>(
         self,
         ops: InfixOps,
-    ) -> Pratt<I, O, E, Self, Infix<InfixOps, InfixOpsOut>>
+    ) -> Pratt<I, O, E, Self, pratt::Infix<InfixOps, InfixOpsOut>>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
@@ -2173,7 +2173,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     {
         Pratt {
             atom: self,
-            ops: Infix {
+            ops: pratt::Infix {
                 infix: ops,
                 phantom: PhantomData,
             },
