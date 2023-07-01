@@ -38,7 +38,7 @@ label = []
 sync = ["spin"]
 
 # Enable Pratt parsing combinator
-pratt = []
+pratt = ["unstable"]
 
 # Allow the use of unstable features (aka features where the API is not settled)
 unstable = []
