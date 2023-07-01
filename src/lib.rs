@@ -84,7 +84,7 @@ pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
     pub use super::number::number;
     #[cfg(feature = "pratt")]
-    pub use super::pratt::{InfixOp, Pratt};
+    pub use super::pratt::{Infix, InfixOp, Pratt};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -117,7 +117,6 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
-use pratt::Infix;
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
