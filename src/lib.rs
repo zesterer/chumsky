@@ -63,6 +63,8 @@ pub mod input;
 pub mod label;
 #[cfg(feature = "lexical-numbers")]
 pub mod number;
+#[cfg(feature = "pratt")]
+pub mod pratt;
 pub mod primitive;
 mod private;
 pub mod recovery;
@@ -81,6 +83,8 @@ pub mod util;
 pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
     pub use super::number::number;
+    #[cfg(feature = "pratt")]
+    pub use super::pratt::{InfixOp, Pratt};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -2099,6 +2103,82 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Self: MaybeSync + Sized + 'a + 'b,
     {
         ParserSealed::boxed(self)
+    }
+
+    /// Use Pratt parsing to efficiently parse binary operators
+    /// with different associativity.
+    ///
+    /// The parsing algorithm currently uses recursion
+    /// to parse nested expressions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chumsky::prelude::*;
+    /// use chumsky::pratt::{left_infix, right_infix};
+    ///
+    /// enum Expr {
+    ///     Literal(i64),
+    ///     Add(Box<Expr>, Box<Expr>),
+    ///     Sub(Box<Expr>, Box<Expr>),
+    ///     Mul(Box<Expr>, Box<Expr>),
+    ///     Div(Box<Expr>, Box<Expr>),
+    /// }
+    ///
+    /// impl std::fmt::Display for Expr {
+    ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///         match self {
+    ///             Self::Literal(literal) => write!(f, "{literal}"),
+    ///             Self::Add(left, right) => write!(f, "({left} + {right})"),
+    ///             Self::Sub(left, right) => write!(f, "({left} - {right})"),
+    ///             Self::Mul(left, right) => write!(f, "({left} * {right})"),
+    ///             Self::Div(left, right) => write!(f, "({left} / {right})"),
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// let atom = text::int::<_, _, extra::Default>(10)
+    ///     .from_str()
+    ///     .unwrapped()
+    ///     .map(Expr::Literal);
+    ///
+    /// let operator = choice((
+    ///     left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+    ///     right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+    /// ));
+    ///
+    /// let expr = atom.pratt(operator.padded_by(just(' ')));
+    /// let expr_str = expr.map(|expr| expr.to_string()).then_ignore(end());
+    /// assert_eq!(expr_str.parse("1 + 2").into_result(), Ok("(1 + 2)".to_string()));
+    /// // `*` binds more strongly than `+`
+    /// assert_eq!(expr_str.parse("1 * 2 + 3").into_result(), Ok("((1 * 2) + 3)".to_string()));
+    /// assert_eq!(expr_str.parse("1 + 2 * 3").into_result(), Ok("(1 + (2 * 3))".to_string()));
+    /// // `+` is left-associative
+    /// assert_eq!(expr_str.parse("1 + 2 + 3").into_result(), Ok("((1 + 2) + 3)".to_string()));
+    /// // `*` is right-associative (in this example)
+    /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
+    /// ```
+    #[cfg(feature = "pratt")]
+    fn pratt<InfixOps, InfixOpsOut>(
+        self,
+        ops: InfixOps,
+    ) -> Pratt<I, O, E, Self, pratt::Infix<InfixOps, InfixOpsOut>>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        InfixOps: Parser<'a, I, InfixOpsOut, E>,
+        Self: Sized,
+    {
+        Pratt {
+            atom: self,
+            ops: pratt::Infix {
+                infix: ops,
+                phantom: PhantomData,
+            },
+            phantom: PhantomData,
+        }
     }
 }
 
