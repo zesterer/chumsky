@@ -123,7 +123,63 @@ where
         }
     }
 
-    go_extra_named!(I, PrattOpOutput<PrefixBuilder<Expr>>, E);
+    go_extra!(PrattOpOutput<PrefixBuilder<Expr>>);
+}
+
+/// DOCUMENT
+pub struct PostfixOp<Parser, Expr, ParserOut> {
+    strength: u8,
+    parser: Parser,
+    build: PostfixBuilder<Expr>,
+    phantom: PhantomData<(ParserOut,)>,
+}
+
+impl<Parser: Clone, Expr, ParserOut> Clone for PostfixOp<Parser, Expr, ParserOut> {
+    fn clone(&self) -> Self {
+        Self {
+            strength: self.strength,
+            parser: self.parser.clone(),
+            build: self.build,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<Parser, Expr, ParserOut> PostfixOp<Parser, Expr, ParserOut> {
+    /// DOCUMENT
+    pub fn new(parser: Parser, strength: u8, build: PostfixBuilder<Expr>) -> Self {
+        Self {
+            strength,
+            parser,
+            build,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<PostfixBuilder<Expr>>, E>
+    for PostfixOp<P, Expr, O>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<M, PrattOpOutput<PostfixBuilder<Expr>>>
+    where
+        Self: Sized,
+    {
+        match self.parser.go::<Check>(inp) {
+            Ok(()) => Ok(M::bind(|| {
+                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), self.build)
+            })),
+            Err(()) => Err(()),
+        }
+    }
+
+    go_extra!(PrattOpOutput<PostfixBuilder<Expr>>);
 }
 
 /// Indicates which argument binds more strongly with a binary infix operator.
