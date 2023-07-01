@@ -468,9 +468,6 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
-    PrefixOps: Parser<'a, I, PrattOpOutput<PrefixBuilder<O>>, E>,
-    PostfixOps: Parser<'a, I, PrattOpOutput<PostfixBuilder<O>>, E>,
     Self: PrattParser<'a, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
