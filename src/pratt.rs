@@ -15,7 +15,7 @@ use crate::{
     extra::ParserExtra,
     input::InputRef,
     prelude::Input,
-    private::{Check, Emit, Mode, PResult, ParserSealed},
+    private::{self, Check, Emit, Mode, PResult, ParserSealed},
     Parser,
 };
 
@@ -29,8 +29,16 @@ pub fn right_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) ->
     InfixOp::new_right(parser, strength, build)
 }
 
+/// DOCUMENT
+pub fn prefix<P, E, PO>(parser: P, strength: u8, build: PrefixBuilder<E>) -> PrefixOp<P, E, PO> {
+    PrefixOp::new(parser, strength, build)
+}
+
 /// Document
 pub type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
+
+/// Document
+pub type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 /// This type is only used so that InfixPrecedence doesn't have to be
 /// public... it's a bit awkward.
@@ -107,6 +115,63 @@ where
 }
 
 /// DOCUMENT
+pub struct PrefixOp<Parser, Expr, ParserOut> {
+    strength: u8,
+    parser: Parser,
+    build: PrefixBuilder<Expr>,
+    phantom: PhantomData<(ParserOut,)>,
+}
+
+impl<Parser: Clone, Expr, ParserOut> Clone for PrefixOp<Parser, Expr, ParserOut> {
+    fn clone(&self) -> Self {
+        Self {
+            strength: self.strength,
+            parser: self.parser.clone(),
+            build: self.build,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<Parser, Expr, ParserOut> PrefixOp<Parser, Expr, ParserOut> {
+    /// DOCUMENT
+    pub fn new(parser: Parser, strength: u8, build: PrefixBuilder<Expr>) -> Self {
+        Self {
+            strength,
+            parser,
+            build,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<PrefixBuilder<Expr>>, E>
+    for PrefixOp<P, Expr, O>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    P: Parser<'a, I, O, E>,
+{
+    fn go<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<M, PrattOpOutput<PrefixBuilder<Expr>>>
+    where
+        Self: Sized,
+    {
+        match self.parser.go::<Check>(inp) {
+            Ok(()) => Ok(M::bind(|| {
+                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), self.build)
+            })),
+            Err(()) => Err(()),
+        }
+    }
+
+    go_extra_named!(I, PrattOpOutput<PrefixBuilder<Expr>>, E);
+}
+
+/// Document
+pub struct NoOps;
 
 trait PrattParser<'a, I, Expr, E>
 where
@@ -120,25 +185,128 @@ where
     ) -> PResult<M, Expr>;
 }
 
-#[derive(Copy, Clone)]
-pub struct Pratt<Atom, InfixOps, Expr, Op, Ex> {
+/// DOCUMENT
+pub struct PrefixPratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> {
     pub(crate) atom: Atom,
+    pub(crate) prefix_ops: PrefixOps,
     pub(crate) infix_ops: InfixOps,
-    pub(crate) phantom: PhantomData<(Expr, Op, Ex)>,
+    pub(crate) phantom: PhantomData<(I, O, E, PrefixOpsOut, InfixOpsOut)>,
 }
 
-impl<'a, Atom, Ops, I, Expr, Op, E> PrattParser<'a, I, Expr, E> for Pratt<Atom, Ops, Expr, Op, E>
+impl<'a, I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
+    for PrefixPratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, Expr, E>,
-    Ops: Parser<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>,
+    Atom: Parser<'a, I, O, E>,
+    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
+    PrefixOps: Parser<'a, I, PrattOpOutput<PrefixBuilder<O>>, E>,
+{
+    fn pratt_parse<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_strength: Option<Strength>,
+    ) -> PResult<M, O> {
+        let pre_op = inp.save();
+        let mut left = match self.prefix_ops.go::<Emit>(inp) {
+            Ok(PrattOpOutput(prec, build)) => {
+                let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
+                M::map(right, build)
+            }
+            Err(_) => {
+                inp.rewind(pre_op);
+                self.atom.go::<M>(inp)?
+            }
+        };
+
+        loop {
+            let pre_op = inp.save();
+            let (op, prec) = match self.infix_ops.go::<Emit>(inp) {
+                Ok(PrattOpOutput(prec, build)) => {
+                    if prec.strength_left().is_lt(&min_strength) {
+                        inp.rewind(pre_op);
+                        return Ok(left);
+                    }
+                    (build, prec)
+                }
+                Err(_) => {
+                    inp.rewind(pre_op);
+                    return Ok(left);
+                }
+            };
+
+            let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
+            left = M::combine(left, right, op);
+        }
+    }
+}
+
+impl<'a, I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> ParserSealed<'a, I, O, E>
+    for PrefixPratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    Atom: Parser<'a, I, O, E>,
+    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
+    PrefixOps: Parser<'a, I, PrattOpOutput<PrefixBuilder<O>>, E>,
+    Self: PrattParser<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        self.pratt_parse::<M>(inp, None)
+    }
+
+    go_extra!(O);
+}
+
+/// DOCUMENT
+#[derive(Copy, Clone)]
+pub struct Pratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> {
+    pub(crate) atom: Atom,
+    pub(crate) prefix_ops: PrefixOps,
+    pub(crate) infix_ops: InfixOps,
+    // pub(crate) postfix_ops: PostfixOps,
+    pub(crate) phantom: PhantomData<(I, O, E, PrefixOpsOut, InfixOpsOut)>,
+}
+
+// <I, O, E, Atom, Prefix, PrefixOpsOut, InfixOps, InfixOpsOut>
+
+impl<'a, I, O, E, Atom, NoOps, InfixOps, InfixOpsOut>
+    Pratt<I, O, E, Atom, NoOps, (), InfixOps, InfixOpsOut>
+{
+    fn with_prefix_ops<PrefixOps, PrefixOpsOut>(
+        self,
+        prefix_ops: PrefixOps,
+    ) -> PrefixPratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
+    {
+        PrefixPratt {
+            atom: self.atom,
+            prefix_ops,
+            infix_ops: self.infix_ops,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
+    for Pratt<I, O, E, Atom, NoOps, (), InfixOps, InfixOpsOut>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    Atom: Parser<'a, I, O, E>,
+    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
 {
     fn pratt_parse<M>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
         min_strength: Option<Strength>,
-    ) -> PResult<M, Expr>
+    ) -> PResult<M, O>
     where
         M: Mode,
     {
@@ -165,21 +333,22 @@ where
     }
 }
 
-impl<'a, I, Op, E, Expr, Atom, Ops> ParserSealed<'a, I, Expr, E> for Pratt<Atom, Ops, Expr, Op, E>
+impl<'a, I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut> ParserSealed<'a, I, O, E>
+    for Pratt<I, O, E, Atom, PrefixOps, PrefixOpsOut, InfixOps, InfixOpsOut>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, Expr, E>,
-    Self: PrattParser<'a, I, Expr, E>,
+    Atom: Parser<'a, I, O, E>,
+    Self: PrattParser<'a, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, Expr>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
     {
         self.pratt_parse::<M>(inp, None)
     }
 
-    go_extra!(Expr);
+    go_extra!(O);
 }
 
 /// Indicates which argument binds more strongly with a binary infix operator.
@@ -286,6 +455,8 @@ mod tests {
 
     enum Expr {
         Literal(i64),
+        Not(Box<Expr>),
+        Negate(Box<Expr>),
         Add(Box<Expr>, Box<Expr>),
         Sub(Box<Expr>, Box<Expr>),
         Mul(Box<Expr>, Box<Expr>),
@@ -296,6 +467,8 @@ mod tests {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::Literal(literal) => write!(f, "{literal}"),
+                Self::Not(right) => write!(f, "(!{right})"),
+                Self::Negate(right) => write!(f, "(-{right})"),
                 Self::Add(left, right) => write!(f, "({left} + {right})"),
                 Self::Sub(left, right) => write!(f, "({left} - {right})"),
                 Self::Mul(left, right) => write!(f, "({left} * {right})"),
@@ -381,5 +554,33 @@ mod tests {
             parse_partial("1+2*3/4*5-6*7+8-9+10").into_result(),
             Ok("(((((1 + (2 * (3 / (4 * 5)))) - (6 * 7)) + 8) - 9) + 10)".to_string()),
         );
+    }
+
+    #[test]
+    fn with_prefix_ops() {
+        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let operator = choice((
+            left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+            left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+            right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
+            right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+        ));
+
+        let parser = atom
+            .pratt(operator)
+            .with_prefix_ops(choice((
+                prefix(just('-'), 1, |rhs| Expr::Negate(Box::new(rhs))),
+                prefix(just('!'), 1, |rhs| Expr::Negate(Box::new(rhs))),
+            )))
+            .map(|x| x.to_string());
+
+        assert_eq!(
+            parser.parse("-1+2*3").into_result(),
+            Ok("((-1) + (2 * 3))".to_string()),
+        )
     }
 }
