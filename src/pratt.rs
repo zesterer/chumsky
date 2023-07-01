@@ -59,9 +59,6 @@ type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 type PostfixBuilder<E> = fn(rhs: E) -> E;
 
-/// Document
-pub struct NoOps;
-
 trait PrattParser<'a, I, Expr, E>
 where
     I: Input<'a>,
@@ -81,8 +78,6 @@ pub struct Pratt<I, O, E, Atom, Ops> {
     pub(crate) ops: Ops,
     pub(crate) phantom: PhantomData<(I, O, E)>,
 }
-
-// <I, O, E, Atom, Prefix, PrefixOpsOut, InfixOps, InfixOpsOut>
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>> {
     /// DOCUMENT
