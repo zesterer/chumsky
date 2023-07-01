@@ -12,9 +12,9 @@ This guide is split up into several sections.
 ## Contents
 
 - [Getting Started](./getting_started.md): Getting started with chumsky, including creating and using parsers
-- [Key Concepts](./key_concepts/index.html): Some brief theory and an introduction to chumsky's core API features
-- [Meet The Parsers](./meet_the_parsers/index.html): An overview of the primitives and combinators provided by chumsky
-- [Error and recovery](./error_and_recovery/index.html): Using chumsky to generate and recover from errors
-- [Recursion](./recursion/index.html): How chumsky handles recursion and self-reference
-- [Debugging](./debugging/index.html): Tips and tricks for debugging chumsky parsers
-- [Technical Notes](./technical_notes/index.html): Information about chumsky for advanced users
+- [Key Concepts](./key_concept.md): Some brief theory and an introduction to chumsky's core API features
+- [Meet The Parsers](./meet_the_parsers.md): An overview of the primitives and combinators provided by chumsky
+- [Error and recovery](./error_and_recovery.md): Using chumsky to generate and recover from errors
+- [Recursion](./recursion.md): How chumsky handles recursion and self-reference
+- [Debugging](./debugging.md): Tips and tricks for debugging chumsky parsers
+- [Technical Notes](./technical_notes.md): Information about chumsky for advanced users
