@@ -198,7 +198,7 @@ pub(super) enum Assoc {
 
 /// Indicates the binding strength of an operator to an argument.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Strength {
+pub enum Strength {
     /// This is the strongly associated side of the operator.
     Strong(u8),
 

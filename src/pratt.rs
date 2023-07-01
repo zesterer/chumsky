@@ -93,7 +93,10 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
+        InfixOps: Parser<'a, I, InfixOpsOut, E>,
         PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
+        Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>:
+            PrattParser<'a, I, O, E>,
     {
         Pratt {
             atom: self.atom,
@@ -114,7 +117,10 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
+        InfixOps: Parser<'a, I, InfixOpsOut, E>,
         PostfixOps: Parser<'a, I, PostfixOpsOut, E>,
+        Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>:
+            PrattParser<'a, I, O, E>,
     {
         Pratt {
             atom: self.atom,
@@ -152,7 +158,23 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
+        InfixOps: Parser<'a, I, InfixOpsOut, E>,
+        PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
         PostfixOps: Parser<'a, I, PostfixOpsOut, E>,
+        Pratt<
+            I,
+            O,
+            E,
+            Atom,
+            InfixPrefixPostfix<
+                InfixOps,
+                InfixOpsOut,
+                PrefixOps,
+                PrefixOpsOut,
+                PostfixOps,
+                PostfixOpsOut,
+            >,
+        >: PrattParser<'a, I, O, E>,
     {
         Pratt {
             atom: self.atom,
@@ -212,11 +234,13 @@ type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 type PostfixBuilder<E> = fn(rhs: E) -> E;
 
-trait PrattParser<'a, I, Expr, E>
+/// Document
+pub trait PrattParser<'a, I, Expr, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    /// Document
     fn pratt_parse<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
