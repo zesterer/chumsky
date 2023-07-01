@@ -46,14 +46,18 @@ pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> P
     PostfixOp::new(parser, strength, build)
 }
 
+mod private {
+    use super::Precedence;
+    pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
+}
+
+use private::PrattOpOutput;
+
 type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
 
 type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 type PostfixBuilder<E> = fn(rhs: E) -> E;
-
-/// DOCUMENT
-pub struct PrattOpOutput<Builder>(Precedence, Builder);
 
 /// Document
 pub struct NoOps;
