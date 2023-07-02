@@ -26,6 +26,62 @@ pub struct InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O> {
     pub(crate) phantom: PhantomData<(P1O, P2O, P3O)>,
 }
 
+impl<P, PO> Clone for Infix<P, PO>
+where
+    P: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            infix: self.infix.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<P1, P1O, P2, P2O> Clone for InfixPrefix<P1, P1O, P2, P2O>
+where
+    P1: Clone,
+    P2: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            infix: self.infix.clone(),
+            prefix: self.prefix.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<P1, P1O, P2, P2O> Clone for InfixPostfix<P1, P1O, P2, P2O>
+where
+    P1: Clone,
+    P2: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            infix: self.infix.clone(),
+            postfix: self.postfix.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<P1, P1O, P2, P2O, P3, P3O> Clone for InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O>
+where
+    P1: Clone,
+    P2: Clone,
+    P3: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            infix: self.infix.clone(),
+            prefix: self.prefix.clone(),
+            postfix: self.postfix.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
 /// DOCUMENT
 pub struct InfixOp<P, E, PO> {
     strength: u8,

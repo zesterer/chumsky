@@ -46,11 +46,31 @@ pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> P
 }
 
 /// DOCUMENT
-#[derive(Copy, Clone)]
 pub struct Pratt<I, O, E, Atom, Ops> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
     pub(crate) phantom: PhantomData<(I, O, E)>,
+}
+
+impl<I, O, E, Atom, Ops> Copy for Pratt<I, O, E, Atom, Ops>
+where
+    Atom: Copy,
+    Ops: Copy,
+{
+}
+
+impl<I, O, E, Atom, Ops> Clone for Pratt<I, O, E, Atom, Ops>
+where
+    Atom: Clone,
+    Ops: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            atom: self.atom.clone(),
+            ops: self.ops.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>> {
