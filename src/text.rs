@@ -302,6 +302,85 @@ where
         .ignored()
 }
 
+/// See [`just_any_case`].
+pub struct JustAnyCase<S, C, I, E> {
+    tag: S,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I, C)>,
+}
+
+impl<S: Copy, C, I, E> Copy for JustAnyCase<S, C, I, E> {}
+impl<S: Clone, C, I, E> Clone for JustAnyCase<S, C, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            tag: self.tag.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+/// A parser that accepts the given input, interpreting upper- and lowercase ASCII values as being the same.
+///
+/// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`],
+/// and [`&[u8]`] when `C` is [`u8`]).
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// let greeting = text::just_any_case::<_, _, _, extra::Err<Simple<char>>>("hello");
+///
+/// assert_eq!(greeting.parse("Hello").into_result(), Ok("Hello"));
+/// assert_eq!(greeting.parse("HELLO").into_result(), Ok("HELLO"));
+/// // This fails because the parser expects an end to the input after the match:
+/// assert!(greeting.parse("Hello!").has_errors());
+/// ```
+pub const fn just_any_case<'a, S, C, I, E>(tag: S) -> JustAnyCase<S, C, I, E>
+where
+    I: ValueInput<'a> + StrInput<'a, C>,
+    C: Char,
+    S: AsRef<C::Str>,
+    E: ParserExtra<'a, I>,
+{
+    JustAnyCase {
+        tag,
+        phantom: EmptyPhantom::new(),
+    }
+}
+
+impl<'a, S, C, I, E> ParserSealed<'a, I, &'a C::Str, E> for JustAnyCase<S, C, I, E>
+where
+    I: ValueInput<'a> + StrInput<'a, C>,
+    C: Char,
+    S: AsRef<C::Str>,
+    E: ParserExtra<'a, I>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
+        let before = inp.offset();
+        let cs = C::str_to_chars(self.tag.as_ref());
+        for c in cs {
+            let before = inp.offset();
+            let next = inp.next();
+            match next {
+                Some(tok) if tok.to_char().eq_ignore_ascii_case(&c.to_char()) => {}
+                _ => {
+                    inp.add_alt(
+                        inp.offset().offset,
+                        Some(Some(MaybeRef::Val(c))),
+                        next.map(|next| MaybeRef::Val(next)),
+                        inp.span_since(before),
+                    );
+                    return Err(());
+                }
+            }
+        }
+        let after = inp.offset();
+        Ok(M::bind(|| inp.slice_inner(before.offset..after.offset)))
+    }
+
+    go_extra!(&'a C::Str);
+}
+
 /// A parser that accepts one or more ASCII digits.
 ///
 /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
