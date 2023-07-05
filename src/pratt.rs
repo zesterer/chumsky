@@ -46,7 +46,7 @@ pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> P
 pub struct Pratt<I, O, E, Atom, Ops> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
-    pub(crate) phantom: EmptyPhantom<(I, O, E)>,
+    pub(crate) _phantom: EmptyPhantom<(I, O, E)>,
 }
 
 impl<I, O, E, Atom, Ops> Copy for Pratt<I, O, E, Atom, Ops>
@@ -65,7 +65,7 @@ where
         Self {
             atom: self.atom.clone(),
             ops: self.ops.clone(),
-            phantom: EmptyPhantom::new(),
+            _phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -89,9 +89,9 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
             ops: InfixPrefix {
                 infix: self.ops.infix,
                 prefix: prefix_ops,
-                phantom: EmptyPhantom::new(),
+                _phantom: EmptyPhantom::new(),
             },
-            phantom: EmptyPhantom::new(),
+            _phantom: EmptyPhantom::new(),
         }
     }
 
@@ -113,9 +113,9 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
             ops: InfixPostfix {
                 infix: self.ops.infix,
                 postfix: postfix_ops,
-                phantom: EmptyPhantom::new(),
+                _phantom: EmptyPhantom::new(),
             },
-            phantom: EmptyPhantom::new(),
+            _phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -168,9 +168,9 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
                 infix: self.ops.infix,
                 prefix: self.ops.prefix,
                 postfix: postfix_ops,
-                phantom: EmptyPhantom::new(),
+                _phantom: EmptyPhantom::new(),
             },
-            phantom: EmptyPhantom::new(),
+            _phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -207,9 +207,9 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>
                 infix: self.ops.infix,
                 prefix: prefix_ops,
                 postfix: self.ops.postfix,
-                phantom: EmptyPhantom::new(),
+                _phantom: EmptyPhantom::new(),
             },
-            phantom: EmptyPhantom::new(),
+            _phantom: EmptyPhantom::new(),
         }
     }
 }
