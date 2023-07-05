@@ -2175,9 +2175,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             atom: self,
             ops: pratt::Infix {
                 infix: ops,
-                phantom: PhantomData,
+                phantom: EmptyPhantom::new(),
             },
-            phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
