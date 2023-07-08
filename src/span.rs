@@ -26,7 +26,7 @@ pub trait Span {
     ///
     /// Typically, [`usize`] is used.
     ///
-    /// NOTE: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritise errors. This
+    /// NOTE: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritize errors. This
     /// means that it's perfectly fine for tokens to have non-continuous spans that bear no relation to their actual
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.

@@ -18,7 +18,7 @@ pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
 
 /// A type that can represent a borrowed reference to a `T` or a value of `T`.
 ///
-/// Used internally to faciltitate zero-copy manipulation of tokens during error generation (see [`Error`]).
+/// Used internally to facilitate zero-copy manipulation of tokens during error generation (see [`Error`]).
 #[derive(Copy, Clone)]
 pub enum Maybe<T, R: Deref<Target = T>> {
     /// We have a reference to `T`.

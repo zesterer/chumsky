@@ -5,7 +5,7 @@
 //! "You ask a glass of water.”*
 //!
 //! The [`recursive()`] function covers most cases, but sometimes it's necessary to manually control the declaration and
-//! definition of parsers more corefully, particularly for mutually-recursive parsers. In such cases, the functions on
+//! definition of parsers more carefully, particularly for mutually-recursive parsers. In such cases, the functions on
 //! [`Recursive`] allow for this.
 
 use super::*;

@@ -788,7 +788,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 
     /// Memoize the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
     ///
-    /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
+    /// If you're finding that certain inputs produce exponential behavior in your parser, strategically applying
     /// memoization to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
     /// way to solve the problem. At the limit, applying memoization to all combinators will turn any parser into one
     /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
@@ -804,7 +804,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Memoized { parser: self }
     }
 
-    /// Transform all outputs of this parser to a pretermined value.
+    /// Transform all outputs of this parser to a predetermined value.
     ///
     /// The output type of this parser is `U`, the type of the predetermined value.
     ///
@@ -1262,7 +1262,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// The output of both parsers must be of the same type, because either output can be produced.
     ///
-    /// If both parser succeed, the output of the first parser is guaranteed to be prioritised over the output of the
+    /// If both parser succeed, the output of the first parser is guaranteed to be prioritized over the output of the
     /// second.
     ///
     /// If both parsers produce errors, the combinator will attempt to select from or combine the errors to produce an
@@ -1396,7 +1396,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 
     /// Parse a pattern any number of times (including zero times).
     ///
-    /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
+    /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
     ///
     /// The output type of this parser can be any [`Container`].
@@ -1811,7 +1811,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    /// Validate an output, producing non-terminal errors if it does not fulfill certain criteria.
     /// The errors will not immediately halt parsing on this path, but instead it will continue,
     /// potentially emitting one or more other errors, only failing after the pattern has otherwise
     /// successfully, or emitted another terminal error.
@@ -1997,7 +1997,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// The resulting iterable parser will emit each element of the output type in turn.
     ///
-    /// This is *broadly* analgous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
+    /// This is *broadly* analogous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
     // TODO: Example
     fn into_iter(self) -> IntoIter<Self, O>
     where
@@ -2363,7 +2363,7 @@ where
     ///
     /// The output type of this iterable parser if `C`, the type being collected into.
     ///
-    /// # Exmaples
+    /// # Examples
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
