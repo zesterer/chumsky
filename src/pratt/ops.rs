@@ -26,7 +26,8 @@ pub struct InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O> {
     pub(crate) phantom: PhantomData<(P1O, P2O, P3O)>,
 }
 
-/// DOCUMENT
+/// A representation of an infix operator to be used in combination with
+/// [`Pratt::pratt`](super::Pratt::pratt).
 pub struct InfixOp<P, E, PO> {
     strength: u8,
     assoc: Assoc,
@@ -48,7 +49,10 @@ impl<P: Clone, E, PO> Clone for InfixOp<P, E, PO> {
 }
 
 impl<P, E, PO> InfixOp<P, E, PO> {
-    /// DOCUMENT
+    /// Creates a left associative infix operator that is parsed with the
+    /// parser `P`, and a function which is used to `build` a value `E`.
+    /// The operator's precedence is determined by `strength`. The higher
+    /// the value, the higher the precedence.
     pub fn new_left(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
         Self {
             strength,
@@ -59,7 +63,10 @@ impl<P, E, PO> InfixOp<P, E, PO> {
         }
     }
 
-    /// DOCUMENT
+    /// Creates a right associative infix operator that is parsed with the
+    /// parser `P`, and a function which is used to `build` a value `E`.
+    /// The operator's precedence is determined by `strength`. The higher
+    /// the value, the higher the precedence.
     pub fn new_right(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
         Self {
             strength,
@@ -96,7 +103,8 @@ where
     go_extra!(PrattOpOutput<InfixBuilder<Expr>>);
 }
 
-/// DOCUMENT
+/// A representation of a prefix operator to be used in combination with
+/// [`Pratt::pratt`](super::Pratt::pratt).
 pub struct PrefixOp<Parser, Expr, ParserOut> {
     strength: u8,
     parser: Parser,
@@ -116,7 +124,10 @@ impl<Parser: Clone, Expr, ParserOut> Clone for PrefixOp<Parser, Expr, ParserOut>
 }
 
 impl<Parser, Expr, ParserOut> PrefixOp<Parser, Expr, ParserOut> {
-    /// DOCUMENT
+    /// Creates a prefix operator (a right-associative unary operator)
+    /// that is parsed with the parser `P`, and a function which is used
+    /// to `build` a value `E`. The operator's precedence is determined
+    /// by `strength`. The higher the value, the higher the precedence.
     pub fn new(parser: Parser, strength: u8, build: PrefixBuilder<Expr>) -> Self {
         Self {
             strength,
@@ -152,7 +163,8 @@ where
     go_extra!(PrattOpOutput<PrefixBuilder<Expr>>);
 }
 
-/// DOCUMENT
+/// A representation of a postfix operator to be used in combination with
+/// [`Pratt::pratt`](super::Pratt::pratt).
 pub struct PostfixOp<Parser, Expr, ParserOut> {
     strength: u8,
     parser: Parser,
@@ -172,7 +184,10 @@ impl<Parser: Clone, Expr, ParserOut> Clone for PostfixOp<Parser, Expr, ParserOut
 }
 
 impl<Parser, Expr, ParserOut> PostfixOp<Parser, Expr, ParserOut> {
-    /// DOCUMENT
+    /// Creates a postfix operator (a left-associative unary operator)
+    /// that is parsed with the parser `P`, and a function which is used
+    /// to `build` a value `E`. The operator's precedence is determined
+    /// by `strength`. The higher the value, the higher the precedence.
     pub fn new(parser: Parser, strength: u8, build: PostfixBuilder<Expr>) -> Self {
         Self {
             strength,

@@ -2105,60 +2105,83 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParserSealed::boxed(self)
     }
 
-    /// Use Pratt parsing to efficiently parse binary operators
-    /// with different associativity.
+    /// Use pratt-parsing to efficiently parse expressions separated by
+    /// operators of different associativity and precedence.
     ///
-    /// The parsing algorithm currently uses recursion
-    /// to parse nested expressions.
+    /// The pratt-parsing algorithm uses the recursion to efficiently
+    /// parse arbitrarily nested expressions.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use chumsky::prelude::*;
-    /// use chumsky::pratt::{left_infix, right_infix};
+    /// use chumsky::pratt::*;
+    /// use chumsky::extra;
     ///
     /// enum Expr {
-    ///     Literal(i64),
-    ///     Add(Box<Expr>, Box<Expr>),
-    ///     Sub(Box<Expr>, Box<Expr>),
-    ///     Mul(Box<Expr>, Box<Expr>),
-    ///     Div(Box<Expr>, Box<Expr>),
+    ///     Add(Box<Self>, Box<Self>),
+    ///     Sub(Box<Self>, Box<Self>),
+    ///     Pow(Box<Self>, Box<Self>),
+    ///     Neg(Box<Self>),
+    ///     Fact(Box<Self>),
+    ///     Deref(Box<Self>),
+    ///     Literal(i32),
     /// }
     ///
     /// impl std::fmt::Display for Expr {
-    ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     ///         match self {
     ///             Self::Literal(literal) => write!(f, "{literal}"),
+    ///             Self::Fact(left) => write!(f, "({left}!)"),
+    ///             Self::Deref(left) => write!(f, "(*{left})"),
+    ///             Self::Neg(right) => write!(f, "(-{right})"),
     ///             Self::Add(left, right) => write!(f, "({left} + {right})"),
     ///             Self::Sub(left, right) => write!(f, "({left} - {right})"),
-    ///             Self::Mul(left, right) => write!(f, "({left} * {right})"),
-    ///             Self::Div(left, right) => write!(f, "({left} / {right})"),
+    ///             Self::Pow(left, right) => write!(f, "({left} ^ {right})"),
     ///         }
     ///     }
     /// }
     ///
-    /// let atom = text::int::<_, _, extra::Default>(10)
+    /// let atom = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .map(Expr::Literal);
     ///
     /// let operator = choice((
-    ///     left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-    ///     right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-    ///     right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
-    /// ));
+    ///     // Our `-` and `+` bind the weakest, meaning that even if they occur
+    ///     // first in an expression, they will be the last executed
+    ///     left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     // Just like in math, we want that if we write -x^2, that our parser
+    ///     // parses that as -(x^2), so we need it to bind tighter than our
+    ///     // prefix operators
+    ///     right_infix(just('^'), 4, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
+    /// ))
+    /// .padded();
     ///
-    /// let expr = atom.pratt(operator.padded_by(just(' ')));
-    /// let expr_str = expr.map(|expr| expr.to_string()).then_ignore(end());
-    /// assert_eq!(expr_str.parse("1 + 2").into_result(), Ok("(1 + 2)".to_string()));
-    /// // `*` binds more strongly than `+`
-    /// assert_eq!(expr_str.parse("1 * 2 + 3").into_result(), Ok("((1 * 2) + 3)".to_string()));
-    /// assert_eq!(expr_str.parse("1 + 2 * 3").into_result(), Ok("(1 + (2 * 3))".to_string()));
-    /// // `+` is left-associative
-    /// assert_eq!(expr_str.parse("1 + 2 + 3").into_result(), Ok("((1 + 2) + 3)".to_string()));
-    /// // `*` is right-associative (in this example)
-    /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
+    /// let prefix_ops = choice((
+    ///     // Notice the conflict with our `Expr::Sub`. This will still
+    ///     // parse correctly. We want negation to happen before `+` and `-`,
+    ///     // so we set it's precedence higher.
+    ///     prefix(just('-'), 2, |rhs| Expr::Neg(Box::new(rhs))),
+    ///     prefix(just('*'), 2, |rhs| Expr::Deref(Box::new(rhs))),
+    /// ))
+    /// .padded();
+    ///
+    /// // We want factorial to happen before any negation, so we need it's
+    /// // precedence to be higher than `Expr::Neg`.
+    /// let factorial = postfix(just('!'), 3, |lhs| Expr::Fact(Box::new(lhs))).padded();
+    ///
+    /// let pratt = atom
+    ///     .pratt(operator)
+    ///     .with_prefix_ops(prefix_ops)
+    ///     .with_postfix_ops(factorial)
+    ///     .map(|x| x.to_string());
+    ///
+    /// assert_eq!(
+    ///     pratt.parse("*1 + -2! - -3^2").into_result(),
+    ///     Ok("(((*1) + (-(2!))) - (-(3 ^ 2)))".to_string()),
+    /// );
     /// ```
     #[cfg(feature = "pratt")]
     fn pratt<InfixOps, InfixOpsOut>(
