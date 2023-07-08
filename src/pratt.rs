@@ -241,19 +241,23 @@ type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 type PostfixBuilder<E> = fn(rhs: E) -> E;
 
-/// Privitize me you coward!
-pub trait PrattParser<'a, I, Expr, E>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-{
-    /// This function drives the [`Pratt`] parser.
-    fn pratt_parse<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        min_strength: Option<Strength>,
-    ) -> PResult<M, Expr>;
+mod nameless_trait {
+    use super::*;
+
+    pub trait PrattParser<'a, I, Expr, E>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+    {
+        fn pratt_parse<M: Mode>(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            min_strength: Option<Strength>,
+        ) -> PResult<M, Expr>;
+    }
 }
+
+use nameless_trait::PrattParser;
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
     for Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>>
