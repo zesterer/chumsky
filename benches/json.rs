@@ -360,7 +360,7 @@ mod winnow {
     use std::str;
 
     fn space<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
-        take_while0(|c| b" \t\r\n".contains(&c))(i)
+        take_while0(|c| b" \t\r\n".contains(&c)).parse_next(i)
     }
 
     fn number<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
@@ -382,7 +382,8 @@ mod winnow {
                 escaped(none_of("\\\""), '\\', one_of("\\/\"bfnrt")),
                 '"',
             )),
-        )(i)
+        )
+        .parse_next(i)
     }
 
     fn array<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], Vec<JsonZero>, E> {
@@ -392,7 +393,8 @@ mod winnow {
                 separated0(value, preceded(space, ',')),
                 preceded(space, ']'),
             )),
-        )(i)
+        )
+        .parse_next(i)
     }
 
     fn member<'a, E: ParseError<&'a [u8]>>(
@@ -402,7 +404,8 @@ mod winnow {
             preceded(space, string),
             cut_err(preceded(space, ':')),
             value,
-        )(i)
+        )
+        .parse_next(i)
     }
 
     fn object<'a, E: ParseError<&'a [u8]>>(
@@ -414,7 +417,8 @@ mod winnow {
                 separated0(member, preceded(space, ',')),
                 preceded(space, '}'),
             )),
-        )(i)
+        )
+        .parse_next(i)
     }
 
     fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
@@ -430,15 +434,16 @@ mod winnow {
                 b'{' => object.map(JsonZero::Object),
                 _ => fail,
             ),
-        )(i)
+        )
+        .parse_next(i)
     }
 
     fn root<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
-        terminated(value, space)(i)
+        terminated(value, space).parse_next(i)
     }
 
     pub fn json<'a>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, Error<&'a [u8]>> {
-        root(i)
+        root.parse_next(i)
     }
 }
 
