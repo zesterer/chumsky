@@ -360,15 +360,19 @@ mod winnow {
     use std::str;
 
     fn space<'a, E: ParserError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
-        take_while(0.., b" \t\r\n").parse_next(i)
+        take_while(0.., [b' ', b'\t', b'\r', b'\n']).parse_next(i)
     }
 
     fn number<'a, E: ParserError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
         (
             opt('-'),
-            alt(((one_of("123456789"), digit0).void(), one_of('0').void())),
+            alt(((one_of(b'1'..=b'9'), digit0).void(), one_of('0').void())),
             opt(('.', digit1)),
-            opt((one_of("eE"), opt(one_of("+-")), cut_err(digit1))),
+            opt((
+                one_of([b'e', b'E']),
+                opt(one_of([b'+', b'-'])),
+                cut_err(digit1),
+            )),
         )
             .recognize()
             .map(|bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap())
@@ -379,7 +383,11 @@ mod winnow {
         preceded(
             '"',
             cut_err(terminated(
-                escaped(none_of("\\\""), '\\', one_of("\\/\"bfnrt")),
+                escaped(
+                    none_of([b'\\', b'"']),
+                    '\\',
+                    one_of([b'\\', b'/', b'"', b'b', b'f', b'n', b'r', b't']),
+                ),
                 '"',
             )),
         )
