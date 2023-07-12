@@ -360,7 +360,7 @@ mod winnow {
     use std::str;
 
     fn space<'a, E: ParserError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
-        take_while(0.., |c| b" \t\r\n".contains(&c)).parse_next(i)
+        take_while(0.., b" \t\r\n").parse_next(i)
     }
 
     fn number<'a, E: ParserError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
