@@ -1,19 +1,16 @@
 //! Implementations of regex-based parsers
 
 use super::*;
+use regex_automata::{meta, Anchored, Input as ReInput};
 
 /// See [`regex()`].
 pub struct Regex<C: Char, I, E> {
-    regex: C::Regex,
+    regex: meta::Regex,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(E, I)>,
+    phantom: EmptyPhantom<(C, E, I)>,
 }
 
-impl<C: Char, I, E> Copy for Regex<C, I, E> where C::Regex: Copy {}
-impl<C: Char, I, E> Clone for Regex<C, I, E>
-where
-    C::Regex: Clone,
-{
+impl<C: Char, I, E> Clone for Regex<C, I, E> {
     fn clone(&self) -> Self {
         Self {
             regex: self.regex.clone(),
@@ -25,7 +22,7 @@ where
 /// Match input based on a provided regex pattern
 pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     Regex {
-        regex: C::new_regex(pattern),
+        regex: meta::Regex::new(pattern).expect("Failed to compile regex"),
         phantom: EmptyPhantom::new(),
     }
 }
@@ -39,7 +36,16 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
         let before = inp.offset();
-        match C::match_regex(&self.regex, inp.slice_trailing_inner()) {
+        
+        let re_in = ReInput::new(inp.full_slice())
+            .anchored(Anchored::Yes)
+            .range(before.offset..);
+        
+        let res = self.regex
+            .find(re_in)
+            .map(|m| m.len());
+        
+        match res {
             Some(len) => {
                 let before = inp.offset();
                 inp.skip_bytes(len);

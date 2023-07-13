@@ -148,6 +148,10 @@ pub trait ExactSizeInput<'a>: Input<'a> {
 pub trait SliceInput<'a>: ExactSizeInput<'a> {
     /// The unsized slice type of this input. For [`&str`] it's `&str`, and for [`&[T]`] it will be `&[T]`.
     type Slice;
+    
+    /// Get the full slice of the input
+    #[doc(hidden)]
+    fn full_slice(&self) -> Self::Slice;
 
     /// Get a slice from a start and end offset
     // TODO: Make unsafe
@@ -250,6 +254,11 @@ impl<'a> SliceInput<'a> for &'a str {
     type Slice = &'a str;
 
     #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        *self
+    }
+
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
     }
@@ -300,6 +309,11 @@ impl<'a> StrInput<'a, u8> for &'a [u8] {}
 
 impl<'a, T> SliceInput<'a> for &'a [T] {
     type Slice = &'a [T];
+
+    #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        *self
+    }
 
     #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
@@ -375,6 +389,11 @@ impl<'a, const N: usize> StrInput<'a, u8> for &'a [u8; N] {}
 impl<'a, T: 'a, const N: usize> SliceInput<'a> for &'a [T; N] {
     type Slice = &'a [T];
 
+    #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        *self
+    }
+    
     #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         &self[range]
@@ -536,6 +555,11 @@ where
     type Slice = I::Slice;
 
     #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        <I as SliceInput>::full_slice(&self.input)
+    }
+
+    #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
         <I as SliceInput>::slice(&self.input, range)
     }
@@ -641,6 +665,11 @@ where
     S::Offset: From<<I::Span as Span>::Offset>,
 {
     type Slice = I::Slice;
+
+    #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        <I as SliceInput>::full_slice(&self.input)
+    }
 
     #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
@@ -757,6 +786,11 @@ where
     F: Fn(I::Span) -> S,
 {
     type Slice = I::Slice;
+
+    #[inline(always)]
+    fn full_slice(&self) -> Self::Slice {
+        <I as SliceInput>::full_slice(&self.input)
+    }
 
     #[inline(always)]
     fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
@@ -1300,6 +1334,15 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         let _ = self.next_inner();
     }
 
+    #[cfg_attr(not(feature = "regex"), allow(dead_code))]
+    #[inline]
+    pub(crate) fn full_slice(&self) -> I::Slice
+    where
+        I: SliceInput<'a>,
+    {
+        self.input.full_slice()
+    }
+    
     /// Get a slice of the input that covers the given offset range.
     #[inline]
     pub fn slice(&self, range: Range<Offset<'a, 'parse, I>>) -> I::Slice
@@ -1334,15 +1377,6 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         I: SliceInput<'a>,
     {
         self.input.slice_from(range)
-    }
-
-    #[cfg_attr(not(feature = "regex"), allow(dead_code))]
-    #[inline(always)]
-    pub(crate) fn slice_trailing_inner(&self) -> I::Slice
-    where
-        I: SliceInput<'a>,
-    {
-        self.input.slice_from(self.offset..)
     }
 
     /// Get a span over the input that covers the given offset range.
