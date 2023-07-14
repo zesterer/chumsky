@@ -36,15 +36,13 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
         let before = inp.offset();
-        
+
         let re_in = ReInput::new(inp.full_slice())
             .anchored(Anchored::Yes)
             .range(before.offset..);
-        
-        let res = self.regex
-            .find(re_in)
-            .map(|m| m.len());
-        
+
+        let res = self.regex.find(re_in).map(|m| m.len());
+
         match res {
             Some(len) => {
                 let before = inp.offset();

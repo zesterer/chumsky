@@ -248,68 +248,56 @@ fn bench_regex(c: &mut Criterion) {
     let re_foo = regex::<_, _, extra::Default>("foo");
     let re_foo2 = regex::<_, _, extra::Default>("[fF]oo");
     let re_rep = regex::<_, _, extra::Default>("(?:abc){4}");
-    
+
     let mut group = c.benchmark_group("regex");
-    
-    group.bench_function(BenchmarkId::new("foo", "foo"),
-        |b| {
-            b.iter(|| {
-                black_box(re_foo.parse(black_box("foo")))
-                    .into_result()
-                    .unwrap();
-            })
-        }
-    );
 
-    group.bench_function(BenchmarkId::new("foo", "barfoofoofoo"),
-         |b| {
-             b.iter(|| {
-                 black_box(re_foo.parse(black_box("barfoofoofoo")))
-                     .into_result()
-                     .unwrap_err();
-             })
-         }
-    );
-    
-    group.bench_function(BenchmarkId::new("[fF]oo", "foo"),
-        |b| {
-            b.iter(|| {
-                black_box(re_foo2.parse(black_box("foo")))
-                    .into_result()
-                    .unwrap()
-            })
-        }
-    );
+    group.bench_function(BenchmarkId::new("foo", "foo"), |b| {
+        b.iter(|| {
+            black_box(re_foo.parse(black_box("foo")))
+                .into_result()
+                .unwrap();
+        })
+    });
 
-    group.bench_function(BenchmarkId::new("[fF]oo", "Foo"),
-         |b| {
-             b.iter(|| {
-                 black_box(re_foo2.parse(black_box("Foo")))
-                     .into_result()
-                     .unwrap()
-             })
-         }
-    );
+    group.bench_function(BenchmarkId::new("foo", "barfoofoofoo"), |b| {
+        b.iter(|| {
+            black_box(re_foo.parse(black_box("barfoofoofoo")))
+                .into_result()
+                .unwrap_err();
+        })
+    });
 
-    group.bench_function(BenchmarkId::new("[fF]oo", "barFoofoo"),
-         |b| {
-             b.iter(|| {
-                 black_box(re_foo2.parse(black_box("barFoofoo")))
-                     .into_result()
-                     .unwrap_err()
-             })
-         }
-    );
+    group.bench_function(BenchmarkId::new("[fF]oo", "foo"), |b| {
+        b.iter(|| {
+            black_box(re_foo2.parse(black_box("foo")))
+                .into_result()
+                .unwrap()
+        })
+    });
 
-    group.bench_function(BenchmarkId::new("(?:abc){4}", "abcabcabcabc"),
-         |b| {
-             b.iter(|| {
-                 black_box(re_rep.parse(black_box("abcabcabcabc")))
-                     .into_result()
-                     .unwrap()
-             })
-         }
-    );
+    group.bench_function(BenchmarkId::new("[fF]oo", "Foo"), |b| {
+        b.iter(|| {
+            black_box(re_foo2.parse(black_box("Foo")))
+                .into_result()
+                .unwrap()
+        })
+    });
+
+    group.bench_function(BenchmarkId::new("[fF]oo", "barFoofoo"), |b| {
+        b.iter(|| {
+            black_box(re_foo2.parse(black_box("barFoofoo")))
+                .into_result()
+                .unwrap_err()
+        })
+    });
+
+    group.bench_function(BenchmarkId::new("(?:abc){4}", "abcabcabcabc"), |b| {
+        b.iter(|| {
+            black_box(re_rep.parse(black_box("abcabcabcabc")))
+                .into_result()
+                .unwrap()
+        })
+    });
 }
 
 #[cfg(not(feature = "regex"))]
