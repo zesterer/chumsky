@@ -30,7 +30,7 @@ pub const fn end<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> End<I, E> {
 impl<I, E> Copy for End<I, E> {}
 impl<I, E> Clone for End<I, E> {
     fn clone(&self) -> Self {
-        End(EmptyPhantom::new())
+        *self
     }
 }
 
@@ -67,7 +67,7 @@ pub const fn empty<I, E>() -> Empty<I, E> {
 impl<I, E> Copy for Empty<I, E> {}
 impl<I, E> Clone for Empty<I, E> {
     fn clone(&self) -> Self {
-        Empty(EmptyPhantom::new())
+        *self
     }
 }
 
@@ -545,9 +545,7 @@ pub struct Any<I, E> {
 impl<I, E> Copy for Any<I, E> {}
 impl<I, E> Clone for Any<I, E> {
     fn clone(&self) -> Self {
-        Self {
-            phantom: EmptyPhantom::new(),
-        }
+        *self
     }
 }
 

@@ -2198,9 +2198,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             atom: self,
             ops: pratt::Infix {
                 infix: ops,
-                phantom: PhantomData,
+                _phantom: EmptyPhantom::new(),
             },
-            phantom: PhantomData,
+            _phantom: EmptyPhantom::new(),
         }
     }
 }
@@ -3357,5 +3357,55 @@ mod tests {
             parser().parse("[200,400,50  ,0,0, ]").into_result(),
             Ok(vec![200, 400, 50, 0, 0]),
         );
+    }
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    struct MyErr(&'static str);
+
+    impl<'a, I> Error<'a, I> for MyErr
+    where
+        I: Input<'a>,
+    {
+        fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+            _expected: E,
+            _found: Option<MaybeRef<'a, I::Token>>,
+            _span: I::Span,
+        ) -> Self {
+            MyErr("expected found")
+        }
+
+        fn merge(self, other: Self) -> Self {
+            if self == MyErr("special") || other == MyErr("special") {
+                MyErr("special")
+            } else {
+                self
+            }
+        }
+    }
+
+    #[test]
+    fn err_prio_0() {
+        #[allow(dead_code)]
+        fn always_err<'a>() -> impl Parser<'a, &'a str, (), extra::Err<MyErr>> {
+            empty().try_map(|_, _| Err(MyErr("special")))
+        }
+
+        assert_eq!(
+            always_err().parse("test").into_result().unwrap_err(),
+            vec![MyErr("special")]
+        )
+    }
+
+    #[test]
+    fn err_prio_1() {
+        #[allow(dead_code)]
+        fn always_err_choice<'a>() -> impl Parser<'a, &'a str, (), extra::Err<MyErr>> {
+            choice((just("something").ignored(), empty())).try_map(|_, _| Err(MyErr("special")))
+        }
+
+        assert_eq!(
+            always_err_choice().parse("test").into_result().unwrap_err(),
+            vec![MyErr("special")]
+        )
     }
 }

@@ -239,7 +239,8 @@ where
     }
 }
 
-// Safety: `Arc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
+#[allow(clippy::arc_with_non_send_sync)]
+// SAFETY: `Arc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
 //         this trait soundly
 unsafe impl<T, C> ContainerExactly<T> for Arc<C>
 where

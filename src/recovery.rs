@@ -218,6 +218,8 @@ where
     F: Fn(I::Span) -> O + Clone,
 {
     // TODO: Does this actually work? TESTS!
+    #[allow(clippy::tuple_array_conversions)]
+    // Clippy is overly eager to fine pointless non-problems
     recursive({
         let (start, end) = (start.clone(), end.clone());
         |block| {
