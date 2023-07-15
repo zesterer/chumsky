@@ -17,7 +17,10 @@ exclude = [
 default = ["std", "spill-stack"]
 
 # Integrate with the standard library.
-std = []
+std = [
+    "regex-automata?/std",
+    "serde?/std"
+]
 
 # Enable nightly-only features like better compiler diagnostics and a Parser impl for ! (the never type).
 nightly = []
@@ -67,7 +70,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 hashbrown = "0.14"
 stacker = { version = "0.1", optional = true }
-regex-automata = { version = "0.3", default-features = false, optional = true }
+regex-automata = { version = "0.3", default-features = false, optional = true, features = ["alloc", "meta", "perf", "unicode", "nfa", "dfa", "hybrid"] }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
 either = { version = "1.8.1", optional = true }
