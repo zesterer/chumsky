@@ -12,6 +12,7 @@
 // TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
+extern crate core;
 
 macro_rules! go_extra {
     ( $O :ty ) => {
@@ -117,6 +118,8 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};

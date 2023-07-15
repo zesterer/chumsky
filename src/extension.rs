@@ -140,6 +140,7 @@ mod current {
     ///
     /// If you're writing an extension crate for chumsky, you can make things less confusing for your users by putting your
     /// parser behind a type alias.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     #[repr(transparent)]
     pub struct Ext<T: ?Sized>(pub T);
