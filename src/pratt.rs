@@ -65,7 +65,7 @@ pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> P
 
 /// A struct which represents a parser capable of using pratt-parsing.
 ///
-/// This parser contains a parser of type `Atom`, which parses expressions
+/// This parser contains a parser of type `Atom`, which parses expressions that
 /// are separated by a set of operators of parsed by a parser of type `Ops`.
 /// The operators may have varying precedence levels, as well as associativity.
 /// For those unfamiliar with operator precedence and/or associativity, it may

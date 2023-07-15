@@ -1394,7 +1394,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Parse a pattern any number of times (including zero times).
+    /// Parse a pattern zero or more times (analog to Regex's '<PAT>*').
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
@@ -2108,8 +2108,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Use pratt-parsing to efficiently parse expressions separated by
     /// operators of different associativity and precedence.
     ///
-    /// The pratt-parsing algorithm uses the recursion to efficiently
-    /// parse arbitrarily nested expressions.
+    /// The pratt-parsing algorithm uses recursion to efficiently parse
+    /// arbitrarily nested expressions.
     ///
     /// # Example
     ///
@@ -2155,7 +2155,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     // Just like in math, we want that if we write -x^2, that our parser
     ///     // parses that as -(x^2), so we need it to bind tighter than our
     ///     // prefix operators
-    ///     right_infix(just('^'), 4, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
+    ///     right_infix(just('^'), 3, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
     /// ))
     /// .padded();
     ///
@@ -2170,7 +2170,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// // We want factorial to happen before any negation, so we need it's
     /// // precedence to be higher than `Expr::Neg`.
-    /// let factorial = postfix(just('!'), 3, |lhs| Expr::Fact(Box::new(lhs))).padded();
+    /// let factorial = postfix(just('!'), 4, |lhs| Expr::Fact(Box::new(lhs))).padded();
     ///
     /// let pratt = atom
     ///     .pratt(operator)
