@@ -49,6 +49,9 @@ lexical-numbers = ["lexical", "unstable"]
 # Adds impl of Parser for either::Either
 either = ["dep:either"]
 
+# Enables regex combinators
+regex = ["dep:regex-automata"]
+
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
 # If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
@@ -59,20 +62,19 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-hashbrown = "0.13"
+hashbrown = "0.14"
 stacker = { version = "0.1", optional = true }
-# Enables regex combinators
-regex = { version = "1.7", optional = true }
+regex-automata = { version = "0.3", optional = true }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
 either = { version = "1.8.1", optional = true }
-unicode-ident =  "1.0.9"
+unicode-ident =  "1.0.10"
 
 [dev-dependencies]
 ariadne = "0.2"
 pom = "3.2"
 nom = "7.1"
-winnow = "0.3"
+winnow = "0.5.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 ciborium = { version = "0.2" }
 criterion = "0.4.0"

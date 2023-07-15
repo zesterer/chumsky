@@ -18,18 +18,7 @@ pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
     ///
     /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-    type Str: ?Sized + AsRef<Self::Str> + 'static;
-
-    /// The type of a regex expression which can match on this type
-    #[cfg(feature = "regex")]
-    type Regex;
-
-    #[cfg(feature = "regex")]
-    #[doc(hidden)]
-    fn new_regex(pattern: &str) -> Self::Regex;
-    #[cfg(feature = "regex")]
-    #[doc(hidden)]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize>;
+    type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + 'static;
 
     /// Convert the given ASCII character to this character type.
     fn from_ascii(c: u8) -> Self;
@@ -65,22 +54,6 @@ pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
 impl Sealed for char {}
 impl Char for char {
     type Str = str;
-
-    #[cfg(feature = "regex")]
-    type Regex = ::regex::Regex;
-
-    #[cfg(feature = "regex")]
-    fn new_regex(pattern: &str) -> Self::Regex {
-        ::regex::Regex::new(pattern).expect("Failed to compile regex")
-    }
-    #[cfg(feature = "regex")]
-    #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
-        regex
-            .find(trailing)
-            .filter(|m| m.start() == 0)
-            .map(|m| m.end())
-    }
 
     fn from_ascii(c: u8) -> Self {
         c as char
@@ -118,22 +91,6 @@ impl Char for char {
 impl Sealed for u8 {}
 impl Char for u8 {
     type Str = [u8];
-
-    #[cfg(feature = "regex")]
-    type Regex = ::regex::bytes::Regex;
-
-    #[cfg(feature = "regex")]
-    fn new_regex(pattern: &str) -> Self::Regex {
-        ::regex::bytes::Regex::new(pattern).expect("Failed to compile regex")
-    }
-    #[cfg(feature = "regex")]
-    #[inline]
-    fn match_regex(regex: &Self::Regex, trailing: &Self::Str) -> Option<usize> {
-        regex
-            .find(trailing)
-            .filter(|m| m.start() == 0)
-            .map(|m| m.end())
-    }
 
     fn from_ascii(c: u8) -> Self {
         c
