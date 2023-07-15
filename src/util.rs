@@ -155,14 +155,14 @@ impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<
         D: Deserializer<'de>,
     {
         struct MaybeVisitor<T, R>(PhantomData<(T, R)>);
-        
+
         impl<'de2, T: Deserialize<'de2>, R: Deref<Target = T>> Visitor<'de2> for MaybeVisitor<T, R> {
             type Value = Maybe<T, R>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "a Maybe")
             }
-            
+
             fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
             where
                 D: Deserializer<'de2>,
@@ -170,7 +170,7 @@ impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<
                 T::deserialize(deserializer).map(Maybe::Val)
             }
         }
-        
+
         deserializer.deserialize_newtype_struct("Maybe", MaybeVisitor(PhantomData))
     }
 }

@@ -119,7 +119,7 @@ use core::{
 };
 use hashbrown::HashMap;
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
