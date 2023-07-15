@@ -84,7 +84,7 @@ where
 }
 
 /// A representation of an infix operator to be used in combination with
-/// [`Pratt::pratt`](super::Pratt::pratt).
+/// [`Parser::pratt`](super::Parser::pratt).
 pub struct InfixOp<P, E, PO> {
     strength: u8,
     assoc: Assoc,
@@ -161,7 +161,7 @@ where
 }
 
 /// A representation of a prefix operator to be used in combination with
-/// [`Pratt::pratt`](super::Pratt::pratt).
+/// [`Parser::pratt`](super::Parser::pratt).
 pub struct PrefixOp<Parser, Expr, ParserOut> {
     strength: u8,
     parser: Parser,
@@ -221,7 +221,7 @@ where
 }
 
 /// A representation of a postfix operator to be used in combination with
-/// [`Pratt::pratt`](super::Pratt::pratt).
+/// [`Parser::pratt`](super::Parser::pratt).
 pub struct PostfixOp<Parser, Expr, ParserOut> {
     strength: u8,
     parser: Parser,
