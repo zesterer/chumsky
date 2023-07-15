@@ -1394,7 +1394,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Parse a pattern zero or more times (analog to Regex's '<PAT>*').
+    /// Parse a pattern zero or more times (analog to Regex's `<PAT>*`).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
