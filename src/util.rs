@@ -7,7 +7,6 @@ use core::{
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
 };
-use core::fmt::Formatter;
 
 pub use sync::MaybeSync;
 
@@ -160,7 +159,7 @@ impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<
         impl<'de2, T: Deserialize<'de2>, R: Deref<Target = T>> Visitor<'de2> for MaybeVisitor<T, R> {
             type Value = Maybe<T, R>;
 
-            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "a Maybe")
             }
             
