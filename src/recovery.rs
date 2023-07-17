@@ -200,7 +200,7 @@ pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F>
 /// A recovery parser that searches for a start and end delimiter, respecting nesting.
 ///
 /// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
-/// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesised expression as
+/// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesized expression as
 /// this can aid in detecting delimiter mismatches.
 ///
 /// A function that generates a fallback output on recovery is also required.
