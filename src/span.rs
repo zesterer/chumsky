@@ -59,12 +59,18 @@ pub struct SimpleSpan<T = usize, C = ()> {
 
 impl<T> SimpleSpan<T> {
     /// Create a new `SimpleSpan` from a start and end offset
-    pub fn new(start: T, end: T) -> SimpleSpan<T> {
+    pub const fn new(start: T, end: T) -> SimpleSpan<T> {
         SimpleSpan {
             start,
             end,
             context: (),
         }
+    }
+
+    /// Create the "End Of Input" span for an input source of the given length.
+    #[inline]
+    pub const fn eoi(length: usize) -> SimpleSpan<usize> {
+        Self::new(length, length)
     }
 
     /// Create a new `SimpleSpan` from a single offset, useful for an EOI (End Of Input) span.
