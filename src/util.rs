@@ -137,3 +137,40 @@ impl<'a, T> From<&'a mut T> for Maybe<T, &'a mut T> {
         Self::Ref(x)
     }
 }
+
+#[cfg(feature = "serde")]
+impl<T: Serialize, R: Deref<Target = T>> Serialize for Maybe<T, R> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_newtype_struct("Maybe", &**self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<T, R> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MaybeVisitor<T, R>(PhantomData<(T, R)>);
+
+        impl<'de2, T: Deserialize<'de2>, R: Deref<Target = T>> Visitor<'de2> for MaybeVisitor<T, R> {
+            type Value = Maybe<T, R>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a Maybe")
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de2>,
+            {
+                T::deserialize(deserializer).map(Maybe::Val)
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("Maybe", MaybeVisitor(PhantomData))
+    }
+}
