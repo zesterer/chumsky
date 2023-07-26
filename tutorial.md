@@ -40,7 +40,7 @@ Chumsky also has [several longer examples](https://github.com/zesterer/chumsky/t
 
 If you've tried hand-writing a parser before, you're probably expecting lots of flow control: splitting text by whitespace, matching/switching/branching on things, making a decision about whether to recurse into a function or expect another token, etc. This is an [*imperative*](https://en.wikipedia.org/wiki/Imperative_programming) approach to parser development and can be very time-consuming to write, maintain, and test.
 
-In contrast, Chumsky parsers are [*declarative*](https://en.wikipedia.org/wiki/Declarative_programming): they still perform intricate flow control internally, but it's all hidden away so you don't need to think of it. Instead of describing *how* to parse a particular grammar, Chumsky parsers simply *describe* a grammar: and it is then Chumsky's job to figure out how to efficiency parse it.
+In contrast, Chumsky parsers are [*declarative*](https://en.wikipedia.org/wiki/Declarative_programming): they still perform intricate flow control internally, but it's all hidden away so you don't need to think of it. Instead of describing *how* to parse a particular grammar, Chumsky parsers simply *describe* a grammar: and it is then Chumsky's job to figure out how to efficiently parse it.
 
 If you've ever seen [Backus Naur Form (BNF)](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form) used to describe a language's syntax, you'll have a good sense of what this means: if you squint, you'll find that a lot of parsers written in Chumsky look pretty close to the BNF definition.
 
