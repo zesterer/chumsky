@@ -12,7 +12,7 @@ use super::*;
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
-/// This trait is currently sealed to minimise the impact of breaking changes. If you find a type that you think should
+/// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
 /// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
 pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     /// The default unsized [`str`]-like type of a linear sequence of this character.
@@ -210,7 +210,7 @@ where
 ///
 /// The output type of this parser is `()`.
 ///
-/// This parser is quite extensive, recognising:
+/// This parser is quite extensive, recognizing:
 ///
 /// - Line feed (`\n`)
 /// - Carriage return (`\r`)

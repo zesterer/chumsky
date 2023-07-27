@@ -2,11 +2,11 @@
 
 use super::*;
 
-/// A trait implemented by [`Error`]s that can orginate from labelled parsers. See [`Parser::labelled`].
+/// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
 pub trait LabelError<'a, I: Input<'a>, L>: Error<'a, I> {
     /// Annotate the expected patterns within this parser with the given label.
     ///
-    /// In practice, this usually removes all other labels and expected tokens in favour of a single label that
+    /// In practice, this usually removes all other labels and expected tokens in favor of a single label that
     /// represents the overall pattern.
     fn label_with(&mut self, label: L);
 

@@ -12,6 +12,7 @@
 // TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
+extern crate core;
 
 macro_rules! go_extra {
     ( $O :ty ) => {
@@ -117,6 +118,8 @@ use core::{
     str::FromStr,
 };
 use hashbrown::HashMap;
+#[cfg(feature = "serde")]
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
@@ -788,7 +791,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 
     /// Memoize the parser such that later attempts to parse the same input 'remember' the attempt and exit early.
     ///
-    /// If you're finding that certain inputs produce exponential behaviour in your parser, strategically applying
+    /// If you're finding that certain inputs produce exponential behavior in your parser, strategically applying
     /// memoization to a ['garden path'](https://en.wikipedia.org/wiki/Garden-path_sentence) rule is often an effective
     /// way to solve the problem. At the limit, applying memoization to all combinators will turn any parser into one
     /// with `O(n)`, albeit with very significant per-element overhead and high memory usage.
@@ -804,7 +807,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Memoized { parser: self }
     }
 
-    /// Transform all outputs of this parser to a pretermined value.
+    /// Transform all outputs of this parser to a predetermined value.
     ///
     /// The output type of this parser is `U`, the type of the predetermined value.
     ///
@@ -1262,7 +1265,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// The output of both parsers must be of the same type, because either output can be produced.
     ///
-    /// If both parser succeed, the output of the first parser is guaranteed to be prioritised over the output of the
+    /// If both parser succeed, the output of the first parser is guaranteed to be prioritized over the output of the
     /// second.
     ///
     /// If both parsers produce errors, the combinator will attempt to select from or combine the errors to produce an
@@ -1394,9 +1397,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Parse a pattern any number of times (including zero times).
+    /// Parse a pattern zero or more times (analog to Regex's `<PAT>*`).
     ///
-    /// Input is eagerly parsed. Be aware that the parser will accept no occurences of the pattern too. Consider using
+    /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
     /// [`Repeated::at_least`] instead if it better suits your use-case.
     ///
     /// The output type of this parser can be any [`Container`].
@@ -1811,7 +1814,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /// Validate an output, producing non-terminal errors if it does not fulfil certain criteria.
+    /// Validate an output, producing non-terminal errors if it does not fulfill certain criteria.
     /// The errors will not immediately halt parsing on this path, but instead it will continue,
     /// potentially emitting one or more other errors, only failing after the pattern has otherwise
     /// successfully, or emitted another terminal error.
@@ -1997,7 +2000,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// The resulting iterable parser will emit each element of the output type in turn.
     ///
-    /// This is *broadly* analgous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
+    /// This is *broadly* analogous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
     // TODO: Example
     fn into_iter(self) -> IntoIter<Self, O>
     where
@@ -2105,60 +2108,83 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParserSealed::boxed(self)
     }
 
-    /// Use Pratt parsing to efficiently parse binary operators
-    /// with different associativity.
+    /// Use pratt-parsing to efficiently parse expressions separated by
+    /// operators of different associativity and precedence.
     ///
-    /// The parsing algorithm currently uses recursion
-    /// to parse nested expressions.
+    /// The pratt-parsing algorithm uses recursion to efficiently parse
+    /// arbitrarily nested expressions.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use chumsky::prelude::*;
-    /// use chumsky::pratt::{left_infix, right_infix};
+    /// use chumsky::pratt::*;
+    /// use chumsky::extra;
     ///
     /// enum Expr {
-    ///     Literal(i64),
-    ///     Add(Box<Expr>, Box<Expr>),
-    ///     Sub(Box<Expr>, Box<Expr>),
-    ///     Mul(Box<Expr>, Box<Expr>),
-    ///     Div(Box<Expr>, Box<Expr>),
+    ///     Add(Box<Self>, Box<Self>),
+    ///     Sub(Box<Self>, Box<Self>),
+    ///     Pow(Box<Self>, Box<Self>),
+    ///     Neg(Box<Self>),
+    ///     Fact(Box<Self>),
+    ///     Deref(Box<Self>),
+    ///     Literal(i32),
     /// }
     ///
     /// impl std::fmt::Display for Expr {
-    ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     ///         match self {
     ///             Self::Literal(literal) => write!(f, "{literal}"),
+    ///             Self::Fact(left) => write!(f, "({left}!)"),
+    ///             Self::Deref(left) => write!(f, "(*{left})"),
+    ///             Self::Neg(right) => write!(f, "(-{right})"),
     ///             Self::Add(left, right) => write!(f, "({left} + {right})"),
     ///             Self::Sub(left, right) => write!(f, "({left} - {right})"),
-    ///             Self::Mul(left, right) => write!(f, "({left} * {right})"),
-    ///             Self::Div(left, right) => write!(f, "({left} / {right})"),
+    ///             Self::Pow(left, right) => write!(f, "({left} ^ {right})"),
     ///         }
     ///     }
     /// }
     ///
-    /// let atom = text::int::<_, _, extra::Default>(10)
+    /// let atom = text::int::<_, _, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .map(Expr::Literal);
     ///
     /// let operator = choice((
-    ///     left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-    ///     right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-    ///     right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
-    /// ));
+    ///     // Our `-` and `+` bind the weakest, meaning that even if they occur
+    ///     // first in an expression, they will be the last executed
+    ///     left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
+    ///     left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     // Just like in math, we want that if we write -x^2, that our parser
+    ///     // parses that as -(x^2), so we need it to bind tighter than our
+    ///     // prefix operators
+    ///     right_infix(just('^'), 3, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
+    /// ))
+    /// .padded();
     ///
-    /// let expr = atom.pratt(operator.padded_by(just(' ')));
-    /// let expr_str = expr.map(|expr| expr.to_string()).then_ignore(end());
-    /// assert_eq!(expr_str.parse("1 + 2").into_result(), Ok("(1 + 2)".to_string()));
-    /// // `*` binds more strongly than `+`
-    /// assert_eq!(expr_str.parse("1 * 2 + 3").into_result(), Ok("((1 * 2) + 3)".to_string()));
-    /// assert_eq!(expr_str.parse("1 + 2 * 3").into_result(), Ok("(1 + (2 * 3))".to_string()));
-    /// // `+` is left-associative
-    /// assert_eq!(expr_str.parse("1 + 2 + 3").into_result(), Ok("((1 + 2) + 3)".to_string()));
-    /// // `*` is right-associative (in this example)
-    /// assert_eq!(expr_str.parse("1 * 2 * 3").into_result(), Ok("(1 * (2 * 3))".to_string()));
+    /// let prefix_ops = choice((
+    ///     // Notice the conflict with our `Expr::Sub`. This will still
+    ///     // parse correctly. We want negation to happen before `+` and `-`,
+    ///     // so we set it's precedence higher.
+    ///     prefix(just('-'), 2, |rhs| Expr::Neg(Box::new(rhs))),
+    ///     prefix(just('*'), 2, |rhs| Expr::Deref(Box::new(rhs))),
+    /// ))
+    /// .padded();
+    ///
+    /// // We want factorial to happen before any negation, so we need it's
+    /// // precedence to be higher than `Expr::Neg`.
+    /// let factorial = postfix(just('!'), 4, |lhs| Expr::Fact(Box::new(lhs))).padded();
+    ///
+    /// let pratt = atom
+    ///     .pratt(operator)
+    ///     .with_prefix_ops(prefix_ops)
+    ///     .with_postfix_ops(factorial)
+    ///     .map(|x| x.to_string());
+    ///
+    /// assert_eq!(
+    ///     pratt.parse("*1 + -2! - -3^2").into_result(),
+    ///     Ok("(((*1) + (-(2!))) - (-(3 ^ 2)))".to_string()),
+    /// );
     /// ```
     #[cfg(feature = "pratt")]
     fn pratt<InfixOps, InfixOpsOut>(
@@ -2340,7 +2366,7 @@ where
     ///
     /// The output type of this iterable parser if `C`, the type being collected into.
     ///
-    /// # Exmaples
+    /// # Examples
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};

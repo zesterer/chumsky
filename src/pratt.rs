@@ -1,10 +1,11 @@
-//! Pratt parser for binary infix operators.
+//! Pratt parser for efficiently parsing operators while respecting
+//! operator precedence.
 //!
-//! Pratt parsing is an algorithm that allows efficient
-//! parsing of binary infix operators.
+//! Pratt parsing is an algorithm that allows efficient parsing of
+//! expressions using recursion.
 //!
-//! The [`Parser::pratt`] method creates a Pratt parser.
-//! Its documentation contains an example of how it can be used.
+//! The [`Parser::pratt`] method creates a [`Pratt`] parser. See the
+//! method's documentation for an example of how it can be used.
 
 mod ops;
 use ops::Strength;
@@ -22,27 +23,62 @@ use crate::{
 
 pub(super) use ops::{Infix, InfixPostfix, InfixPrefix, InfixPrefixPostfix, PrattOpOutput};
 
-/// DOCUMENT
+/// Shorthand for [`InfixOp::new_left`].
+///
+/// Creates a left associative infix operator that is parsed with the
+/// parser `P`, and a function which is used to `build` a value `E`.
+/// The operator's precedence is determined by `strength`. The higher
+/// the value, the higher the precedence.
 pub fn left_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
     InfixOp::new_left(parser, strength, build)
 }
 
-/// DOCUMENT
+/// Shorthand for [`InfixOp::new_right`].
+///
+/// Creates a right associative infix operator that is parsed with the
+/// parser `P`, and a function which is used to `build` a value `E`.
+/// The operator's precedence is determined by `strength`. The higher
+/// the value, the higher the precedence.
 pub fn right_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
     InfixOp::new_right(parser, strength, build)
 }
 
-/// DOCUMENT
+/// Shorthand for [`PrefixOp::new`].
+///
+/// Creates a prefix operator (a right-associative unary operator)
+/// that is parsed with the parser `P`, and a function which is used
+/// to `build` a value `E`. The operator's precedence is determined
+/// by `strength`. The higher the value, the higher the precedence.
 pub fn prefix<P, E, PO>(parser: P, strength: u8, build: PrefixBuilder<E>) -> PrefixOp<P, E, PO> {
     PrefixOp::new(parser, strength, build)
 }
 
-/// DOCUMENT
+/// Shorthand for [`PostfixOp::new`].
+///
+/// Creates a postfix operator (a left-associative unary operator)
+/// that is parsed with the parser `P`, and a function which is used
+/// to `build` a value `E`. The operator's precedence is determined
+/// by `strength`. The higher the value, the higher the precedence.
 pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> PostfixOp<P, E, PO> {
     PostfixOp::new(parser, strength, build)
 }
 
-/// DOCUMENT
+/// A struct which represents a parser capable of using pratt-parsing.
+///
+/// This parser contains a parser of type `Atom`, which parses expressions that
+/// are separated by a set of operators of parsed by a parser of type `Ops`.
+/// The operators may have varying precedence levels, as well as associativity.
+/// For those unfamiliar with operator precedence and/or associativity, it may
+/// be helpful to read [this documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence)
+///
+/// This struct offers two methods:
+/// * `with_prefix_ops`: Attaches prefix operators to the parser
+/// * `with_postfix_ops`: Attaches postfix operators to the parser
+///
+/// Once one of the methods has been used, it will become unavailable
+/// due to the use of the type-state pattern to prevent accidental
+/// resetting of the operators.
+/// See [`Parser::pratt`] for an example of how to use these methods.
 pub struct Pratt<I, O, E, Atom, Ops> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
@@ -71,7 +107,8 @@ where
 }
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>> {
-    /// DOCUMENT
+    /// Extend a `Pratt` parser by setting prefix operators.
+    /// See [`Parser::pratt`] for an example of how to use this methods.
     pub fn with_prefix_ops<PrefixOps, PrefixOpsOut>(
         self,
         prefix_ops: PrefixOps,
@@ -95,7 +132,8 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
         }
     }
 
-    /// DOCUMENT
+    /// Extend a `Pratt` parser by setting postfix operators
+    /// See [`Parser::pratt`] for an example of how to use this method.
     pub fn with_postfix_ops<PostfixOps, PostfixOpsOut>(
         self,
         postfix_ops: PostfixOps,
@@ -123,7 +161,7 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
     Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>
 {
-    /// DOCUMENT
+    /// Extend a `Pratt` parser by setting postfix operators
     pub fn with_postfix_ops<PostfixOps, PostfixOpsOut>(
         self,
         postfix_ops: PostfixOps,
@@ -178,7 +216,7 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>
     Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>
 {
-    /// DOCUMENT
+    /// Extend a `Pratt` parser by setting prefix operators
     pub fn with_prefix_ops<PrefixOps, PrefixOpsOut>(
         self,
         prefix_ops: PrefixOps,
@@ -220,19 +258,23 @@ type PrefixBuilder<E> = fn(rhs: E) -> E;
 
 type PostfixBuilder<E> = fn(rhs: E) -> E;
 
-/// Document
-pub trait PrattParser<'a, I, Expr, E>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-{
-    /// Document
-    fn pratt_parse<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        min_strength: Option<Strength>,
-    ) -> PResult<M, Expr>;
+mod nameless_trait {
+    use super::*;
+
+    pub trait PrattParser<'a, I, Expr, E>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+    {
+        fn pratt_parse<M: Mode>(
+            &self,
+            inp: &mut InputRef<'a, '_, I, E>,
+            min_strength: Option<Strength>,
+        ) -> PResult<M, Expr>;
+    }
 }
+
+use nameless_trait::PrattParser;
 
 impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
     for Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>>

@@ -738,7 +738,7 @@ pub struct Choice<T> {
 ///   compilation times.
 ///
 /// - Parsing is likely a little faster in some cases because the resulting parser is 'less careful' about error
-///   routing, and doesn't perform the same fine-grained error prioritisation that [`Parser::or`] does.
+///   routing, and doesn't perform the same fine-grained error prioritization that [`Parser::or`] does.
 ///
 /// These qualities make this parser ideal for lexers.
 ///

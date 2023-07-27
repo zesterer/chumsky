@@ -1,7 +1,7 @@
 //! Types and traits that let you write extensions for chumsky.
 //!
-//! Chumsky is a complicated crate that performs many internal optimisations to keep your parsers fast. These
-//! optimisations mean that chumsky's core is rapidly changing, difficult to work with, and reveals a lot of
+//! Chumsky is a complicated crate that performs many internal optimizations to keep your parsers fast. These
+//! optimizations mean that chumsky's core is rapidly changing, difficult to work with, and reveals a lot of
 //! often-superfluous implementation details that are necessary to account for.
 //!
 //! In short: it's not a good basis for a stable public API upon which to build a parser ecosystem.
@@ -116,7 +116,7 @@ mod current {
 
         /// Attempt to check the given input.
         ///
-        /// This function should have **exactly** the same behaviour as [`ExtParser::parse`]. If the behaviour differs,
+        /// This function should have **exactly** the same behavior as [`ExtParser::parse`]. If the behavior differs,
         /// the result of using the parser is unspecified (note that chumsky tries to aggressively avoid generating
         /// outputs if it doesn't use them, and will readily swap between [`ExtParser::parse`] and [`ExtParser::check`]
         /// when it thinks that doing so might yield performance benefits).
@@ -140,6 +140,7 @@ mod current {
     ///
     /// If you're writing an extension crate for chumsky, you can make things less confusing for your users by putting your
     /// parser behind a type alias.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     #[repr(transparent)]
     pub struct Ext<T: ?Sized>(pub T);

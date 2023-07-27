@@ -26,7 +26,7 @@ pub trait Span {
     ///
     /// Typically, [`usize`] is used.
     ///
-    /// NOTE: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritise errors. This
+    /// NOTE: Offsets have no inherently meaning to Chumsky and are not used to decide how to prioritize errors. This
     /// means that it's perfectly fine for tokens to have non-continuous spans that bear no relation to their actual
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.
@@ -47,7 +47,8 @@ pub trait Span {
 
 /// The most basic implementor of `Span` - akin to `Range`, but `Copy` since it's not also
 /// an iterator. Also has a `Display` implementation
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SimpleSpan<T = usize, C = ()> {
     /// The start offset of the span.
     pub start: T,

@@ -821,7 +821,7 @@ struct IoInner<R> {
 }
 
 /// Input type which supports seekable readers. Uses a [`BufReader`] internally to buffer input and
-/// avoid unecessary IO calls.
+/// avoid unnecessary IO calls.
 ///
 /// Only available with the `std` feature
 #[cfg(feature = "std")]
@@ -1252,7 +1252,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     ///
     /// # Import Notice
     ///
-    /// See [`InputRef::parse`] about unspecified behaviour associated with this function.
+    /// See [`InputRef::parse`] about unspecified behavior associated with this function.
     pub fn check<O, P: Parser<'a, I, O, E>>(&mut self, parser: P) -> Result<(), E::Error> {
         match parser.go::<Check>(self) {
             Ok(()) => Ok(()),
@@ -1264,7 +1264,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
     ///
     /// This function is more flexible than either [`InputRef::next`] or [`InputRef::next_ref`] since it
     /// only requires that the [`Input`] trait be implemented for `I` (instead of either [`ValueInput`] or
-    /// [`BorrowInput`]). However, that increased flexibility for the end user comes with a tradeoff for the
+    /// [`BorrowInput`]). However, that increased flexibility for the end user comes with a trade-off for the
     /// implementation: this function returns a [`MaybeRef<I::Token>`] that provides only a temporary reference to the
     /// token.
     ///
