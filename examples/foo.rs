@@ -76,7 +76,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
             |lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)),
         );
 
-        sum
+        sum.padded()
     });
 
     let decl = recursive(|decl| {
