@@ -32,8 +32,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
 
     let expr = recursive(|expr| {
         let int = text::int(10)
-            .map(|s: &str| Expr::Num(s.parse().unwrap()))
-            .padded();
+            .map(|s: &str| Expr::Num(s.parse().unwrap()));
 
         let call = ident
             .then(
@@ -48,7 +47,8 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
         let atom = int
             .or(expr.delimited_by(just('('), just(')')))
             .or(call)
-            .or(ident.map(Expr::Var));
+            .or(ident.map(Expr::Var))
+            .padded();
 
         let op = |c| just(c).padded();
 
