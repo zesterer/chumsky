@@ -1059,14 +1059,14 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
     #[inline]
-    pub(crate) fn with_ctx<'sub_parse, C, O>(
+    pub(crate) fn with_ctx<'sub_parse, EM, O>(
         &'sub_parse mut self,
-        new_ctx: &'sub_parse C,
-        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, extra::Full<E::Error, E::State, C>>) -> O,
+        new_ctx: &'sub_parse EM::Context,
+        f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, EM>) -> O,
     ) -> O
     where
         'parse: 'sub_parse,
-        C: 'a,
+        EM: ParserExtra<'a, I, Error = E::Error, State = E::State>,
     {
         let mut new_inp = InputRef {
             input: self.input,
