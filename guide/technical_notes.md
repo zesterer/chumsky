@@ -15,7 +15,7 @@ the library, it is reasonable to assume as much.
 
 Chumsky also has limited support for context-sensitive parsing. Chumsky's context-sensitive parsing allows previously
 parsed elements of the grammar to inform the parsing of future elements in a limited way.
-See [`Parser::ignore_with_ctx`] and [`Parser::then_with_ctx`]for more information.
+See [`Parser::ignore_then_ctx`] and [`Parser::then_ctx`]for more information.
 
 The term 'PEG++' might be an appropriate description of chumsky, with 'CFG + left context' being a description of the
 grammars that it can parse.

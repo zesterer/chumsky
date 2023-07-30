@@ -1171,8 +1171,8 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
 
     /// Get a reference to the context fed to the current parser.
     ///
-    /// See [`ConfigParser::configure`], [`Parser::ignore_with_ctx`] and
-    /// [`Parser::then_with_ctx`] for more information about context-sensitive
+    /// See [`ConfigParser::configure`], [`Parser::ignore_then_ctx`] and
+    /// [`Parser::then_ctx`] for more information about context-sensitive
     /// parsing.
     #[inline(always)]
     pub fn ctx(&self) -> &E::Context {
