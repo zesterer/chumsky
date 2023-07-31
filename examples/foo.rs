@@ -31,8 +31,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     let ident = text::ascii::ident().padded();
 
     let expr = recursive(|expr| {
-        let int = text::int(10)
-            .map(|s: &str| Expr::Num(s.parse().unwrap()));
+        let int = text::int(10).map(|s: &str| Expr::Num(s.parse().unwrap()));
 
         let call = ident
             .then(
