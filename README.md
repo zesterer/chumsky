@@ -42,8 +42,7 @@ A parser library for humans with powerful error recovery.
 
 ## Example [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) Parser
 
-See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for the full
-interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
+See [`examples/brainfuck.rs`] for the full interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
 
 ```rust
 use chumsky::prelude::*;
@@ -73,16 +72,14 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>> {
 
 Other examples include:
 
-- A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --example json --
-  examples/sample.json`)
-- An [interpreter for a simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
+- A [JSON parser] (`cargo run --example json -- examples/sample.json`)
+- An [interpreter for a simple Rust-y language][examples/nano_rust.rs]
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
 ## Tutorial
 
-Chumsky has [a tutorial](https://github.com/zesterer/chumsky/blob/master/tutorial.md) that teaches you how to write a
-parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence, functions,
-let declarations, and calls.
+Chumsky has a [tutorial] that teaches you how to write a parser and interpreter for a simple dynamic language
+with unary and binary operators, operator precedence, functions, let declarations, and calls.
 
 ## *What* is a parser combinator?
 
@@ -189,3 +186,9 @@ My apologies to Noam for choosing such an absurd name.
 ## License
 
 Chumsky is licensed under the MIT license (see `LICENSE` in the main repository).
+
+<!-- These link destinations are defined like this so that src/lib.rs can override them. -->
+[`examples/brainfuck.rs`]: https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs
+[JSON parser]: https://github.com/zesterer/chumsky/blob/master/examples/json.rs
+[examples/nano_rust.rs]: https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs
+[tutorial]: https://github.com/zesterer/chumsky/blob/master/tutorial.md
