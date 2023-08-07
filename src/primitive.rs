@@ -592,28 +592,31 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
 }
 
 /// See [`map_ctx`].
-pub struct MapCtx<A, F> {
+pub struct MapCtx<A, AE, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
+    pub(crate) extra_phantom: PhantomData<AE>,
 }
 
-impl<A: Copy, F: Copy> Copy for MapCtx<A, F> {}
-impl<A: Clone, F: Clone> Clone for MapCtx<A, F> {
+impl<A: Copy, AE, F: Copy> Copy for MapCtx<A, AE, F> {}
+impl<A: Clone, AE, F: Clone> Clone for MapCtx<A, AE, F> {
     fn clone(&self) -> Self {
         MapCtx {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
+            extra_phantom: PhantomData,
         }
     }
 }
 
-impl<'a, I, O, E, A, F, Ctx> ParserSealed<'a, I, O, E> for MapCtx<A, F>
+impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, extra::Full<E::Error, E::State, Ctx>>,
-    F: Fn(&E::Context) -> Ctx,
-    Ctx: 'a,
+    EI: ParserExtra<'a, I, Error = E::Error, State = E::State>,
+    A: Parser<'a, I, O, EI>,
+    F: Fn(&E::Context) -> EI::Context,
+    EI::Context: 'a,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -638,10 +641,10 @@ where
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
 ///
-/// let upper = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
+/// let upper = just::<u8, &[u8], extra::Context<u8>>(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
 ///
 /// let inc = one_of::<_, _, extra::Default>(b'a'..=b'z')
-///     .ignore_with_ctx(map_ctx(|c: &u8| c.to_ascii_uppercase(), upper))
+///     .ignore_with_ctx(map_ctx::<_, u8, &[u8], extra::Context<u8>, extra::Context<u8>, _>(|c: &u8| c.to_ascii_uppercase(), upper))
 ///     .slice()
 ///     .repeated()
 ///     .at_least(1)
@@ -650,15 +653,46 @@ where
 /// assert_eq!(inc.parse(b"aAbB" as &[_]).into_result(), Ok(vec![b"aA" as &[_], b"bB"]));
 /// assert!(inc.parse(b"aB").has_errors());
 /// ```
-pub const fn map_ctx<'a, P, OP, I, E, F, Ctx>(mapper: F, parser: P) -> MapCtx<P, F>
+/// You can not only change the value of the context but also change the type entirely:
+/// ```
+/// # use chumsky::{
+///         extra,
+///         primitive::{just, map_ctx},
+///         ConfigParser, Parser,
+/// };
+///
+/// fn string_ctx<'a>() -> impl Parser<'a, &'a str, (), extra::Context<String>> {
+///     just("".to_owned())
+///         .configure(|cfg, s: &String| cfg.seq(s.clone()))
+///         .ignored()
+/// }
+///
+/// fn usize_ctx<'a>() -> impl Parser<'a, &'a str, (), extra::Context<usize>> {
+///     map_ctx::<_, _, _, extra::Context<usize>, extra::Context<String>, _>(
+///        |num: &usize| num.to_string(),
+///        string_ctx(),
+///     )
+/// }
+///
+/// fn specific_usize<'a>(num: usize) -> impl Parser<'a, &'a str, ()> {
+///     usize_ctx().with_ctx(num)
+/// }
+/// assert!(!specific_usize(10).parse("10").has_errors());
+/// ```
+pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F>
 where
-    F: Fn(&E::Context) -> Ctx,
-    Ctx: 'a,
+    F: Fn(&E::Context) -> EP::Context,
     I: Input<'a>,
-    P: Parser<'a, I, OP, E>,
+    P: Parser<'a, I, OP, EP>,
     E: ParserExtra<'a, I>,
+    EP: ParserExtra<'a, I>,
+    EP::Context: 'a,
 {
-    MapCtx { parser, mapper }
+    MapCtx {
+        parser,
+        mapper,
+        extra_phantom: PhantomData,
+    }
 }
 
 /// See [`fn@todo`].
