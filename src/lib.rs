@@ -1,7 +1,10 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
-#![cfg_attr(feature = "nightly", feature(never_type, rustc_attrs))]
-#![cfg_attr(feature = "nightly", feature(fn_traits, tuple_trait, unboxed_closures))]
+#![cfg_attr(feature = "nightly", allow(internal_features))]
+#![cfg_attr(
+    feature = "nightly",
+    feature(never_type, rustc_attrs, fn_traits, tuple_trait, unboxed_closures)
+)]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
