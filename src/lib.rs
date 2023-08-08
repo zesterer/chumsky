@@ -5,6 +5,14 @@
     feature = "nightly",
     feature(never_type, rustc_attrs, fn_traits, tuple_trait, unboxed_closures)
 )]
+//
+// README.md links these files via the main branch. For docs.rs we however want to link them
+// to the version of the documented crate since the files in the main branch may diverge.
+#![doc = concat!("[`examples/brainfuck.rs`]: ", blob_url_prefix!(), "/examples/brainfuck.rs")]
+#![doc = concat!("[JSON parser]: ", blob_url_prefix!(), "/examples/json.rs")]
+#![doc = concat!("[examples/nano_rust.rs]: ", blob_url_prefix!(), "/examples/nano_rust.rs")]
+#![doc = concat!("[tutorial]: ", blob_url_prefix!(), "/tutorial.md")]
+//
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
@@ -16,6 +24,15 @@
 
 extern crate alloc;
 extern crate core;
+
+macro_rules! blob_url_prefix {
+    () => {
+        concat!(
+            "https://github.com/zesterer/chumsky/blob/",
+            env!("CARGO_PKG_VERSION")
+        )
+    };
+}
 
 macro_rules! go_extra {
     ( $O :ty ) => {
