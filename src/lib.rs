@@ -29,7 +29,7 @@ macro_rules! blob_url_prefix {
     () => {
         concat!(
             "https://github.com/zesterer/chumsky/blob/",
-            env!("CARGO_PKG_VERSION")
+            env!("VERGEN_GIT_SHA")
         )
     };
 }
