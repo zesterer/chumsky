@@ -2532,7 +2532,7 @@ where
     ///
     ///
     #[cfg_attr(debug_assertions, track_caller)]
-    fn foldr_with_state<B, F, OA>(self, other: B, f: F) -> FoldrWithState<F, Self, B, OA, E>
+    fn foldr_with_state<B, F, OA>(self, other: B, f: F) -> FoldrWithState<F, Self, B, O, E>
     where
         F: Fn(O, OA, &mut E::State) -> OA,
         B: Parser<'a, I, OA, E>,
