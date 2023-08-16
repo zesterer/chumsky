@@ -239,6 +239,9 @@ where
     where
         I: 'a;
 
+    // Determines whether this iter parser is expected to not consume input on each iteration
+    const NONCONSUMPTION_IS_OK: bool = false;
+
     #[doc(hidden)]
     fn make_iter<M: Mode>(
         &self,

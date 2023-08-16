@@ -724,6 +724,8 @@ where
     // between iterator and usize at compile time.
     type IterState<M: Mode> = O::IntoIter; //M::Output<O::IntoIter>;
 
+    const NONCONSUMPTION_IS_OK: bool = true;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -1998,7 +2000,7 @@ where
             // We only check after the second iteration because that's when we *must* have consumed both item
             // and separator.
             #[cfg(debug_assertions)]
-            {
+            if !A::NONCONSUMPTION_IS_OK {
                 if i >= 1 {
                     debug_assert!(
                         before != inp.offset(),
@@ -2257,11 +2259,13 @@ where
                 Err(()) => return Err(()),
             }
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.offset(),
-                "found Foldr combinator making no progress at {}",
-                self.location,
-            );
+            if !A::NONCONSUMPTION_IS_OK {
+                debug_assert!(
+                    before != inp.offset(),
+                    "found Foldr combinator making no progress at {}",
+                    self.location,
+                );
+            }
         }
 
         let b_out = self.parser_b.go::<M>(inp)?;
@@ -2325,11 +2329,13 @@ where
                 Err(()) => return Err(()),
             }
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.offset(),
-                "found FoldrWithState combinator making no progress at {}",
-                self.location,
-            );
+            if !A::NONCONSUMPTION_IS_OK {
+                debug_assert!(
+                    before != inp.offset(),
+                    "found FoldrWithState combinator making no progress at {}",
+                    self.location,
+                );
+            }
         }
 
         let b_out = self.parser_b.go::<M>(inp)?;
@@ -2396,11 +2402,13 @@ where
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.offset(),
-                "found Foldl combinator making no progress at {}",
-                self.location,
-            );
+            if !B::NONCONSUMPTION_IS_OK {
+                debug_assert!(
+                    before != inp.offset(),
+                    "found Foldl combinator making no progress at {}",
+                    self.location,
+                );
+            }
         }
     }
 
@@ -2459,11 +2467,13 @@ where
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.offset(),
-                "found FoldlWithState combinator making no progress at {}",
-                self.location,
-            );
+            if !B::NONCONSUMPTION_IS_OK {
+                debug_assert!(
+                    before != inp.offset(),
+                    "found FoldlWithState combinator making no progress at {}",
+                    self.location,
+                );
+            }
         }
     }
 

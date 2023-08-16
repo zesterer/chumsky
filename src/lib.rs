@@ -3431,4 +3431,19 @@ mod tests {
             vec![MyErr("special")]
         )
     }
+
+    #[test]
+    fn into_iter_no_error() {
+        fn parser<'a>() -> impl Parser<'a, &'a str, (), extra::Err<MyErr>> {
+            let many_as = just('a')
+                .ignored()
+                .repeated()
+                .at_least(1)
+                .collect::<Vec<_>>();
+
+            many_as.into_iter().collect()
+        }
+
+        assert_eq!(parser().parse("aaa").into_result().unwrap(), ());
+    }
 }
