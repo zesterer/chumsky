@@ -903,7 +903,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, 'b, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<Vec<A>>
+impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<Vec<A>>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -916,7 +916,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, 'b, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
+impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
