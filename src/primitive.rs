@@ -872,7 +872,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
+impl<'a, 'b, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&'b [A]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -880,7 +880,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        if N == 0 {
+        if self.parsers.is_empty() {
             let offs = inp.offset();
             let err_span = inp.span_since(offs);
             inp.add_alt(offs.offset, None, None, err_span);
@@ -900,6 +900,32 @@ where
         }
     }
 
+    go_extra!(O);
+}
+
+impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<Vec<A>>
+where
+    A: Parser<'a, I, O, E>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        choice(&self.parsers[..]).go::<M>(inp)
+    }
+    go_extra!(O);
+}
+
+impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
+where
+    A: Parser<'a, I, O, E>,
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        choice(&self.parsers[..]).go::<M>(inp)
+    }
     go_extra!(O);
 }
 
