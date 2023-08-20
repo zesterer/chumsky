@@ -2856,12 +2856,12 @@ macro_rules! select_ref {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::prelude::*;
 
     #[test]
     fn zero_copy() {
-        use self::input::WithContext;
-        use self::prelude::*;
+        use crate::input::WithContext;
+        use crate::prelude::*;
 
         #[derive(PartialEq, Debug)]
         enum Token<'a> {
@@ -2909,8 +2909,8 @@ mod tests {
 
     #[test]
     fn zero_copy_map_span() {
-        use self::input::MappedSpan;
-        use self::prelude::*;
+        use crate::input::MappedSpan;
+        use crate::prelude::*;
 
         #[derive(PartialEq, Debug)]
         enum Token<'a> {
@@ -2965,7 +2965,7 @@ mod tests {
 
     #[test]
     fn zero_copy_repetition() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             any()
@@ -3001,7 +3001,7 @@ mod tests {
 
     #[test]
     fn zero_copy_group() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
             group((
@@ -3041,7 +3041,7 @@ mod tests {
 
     #[test]
     fn zero_copy_group_array() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, [char; 3]> {
             group([just('a'), just('b'), just('c')])
@@ -3054,7 +3054,7 @@ mod tests {
     #[test]
     fn unicode_str() {
         let input = "🄯🄚🹠🴎🄐🝋🰏🄂🬯🈦g🸵🍩🕔🈳2🬙🨞🅢🭳🎅h🵚🧿🏩🰬k🠡🀔🈆🝹🤟🉗🴟📵🰄🤿🝜🙘🹄5🠻🡉🱖🠓";
-        let mut own = InputOwn::<_, extra::Default>::new(input);
+        let mut own = crate::input::InputOwn::<_, extra::Default>::new(input);
         let mut inp = own.as_ref_start();
 
         while let Some(_c) = inp.next() {}
@@ -3062,7 +3062,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl IterParser<'a, &'a str, char> {
             any().repeated()
@@ -3079,7 +3079,7 @@ mod tests {
     #[test]
     #[cfg(feature = "memoization")]
     fn exponential() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, String> {
             recursive(|expr| {
@@ -3109,7 +3109,7 @@ mod tests {
     #[test]
     #[cfg(feature = "memoization")]
     fn left_recursive() {
-        use self::prelude::*;
+        use crate::prelude::*;
 
         fn parser<'a>() -> impl Parser<'a, &'a str, String> {
             recursive(|expr| {
@@ -3136,7 +3136,7 @@ mod tests {
 
     #[cfg(debug_assertions)]
     mod debug_asserts {
-        use super::prelude::*;
+        use crate::prelude::*;
 
         // TODO panic when left recursive parser is detected
         // #[test]
@@ -3288,6 +3288,8 @@ mod tests {
 
     #[test]
     fn arc_impl() {
+        use alloc::sync::Arc;
+
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             Arc::new(
                 any()
@@ -3352,6 +3354,8 @@ mod tests {
 
     #[test]
     fn rc_impl() {
+        use alloc::rc::Rc;
+
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             Rc::new(
                 any()
@@ -3385,13 +3389,13 @@ mod tests {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     struct MyErr(&'static str);
 
-    impl<'a, I> Error<'a, I> for MyErr
+    impl<'a, I> crate::Error<'a, I> for MyErr
     where
         I: Input<'a>,
     {
-        fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
+        fn expected_found<E: IntoIterator<Item = Option<crate::MaybeRef<'a, I::Token>>>>(
             _expected: E,
-            _found: Option<MaybeRef<'a, I::Token>>,
+            _found: Option<crate::MaybeRef<'a, I::Token>>,
             _span: I::Span,
         ) -> Self {
             MyErr("expected found")
@@ -3445,5 +3449,116 @@ mod tests {
         }
 
         assert_eq!(parser().parse("aaa").into_result().unwrap(), ());
+    }
+
+    #[test]
+    #[cfg(feature = "unstable")]
+    fn cached() {
+        fn my_parser<'a>() -> impl Parser<'a, &'a str, &'a str, extra::Default> {
+            any().repeated().exactly(5).slice()
+        }
+
+        struct MyCache;
+
+        impl crate::cache::Cached for MyCache {
+            type Input<'src> = &'src str;
+            type Output<'src> = &'src str;
+            type Extra<'src> = extra::Default;
+
+            fn make_parser<'src>(
+                self,
+            ) -> Boxed<'src, 'src, Self::Input<'src>, Self::Output<'src>, Self::Extra<'src>>
+            {
+                Parser::boxed(my_parser())
+            }
+        }
+
+        // usage < definition
+        {
+            let parser = crate::cache::Cache::new(MyCache);
+
+            for _ in 0..2 {
+                let s = "hello".to_string();
+
+                assert_eq!(parser.get().parse(&s).into_result(), Ok("hello"));
+                assert!(matches!(
+                    parser.get().parse("goodbye").into_result(),
+                    Err(_)
+                ));
+            }
+        }
+
+        // usage > definition
+        {
+            let s = "hello".to_string();
+
+            for _ in 0..2 {
+                let parser = crate::cache::Cache::new(MyCache);
+
+                assert_eq!(parser.get().parse(&s).into_result(), Ok("hello"));
+                assert!(matches!(
+                    parser.get().parse("goodbye").into_result(),
+                    Err(_)
+                ));
+            }
+        }
+    }
+}
+
+/// Traits and types that allow parsers to be cached between invocations.
+#[cfg(feature = "unstable")]
+pub mod cache {
+    use super::*;
+
+    /// Implementing this trait allows you to cache parser for use with multiple inputs.
+    pub trait Cached {
+        /// The input type of the parser (for example, `&'a str`).
+        type Input<'src>: Input<'src>;
+
+        /// The output type of the parser.
+        type Output<'src>;
+
+        /// The extra type of the parser (see [`extra`]).
+        type Extra<'src>: ParserExtra<'src, Self::Input<'src>>;
+
+        // /// The type of the parser to be cached.
+        // type Parser<'a>: Parser<'a, Self::Input<'a>, Self::Output<'a>, Self::Extra<'a>>;
+
+        /// Create an instance of the parser
+        fn make_parser<'src>(
+            self,
+        ) -> Boxed<'src, 'src, Self::Input<'src>, Self::Output<'src>, Self::Extra<'src>>;
+    }
+
+    /// Allows a parser to be cached for use with inputs and outputs of difference lifetimes.
+    pub struct Cache<C: Cached> {
+        parser: Boxed<'static, 'static, C::Input<'static>, C::Output<'static>, C::Extra<'static>>,
+        #[allow(dead_code)]
+        phantom: EmptyPhantom<C>,
+    }
+
+    impl<C: Cached> Cache<C> {
+        /// Create a new cached parser.
+        pub fn new(cacher: C) -> Self {
+            Self {
+                parser: cacher.make_parser(),
+                phantom: EmptyPhantom::new(),
+            }
+        }
+
+        /// Get a reference to the cached parser.
+        ///
+        /// Because this function is generic over an input lifetime, the
+        pub fn get<'src>(
+            &self,
+        ) -> &Boxed<'src, 'src, C::Input<'src>, C::Output<'src>, C::Extra<'src>> {
+            // SAFETY: This is safe because the API of `Cache` requires that the parser we store is bound by an arbitrary
+            // lifetime variable (see `Cached::make_parser`). Therefore, the implementor of `Cached` has no way to
+            // 'discover' the lifetime and so, because lifetimes are entirely removed during monomorphisation, the parser
+            // must be valid for arbitrary lifetimes.
+            unsafe {
+                &*(&self.parser as *const Boxed<C::Input<'_>, C::Output<'_>, C::Extra<'_>>).cast()
+            }
+        }
     }
 }
