@@ -1,4 +1,4 @@
-//! A small module that implements the [`Parser`](Parser) trait for the
+//! A small module that implements the [`Parser`] trait for the
 //! [`either::Either`](https://docs.rs/either/latest/either/enum.Either.html) type.
 
 use either::Either;

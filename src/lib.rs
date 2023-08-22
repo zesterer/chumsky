@@ -69,6 +69,8 @@ macro_rules! go_cfg_extra {
 }
 
 mod blanket;
+#[cfg(feature = "unstable")]
+pub mod cache;
 pub mod combinator;
 pub mod container;
 #[cfg(feature = "either")]
@@ -347,7 +349,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse(&self, input: I) -> ParseResult<O, E::Error>
     where
-        Self: Sized,
         I: Input<'a>,
         E::State: Default,
         E::Context: Default,
@@ -365,7 +366,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse_with_state(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
-        Self: Sized,
         I: Input<'a>,
         E::Context: Default,
     {
@@ -3461,14 +3461,9 @@ mod tests {
         struct MyCache;
 
         impl crate::cache::Cached for MyCache {
-            type Input<'src> = &'src str;
-            type Output<'src> = &'src str;
-            type Extra<'src> = extra::Default;
+            type Parser<'src> = Boxed<'src, 'src, &'src str, &'src str, extra::Default>;
 
-            fn make_parser<'src>(
-                self,
-            ) -> Boxed<'src, 'src, Self::Input<'src>, Self::Output<'src>, Self::Extra<'src>>
-            {
+            fn make_parser<'src>(self) -> Self::Parser<'src> {
                 Parser::boxed(my_parser())
             }
         }
@@ -3500,64 +3495,6 @@ mod tests {
                     parser.get().parse("goodbye").into_result(),
                     Err(_)
                 ));
-            }
-        }
-    }
-}
-
-/// Traits and types that allow parsers to be cached between invocations.
-#[cfg(feature = "unstable")]
-pub mod cache {
-    use super::*;
-
-    /// Implementing this trait allows you to cache parser for use with multiple inputs.
-    pub trait Cached {
-        /// The input type of the parser (for example, `&'a str`).
-        type Input<'src>: Input<'src>;
-
-        /// The output type of the parser.
-        type Output<'src>;
-
-        /// The extra type of the parser (see [`extra`]).
-        type Extra<'src>: ParserExtra<'src, Self::Input<'src>>;
-
-        // /// The type of the parser to be cached.
-        // type Parser<'a>: Parser<'a, Self::Input<'a>, Self::Output<'a>, Self::Extra<'a>>;
-
-        /// Create an instance of the parser
-        fn make_parser<'src>(
-            self,
-        ) -> Boxed<'src, 'src, Self::Input<'src>, Self::Output<'src>, Self::Extra<'src>>;
-    }
-
-    /// Allows a parser to be cached for use with inputs and outputs of difference lifetimes.
-    pub struct Cache<C: Cached> {
-        parser: Boxed<'static, 'static, C::Input<'static>, C::Output<'static>, C::Extra<'static>>,
-        #[allow(dead_code)]
-        phantom: EmptyPhantom<C>,
-    }
-
-    impl<C: Cached> Cache<C> {
-        /// Create a new cached parser.
-        pub fn new(cacher: C) -> Self {
-            Self {
-                parser: cacher.make_parser(),
-                phantom: EmptyPhantom::new(),
-            }
-        }
-
-        /// Get a reference to the cached parser.
-        ///
-        /// Because this function is generic over an input lifetime, the
-        pub fn get<'src>(
-            &self,
-        ) -> &Boxed<'src, 'src, C::Input<'src>, C::Output<'src>, C::Extra<'src>> {
-            // SAFETY: This is safe because the API of `Cache` requires that the parser we store is bound by an arbitrary
-            // lifetime variable (see `Cached::make_parser`). Therefore, the implementor of `Cached` has no way to
-            // 'discover' the lifetime and so, because lifetimes are entirely removed during monomorphisation, the parser
-            // must be valid for arbitrary lifetimes.
-            unsafe {
-                &*(&self.parser as *const Boxed<C::Input<'_>, C::Output<'_>, C::Extra<'_>>).cast()
             }
         }
     }

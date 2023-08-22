@@ -438,6 +438,9 @@ pub mod ascii {
     }
 }
 
+// Unicode is the default
+pub use unicode::*;
+
 /// Parsers and utilities for working with unicode inputs.
 pub mod unicode {
     use super::*;
