@@ -935,9 +935,21 @@ impl<'a, 'parse, I: Input<'a>> Clone for Offset<'a, 'parse, I> {
     }
 }
 
+impl<'a, 'parse, I: Input<'a>> Eq for Offset<'a, 'parse, I> {}
 impl<'a, 'parse, I: Input<'a>> PartialEq for Offset<'a, 'parse, I> {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset
+    }
+}
+
+impl<'a, 'parse, I: Input<'a>> PartialOrd for Offset<'a, 'parse, I> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<'a, 'parse, I: Input<'a>> Ord for Offset<'a, 'parse, I> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset.cmp(&other.offset)
     }
 }
 
