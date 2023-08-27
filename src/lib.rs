@@ -1420,9 +1420,10 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Parse a pattern zero or more times (analog to Regex's `<PAT>*`).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
-    /// [`Repeated::at_least`] instead if it better suits your use-case.
+    /// [`Repeated::at_least`] instead if you wish to parse a minimum number of elements.
     ///
-    /// The output type of this parser can be any [`Container`].
+    /// The output type of this parser is, by default, `()`. If you want to collect the items into a [`Container`]
+    /// (such as a [`Vec`]), use [`IterParser::collect`].
     ///
     /// # Examples
     ///
@@ -2729,7 +2730,7 @@ where
 /// Internally, [`select!`] is very similar to [`Parser::try_map`] and thinking of it as such might make it less
 /// confusing.
 ///
-/// `select!` requires that tokens implement [`Clone`].
+/// `select!` requires that tokens implement [`Clone`] and the input type implements [`ValueInput`].
 ///
 /// If you're trying to access tokens referentially (for the sake of nested parsing, or simply because you want to
 /// avoid cloning the token), see [`select_ref!`].

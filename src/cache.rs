@@ -50,7 +50,7 @@ pub trait Cached {
     fn make_parser<'src>(self) -> Self::Parser<'src>;
 }
 
-/// Allows a parser to be cached for use with inputs and outputs of difference lifetimes.
+/// Allows a parser to be cached for reuse with inputs and outputs of different lifetimes.
 pub struct Cache<C: Cached> {
     parser: C::Parser<'static>,
     #[allow(dead_code)]
@@ -75,7 +75,7 @@ impl<C: Cached> Cache<C> {
     /// Get a reference to the cached parser.
     ///
     /// Because this function is generic over an input lifetime, the returned parser can be used in many
-    /// difference contexts.
+    /// different contexts.
     pub fn get<'src>(&self) -> &C::Parser<'src> {
         // SAFETY: This is safe because the API of `Cache` requires that the parser we store is bound by an arbitrary
         // lifetime variable (see `Cached::make_parser`). Therefore, the implementor of `Cached` has no way to
