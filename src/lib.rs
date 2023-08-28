@@ -2174,12 +2174,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// let operator = choice((
     ///     // Our `-` and `+` bind the weakest, meaning that even if they occur
     ///     // first in an expression, they will be the last executed
-    ///     left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+    ///     left_infix(just('+'), 1, |_op, [l, r]| Expr::Add(Box::new(l), Box::new(r))),
+    ///     left_infix(just('-'), 1, |_op, [l, r]| Expr::Sub(Box::new(l), Box::new(r))),
     ///     // Just like in math, we want that if we write -x^2, that our parser
     ///     // parses that as -(x^2), so we need it to bind tighter than our
     ///     // prefix operators
-    ///     right_infix(just('^'), 3, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
+    ///     right_infix(just('^'), 3, |_op, [l, r]| Expr::Pow(Box::new(l), Box::new(r))),
     /// ))
     /// .padded();
     ///
@@ -2187,14 +2187,14 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     // Notice the conflict with our `Expr::Sub`. This will still
     ///     // parse correctly. We want negation to happen before `+` and `-`,
     ///     // so we set it's precedence higher.
-    ///     prefix(just('-'), 2, |rhs| Expr::Neg(Box::new(rhs))),
-    ///     prefix(just('*'), 2, |rhs| Expr::Deref(Box::new(rhs))),
+    ///     prefix(just('-'), 2, |_op, rhs| Expr::Neg(Box::new(rhs))),
+    ///     prefix(just('*'), 2, |_op, rhs| Expr::Deref(Box::new(rhs))),
     /// ))
     /// .padded();
     ///
     /// // We want factorial to happen before any negation, so we need it's
     /// // precedence to be higher than `Expr::Neg`.
-    /// let factorial = postfix(just('!'), 4, |lhs| Expr::Fact(Box::new(lhs))).padded();
+    /// let factorial = postfix(just('!'), 4, |_op, lhs| Expr::Fact(Box::new(lhs))).padded();
     ///
     /// let pratt = atom
     ///     .pratt(operator)
