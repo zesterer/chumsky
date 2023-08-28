@@ -2408,6 +2408,53 @@ where
     }
 
     /// Convert the output of this iterable parser into a stream which can be used by another parser.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chumsky::{prelude::*, text::ident, input::{Stream, ValueInput}};
+    ///
+    /// #[derive(Copy, Clone, Eq, PartialEq)]
+    /// enum Token<'a> {
+    ///   Comma,
+    ///   Symbol(&'a str),
+    /// }
+    ///
+    /// fn tokenize<'a>() -> impl Parser<'a, &'a str, Token<'a>> {
+    ///   choice((
+    ///     just(',').to(Token::Comma),
+    ///     ident().map(Token::Symbol),
+    ///   ))
+    /// }
+    ///
+    /// #[derive(PartialEq, Eq, Debug)]
+    /// struct SymbolList<'a> {
+    ///   pub symbols: Vec<&'a str>,
+    /// }
+    ///
+    /// fn list<'a, I>() -> impl Parser<'a, I, SymbolList<'a>>
+    /// where I: ValueInput<'a, Token=Token<'a>, Span=SimpleSpan> {
+    ///   fn symbol<'a, I>() -> impl Parser<'a, I, &'a str>
+    ///   where I: ValueInput<'a, Token=Token<'a>, Span=SimpleSpan> {
+    ///     select! {
+    ///       Token::Symbol(name) => name,
+    ///     }
+    ///   }
+    ///
+    ///   let comma = select! { Token::Comma => () };
+    ///
+    ///   symbol()
+    ///     .then(comma.ignore_then(symbol()).repeated().collect::<Vec<_>>())
+    ///     .map(|(head, tail)| SymbolList {
+    ///       symbols: vec![head].into_iter().chain(tail.into_iter()).collect(),
+    ///     })
+    /// }
+    ///
+    /// let input = "a,bb,asdfe";
+    /// let token_stream = tokenize().repeated().stream(input).into_result().unwrap();
+    /// let result = list().parse(token_stream).into_result().unwrap();
+    /// assert_eq!(result, SymbolList { symbols: vec!["a", "bb", "asdfe"] });
+    /// ```
     fn stream(
         self,
         input: I,
