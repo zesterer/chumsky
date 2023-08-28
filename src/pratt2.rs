@@ -14,10 +14,10 @@ where
 
     fn op_parser(&self) -> &Self::OpParser;
     fn associativity(&self) -> Associativity;
-    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O) -> O {
+    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, span: I::Span) -> O {
         unreachable!()
     }
-    fn fold_prefix(&self, op: Self::Op, rhs: O) -> O {
+    fn fold_prefix(&self, op: Self::Op, rhs: O, span: I::Span) -> O {
         unreachable!()
     }
 }
@@ -89,7 +89,7 @@ where
     fn associativity(&self) -> Associativity {
         self.associativity
     }
-    fn fold_infix(&self, lhs: O, _op: Self::Op, rhs: O) -> O {
+    fn fold_infix(&self, lhs: O, _op: Self::Op, rhs: O, _span: I::Span) -> O {
         (self.f)(lhs, rhs)
     }
 }
@@ -111,8 +111,30 @@ where
     fn associativity(&self) -> Associativity {
         self.associativity
     }
-    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O) -> O {
+    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, _span: I::Span) -> O {
         (self.f)(lhs, op, rhs)
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, (O, Op, O, I::Span)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(O, Op, O, I::Span) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const INFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        self.associativity
+    }
+    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, span: I::Span) -> O {
+        (self.f)(lhs, op, rhs, span)
     }
 }
 
@@ -154,8 +176,30 @@ where
     fn associativity(&self) -> Associativity {
         Associativity::Left(self.binding_power)
     }
-    fn fold_prefix(&self, op: Self::Op, rhs: O) -> O {
+    fn fold_prefix(&self, op: Self::Op, rhs: O, _span: I::Span) -> O {
         (self.f)(op, rhs)
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, (Op, O, I::Span)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(Op, O, I::Span) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const PREFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    fn fold_prefix(&self, op: Self::Op, rhs: O, span: I::Span) -> O {
+        (self.f)(op, rhs, span)
     }
 }
 
@@ -180,7 +224,7 @@ macro_rules! impl_pratt_for_tuple {
                 Atom: Parser<'a, I, O, E>,
                 $($X: Operator<'a, I, O, E>),*
             {
-                let pre_op = inp.save();
+                let pre_expr = inp.save();
                 let mut lhs = 'choice: {
                     let ($($X,)*) = &self.ops;
 
@@ -189,11 +233,14 @@ macro_rules! impl_pratt_for_tuple {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => {
                                     match self.pratt_go::<M, _, _, _>(inp, $X.associativity().right_power()) {
-                                        Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| $X.fold_prefix(op, rhs)),
-                                        Err(()) => inp.rewind(pre_op),
+                                        Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
+                                            let span = inp.span_since(pre_expr.offset());
+                                            $X.fold_prefix(op, rhs, span)
+                                        }),
+                                        Err(()) => inp.rewind(pre_expr),
                                     }
                                 },
-                                Err(()) => inp.rewind(pre_op),
+                                Err(()) => inp.rewind(pre_expr),
                             }
                         }
                     )*
@@ -233,7 +280,10 @@ macro_rules! impl_pratt_for_tuple {
                                         Ok(rhs) => M::combine(
                                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                                             op,
-                                            |(lhs, rhs), op| $X.fold_infix(lhs, op, rhs),
+                                            |(lhs, rhs), op| {
+                                                let span = inp.span_since(pre_expr.offset());
+                                                $X.fold_infix(lhs, op, rhs, span)
+                                            },
                                         ),
                                         Err(()) => { inp.rewind(pre_op); break },
                                     }
