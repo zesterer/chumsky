@@ -15,7 +15,7 @@ exclude = [
 build = "build.rs"
 
 [features]
-default = ["std", "spill-stack"]
+default = ["std", "spill-stack", "pratt"]
 
 # Integrate with the standard library.
 std = [

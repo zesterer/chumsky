@@ -1,33 +1,36 @@
 use super::*;
 use crate::EmptyPhantom;
 
-pub struct PrattOpOutput<Builder>(pub(super) Precedence, pub(super) Builder);
+/// Internal output of a pratt parser.
+pub struct PrattOpOutput<Op, Builder>(pub(super) Precedence, pub(super) Op, pub(super) Builder);
 
-pub struct Infix<P, PO> {
+/// Infix parser and the type of the operator.
+/// Implements a parser that outputs `PrattOpOutput`.
+pub struct Infix<P, Op> {
     pub(crate) infix: P,
-    pub(crate) _phantom: EmptyPhantom<PO>,
+    pub(crate) _phantom: EmptyPhantom<Op>,
 }
 
-pub struct InfixPrefix<P1, P1O, P2, P2O> {
+pub struct InfixPrefix<P1, Op1, P2, Op2> {
     pub(crate) infix: P1,
     pub(crate) prefix: P2,
-    pub(crate) _phantom: EmptyPhantom<(P1O, P2O)>,
+    pub(crate) _phantom: EmptyPhantom<(Op1, Op2)>,
 }
 
-pub struct InfixPostfix<P1, P1O, P2, P2O> {
+pub struct InfixPostfix<P1, Op1, P2, Op2> {
     pub(crate) infix: P1,
     pub(crate) postfix: P2,
-    pub(crate) _phantom: EmptyPhantom<(P1O, P2O)>,
+    pub(crate) _phantom: EmptyPhantom<(Op1, Op2)>,
 }
 
-pub struct InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O> {
+pub struct InfixPrefixPostfix<P1, Op1, P2, Op2, P3, Op3> {
     pub(crate) infix: P1,
     pub(crate) prefix: P2,
     pub(crate) postfix: P3,
-    pub(crate) _phantom: EmptyPhantom<(P1O, P2O, P3O)>,
+    pub(crate) _phantom: EmptyPhantom<(Op1, Op2, Op3)>,
 }
 
-impl<P, PO> Clone for Infix<P, PO>
+impl<P, Op> Clone for Infix<P, Op>
 where
     P: Clone,
 {
@@ -39,7 +42,7 @@ where
     }
 }
 
-impl<P1, P1O, P2, P2O> Clone for InfixPrefix<P1, P1O, P2, P2O>
+impl<P1, Op1, P2, Op2> Clone for InfixPrefix<P1, Op1, P2, Op2>
 where
     P1: Clone,
     P2: Clone,
@@ -53,7 +56,7 @@ where
     }
 }
 
-impl<P1, P1O, P2, P2O> Clone for InfixPostfix<P1, P1O, P2, P2O>
+impl<P1, Op1, P2, Op2> Clone for InfixPostfix<P1, Op1, P2, Op2>
 where
     P1: Clone,
     P2: Clone,
@@ -67,7 +70,7 @@ where
     }
 }
 
-impl<P1, P1O, P2, P2O, P3, P3O> Clone for InfixPrefixPostfix<P1, P1O, P2, P2O, P3, P3O>
+impl<P1, Op1, P2, Op2, P3, Op3> Clone for InfixPrefixPostfix<P1, Op1, P2, Op2, P3, Op3>
 where
     P1: Clone,
     P2: Clone,
@@ -85,38 +88,35 @@ where
 
 /// A representation of an infix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
-pub struct InfixOp<P, E, PO> {
+pub struct InfixOp<P, Op, O> {
     strength: u8,
     assoc: Assoc,
     parser: P,
-    build: InfixBuilder<E>,
-    _phantom: EmptyPhantom<(PO,)>,
+    build: InfixBuilder<Op, O>,
 }
 
-impl<P: Clone, E, PO> Clone for InfixOp<P, E, PO> {
+impl<P: Clone, Op, O> Clone for InfixOp<P, Op, O> {
     fn clone(&self) -> Self {
         Self {
             strength: self.strength,
             assoc: self.assoc,
             parser: self.parser.clone(),
             build: self.build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<P, E, PO> InfixOp<P, E, PO> {
+impl<P, Op, O> InfixOp<P, Op, O> {
     /// Creates a left associative infix operator that is parsed with the
     /// parser `P`, and a function which is used to `build` a value `E`.
     /// The operator's precedence is determined by `strength`. The higher
     /// the value, the higher the precedence.
-    pub fn new_left(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
+    pub fn new_left(parser: P, strength: u8, build: InfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             assoc: Assoc::Left,
             parser,
             build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 
@@ -124,160 +124,153 @@ impl<P, E, PO> InfixOp<P, E, PO> {
     /// parser `P`, and a function which is used to `build` a value `E`.
     /// The operator's precedence is determined by `strength`. The higher
     /// the value, the higher the precedence.
-    pub fn new_right(parser: P, strength: u8, build: InfixBuilder<E>) -> Self {
+    pub fn new_right(parser: P, strength: u8, build: InfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             assoc: Assoc::Right,
             parser,
             build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<InfixBuilder<Expr>>, E>
-    for InfixOp<P, Expr, O>
+impl<'a, P, I, Op, O, E> ParserSealed<'a, I, PrattOpOutput<Op, InfixBuilder<Op, O>>, E>
+    for InfixOp<P, Op, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
+    P: Parser<'a, I, Op, E>,
 {
     fn go<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, PrattOpOutput<InfixBuilder<Expr>>>
+    ) -> PResult<M, PrattOpOutput<Op, InfixBuilder<Op, O>>>
     where
         Self: Sized,
     {
-        match self.parser.go::<Check>(inp) {
-            Ok(()) => Ok(M::bind(|| {
-                PrattOpOutput(Precedence::new(self.strength, self.assoc), self.build)
+        match self.parser.go::<M>(inp) {
+            Ok(op) => Ok(M::map(op, |op| {
+                PrattOpOutput(Precedence::new(self.strength, self.assoc), op, self.build)
             })),
             Err(()) => Err(()),
         }
     }
 
-    go_extra!(PrattOpOutput<InfixBuilder<Expr>>);
+    go_extra!(PrattOpOutput<Op, InfixBuilder<Op, O>>);
 }
 
 /// A representation of a prefix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
-pub struct PrefixOp<Parser, Expr, ParserOut> {
+pub struct PrefixOp<Parser, Op, O> {
     strength: u8,
     parser: Parser,
-    build: PrefixBuilder<Expr>,
-    _phantom: EmptyPhantom<(ParserOut,)>,
+    build: PrefixBuilder<Op, O>,
 }
 
-impl<Parser: Clone, Expr, ParserOut> Clone for PrefixOp<Parser, Expr, ParserOut> {
+impl<Parser: Clone, Op, O> Clone for PrefixOp<Parser, Op, O> {
     fn clone(&self) -> Self {
         Self {
             strength: self.strength,
             parser: self.parser.clone(),
             build: self.build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<Parser, Expr, ParserOut> PrefixOp<Parser, Expr, ParserOut> {
+impl<Parser, Op, O> PrefixOp<Parser, Op, O> {
     /// Creates a prefix operator (a right-associative unary operator)
     /// that is parsed with the parser `P`, and a function which is used
     /// to `build` a value `E`. The operator's precedence is determined
     /// by `strength`. The higher the value, the higher the precedence.
-    pub fn new(parser: Parser, strength: u8, build: PrefixBuilder<Expr>) -> Self {
+    pub fn new(parser: Parser, strength: u8, build: PrefixBuilder<Op, O>) -> Self {
         Self {
             strength,
             parser,
             build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<PrefixBuilder<Expr>>, E>
-    for PrefixOp<P, Expr, O>
+impl<'a, P, I, Op, O, E> ParserSealed<'a, I, PrattOpOutput<Op, PrefixBuilder<Op, O>>, E>
+    for PrefixOp<P, Op, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
+    P: Parser<'a, I, Op, E>,
 {
     fn go<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, PrattOpOutput<PrefixBuilder<Expr>>>
+    ) -> PResult<M, PrattOpOutput<Op, PrefixBuilder<Op, O>>>
     where
         Self: Sized,
     {
-        match self.parser.go::<Check>(inp) {
-            Ok(()) => Ok(M::bind(|| {
-                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), self.build)
+        match self.parser.go::<M>(inp) {
+            Ok(op) => Ok(M::map(op, |op| {
+                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), op, self.build)
             })),
             Err(()) => Err(()),
         }
     }
 
-    go_extra!(PrattOpOutput<PrefixBuilder<Expr>>);
+    go_extra!(PrattOpOutput<Op, PrefixBuilder<Op, O>>);
 }
 
 /// A representation of a postfix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
-pub struct PostfixOp<Parser, Expr, ParserOut> {
+pub struct PostfixOp<Parser, Op, O> {
     strength: u8,
     parser: Parser,
-    build: PostfixBuilder<Expr>,
-    _phantom: EmptyPhantom<(ParserOut,)>,
+    build: PostfixBuilder<Op, O>,
 }
 
-impl<Parser: Clone, Expr, ParserOut> Clone for PostfixOp<Parser, Expr, ParserOut> {
+impl<Parser: Clone, Op, O> Clone for PostfixOp<Parser, Op, O> {
     fn clone(&self) -> Self {
         Self {
             strength: self.strength,
             parser: self.parser.clone(),
             build: self.build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<Parser, Expr, ParserOut> PostfixOp<Parser, Expr, ParserOut> {
+impl<Parser, Op, O> PostfixOp<Parser, Op, O> {
     /// Creates a postfix operator (a left-associative unary operator)
     /// that is parsed with the parser `P`, and a function which is used
     /// to `build` a value `E`. The operator's precedence is determined
     /// by `strength`. The higher the value, the higher the precedence.
-    pub fn new(parser: Parser, strength: u8, build: PostfixBuilder<Expr>) -> Self {
+    pub fn new(parser: Parser, strength: u8, build: PostfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             parser,
             build,
-            _phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'a, P, Expr, I, O, E> ParserSealed<'a, I, PrattOpOutput<PostfixBuilder<Expr>>, E>
-    for PostfixOp<P, Expr, O>
+impl<'a, P, I, Op, O, E> ParserSealed<'a, I, PrattOpOutput<Op, PostfixBuilder<Op, O>>, E>
+    for PostfixOp<P, Op, O>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
+    P: Parser<'a, I, Op, E>,
 {
     fn go<M: Mode>(
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<M, PrattOpOutput<PostfixBuilder<Expr>>>
+    ) -> PResult<M, PrattOpOutput<Op, PostfixBuilder<Op, O>>>
     where
         Self: Sized,
     {
-        match self.parser.go::<Check>(inp) {
-            Ok(()) => Ok(M::bind(|| {
-                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), self.build)
+        match self.parser.go::<M>(inp) {
+            Ok(op) => Ok(M::map(op, |op| {
+                PrattOpOutput(Precedence::new(self.strength, Assoc::Right), op, self.build)
             })),
             Err(()) => Err(()),
         }
     }
 
-    go_extra!(PrattOpOutput<PostfixBuilder<Expr>>);
+    go_extra!(PrattOpOutput<Op, PostfixBuilder<Op, O>>);
 }
 
 /// Indicates which argument binds more strongly with a binary infix operator.

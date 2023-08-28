@@ -2208,14 +2208,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// );
     /// ```
     #[cfg(feature = "pratt")]
-    fn pratt<InfixOps, InfixOpsOut>(
+    fn pratt<InfixParser, InfixOperator>(
         self,
-        ops: InfixOps,
-    ) -> Pratt<I, O, E, Self, pratt::Infix<InfixOps, InfixOpsOut>>
+        ops: InfixParser,
+    ) -> Pratt<I, O, E, Self, pratt::Infix<InfixParser, InfixOperator>>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        InfixOps: Parser<'a, I, InfixOpsOut, E>,
         Self: Sized,
     {
         Pratt {

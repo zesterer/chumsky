@@ -26,20 +26,28 @@ pub(super) use ops::{Infix, InfixPostfix, InfixPrefix, InfixPrefixPostfix, Pratt
 /// Shorthand for [`InfixOp::new_left`].
 ///
 /// Creates a left associative infix operator that is parsed with the
-/// parser `P`, and a function which is used to `build` a value `E`.
+/// parser `P`, and a function which is used to `build` a value `O`.
 /// The operator's precedence is determined by `strength`. The higher
 /// the value, the higher the precedence.
-pub fn left_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
+pub fn left_infix<P, Op, O>(
+    parser: P,
+    strength: u8,
+    build: InfixBuilder<Op, O>,
+) -> InfixOp<P, Op, O> {
     InfixOp::new_left(parser, strength, build)
 }
 
 /// Shorthand for [`InfixOp::new_right`].
 ///
 /// Creates a right associative infix operator that is parsed with the
-/// parser `P`, and a function which is used to `build` a value `E`.
+/// parser `P`, and a function which is used to `build` a value `O`.
 /// The operator's precedence is determined by `strength`. The higher
 /// the value, the higher the precedence.
-pub fn right_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) -> InfixOp<P, E, PO> {
+pub fn right_infix<P, Op, O>(
+    parser: P,
+    strength: u8,
+    build: InfixBuilder<Op, O>,
+) -> InfixOp<P, Op, O> {
     InfixOp::new_right(parser, strength, build)
 }
 
@@ -47,9 +55,13 @@ pub fn right_infix<P, E, PO>(parser: P, strength: u8, build: InfixBuilder<E>) ->
 ///
 /// Creates a prefix operator (a right-associative unary operator)
 /// that is parsed with the parser `P`, and a function which is used
-/// to `build` a value `E`. The operator's precedence is determined
+/// to `build` a value `O`. The operator's precedence is determined
 /// by `strength`. The higher the value, the higher the precedence.
-pub fn prefix<P, E, PO>(parser: P, strength: u8, build: PrefixBuilder<E>) -> PrefixOp<P, E, PO> {
+pub fn prefix<P, Op, O>(
+    parser: P,
+    strength: u8,
+    build: PrefixBuilder<Op, O>,
+) -> PrefixOp<P, Op, O> {
     PrefixOp::new(parser, strength, build)
 }
 
@@ -57,9 +69,13 @@ pub fn prefix<P, E, PO>(parser: P, strength: u8, build: PrefixBuilder<E>) -> Pre
 ///
 /// Creates a postfix operator (a left-associative unary operator)
 /// that is parsed with the parser `P`, and a function which is used
-/// to `build` a value `E`. The operator's precedence is determined
+/// to `build` a value `O`. The operator's precedence is determined
 /// by `strength`. The higher the value, the higher the precedence.
-pub fn postfix<P, E, PO>(parser: P, strength: u8, build: PostfixBuilder<E>) -> PostfixOp<P, E, PO> {
+pub fn postfix<P, Op, O>(
+    parser: P,
+    strength: u8,
+    build: PostfixBuilder<Op, O>,
+) -> PostfixOp<P, Op, O> {
     PostfixOp::new(parser, strength, build)
 }
 
@@ -106,19 +122,19 @@ where
     }
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>> {
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator>
+    Pratt<I, O, E, Atom, Infix<InfixParser, InfixOperator>>
+{
     /// Extend a `Pratt` parser by setting prefix operators.
     /// See [`Parser::pratt`] for an example of how to use this methods.
-    pub fn with_prefix_ops<PrefixOps, PrefixOpsOut>(
+    pub fn with_prefix_ops<PrefixParser, PrefixOperator>(
         self,
-        prefix_ops: PrefixOps,
-    ) -> Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>
+        prefix_ops: PrefixParser,
+    ) -> Pratt<I, O, E, Atom, InfixPrefix<InfixParser, InfixOperator, PrefixParser, PrefixOperator>>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        InfixOps: Parser<'a, I, InfixOpsOut, E>,
-        PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
-        Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>:
+        Pratt<I, O, E, Atom, InfixPrefix<InfixParser, InfixOperator, PrefixParser, PrefixOperator>>:
             PrattParser<'a, I, O, E>,
     {
         Pratt {
@@ -134,17 +150,26 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
 
     /// Extend a `Pratt` parser by setting postfix operators
     /// See [`Parser::pratt`] for an example of how to use this method.
-    pub fn with_postfix_ops<PostfixOps, PostfixOpsOut>(
+    pub fn with_postfix_ops<PostfixParser, PostfixOperator>(
         self,
-        postfix_ops: PostfixOps,
-    ) -> Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>
+        postfix_ops: PostfixParser,
+    ) -> Pratt<
+        I,
+        O,
+        E,
+        Atom,
+        InfixPostfix<InfixParser, InfixOperator, PostfixParser, PostfixOperator>,
+    >
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        InfixOps: Parser<'a, I, InfixOpsOut, E>,
-        PostfixOps: Parser<'a, I, PostfixOpsOut, E>,
-        Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>:
-            PrattParser<'a, I, O, E>,
+        Pratt<
+            I,
+            O,
+            E,
+            Atom,
+            InfixPostfix<InfixParser, InfixOperator, PostfixParser, PostfixOperator>,
+        >: PrattParser<'a, I, O, E>,
     {
         Pratt {
             atom: self.atom,
@@ -158,45 +183,42 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> Pratt<I, O, E, Atom, Infix<InfixO
     }
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
-    Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator, PrefixParser, PrefixOperator>
+    Pratt<I, O, E, Atom, InfixPrefix<InfixParser, InfixOperator, PrefixParser, PrefixOperator>>
 {
     /// Extend a `Pratt` parser by setting postfix operators
-    pub fn with_postfix_ops<PostfixOps, PostfixOpsOut>(
+    pub fn with_postfix_ops<PostfixParser, PostfixOperator>(
         self,
-        postfix_ops: PostfixOps,
+        postfix_ops: PostfixParser,
     ) -> Pratt<
         I,
         O,
         E,
         Atom,
         InfixPrefixPostfix<
-            InfixOps,
-            InfixOpsOut,
-            PrefixOps,
-            PrefixOpsOut,
-            PostfixOps,
-            PostfixOpsOut,
+            InfixParser,
+            InfixOperator,
+            PrefixParser,
+            PrefixOperator,
+            PostfixParser,
+            PostfixOperator,
         >,
     >
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        InfixOps: Parser<'a, I, InfixOpsOut, E>,
-        PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
-        PostfixOps: Parser<'a, I, PostfixOpsOut, E>,
         Pratt<
             I,
             O,
             E,
             Atom,
             InfixPrefixPostfix<
-                InfixOps,
-                InfixOpsOut,
-                PrefixOps,
-                PrefixOpsOut,
-                PostfixOps,
-                PostfixOpsOut,
+                InfixParser,
+                InfixOperator,
+                PrefixParser,
+                PrefixOperator,
+                PostfixParser,
+                PostfixOperator,
             >,
         >: PrattParser<'a, I, O, E>,
     {
@@ -213,31 +235,30 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>
     }
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>
-    Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator, PostfixParser, PostfixOperator>
+    Pratt<I, O, E, Atom, InfixPostfix<InfixParser, InfixOperator, PostfixParser, PostfixOperator>>
 {
     /// Extend a `Pratt` parser by setting prefix operators
-    pub fn with_prefix_ops<PrefixOps, PrefixOpsOut>(
+    pub fn with_prefix_ops<PrefixParser, PrefixOperator>(
         self,
-        prefix_ops: PrefixOps,
+        prefix_ops: PrefixParser,
     ) -> Pratt<
         I,
         O,
         E,
         Atom,
         InfixPrefixPostfix<
-            InfixOps,
-            InfixOpsOut,
-            PrefixOps,
-            PrefixOpsOut,
-            PostfixOps,
-            PostfixOpsOut,
+            InfixParser,
+            InfixOperator,
+            PrefixParser,
+            PrefixOperator,
+            PostfixParser,
+            PostfixOperator,
         >,
     >
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,
-        PrefixOps: Parser<'a, I, PrefixOpsOut, E>,
     {
         Pratt {
             atom: self.atom,
@@ -252,11 +273,11 @@ impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>
     }
 }
 
-type InfixBuilder<E> = fn(lhs: E, rhs: E) -> E;
+type InfixBuilder<Op, O> = fn(op: Op, children: [O; 2]) -> O;
 
-type PrefixBuilder<E> = fn(rhs: E) -> E;
+type PrefixBuilder<Op, O> = fn(op: Op, child: O) -> O;
 
-type PostfixBuilder<E> = fn(rhs: E) -> E;
+type PostfixBuilder<Op, O> = fn(op: Op, child: O) -> O;
 
 mod nameless_trait {
     use super::*;
@@ -276,13 +297,13 @@ mod nameless_trait {
 
 use nameless_trait::PrattParser;
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut> PrattParser<'a, I, O, E>
-    for Pratt<I, O, E, Atom, Infix<InfixOps, InfixOpsOut>>
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator> PrattParser<'a, I, O, E>
+    for Pratt<I, O, E, Atom, Infix<InfixParser, InfixOperator>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
+    InfixParser: Parser<'a, I, PrattOpOutput<InfixOperator, InfixBuilder<InfixOperator, O>>, E>,
 {
     fn pratt_parse<M>(
         &self,
@@ -295,13 +316,13 @@ where
         let mut left = self.atom.go::<M>(inp)?;
         loop {
             let pre_op = inp.save();
-            let (op, prec) = match self.ops.infix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+            let (prec, op, build) = match self.ops.infix.go::<Emit>(inp) {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    (build, prec)
+                    (prec, op, build)
                 }
                 Err(_) => {
                     inp.rewind(pre_op);
@@ -310,19 +331,21 @@ where
             };
 
             let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-            left = M::combine(left, right, op);
+            let children = M::array([left, right]);
+            left = M::combine(M::bind(|| op), children, build);
         }
     }
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut> PrattParser<'a, I, O, E>
-    for Pratt<I, O, E, Atom, InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>>
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator, PrefixParser, PrefixOperator>
+    PrattParser<'a, I, O, E>
+    for Pratt<I, O, E, Atom, InfixPrefix<InfixParser, InfixOperator, PrefixParser, PrefixOperator>>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
-    PrefixOps: Parser<'a, I, PrattOpOutput<PrefixBuilder<O>>, E>,
+    InfixParser: Parser<'a, I, PrattOpOutput<InfixOperator, InfixBuilder<InfixOperator, O>>, E>,
+    PrefixParser: Parser<'a, I, PrattOpOutput<PrefixOperator, PrefixBuilder<PrefixOperator, O>>, E>,
 {
     fn pratt_parse<M>(
         &self,
@@ -334,9 +357,9 @@ where
     {
         let pre_op = inp.save();
         let mut left = match self.ops.prefix.go::<Emit>(inp) {
-            Ok(PrattOpOutput(prec, build)) => {
+            Ok(PrattOpOutput(prec, op, build)) => {
                 let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-                M::map(right, build)
+                M::combine(M::bind(|| op), right, build)
             }
             Err(_) => {
                 inp.rewind(pre_op);
@@ -346,13 +369,13 @@ where
 
         loop {
             let pre_op = inp.save();
-            let (op, prec) = match self.ops.infix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+            let (prec, op, build) = match self.ops.infix.go::<Emit>(inp) {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    (build, prec)
+                    (prec, op, build)
                 }
                 Err(_) => {
                     inp.rewind(pre_op);
@@ -361,19 +384,28 @@ where
             };
 
             let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-            left = M::combine(left, right, op);
+            let children = M::array([left, right]);
+            left = M::combine(M::bind(|| op), children, build);
         }
     }
 }
 
-impl<'a, I, O, E, Atom, InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut> PrattParser<'a, I, O, E>
-    for Pratt<I, O, E, Atom, InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>>
+impl<'a, I, O, E, Atom, InfixParser, InfixOperator, PostfixParser, PostfixOperator>
+    PrattParser<'a, I, O, E>
+    for Pratt<
+        I,
+        O,
+        E,
+        Atom,
+        InfixPostfix<InfixParser, InfixOperator, PostfixParser, PostfixOperator>,
+    >
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
-    PostfixOps: Parser<'a, I, PrattOpOutput<PostfixBuilder<O>>, E>,
+    InfixParser: Parser<'a, I, PrattOpOutput<InfixOperator, InfixBuilder<InfixOperator, O>>, E>,
+    PostfixParser:
+        Parser<'a, I, PrattOpOutput<PostfixOperator, PostfixBuilder<PostfixOperator, O>>, E>,
 {
     fn pratt_parse<M>(
         &self,
@@ -387,12 +419,12 @@ where
         loop {
             let pre_op = inp.save();
             match self.ops.postfix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    left = M::map(left, build);
+                    left = M::combine(M::bind(|| op), left, build);
                     continue;
                 }
                 Err(_) => {
@@ -400,13 +432,13 @@ where
                 }
             }
 
-            let (op, prec) = match self.ops.infix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+            let (prec, op, build) = match self.ops.infix.go::<Emit>(inp) {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    (build, prec)
+                    (prec, op, build)
                 }
                 Err(_) => {
                     inp.rewind(pre_op);
@@ -415,7 +447,8 @@ where
             };
 
             let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-            left = M::combine(left, right, op);
+            let children = M::array([left, right]);
+            left = M::combine(M::bind(|| op), children, build);
         }
     }
 }
@@ -426,12 +459,12 @@ impl<
         O,
         E,
         Atom,
-        InfixOps,
-        InfixOpsOut,
-        PrefixOps,
-        PrefixOpsOut,
-        PostfixOps,
-        PostfixOpsOut,
+        InfixParser,
+        InfixOperator,
+        PrefixParser,
+        PrefixOperator,
+        PostfixParser,
+        PostfixOperator,
     > PrattParser<'a, I, O, E>
     for Pratt<
         I,
@@ -439,21 +472,22 @@ impl<
         E,
         Atom,
         InfixPrefixPostfix<
-            InfixOps,
-            InfixOpsOut,
-            PrefixOps,
-            PrefixOpsOut,
-            PostfixOps,
-            PostfixOpsOut,
+            InfixParser,
+            InfixOperator,
+            PrefixParser,
+            PrefixOperator,
+            PostfixParser,
+            PostfixOperator,
         >,
     >
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    InfixOps: Parser<'a, I, PrattOpOutput<InfixBuilder<O>>, E>,
-    PrefixOps: Parser<'a, I, PrattOpOutput<PrefixBuilder<O>>, E>,
-    PostfixOps: Parser<'a, I, PrattOpOutput<PostfixBuilder<O>>, E>,
+    InfixParser: Parser<'a, I, PrattOpOutput<InfixOperator, InfixBuilder<InfixOperator, O>>, E>,
+    PrefixParser: Parser<'a, I, PrattOpOutput<PrefixOperator, PrefixBuilder<PrefixOperator, O>>, E>,
+    PostfixParser:
+        Parser<'a, I, PrattOpOutput<PostfixOperator, PostfixBuilder<PostfixOperator, O>>, E>,
 {
     fn pratt_parse<M>(
         &self,
@@ -465,9 +499,9 @@ where
     {
         let pre_op = inp.save();
         let mut left = match self.ops.prefix.go::<Emit>(inp) {
-            Ok(PrattOpOutput(prec, build)) => {
+            Ok(PrattOpOutput(prec, op, build)) => {
                 let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-                M::map(right, build)
+                M::combine(M::bind(|| op), right, build)
             }
             Err(_) => {
                 inp.rewind(pre_op);
@@ -478,12 +512,12 @@ where
         loop {
             let pre_op = inp.save();
             match self.ops.postfix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    left = M::map(left, build);
+                    left = M::combine(M::bind(|| op), left, build);
                     continue;
                 }
                 Err(_) => {
@@ -491,13 +525,13 @@ where
                 }
             }
 
-            let (op, prec) = match self.ops.infix.go::<Emit>(inp) {
-                Ok(PrattOpOutput(prec, build)) => {
+            let (prec, op, build) = match self.ops.infix.go::<Emit>(inp) {
+                Ok(PrattOpOutput(prec, op, build)) => {
                     if prec.strength_left().is_lt(&min_strength) {
                         inp.rewind(pre_op);
                         return Ok(left);
                     }
-                    (build, prec)
+                    (prec, op, build)
                 }
                 Err(_) => {
                     inp.rewind(pre_op);
@@ -506,7 +540,8 @@ where
             };
 
             let right = self.pratt_parse::<M>(inp, Some(prec.strength_right()))?;
-            left = M::combine(left, right, op);
+            let children = M::array([left, right]);
+            left = M::combine(M::bind(|| op), children, build);
         }
     }
 }
@@ -532,13 +567,13 @@ macro_rules! impl_parse {
     };
 }
 
-impl_parse!(Infix<InfixOps, InfixOpsOut>);
+impl_parse!(Infix<InfixParser, InfixOperator>);
 
-impl_parse!(InfixPrefix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut>);
+impl_parse!(InfixPrefix<InfixParser, InfixOperator, PrefixParser, PrefixOperator>);
 
-impl_parse!(InfixPostfix<InfixOps, InfixOpsOut, PostfixOps, PostfixOpsOut>);
+impl_parse!(InfixPostfix<InfixParser, InfixOperator, PostfixParser, PostfixOperator>);
 
-impl_parse!(InfixPrefixPostfix<InfixOps, InfixOpsOut, PrefixOps, PrefixOpsOut, PostfixOps, PostfixOpsOut,>);
+impl_parse!(InfixPrefixPostfix<InfixParser, InfixOperator, PrefixParser, PrefixOperator, PostfixParser, PostfixOperator,>);
 
 #[cfg(test)]
 mod tests {
@@ -584,13 +619,23 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         let operator = choice((
-            left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            left_infix(just('+'), 0, |_, [l, r]| {
+                Expr::Add(Box::new(l), Box::new(r))
+            }),
+            left_infix(just('-'), 0, |_, [l, r]| {
+                Expr::Sub(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('*'), 1, |_, [l, r]| {
+                Expr::Mul(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('/'), 1, |_, [l, r]| {
+                Expr::Div(Box::new(l), Box::new(r))
+            }),
         ));
 
-        atom.pratt(operator).map(|x| x.to_string())
+        let pratt = atom.pratt(operator);
+        let pratt1 = pratt.map(|x| x.to_string());
+        pratt1
     }
 
     fn complete_parser<'a>() -> impl Parser<'a, &'a str, String, Err<Simple<'a, char>>> {
@@ -667,10 +712,18 @@ mod tests {
             .map(Expr::Literal);
 
         let operator = choice((
-            left_infix(just('+'), 0, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            left_infix(just('-'), 0, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            right_infix(just('*'), 1, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            right_infix(just('/'), 1, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            left_infix(just('+'), 0, |_op, [l, r]| {
+                Expr::Add(Box::new(l), Box::new(r))
+            }),
+            left_infix(just('-'), 0, |_op, [l, r]| {
+                Expr::Sub(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('*'), 1, |_op, [l, r]| {
+                Expr::Mul(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('/'), 1, |_op, [l, r]| {
+                Expr::Div(Box::new(l), Box::new(r))
+            }),
         ));
 
         let parser = atom
@@ -679,10 +732,10 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                prefix(just('-'), 2, |rhs| Expr::Negate(Box::new(rhs))),
-                prefix(just('~'), 2, |rhs| Expr::Not(Box::new(rhs))),
+                prefix(just('-'), 2, |_op, rhs| Expr::Negate(Box::new(rhs))),
+                prefix(just('~'), 2, |_op, rhs| Expr::Not(Box::new(rhs))),
                 // This is what happens when not
-                prefix(just('§'), 1, |rhs| Expr::Confusion(Box::new(rhs))),
+                prefix(just('§'), 1, |_op, rhs| Expr::Confusion(Box::new(rhs))),
             )))
             .map(|x| x.to_string());
 
@@ -700,10 +753,18 @@ mod tests {
             .map(Expr::Literal);
 
         let operator = choice((
-            left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            right_infix(just('*'), 2, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            right_infix(just('/'), 2, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            left_infix(just('+'), 1, |_op, [l, r]| {
+                Expr::Add(Box::new(l), Box::new(r))
+            }),
+            left_infix(just('-'), 1, |_op, [l, r]| {
+                Expr::Sub(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('*'), 2, |_op, [l, r]| {
+                Expr::Mul(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('/'), 2, |_op, [l, r]| {
+                Expr::Div(Box::new(l), Box::new(r))
+            }),
         ));
 
         let parser = atom
@@ -712,9 +773,9 @@ mod tests {
                 // Because we defined '+' and '-' as left associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher, i.e. they must bind tighter
-                postfix(just('!'), 2, |lhs| Expr::Factorial(Box::new(lhs))),
+                postfix(just('!'), 2, |_op, lhs| Expr::Factorial(Box::new(lhs))),
                 // Or weirdness happens
-                postfix(just('$'), 0, |lhs| Expr::Value(Box::new(lhs))),
+                postfix(just('$'), 0, |_op, lhs| Expr::Value(Box::new(lhs))),
             )))
             .map(|x| x.to_string());
 
@@ -732,10 +793,18 @@ mod tests {
             .map(Expr::Literal);
 
         let operator = choice((
-            left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-            left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-            right_infix(just('*'), 2, |l, r| Expr::Mul(Box::new(l), Box::new(r))),
-            right_infix(just('/'), 2, |l, r| Expr::Div(Box::new(l), Box::new(r))),
+            left_infix(just('+'), 1, |_op, [l, r]| {
+                Expr::Add(Box::new(l), Box::new(r))
+            }),
+            left_infix(just('-'), 1, |_op, [l, r]| {
+                Expr::Sub(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('*'), 2, |_op, [l, r]| {
+                Expr::Mul(Box::new(l), Box::new(r))
+            }),
+            right_infix(just('/'), 2, |_op, [l, r]| {
+                Expr::Div(Box::new(l), Box::new(r))
+            }),
         ));
 
         let parser = atom
@@ -744,18 +813,18 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                prefix(just('-'), 4, |rhs| Expr::Negate(Box::new(rhs))),
-                prefix(just('~'), 4, |rhs| Expr::Not(Box::new(rhs))),
+                prefix(just('-'), 4, |_op, rhs| Expr::Negate(Box::new(rhs))),
+                prefix(just('~'), 4, |_op, rhs| Expr::Not(Box::new(rhs))),
                 // This is what happens when not
-                prefix(just('§'), 1, |rhs| Expr::Confusion(Box::new(rhs))),
+                prefix(just('§'), 1, |_op, rhs| Expr::Confusion(Box::new(rhs))),
             )))
             .with_postfix_ops(choice((
                 // Because we defined '+' and '-' as left associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher, i.e. they must bind tighter
-                postfix(just('!'), 5, |lhs| Expr::Factorial(Box::new(lhs))),
+                postfix(just('!'), 5, |_op, lhs| Expr::Factorial(Box::new(lhs))),
                 // Or weirdness happens
-                postfix(just('$'), 0, |lhs| Expr::Value(Box::new(lhs))),
+                postfix(just('$'), 0, |_op, lhs| Expr::Value(Box::new(lhs))),
             )))
             .map(|x| x.to_string());
 
