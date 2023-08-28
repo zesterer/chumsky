@@ -88,6 +88,8 @@ pub mod label;
 pub mod number;
 #[cfg(feature = "pratt")]
 pub mod pratt;
+#[cfg(feature = "pratt")]
+pub mod pratt2;
 pub mod primitive;
 mod private;
 pub mod recovery;
@@ -2224,6 +2226,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             },
             _phantom: EmptyPhantom::new(),
         }
+    }
+
+    /// TODO
+    #[cfg(feature = "pratt")]
+    fn pratt2<Ops>(self, ops: Ops) -> pratt2::Pratt<Self, Ops>
+    where
+        Self: Sized,
+    {
+        pratt2::Pratt { atom: self, ops }
     }
 }
 
