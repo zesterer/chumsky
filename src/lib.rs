@@ -2306,7 +2306,6 @@ where
 }
 
 /// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
-#[cfg(test)]
 pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E: ParserExtra<'a, I>>
 {
     parser: P,
@@ -2317,7 +2316,6 @@ pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E:
     phantom: EmptyPhantom<(&'a (), O)>,
 }
 
-#[cfg(test)]
 impl<'a, 'iter, P, I: Input<'a>, O, E: ParserExtra<'a, I>> Iterator
     for ParserIter<'a, 'iter, P, I, O, E>
 where
@@ -2407,6 +2405,25 @@ where
             parser: self,
             phantom: EmptyPhantom::new(),
         }
+    }
+
+    /// Convert the output of this iterable parser into a stream which can be used by another parser.
+    fn stream(
+        self,
+        input: I,
+    ) -> ParseResult<input::Stream<ParserIter<'a, 'static, Self, I, O, E>>, E::Error>
+    where
+        Self: IterParser<'a, I, O, E> + Sized,
+        E::State: Default,
+        E::Context: Default,
+    {
+        let (iter, errs) = self.parse_iter(input).into_output_errors();
+        if iter.is_none() {
+            return ParseResult::new(None, errs);
+        }
+
+        let stream = input::Stream::from_iter(iter.unwrap());
+        ParseResult::new(Some(stream), errs)
     }
 
     /// Collect this iterable parser into a [`usize`], outputting the number of elements that were parsed.
@@ -2553,7 +2570,6 @@ where
     ///
     /// Warning: Trailing errors will be ignored
     // TODO: Stabilize once error handling is properly decided on
-    #[cfg(test)]
     fn parse_iter(self, input: I) -> ParseResult<ParserIter<'a, 'static, Self, I, O, E>, E::Error>
     where
         Self: IterParser<'a, I, O, E> + Sized,

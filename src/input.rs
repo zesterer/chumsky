@@ -1033,7 +1033,6 @@ where
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn as_ref_at<'parse>(
         &'parse mut self,
         offset: I::Offset,
