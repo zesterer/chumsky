@@ -232,7 +232,7 @@ macro_rules! impl_pratt_for_tuple {
                         if $X::PREFIX {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => {
-                                    match self.pratt_go::<M, _, _, _>(inp, $X.associativity().right_power()) {
+                                    match self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power()) {
                                         Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
                                             let span = inp.span_since(pre_expr.offset());
                                             $X.fold_prefix(op, rhs, span)
@@ -248,49 +248,35 @@ macro_rules! impl_pratt_for_tuple {
                     self.atom.go::<M>(inp)?
                 };
 
-                'luup: loop {
-                    enum Op<$($X),*> { $($X($X)),* }
-
+                loop {
                     let ($($X,)*) = &self.ops;
 
                     let pre_op = inp.save();
-                    let op = 'choice: {
-                        $(
-                            if $X::INFIX {
-                                match $X.op_parser().go::<M>(inp) {
-                                    Ok(out) => break 'choice Op::$X(out),
-                                    Err(()) => inp.rewind(pre_op),
-                                }
-                            }
-                        )*
-
-                        inp.rewind(pre_op);
-                        break 'luup;
-                    };
-
-                    match op {
-                        $(
-                            Op::$X(op) => {
-                                let assoc = $X.associativity();
-                                if assoc.left_power() < min_power {
-                                    inp.rewind(pre_op);
-                                    break
-                                } else {
-                                    lhs = match self.pratt_go::<M, _, _, _>(inp, assoc.right_power()) {
-                                        Ok(rhs) => M::combine(
+                   $(
+                        let assoc = $X.associativity();
+                        if $X::INFIX && assoc.left_power() >= min_power {
+                            match $X.op_parser().go::<M>(inp) {
+                                Ok(op) => match self.pratt_go::<M, _, _, _>(inp, assoc.right_power()) {
+                                    Ok(rhs) => {
+                                        lhs = M::combine(
                                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                                             op,
                                             |(lhs, rhs), op| {
                                                 let span = inp.span_since(pre_expr.offset());
                                                 $X.fold_infix(lhs, op, rhs, span)
                                             },
-                                        ),
-                                        Err(()) => { inp.rewind(pre_op); break },
-                                    }
-                                }
-                            },
-                        )*
-                    }
+                                        );
+                                        continue
+                                    },
+                                    Err(()) => inp.rewind(pre_op),
+                                },
+                                Err(()) => inp.rewind(pre_op),
+                            }
+                        }
+                    )*
+
+                    inp.rewind(pre_op);
+                    break;
                 }
 
                 Ok(lhs)
