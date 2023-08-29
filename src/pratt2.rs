@@ -11,6 +11,7 @@ where
     type OpParser: Parser<'a, I, Self::Op, E>;
     const INFIX: bool = false;
     const PREFIX: bool = false;
+    const POSTFIX: bool = false;
 
     fn op_parser(&self) -> &Self::OpParser;
     fn associativity(&self) -> Associativity;
@@ -18,6 +19,9 @@ where
         unreachable!()
     }
     fn fold_prefix(&self, op: Self::Op, rhs: O, span: I::Span) -> O {
+        unreachable!()
+    }
+    fn fold_postfix(&self, lhs: O, op: Self::Op, span: I::Span) -> O {
         unreachable!()
     }
 }
@@ -146,7 +150,7 @@ pub struct Prefix<A, F, Op, Args> {
     phantom: EmptyPhantom<(Op, Args)>,
 }
 
-pub const fn unary_prefix<A, F, Op, Args>(
+pub const fn prefix<A, F, Op, Args>(
     binding_power: u16,
     op_parser: A,
     f: F,
@@ -156,6 +160,28 @@ pub const fn unary_prefix<A, F, Op, Args>(
         f,
         binding_power,
         phantom: EmptyPhantom::new(),
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, (O,)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(O) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const PREFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    fn fold_prefix(&self, _op: Self::Op, rhs: O, _span: I::Span) -> O {
+        (self.f)(rhs)
     }
 }
 
@@ -203,6 +229,93 @@ where
     }
 }
 
+pub struct Postfix<A, F, Op, Args> {
+    op_parser: A,
+    f: F,
+    binding_power: u16,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(Op, Args)>,
+}
+
+pub const fn postfix<A, F, Op, Args>(
+    binding_power: u16,
+    op_parser: A,
+    f: F,
+) -> Postfix<A, F, Op, Args> {
+    Postfix {
+        op_parser,
+        f,
+        binding_power,
+        phantom: EmptyPhantom::new(),
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (O,)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(O) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const POSTFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    fn fold_postfix(&self, lhs: O, _op: Self::Op, _span: I::Span) -> O {
+        (self.f)(lhs)
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (Op, O)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(O, Op) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const POSTFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    fn fold_postfix(&self, lhs: O, op: Self::Op, _span: I::Span) -> O {
+        (self.f)(lhs, op)
+    }
+}
+
+impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (Op, O, I::Span)>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, Op, E>,
+    F: Fn(O, Op, I::Span) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const POSTFIX: bool = true;
+
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    fn fold_postfix(&self, lhs: O, op: Self::Op, span: I::Span) -> O {
+        (self.f)(lhs, op, span)
+    }
+}
+
 pub struct Pratt<Atom, Ops> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
@@ -228,6 +341,7 @@ macro_rules! impl_pratt_for_tuple {
                 let mut lhs = 'choice: {
                     let ($($X,)*) = &self.ops;
 
+                    // Prefix unary operators
                     $(
                         if $X::PREFIX {
                             match $X.op_parser().go::<M>(inp) {
@@ -252,7 +366,26 @@ macro_rules! impl_pratt_for_tuple {
                     let ($($X,)*) = &self.ops;
 
                     let pre_op = inp.save();
-                   $(
+
+                    // Postfix unary operators
+                    $(
+                        let assoc = $X.associativity();
+                        if $X::POSTFIX && assoc.right_power() >= min_power {
+                            match $X.op_parser().go::<M>(inp) {
+                                Ok(op) => {
+                                    lhs = M::combine(lhs, op, |lhs, op| {
+                                        let span = inp.span_since(pre_expr.offset());
+                                        $X.fold_postfix(lhs, op, span)
+                                    });
+                                    continue
+                                },
+                                Err(()) => inp.rewind(pre_op),
+                            }
+                        }
+                    )*
+
+                    // Infix binary operators
+                    $(
                         let assoc = $X.associativity();
                         if $X::INFIX && assoc.left_power() >= min_power {
                             match $X.op_parser().go::<M>(inp) {
@@ -306,11 +439,20 @@ impl_pratt_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T
 mod tests {
     use super::*;
 
+    fn factorial(x: i64) -> i64 {
+        if x == 0 {
+            1
+        } else {
+            x * factorial(x - 1)
+        }
+    }
+
     fn parser<'a>() -> impl Parser<'a, &'a str, i64> {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt2((
-            unary_prefix(2, just('-'), |_, x: i64| -x),
+            prefix(2, just('-'), |_, x: i64| -x),
+            postfix(2, just('!'), factorial),
             binary(left(0), just('+'), |l, r| l + r),
             binary(left(0), just('-'), |l, r| l - r),
             binary(left(1), just('*'), |l, r| l * r),
@@ -320,13 +462,15 @@ mod tests {
 
     #[test]
     fn precedence() {
-        assert_eq!(parser().parse("1 + 2 * 3").into_result(), Ok(7));
-        assert_eq!(parser().parse("2 * 3 + 1").into_result(), Ok(7));
+        assert_eq!(parser().parse("2 + 3 * 4").into_result(), Ok(14));
+        assert_eq!(parser().parse("2 * 3 + 4").into_result(), Ok(10));
     }
 
     #[test]
     fn unary() {
         assert_eq!(parser().parse("-2").into_result(), Ok(-2));
+        assert_eq!(parser().parse("4!").into_result(), Ok(24));
+        assert_eq!(parser().parse("2 + 4!").into_result(), Ok(26));
         assert_eq!(parser().parse("-2 + 2").into_result(), Ok(0));
     }
 }
