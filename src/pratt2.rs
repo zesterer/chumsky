@@ -15,13 +15,13 @@ where
 
     fn op_parser(&self) -> &Self::OpParser;
     fn associativity(&self) -> Associativity;
-    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, span: I::Span) -> O {
+    fn fold_infix(&self, _lhs: O, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
         unreachable!()
     }
-    fn fold_prefix(&self, op: Self::Op, rhs: O, span: I::Span) -> O {
+    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
         unreachable!()
     }
-    fn fold_postfix(&self, lhs: O, op: Self::Op, span: I::Span) -> O {
+    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _span: I::Span) -> O {
         unreachable!()
     }
 }
@@ -451,7 +451,7 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt2((
-            prefix(2, just('-'), |_, x: i64| -x),
+            prefix(2, just('-'), |x: i64| -x),
             postfix(2, just('!'), factorial),
             binary(left(0), just('+'), |l, r| l + r),
             binary(left(0), just('-'), |l, r| l - r),
