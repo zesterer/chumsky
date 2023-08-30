@@ -63,7 +63,7 @@ pub fn right(binding_power: u16) -> Associativity {
     Associativity::Right(binding_power)
 }
 
-pub const fn binary<A, F, Op, Args>(
+pub const fn infix<A, F, Op, Args>(
     associativity: Associativity,
     op_parser: A,
     f: F,
@@ -76,71 +76,31 @@ pub const fn binary<A, F, Op, Args>(
     }
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, (O, O)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O, O) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const INFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        self.associativity
-    }
-    fn fold_infix(&self, lhs: O, _op: Self::Op, rhs: O, _span: I::Span) -> O {
-        (self.f)(lhs, rhs)
-    }
+macro_rules! infix_op {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, ($($Arg,)*)>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            A: Parser<'a, I, Op, E>,
+            F: Fn($($Arg),*) -> O,
+        {
+            type Op = Op;
+            type OpParser = A;
+            const INFIX: bool = true;
+            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            fn associativity(&self) -> Associativity { self.associativity }
+            fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.f; $invoke }
+        }
+    };
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, (O, Op, O)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O, Op, O) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const INFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        self.associativity
-    }
-    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, _span: I::Span) -> O {
-        (self.f)(lhs, op, rhs)
-    }
-}
-
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, (O, Op, O, I::Span)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O, Op, O, I::Span) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const INFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        self.associativity
-    }
-    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, span: I::Span) -> O {
-        (self.f)(lhs, op, rhs, span)
-    }
-}
+// Allow `|lhs, rhs| <expr>` to be used as a fold closure for infix operators
+infix_op!(|f: Fn(O, O) -> O, lhs, _op, rhs, _span| f(lhs, rhs));
+// Allow `|lhs, op, rhs| <expr>` to be used as a fold closure for infix operators
+infix_op!(|f: Fn(O, Op, O) -> O, lhs, op, rhs, _span| f(lhs, op, rhs));
+// Allow `|lhs, op, rhs, span| <expr>` to be used as a fold closure for infix operators
+infix_op!(|f: Fn(O, Op, O, I::Span) -> O, lhs, op, rhs, span| f(lhs, op, rhs, span));
 
 pub struct Prefix<A, F, Op, Args> {
     op_parser: A,
@@ -163,71 +123,31 @@ pub const fn prefix<A, F, Op, Args>(
     }
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, (O,)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const PREFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_prefix(&self, _op: Self::Op, rhs: O, _span: I::Span) -> O {
-        (self.f)(rhs)
-    }
+macro_rules! prefix_op {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, ($($Arg,)*)>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            A: Parser<'a, I, Op, E>,
+            F: Fn($($Arg),*) -> O,
+        {
+            type Op = Op;
+            type OpParser = A;
+            const PREFIX: bool = true;
+            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
+            fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.f; $invoke }
+        }
+    };
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, (Op, O)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(Op, O) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const PREFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_prefix(&self, op: Self::Op, rhs: O, _span: I::Span) -> O {
-        (self.f)(op, rhs)
-    }
-}
-
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, (Op, O, I::Span)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(Op, O, I::Span) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const PREFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_prefix(&self, op: Self::Op, rhs: O, span: I::Span) -> O {
-        (self.f)(op, rhs, span)
-    }
-}
+// Allow `|rhs| <expr>` to be used as a fold closure for prefix operators
+prefix_op!(|f: Fn(O) -> O, _op, rhs, _span| f(rhs));
+// Allow `|op, rhs| <expr>` to be used as a fold closure for prefix operators
+prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _span| f(op, rhs));
+// Allow `|op, rhs, span| <expr>` to be used as a fold closure for prefix operators
+prefix_op!(|f: Fn(Op, O, I::Span) -> O, op, rhs, span| f(op, rhs, span));
 
 pub struct Postfix<A, F, Op, Args> {
     op_parser: A,
@@ -250,71 +170,31 @@ pub const fn postfix<A, F, Op, Args>(
     }
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (O,)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const POSTFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_postfix(&self, lhs: O, _op: Self::Op, _span: I::Span) -> O {
-        (self.f)(lhs)
-    }
+macro_rules! postfix_op {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $span:ident| $invoke:expr) => {
+        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, ($($Arg,)*)>
+        where
+            I: Input<'a>,
+            E: ParserExtra<'a, I>,
+            A: Parser<'a, I, Op, E>,
+            F: Fn($($Arg),*) -> O,
+        {
+            type Op = Op;
+            type OpParser = A;
+            const POSTFIX: bool = true;
+            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
+            fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span) -> O { let $f = &self.f; $invoke }
+        }
+    };
 }
 
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (Op, O)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O, Op) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const POSTFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_postfix(&self, lhs: O, op: Self::Op, _span: I::Span) -> O {
-        (self.f)(lhs, op)
-    }
-}
-
-impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, (Op, O, I::Span)>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, Op, E>,
-    F: Fn(O, Op, I::Span) -> O,
-{
-    type Op = Op;
-    type OpParser = A;
-    const POSTFIX: bool = true;
-
-    fn op_parser(&self) -> &Self::OpParser {
-        &self.op_parser
-    }
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-    fn fold_postfix(&self, lhs: O, op: Self::Op, span: I::Span) -> O {
-        (self.f)(lhs, op, span)
-    }
-}
+// Allow `|lhs| <expr>` to be used as a fold closure for postfix operators
+postfix_op!(|f: Fn(O) -> O, lhs, _op, _span| f(lhs));
+// Allow `|lhs, op| <expr>` to be used as a fold closure for postfix operators
+postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _span| f(lhs, op));
+// Allow `|lhs, op, span| <expr>` to be used as a fold closure for postfix operators
+postfix_op!(|f: Fn(O, Op, I::Span) -> O, lhs, op, span| f(lhs, op, span));
 
 pub struct Pratt<Atom, Ops> {
     pub(crate) atom: Atom,
@@ -453,10 +333,10 @@ mod tests {
         atom.pratt2((
             prefix(2, just('-'), |x: i64| -x),
             postfix(2, just('!'), factorial),
-            binary(left(0), just('+'), |l, r| l + r),
-            binary(left(0), just('-'), |l, r| l - r),
-            binary(left(1), just('*'), |l, r| l * r),
-            binary(left(1), just('/'), |l, _, r| l / r),
+            infix(left(0), just('+'), |l, r| l + r),
+            infix(left(0), just('-'), |l, r| l - r),
+            infix(left(1), just('*'), |l, r| l * r),
+            infix(left(1), just('/'), |l, _, r| l / r),
         ))
     }
 
