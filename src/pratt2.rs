@@ -318,6 +318,7 @@ impl_pratt_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{extra::Err, prelude::*};
 
     fn factorial(x: i64) -> i64 {
         if x == 0 {
@@ -352,5 +353,210 @@ mod tests {
         assert_eq!(parser().parse("4!").into_result(), Ok(24));
         assert_eq!(parser().parse("2 + 4!").into_result(), Ok(26));
         assert_eq!(parser().parse("-2 + 2").into_result(), Ok(0));
+    }
+
+    enum Expr {
+        Literal(i64),
+        Not(Box<Expr>),
+        Negate(Box<Expr>),
+        Confusion(Box<Expr>),
+        Factorial(Box<Expr>),
+        Value(Box<Expr>),
+        Add(Box<Expr>, Box<Expr>),
+        Sub(Box<Expr>, Box<Expr>),
+        Mul(Box<Expr>, Box<Expr>),
+        Div(Box<Expr>, Box<Expr>),
+    }
+
+    impl std::fmt::Display for Expr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::Literal(literal) => write!(f, "{literal}"),
+                Self::Not(right) => write!(f, "(~{right})"),
+                Self::Negate(right) => write!(f, "(-{right})"),
+                Self::Confusion(right) => write!(f, "(§{right})"),
+                Self::Factorial(right) => write!(f, "({right}!)"),
+                Self::Value(right) => write!(f, "({right}$)"),
+                Self::Add(left, right) => write!(f, "({left} + {right})"),
+                Self::Sub(left, right) => write!(f, "({left} - {right})"),
+                Self::Mul(left, right) => write!(f, "({left} * {right})"),
+                Self::Div(left, right) => write!(f, "({left} / {right})"),
+            }
+        }
+    }
+
+    fn u(e: fn(Box<Expr>) -> Expr, r: Expr) -> Expr {
+        e(Box::new(r))
+    }
+    fn i(e: fn(Box<Expr>, Box<Expr>) -> Expr, l: Expr, r: Expr) -> Expr {
+        e(Box::new(l), Box::new(r))
+    }
+
+    fn expr_parser<'a>() -> impl Parser<'a, &'a str, String, Err<Simple<'a, char>>> {
+        let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
+
+        atom.pratt2((
+            infix(left(0), just('+'), |l, r| i(Expr::Add, l, r)),
+            infix(left(0), just('-'), |l, r| i(Expr::Sub, l, r)),
+            infix(right(1), just('*'), |l, r| i(Expr::Mul, l, r)),
+            infix(right(1), just('/'), |l, r| i(Expr::Div, l, r)),
+        ))
+        .map(|x| x.to_string())
+    }
+
+    fn complete_parser<'a>() -> impl Parser<'a, &'a str, String, Err<Simple<'a, char>>> {
+        expr_parser().then_ignore(end())
+    }
+
+    fn parse(input: &str) -> ParseResult<String, Simple<char>> {
+        complete_parser().parse(input)
+    }
+
+    fn parse_partial(input: &str) -> ParseResult<String, Simple<char>> {
+        expr_parser().lazy().parse(input)
+    }
+
+    fn unexpected<'a, C: Into<Option<MaybeRef<'a, char>>>, S: Into<SimpleSpan>>(
+        c: C,
+        span: S,
+    ) -> Simple<'a, char> {
+        <Simple<_> as Error<'_, &'_ str>>::expected_found(None, c.into(), span.into())
+    }
+
+    #[test]
+    fn missing_first_expression() {
+        assert_eq!(parse("").into_result(), Err(vec![unexpected(None, 0..0)]))
+    }
+
+    #[test]
+    fn missing_later_expression() {
+        assert_eq!(parse("1+").into_result(), Err(vec![unexpected(None, 2..2)]),);
+    }
+
+    #[test]
+    fn invalid_first_expression() {
+        assert_eq!(
+            parse("?").into_result(),
+            Err(vec![unexpected(Some('?'.into()), 0..1)]),
+        );
+    }
+
+    #[test]
+    fn invalid_later_expression() {
+        assert_eq!(
+            parse("1+?").into_result(),
+            Err(vec![dbg!(unexpected(Some('?'.into()), 2..3))]),
+        );
+    }
+
+    #[test]
+    fn invalid_operator() {
+        assert_eq!(
+            parse("1?").into_result(),
+            Err(vec![unexpected(Some('?'.into()), 1..2)]),
+        );
+    }
+
+    #[test]
+    fn invalid_operator_incomplete() {
+        assert_eq!(parse_partial("1?").into_result(), Ok("1".to_string()),);
+    }
+
+    #[test]
+    fn complex_nesting() {
+        assert_eq!(
+            parse_partial("1+2*3/4*5-6*7+8-9+10").into_result(),
+            Ok("(((((1 + (2 * (3 / (4 * 5)))) - (6 * 7)) + 8) - 9) + 10)".to_string()),
+        );
+    }
+
+    #[test]
+    fn with_prefix_ops() {
+        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt2((
+                // -- Prefix
+                // Because we defined '*' and '/' as right associative operators,
+                // in order to get these to function as expected, their strength
+                // must be higher
+                prefix(2, just('-'), |r| u(Expr::Negate, r)),
+                prefix(2, just('~'), |r| u(Expr::Not, r)),
+                // This is what happens when not
+                prefix(1, just('§'), |r| u(Expr::Confusion, r)),
+                // -- Infix
+                infix(left(0), just('+'), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just('-'), |l, r| i(Expr::Sub, l, r)),
+                infix(right(1), just('*'), |l, r| i(Expr::Mul, l, r)),
+                infix(right(1), just('/'), |l, r| i(Expr::Div, l, r)),
+            ))
+            .map(|x| x.to_string());
+
+        assert_eq!(
+            parser.parse("-1+§~2*3").into_result(),
+            Ok("((-1) + (§((~2) * 3)))".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_postfix_ops() {
+        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt2((
+                // -- Postfix
+                // Because we defined '*' and '/' as right associative operators,
+                // in order to get these to function as expected, their strength
+                // must be higher
+                postfix(2, just('!'), |l| u(Expr::Factorial, l)),
+                // This is what happens when not
+                postfix(0, just('$'), |l| u(Expr::Value, l)),
+                // -- Infix
+                infix(left(1), just('+'), |l, r| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, r| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, r| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, r| i(Expr::Div, l, r)),
+            ))
+            .map(|x| x.to_string());
+
+        assert_eq!(
+            parser.parse("1+2!$*3").into_result(),
+            Ok("(((1 + (2!))$) * 3)".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_pre_and_postfix_ops() {
+        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt2((
+                // -- Prefix
+                prefix(4, just('-'), |r| u(Expr::Negate, r)),
+                prefix(4, just('~'), |r| u(Expr::Not, r)),
+                prefix(1, just('§'), |r| u(Expr::Confusion, r)),
+                // -- Postfix
+                postfix(5, just('!'), |l| u(Expr::Factorial, l)),
+                postfix(0, just('$'), |l| u(Expr::Value, l)),
+                // -- Infix
+                infix(left(1), just('+'), |l, r| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, r| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, r| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, r| i(Expr::Div, l, r)),
+            ))
+            .map(|x| x.to_string());
+        assert_eq!(
+            parser.parse("§1+-~2!$*3").into_result(),
+            Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
+        )
     }
 }
