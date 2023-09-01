@@ -43,6 +43,46 @@ pub trait Span {
 
     /// Return the end offset of the span.
     fn end(&self) -> Self::Offset;
+
+    /// Turn this span into a zero-width span that starts and ends at the end of the original.
+    ///
+    /// For example, an original span like `3..7` will result in a new span of `7..7`.
+    ///
+    /// This may be convenient in various circumstances, such as when specifying the 'end of input' span in
+    /// [`Input::spanned`].
+    fn to_end(&self) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new(self.context(), self.end()..self.end())
+    }
+
+    /// Combine two assumed-contiguous spans together into a larger span that encompasses both (and anything between).
+    ///
+    /// For example, spans like `3..5` and `7..8` will result in a unioned span of `3..8`.
+    ///
+    /// The spans may overlap one-another, but the start offset must come before the end offset for each span (i.e:
+    /// each span must be 'well-formed'). If this is not the case, the result is unspecified.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`Self::Context`]s of both spans are not equal.
+    fn union(&self, other: Self) -> Self
+    where
+        Self::Context: PartialEq + fmt::Debug,
+        Self::Offset: Ord,
+        Self: Sized,
+    {
+        assert_eq!(
+            self.context(),
+            other.context(),
+            "tried to union two spans with different contexts"
+        );
+        Self::new(
+            self.context(),
+            self.start().min(other.start())..self.end().max(other.end()),
+        )
+    }
 }
 
 /// The most basic implementor of `Span` - akin to `Range`, but `Copy` since it's not also

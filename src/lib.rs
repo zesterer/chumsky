@@ -219,9 +219,14 @@ mod sync {
 
 use sync::{DynParser, MaybeSync, RefC, RefW};
 
-/// The result of running a [`Parser`]. Can be converted into a [`Result`] via
-/// [`ParseResult::into_result`] for when you only care about success or failure, or into distinct
-/// error and output via [`ParseResult::into_output_errors`]
+/// The result of performing a parse on an input with [`Parser`].
+///
+/// Unlike `Result`, this type is designed to express the fact that generating outputs and errors are not
+/// mutually-exclusive operations: it is possible for a parse to produce non-terminal errors (see
+/// [`Parse::recover_with`] while still producing useful output).
+///
+/// If you don't care for recovered outputs and you with to treat success/failure as a binary, you may use
+/// [`ParseResult::into_result`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ParseResult<T, E> {
     output: Option<T>,
@@ -248,8 +253,9 @@ impl<T, E> ParseResult<T, E> {
         self.output.as_ref()
     }
 
-    /// Get a slice containing the parse errors for this result. The slice will be empty if there are no errors.
-    pub fn errors(&self) -> impl ExactSizeIterator<Item = &E> {
+    /// Get an iterator over the parse errors for this result. The iterator will produce no items if there were no
+    /// errors.
+    pub fn errors(&self) -> impl ExactSizeIterator<Item = &E> + DoubleEndedIterator {
         self.errs.iter()
     }
 
@@ -280,21 +286,22 @@ impl<T, E> ParseResult<T, E> {
         }
     }
 
-    /// If the parse succeeded (i.e: no errors were produced), this function returns the output value, `T`.
+    /// Convert this `ParseResult` into the output. If any errors were generated (including non-fatal errors!), a
+    /// panic will occur instead.
     ///
-    /// If parsing generated errors, this function panics (even if these errors were non-fatal).
+    /// The use of this function is discouraged in user-facing code. However, it may be convenient for use in tests.
     #[track_caller]
     pub fn unwrap(self) -> T
     where
         E: fmt::Debug,
     {
-        if self.errs.is_empty() {
-            self.output.expect("parser generated no errors or output")
-        } else {
+        if self.has_errors() {
             panic!(
-                "called `ParseResult::unwrap()` on a parse result with errors: {:?}",
-                self.errs
+                "called `ParseResult::unwrap` on a parse result containing errors: {:?}",
+                &self.errs
             )
+        } else {
+            self.output.expect("parser generated no errors or output")
         }
     }
 }
