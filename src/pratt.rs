@@ -31,7 +31,7 @@ pub(super) use ops::{Infix, InfixPostfix, InfixPrefix, InfixPrefixPostfix, Pratt
 /// the value, the higher the precedence.
 pub fn left_infix<P, Op, O>(
     parser: P,
-    strength: u8,
+    strength: u16,
     build: InfixBuilder<Op, O>,
 ) -> InfixOp<P, Op, O> {
     InfixOp::new_left(parser, strength, build)
@@ -45,7 +45,7 @@ pub fn left_infix<P, Op, O>(
 /// the value, the higher the precedence.
 pub fn right_infix<P, Op, O>(
     parser: P,
-    strength: u8,
+    strength: u16,
     build: InfixBuilder<Op, O>,
 ) -> InfixOp<P, Op, O> {
     InfixOp::new_right(parser, strength, build)
@@ -59,7 +59,7 @@ pub fn right_infix<P, Op, O>(
 /// by `strength`. The higher the value, the higher the precedence.
 pub fn prefix<P, Op, O>(
     parser: P,
-    strength: u8,
+    strength: u16,
     build: PrefixBuilder<Op, O>,
 ) -> PrefixOp<P, Op, O> {
     PrefixOp::new(parser, strength, build)
@@ -73,7 +73,7 @@ pub fn prefix<P, Op, O>(
 /// by `strength`. The higher the value, the higher the precedence.
 pub fn postfix<P, Op, O>(
     parser: P,
-    strength: u8,
+    strength: u16,
     build: PostfixBuilder<Op, O>,
 ) -> PostfixOp<P, Op, O> {
     PostfixOp::new(parser, strength, build)
