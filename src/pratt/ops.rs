@@ -89,7 +89,7 @@ where
 /// A representation of an infix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
 pub struct InfixOp<P, Op, O> {
-    strength: u8,
+    strength: u16,
     assoc: Assoc,
     parser: P,
     build: InfixBuilder<Op, O>,
@@ -111,7 +111,7 @@ impl<P, Op, O> InfixOp<P, Op, O> {
     /// parser `P`, and a function which is used to `build` a value `E`.
     /// The operator's precedence is determined by `strength`. The higher
     /// the value, the higher the precedence.
-    pub fn new_left(parser: P, strength: u8, build: InfixBuilder<Op, O>) -> Self {
+    pub fn new_left(parser: P, strength: u16, build: InfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             assoc: Assoc::Left,
@@ -124,7 +124,7 @@ impl<P, Op, O> InfixOp<P, Op, O> {
     /// parser `P`, and a function which is used to `build` a value `E`.
     /// The operator's precedence is determined by `strength`. The higher
     /// the value, the higher the precedence.
-    pub fn new_right(parser: P, strength: u8, build: InfixBuilder<Op, O>) -> Self {
+    pub fn new_right(parser: P, strength: u16, build: InfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             assoc: Assoc::Right,
@@ -162,7 +162,7 @@ where
 /// A representation of a prefix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
 pub struct PrefixOp<Parser, Op, O> {
-    strength: u8,
+    strength: u16,
     parser: Parser,
     build: PrefixBuilder<Op, O>,
 }
@@ -182,7 +182,7 @@ impl<Parser, Op, O> PrefixOp<Parser, Op, O> {
     /// that is parsed with the parser `P`, and a function which is used
     /// to `build` a value `E`. The operator's precedence is determined
     /// by `strength`. The higher the value, the higher the precedence.
-    pub fn new(parser: Parser, strength: u8, build: PrefixBuilder<Op, O>) -> Self {
+    pub fn new(parser: Parser, strength: u16, build: PrefixBuilder<Op, O>) -> Self {
         Self {
             strength,
             parser,
@@ -219,7 +219,7 @@ where
 /// A representation of a postfix operator to be used in combination with
 /// [`Parser::pratt`](super::Parser::pratt).
 pub struct PostfixOp<Parser, Op, O> {
-    strength: u8,
+    strength: u16,
     parser: Parser,
     build: PostfixBuilder<Op, O>,
 }
@@ -239,7 +239,7 @@ impl<Parser, Op, O> PostfixOp<Parser, Op, O> {
     /// that is parsed with the parser `P`, and a function which is used
     /// to `build` a value `E`. The operator's precedence is determined
     /// by `strength`. The higher the value, the higher the precedence.
-    pub fn new(parser: Parser, strength: u8, build: PostfixBuilder<Op, O>) -> Self {
+    pub fn new(parser: Parser, strength: u16, build: PostfixBuilder<Op, O>) -> Self {
         Self {
             strength,
             parser,
@@ -291,15 +291,15 @@ pub(super) enum Assoc {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Strength {
     /// This is the strongly associated side of the operator.
-    Strong(u8),
+    Strong(u16),
 
     /// This is the weakly associated side of the operator.
-    Weak(u8),
+    Weak(u16),
 }
 
 impl Strength {
     /// Get the binding strength, ignoring associativity.
-    pub fn strength(&self) -> &u8 {
+    pub fn strength(&self) -> &u16 {
         match self {
             Self::Strong(strength) => strength,
             Self::Weak(strength) => strength,
@@ -334,13 +334,13 @@ impl PartialOrd for Strength {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) struct Precedence {
-    strength: u8,
+    strength: u16,
     associativity: Assoc,
 }
 
 impl Precedence {
     /// Create a new precedence value.
-    pub fn new(strength: u8, associativity: Assoc) -> Self {
+    pub fn new(strength: u16, associativity: Assoc) -> Self {
         Self {
             strength,
             associativity,
