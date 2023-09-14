@@ -2837,8 +2837,8 @@ where
 macro_rules! select {
     ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select(
-            move |x, span| match x {
-                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? () $(;$out)? })),+,
+            move |x, span| match (x, span) {
+                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
@@ -2854,8 +2854,8 @@ macro_rules! select {
 macro_rules! select_ref {
     ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select_ref(
-            move |x, span| match x {
-                $($p $(if $guard)? => ::core::option::Option::Some({ $(let $span = span;)? () $(;$out)? })),+,
+            move |x, span| match (x, span) {
+                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
