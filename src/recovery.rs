@@ -98,7 +98,7 @@ pub struct SkipThenRetryUntil<S, U> {
 impl<S, U> Sealed for SkipThenRetryUntil<S, U> {}
 impl<'a, I, O, E, S, U> Strategy<'a, I, O, E> for SkipThenRetryUntil<S, U>
 where
-    I: ValueInput<'a>,
+    I: Input<'a>,
     S: Parser<'a, I, (), E>,
     U: Parser<'a, I, (), E>,
     E: ParserExtra<'a, I>,
@@ -157,7 +157,7 @@ pub struct SkipUntil<S, U, F> {
 impl<S, U, F> Sealed for SkipUntil<S, U, F> {}
 impl<'a, I, O, E, S, U, F> Strategy<'a, I, O, E> for SkipUntil<S, U, F>
 where
-    I: ValueInput<'a>,
+    I: Input<'a>,
     S: Parser<'a, I, (), E>,
     U: Parser<'a, I, (), E>,
     F: Fn() -> O,
