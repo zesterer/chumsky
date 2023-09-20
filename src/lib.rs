@@ -223,7 +223,7 @@ use sync::{DynParser, MaybeSync, RefC, RefW};
 ///
 /// Unlike `Result`, this type is designed to express the fact that generating outputs and errors are not
 /// mutually-exclusive operations: it is possible for a parse to produce non-terminal errors (see
-/// [`Parse::recover_with`] while still producing useful output).
+/// [`Parser::recover_with`] while still producing useful output).
 ///
 /// If you don't care for recovered outputs and you with to treat success/failure as a binary, you may use
 /// [`ParseResult::into_result`].
