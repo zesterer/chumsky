@@ -627,7 +627,9 @@ where
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `I`, the input that was found.
+/// The output type of this parser is `&'a I::Token`, the input that was found.
+///
+/// This function is the borrowing equivalent of [any]. Where possible, it's recommended to use [any] instead.
 ///
 /// # Examples
 ///
