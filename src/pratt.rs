@@ -168,6 +168,18 @@ pub struct Infix<A, F, Op, Args> {
     phantom: EmptyPhantom<(Op, Args)>,
 }
 
+impl<A: Copy, F: Copy, Op, Args> Copy for Infix<A, F, Op, Args> {}
+impl<A: Clone, F: Clone, Op, Args> Clone for Infix<A, F, Op, Args> {
+    fn clone(&self) -> Self {
+        Self {
+            op_parser: self.op_parser.clone(),
+            fold: self.fold.clone(),
+            associativity: self.associativity,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
 /// Specify a binary infix operator for a pratt parser with the given associativity, binding power, and
 /// [fold function](crate::pratt#fold-functions).
 ///
@@ -211,9 +223,9 @@ macro_rules! infix_op {
             type Op = Op;
             type OpParser = A;
             const IS_INFIX: bool = true;
-            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            fn associativity(&self) -> Associativity { self.associativity }
-            fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            #[inline(always)] fn associativity(&self) -> Associativity { self.associativity }
+            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -232,6 +244,18 @@ pub struct Prefix<A, F, Op, Args> {
     binding_power: u16,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(Op, Args)>,
+}
+
+impl<A: Copy, F: Copy, Op, Args> Copy for Prefix<A, F, Op, Args> {}
+impl<A: Clone, F: Clone, Op, Args> Clone for Prefix<A, F, Op, Args> {
+    fn clone(&self) -> Self {
+        Self {
+            op_parser: self.op_parser.clone(),
+            fold: self.fold.clone(),
+            binding_power: self.binding_power,
+            phantom: EmptyPhantom::new(),
+        }
+    }
 }
 
 /// Specify a unary prefix operator for a pratt parser with the given binding power and
@@ -274,9 +298,9 @@ macro_rules! prefix_op {
             type Op = Op;
             type OpParser = A;
             const IS_PREFIX: bool = true;
-            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
+            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -295,6 +319,18 @@ pub struct Postfix<A, F, Op, Args> {
     binding_power: u16,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(Op, Args)>,
+}
+
+impl<A: Copy, F: Copy, Op, Args> Copy for Postfix<A, F, Op, Args> {}
+impl<A: Clone, F: Clone, Op, Args> Clone for Postfix<A, F, Op, Args> {
+    fn clone(&self) -> Self {
+        Self {
+            op_parser: self.op_parser.clone(),
+            fold: self.fold.clone(),
+            binding_power: self.binding_power,
+            phantom: EmptyPhantom::new(),
+        }
+    }
 }
 
 /// Specify a unary postfix operator for a pratt parser with the given binding power and
@@ -337,9 +373,9 @@ macro_rules! postfix_op {
             type Op = Op;
             type OpParser = A;
             const IS_POSTFIX: bool = true;
-            fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
+            #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
+            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -352,6 +388,7 @@ postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _span| f(lhs, op));
 postfix_op!(|f: Fn(O, Op, I::Span) -> O, lhs, op, span| f(lhs, op, span));
 
 /// See [`Parser::pratt`].
+#[derive(Copy, Clone)]
 pub struct Pratt<Atom, Ops> {
     pub(crate) atom: Atom,
     pub(crate) ops: Ops,
@@ -366,6 +403,7 @@ macro_rules! impl_pratt_for_tuple {
     (~ $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
         impl<'a, Atom, $($X),*> Pratt<Atom, ($($X,)*)> {
+            #[inline]
             fn pratt_go<M: Mode, I, O, E>(&self, inp: &mut InputRef<'a, '_, I, E>, min_power: u32) -> PResult<M, O>
             where
                 I: Input<'a>,
@@ -382,7 +420,7 @@ macro_rules! impl_pratt_for_tuple {
                         if $X::IS_PREFIX {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => {
-                                    match self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power()) {
+                                    match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power())) {
                                         Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
                                             let span = inp.span_since(pre_expr.offset());
                                             $X.fold_prefix(op, rhs, span)
@@ -425,7 +463,7 @@ macro_rules! impl_pratt_for_tuple {
                         let assoc = $X.associativity();
                         if $X::IS_INFIX && assoc.left_power() >= min_power {
                             match $X.op_parser().go::<M>(inp) {
-                                Ok(op) => match self.pratt_go::<M, _, _, _>(inp, assoc.right_power()) {
+                                Ok(op) => match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, assoc.right_power())) {
                                     Ok(rhs) => {
                                         lhs = M::combine(
                                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
@@ -510,6 +548,20 @@ mod tests {
         assert_eq!(parser().parse("2 + 4!").into_result(), Ok(26));
         assert_eq!(parser().parse("-2 + 2").into_result(), Ok(0));
     }
+
+    // TODO: Make this work
+    // fn parser_dynamic<'a>() -> impl Parser<'a, &'a str, i64> {
+    //     let atom = text::int(10).padded().from_str::<i64>().unwrapped();
+
+    //     atom.pratt(vec![
+    //         prefix(2, just('-'), |x: i64| -x).into(),
+    //         postfix(2, just('!'), factorial).into(),
+    //         infix(left(0), just('+'), |l, r| l + r).into(),
+    //         infix(left(0), just('-'), |l, r| l - r).into(),
+    //         infix(left(1), just('*'), |l, r| l * r).into(),
+    //         infix(left(1), just('/'), |l, _, r| l / r).into(),
+    //     ])
+    // }
 
     enum Expr {
         Literal(i64),
