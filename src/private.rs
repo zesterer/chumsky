@@ -288,9 +288,7 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
     }
 
     unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
-        let out = (&uninit as *const [Self; N] as *const [T; N]).read();
-        core::mem::forget(uninit);
-        out
+        (&uninit as *const [Self; N] as *const [T; N]).read()
     }
 }
 
