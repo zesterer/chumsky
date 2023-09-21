@@ -591,6 +591,64 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
     }
 }
 
+/// See [`any_ref`].
+pub struct AnyRef<I, E> {
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
+}
+
+impl<I, E> Copy for AnyRef<I, E> {}
+impl<I, E> Clone for AnyRef<I, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, I, E> ParserSealed<'a, I, &'a I::Token, E> for AnyRef<I, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Token> {
+        let before = inp.offset();
+        match inp.next_ref_inner() {
+            (_, Some(tok)) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                let err_span = inp.span_since(before);
+                inp.add_alt(at, None, found.map(|f| f.into()), err_span);
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(&'a I::Token);
+}
+
+/// A parser that accepts any input (but not the end of input).
+///
+/// The output type of this parser is `&'a I::Token`, the input that was found.
+///
+/// This function is the borrowing equivalent of [any]. Where possible, it's recommended to use [any] instead.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// let any_ref_0 = any_ref::<_, extra::Err<Simple<char>>>();
+/// let any_ref_1 = any_ref::<_, extra::Err<Simple<char>>>();
+///
+/// assert_eq!(any_ref_1.parse(&['a'; 1]).into_result(), Ok(&'a'));
+/// assert_eq!(any_ref_1.parse(&['7'; 1]).into_result(), Ok(&'7'));
+/// assert_eq!(any_ref_1.parse(&['\t'; 1]).into_result(), Ok(&'\t'));
+/// assert!(any_ref_0.parse(&[]).has_errors());
+/// ```
+pub const fn any_ref<'a, I: BorrowInput<'a>, E: ParserExtra<'a, I>>() -> AnyRef<I, E> {
+    AnyRef {
+        phantom: EmptyPhantom::new(),
+    }
+}
+
 /// See [`map_ctx`].
 pub struct MapCtx<A, AE, F> {
     pub(crate) parser: A,
