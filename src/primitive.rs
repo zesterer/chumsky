@@ -572,7 +572,7 @@ where
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `I`, the input that was found.
+/// The output type of this parser is `I::Token`, the input that was found.
 ///
 /// # Examples
 ///
