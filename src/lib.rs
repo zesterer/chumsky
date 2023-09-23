@@ -27,10 +27,7 @@ extern crate core;
 
 macro_rules! blob_url_prefix {
     () => {
-        concat!(
-            "https://github.com/zesterer/chumsky/blob/",
-            env!("VERGEN_GIT_SHA")
-        )
+        concat!("https://github.com/zesterer/chumsky/blob/",)
     };
 }
 

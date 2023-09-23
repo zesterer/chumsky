@@ -12,7 +12,6 @@ exclude = [
     "/misc/*",
 	"/benches/samples/*",
 ]
-build = "build.rs"
 
 [features]
 default = ["std", "spill-stack"]
@@ -92,9 +91,6 @@ sn = "0.1"
 logos = "0.13"
 lasso = "0.7"
 slotmap = "1.0"
-
-[build-dependencies]
-vergen = { version = "=8.1.1", features = ["git", "gitoxide"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11", features = ["flamegraph", "criterion"] }
