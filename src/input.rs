@@ -1071,7 +1071,7 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
     #[inline]
-    pub(crate) fn with_ctx<'sub_parse, EM, O>(
+    pub fn with_ctx<'sub_parse, EM, O>(
         &'sub_parse mut self,
         new_ctx: &'sub_parse EM::Context,
         f: impl FnOnce(&mut InputRef<'a, 'sub_parse, I, EM>) -> O,
