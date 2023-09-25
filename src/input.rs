@@ -1070,6 +1070,7 @@ pub struct InputRef<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
 }
 
 impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E> {
+    /// Changes the ctx of an InputRef
     #[inline]
     pub fn with_ctx<'sub_parse, EM, O>(
         &'sub_parse mut self,
