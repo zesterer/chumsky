@@ -320,6 +320,74 @@ where
     go_extra!(O);
 }
 
+/// See [`Parser::map_with_ctx`].
+pub struct MapWithContext<A, OA, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+impl<A: Copy, OA, F: Copy> Copy for MapWithContext<A, OA, F> {}
+impl<A: Clone, OA, F: Clone> Clone for MapWithContext<A, OA, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithContext<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+    F: Fn(OA, &E::Context) -> O,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, move |x| (self.mapper)(x, inp.ctx)))
+    }
+
+    go_extra!(O);
+}
+
+impl<'a, I, O, E, A, OA, F> IterParserSealed<'a, I, O, E> for MapWithContext<A, OA, F>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, OA, E>,
+    F: Fn(OA, &E::Context) -> O,
+{
+    type IterState<M: Mode> = A::IterState<M>
+    where
+        I: 'a;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        self.parser.make_iter(inp)
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        match self.parser.next::<M>(inp, state) {
+            Ok(Some(o)) => Ok(Some(M::map(o, move |x| (self.mapper)(x, inp.ctx)))),
+            Ok(None) => Ok(None),
+            Err(()) => Err(()),
+        }
+    }
+}
+
 /// See [`Parser::map`].
 pub struct Map<A, OA, F> {
     pub(crate) parser: A,

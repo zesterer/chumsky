@@ -534,6 +534,47 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Works the same as [`Parser::map`], but the second argument for the mapper F is the parser's
+    /// current context.
+    ///
+    /// Primarily used to modify existing context using the result of a parser, before passing to a
+    /// `*_with_ctx` method. Also useful when the output of a parser is dependent on the currenct
+    /// context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    ///
+    /// fn palindrome_parser<'a>() -> impl Parser<'a, &'a str, String> {
+    ///     recursive(|chain| {
+    ///         choice((
+    ///             just(String::new())
+    ///                 .configure(|cfg, ctx: &String| cfg.seq(ctx.clone()))
+    ///                 .then_ignore(end()),
+    ///             any()
+    ///                 .map_with_ctx(|x, ctx| format!("{x}{ctx}"))
+    ///                 .ignore_with_ctx(chain),
+    ///         ))
+    ///     })
+    ///     .with_ctx(String::new())
+    /// }
+    ///
+    /// assert_eq!(palindrome_parser().parse("abccba").into_result().as_deref(), Ok("cba"));
+    /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
+    /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
+    /// ```
+    fn map_with_ctx<U, F: Fn(O, &E::Context) -> U>(self, f: F) -> MapWithContext<Self, O, F>
+    where
+        Self: Sized,
+    {
+        MapWithContext {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Map the output of this parser to another value.
     /// If the output of this parser isn't a tuple, use [`Parser::map`].
     ///
