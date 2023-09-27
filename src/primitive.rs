@@ -650,24 +650,25 @@ pub const fn any_ref<'a, I: BorrowInput<'a>, E: ParserExtra<'a, I>>() -> AnyRef<
 }
 
 /// See [`map_ctx`].
-pub struct MapCtx<A, AE, F> {
+pub struct MapCtx<A, AE, F, E> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
-    pub(crate) extra_phantom: PhantomData<AE>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(AE, E)>,
 }
 
-impl<A: Copy, AE, F: Copy> Copy for MapCtx<A, AE, F> {}
-impl<A: Clone, AE, F: Clone> Clone for MapCtx<A, AE, F> {
+impl<A: Copy, AE, F: Copy, E> Copy for MapCtx<A, AE, F, E> {}
+impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
     fn clone(&self) -> Self {
         MapCtx {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            extra_phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F>
+impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -737,7 +738,7 @@ where
 /// }
 /// assert!(!specific_usize(10).parse("10").has_errors());
 /// ```
-pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F>
+pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
 where
     F: Fn(&E::Context) -> EP::Context,
     I: Input<'a>,
@@ -749,7 +750,7 @@ where
     MapCtx {
         parser,
         mapper,
-        extra_phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
