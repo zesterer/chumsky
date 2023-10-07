@@ -114,7 +114,9 @@ pub mod prelude {
         error::{Cheap, EmptyErr, Error as _, Rich, Simple},
         extra,
         input::Input,
-        primitive::{any, choice, custom, empty, end, group, just, map_ctx, none_of, one_of, todo},
+        primitive::{
+            any, any_ref, choice, custom, empty, end, group, just, map_ctx, none_of, one_of, todo,
+        },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
         span::{SimpleSpan, Span as _},
@@ -223,7 +225,7 @@ use sync::{DynParser, MaybeSync, RefC, RefW};
 ///
 /// Unlike `Result`, this type is designed to express the fact that generating outputs and errors are not
 /// mutually-exclusive operations: it is possible for a parse to produce non-terminal errors (see
-/// [`Parse::recover_with`] while still producing useful output).
+/// [`Parser::recover_with`] while still producing useful output).
 ///
 /// If you don't care for recovered outputs and you with to treat success/failure as a binary, you may use
 /// [`ParseResult::into_result`].
@@ -543,6 +545,47 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Self: Sized,
     {
         Map {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Works the same as [`Parser::map`], but the second argument for the mapper F is the parser's
+    /// current context.
+    ///
+    /// Primarily used to modify existing context using the result of a parser, before passing to a
+    /// `*_with_ctx` method. Also useful when the output of a parser is dependent on the currenct
+    /// context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    ///
+    /// fn palindrome_parser<'a>() -> impl Parser<'a, &'a str, String> {
+    ///     recursive(|chain| {
+    ///         choice((
+    ///             just(String::new())
+    ///                 .configure(|cfg, ctx: &String| cfg.seq(ctx.clone()))
+    ///                 .then_ignore(end()),
+    ///             any()
+    ///                 .map_with_ctx(|x, ctx| format!("{x}{ctx}"))
+    ///                 .ignore_with_ctx(chain),
+    ///         ))
+    ///     })
+    ///     .with_ctx(String::new())
+    /// }
+    ///
+    /// assert_eq!(palindrome_parser().parse("abccba").into_result().as_deref(), Ok("cba"));
+    /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
+    /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
+    /// ```
+    fn map_with_ctx<U, F: Fn(O, &E::Context) -> U>(self, f: F) -> MapWithContext<Self, O, F>
+    where
+        Self: Sized,
+    {
+        MapWithContext {
             parser: self,
             mapper: f,
             phantom: EmptyPhantom::new(),

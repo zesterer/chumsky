@@ -575,7 +575,7 @@ where
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `I`, the input that was found.
+/// The output type of this parser is `I::Token`, the input that was found.
 ///
 /// # Examples
 ///
@@ -594,25 +594,84 @@ pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
     }
 }
 
-/// See [`map_ctx`].
-pub struct MapCtx<A, AE, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    pub(crate) extra_phantom: PhantomData<AE>,
+/// See [`any_ref`].
+pub struct AnyRef<I, E> {
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
 }
 
-impl<A: Copy, AE, F: Copy> Copy for MapCtx<A, AE, F> {}
-impl<A: Clone, AE, F: Clone> Clone for MapCtx<A, AE, F> {
+impl<I, E> Copy for AnyRef<I, E> {}
+impl<I, E> Clone for AnyRef<I, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, I, E> ParserSealed<'a, I, &'a I::Token, E> for AnyRef<I, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Token> {
+        let before = inp.offset();
+        match inp.next_ref_inner() {
+            (_, Some(tok)) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                let err_span = inp.span_since(before);
+                inp.add_alt(at, None, found.map(|f| f.into()), err_span);
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(&'a I::Token);
+}
+
+/// A parser that accepts any input (but not the end of input).
+///
+/// The output type of this parser is `&'a I::Token`, the input that was found.
+///
+/// This function is the borrowing equivalent of [any]. Where possible, it's recommended to use [any] instead.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// let any_ref_0 = any_ref::<_, extra::Err<Simple<char>>>();
+/// let any_ref_1 = any_ref::<_, extra::Err<Simple<char>>>();
+///
+/// assert_eq!(any_ref_1.parse(&['a'; 1]).into_result(), Ok(&'a'));
+/// assert_eq!(any_ref_1.parse(&['7'; 1]).into_result(), Ok(&'7'));
+/// assert_eq!(any_ref_1.parse(&['\t'; 1]).into_result(), Ok(&'\t'));
+/// assert!(any_ref_0.parse(&[]).has_errors());
+/// ```
+pub const fn any_ref<'a, I: BorrowInput<'a>, E: ParserExtra<'a, I>>() -> AnyRef<I, E> {
+    AnyRef {
+        phantom: EmptyPhantom::new(),
+    }
+}
+
+/// See [`map_ctx`].
+pub struct MapCtx<A, AE, F, E> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(AE, E)>,
+}
+
+impl<A: Copy, AE, F: Copy, E> Copy for MapCtx<A, AE, F, E> {}
+impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
     fn clone(&self) -> Self {
         MapCtx {
             parser: self.parser.clone(),
             mapper: self.mapper.clone(),
-            extra_phantom: PhantomData,
+            phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F>
+impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -682,7 +741,7 @@ where
 /// }
 /// assert!(!specific_usize(10).parse("10").has_errors());
 /// ```
-pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F>
+pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
 where
     F: Fn(&E::Context) -> EP::Context,
     I: Input<'a>,
@@ -694,7 +753,7 @@ where
     MapCtx {
         parser,
         mapper,
-        extra_phantom: PhantomData,
+        phantom: EmptyPhantom::new(),
     }
 }
 
