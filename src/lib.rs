@@ -436,10 +436,27 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParseResult::new(out, errs)
     }
 
+    /// Map from the output of the current parser and a slice of the input based on the current parser's span to a value.
+    /// 
+    /// The returned value may borrow data from the input slice, making this function very useful
+    /// for creating zero-copy AST output values
+    fn map_with_slice<U, F: Fn(O, I::Slice) -> U>(self, f: F) -> MapWithSlice<'a, Self, I, O, E, F, U>
+    where
+        Self: Sized,
+        I: SliceInput<'a>,
+    {
+        MapWithSlice {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
     /// The returned value may borrow data from the input slice, making this function very useful
     /// for creating zero-copy AST output values
+    /// This is effectively a special case of [`map_with_slice`](Parser::map_with_slice)`(|o, s|f(s))`
     fn map_slice<U, F: Fn(I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, F, U>
     where
         Self: Sized,
@@ -2835,10 +2852,10 @@ where
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($p:pat $(= $span:ident)? $(, $state:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select(
-            move |x, span| match (x, span) {
-                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+            move |x, span, state| match (x, span, state) {
+                $(($p $(,$span)? $(,$state)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
@@ -2852,10 +2869,10 @@ macro_rules! select {
 /// `select_ref` requires that the parser input implements [`BorrowInput`].
 #[macro_export]
 macro_rules! select_ref {
-    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($p:pat $(= $span:ident)? $(, $state:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select_ref(
-            move |x, span| match (x, span) {
-                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+            move |x, span, state| match (x, span, state) {
+                $(($p $(,$span)? $(,$state)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )

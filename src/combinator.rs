@@ -185,6 +185,63 @@ where
     }
 }
 
+/// See [`Parser::map_with_slice`].
+pub struct MapWithSlice<'a, A, I, O, E, F, U>
+where
+    I: SliceInput<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    F: Fn(O, I::Slice) -> U,
+{
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(I::Slice, O, E)>,
+}
+
+impl<'a, A: Copy, I, O, E, F: Copy, U> Copy for MapWithSlice<'a, A, I, O, E, F, U>
+where
+    I: SliceInput<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    F: Fn(O, I::Slice) -> U,
+{
+}
+impl<'a, A: Clone, I, O, E, F: Clone, U> Clone for MapWithSlice<'a, A, I, O, E, F, U>
+where
+    I: Input<'a> + SliceInput<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    F: Fn(O, I::Slice) -> U,
+{
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            mapper: self.mapper.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, O, E, A, F, U> ParserSealed<'a, I, U, E> for MapWithSlice<'a, A, I, O, E, F, U>
+where
+    I: SliceInput<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+    F: Fn(O, I::Slice) -> U,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U> {
+        let before = inp.offset().offset;
+        let gen = self.parser.go::<Emit>(inp)?;
+        let after = inp.offset().offset;
+
+        Ok(M::bind(|| (self.mapper)(gen, inp.slice_inner(before..after))))
+    }
+
+    go_extra!(U);
+}
+
 /// See [`Parser::map_slice`].
 pub struct MapSlice<'a, A, I, O, E, F, U>
 where

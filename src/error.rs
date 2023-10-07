@@ -777,7 +777,9 @@ where
 
     #[inline]
     fn in_context(&mut self, label: L, span: I::Span) {
+        // label is not yet in context
         if self.context.iter().all(|(l, _)| l != &label) {
+            // add it to context
             self.context.push((label, span));
         }
     }
