@@ -19,7 +19,7 @@ enum Json {
 
 fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
     recursive(|value| {
-        let digits = text::digits(10).slice();
+        let digits = text::digits(10).to_slice();
 
         let frac = just('.').then(digits.clone());
 
@@ -33,7 +33,8 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .then(text::int(10))
             .then(frac.or_not())
             .then(exp.or_not())
-            .map_slice(|s: &str| s.parse().unwrap())
+            .to_slice()
+            .map(|s: &str| s.parse().unwrap())
             .boxed();
 
         let escape = just('\\')
@@ -46,7 +47,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
                 just('n').to('\n'),
                 just('r').to('\r'),
                 just('t').to('\t'),
-                just('u').ignore_then(text::digits(16).exactly(4).slice().validate(
+                just('u').ignore_then(text::digits(16).exactly(4).to_slice().validate(
                     |digits, span, emitter| {
                         char::from_u32(u32::from_str_radix(digits, 16).unwrap()).unwrap_or_else(
                             || {
@@ -64,7 +65,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .ignored()
             .or(escape)
             .repeated()
-            .slice()
+            .to_slice()
             .map(ToString::to_string)
             .delimited_by(just('"'), just('"'))
             .boxed();

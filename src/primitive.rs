@@ -704,7 +704,7 @@ where
 ///
 /// let inc = one_of::<_, _, extra::Default>(b'a'..=b'z')
 ///     .ignore_with_ctx(map_ctx::<_, u8, &[u8], extra::Context<u8>, extra::Context<u8>, _>(|c: &u8| c.to_ascii_uppercase(), upper))
-///     .slice()
+///     .to_slice()
 ///     .repeated()
 ///     .at_least(1)
 ///     .collect::<Vec<_>>();
@@ -783,8 +783,8 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// ```should_panic
 /// # use chumsky::prelude::*;
 /// let int = just::<_, _, extra::Err<Simple<char>>>("0x").ignore_then(todo())
-///     .or(just("0b").ignore_then(text::digits(2).slice()))
-///     .or(text::int(10).slice());
+///     .or(just("0b").ignore_then(text::digits(2).to_slice()))
+///     .or(text::int(10).to_slice());
 ///
 /// // Decimal numbers are parsed
 /// assert_eq!(int.parse("12").into_result(), Ok("12"));

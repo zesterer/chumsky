@@ -152,7 +152,9 @@ use self::{
     container::*,
     error::Error,
     extra::ParserExtra,
-    input::{BorrowInput, Emitter, ExactSizeInput, InputRef, SliceInput, StrInput, ValueInput},
+    input::{
+        BorrowInput, Emitter, ExactSizeInput, InputRef, Offset, SliceInput, StrInput, ValueInput,
+    },
     prelude::*,
     primitive::Any,
     private::{
@@ -438,6 +440,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParseResult::new(out, errs)
     }
 
+    /*
     /// Map from a slice of the input based on the current parser's span to a value.
     ///
     /// The returned value may borrow data from the input slice, making this function very useful
@@ -453,16 +456,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
+    */
 
     /// Convert the output of this parser into a slice of the input, based on the current parser's
     /// span.
-    ///
-    /// This is effectively a special case of [`map_slice`](Parser::map_slice)`(|x| x)`
-    fn slice(self) -> Slice<Self, O>
+    fn to_slice(self) -> ToSlice<Self, O>
     where
         Self: Sized,
     {
-        Slice {
+        ToSlice {
             parser: self,
             phantom: EmptyPhantom::new(),
         }
@@ -534,6 +536,24 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Map the output of this parser to another value, with the opportunity to get extra metadata.
+    ///
+    /// The output type of this parser is `U`, the same as the function's output.
+    fn map_with<U, F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>) -> U>(
+        self,
+        f: F,
+    ) -> MapWith<Self, O, F>
+    where
+        Self: Sized,
+    {
+        MapWith {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /*
     /// Works the same as [`Parser::map`], but the second argument for the mapper F is the parser's
     /// current context.
     ///
@@ -574,6 +594,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
+    */
 
     /// Map the output of this parser to another value.
     /// If the output of this parser isn't a tuple, use [`Parser::map`].
@@ -628,6 +649,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /*
     /// Map the output of this parser to another value, making use of the pattern's span when doing so.
     ///
     /// This is very useful when generating an AST that attaches a span to each AST node.
@@ -660,6 +682,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
+    */
 
     /// Transform the output of this parser to the pattern's span.
     ///
@@ -682,8 +705,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// }
     ///
     /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
-    ///     .slice()
-    ///     .map_with_span(Expr::Int)
+    ///     .to_slice()
+    ///     .map_with(|int, e| Expr::Int(int, e.span()))
     ///     .padded();
     ///
     /// let add_op = just('+').to_span().padded();
@@ -712,6 +735,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /*
     /// Map the output of this parser to another value, making use of the parser's state when doing so.
     ///
     /// This is very useful for parsing non context-free grammars.
@@ -772,6 +796,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
+    */
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
@@ -805,6 +830,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /*
     /// After a successful parse, apply a fallible function to the output, making use of the parser's state when
     /// doing so. If the function produces an error, treat it as a parsing error.
     ///
@@ -820,6 +846,28 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         Self: Sized,
     {
         TryMapWithState {
+            parser: self,
+            mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+    */
+
+    /// After a successful parse, apply a fallible function to the output, with the opportunity to get extra metadata.
+    /// If the function produces an error, treat it as a parsing error.
+    ///
+    /// If you wish parsing of this pattern to continue when an error is generated instead of halting, consider using
+    /// [`Parser::validate`] instead.
+    ///
+    /// The output type of this parser is `U`, the [`Ok`] return value of the function.
+    fn try_map_with<U, F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>) -> Result<U, E::Error>>(
+        self,
+        f: F,
+    ) -> TryMapWith<Self, O, F>
+    where
+        Self: Sized,
+    {
+        TryMapWith {
             parser: self,
             mapper: f,
             phantom: EmptyPhantom::new(),
@@ -1427,7 +1475,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///         .and_is(one_of("{}").not())
     ///         .repeated()
     ///         .at_least(1)
-    ///         .map_slice(Tree::Text);
+    ///         .to_slice()
+    ///         .map(Tree::Text);
     ///
     ///     let group = tree
     ///         .repeated()
@@ -1635,9 +1684,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// // Now, define our parser
     /// let int = text::int::<&str, _, extra::Full<Simple<char>, NodeArena, ()>>(10)
     ///     .padded()
-    ///     .map_with_state(|s, _, state: &mut NodeArena|
+    ///     .map_with(|s, e|
     ///         // Return the ID of the new integer node
-    ///         state.insert(Expr::Int(s.parse().unwrap()))
+    ///         e.state().insert(Expr::Int(s.parse().unwrap()))
     ///     );
     ///
     /// let sum = int.foldl_with_state(
@@ -1689,7 +1738,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::prelude::*;
     /// let just_numbers = text::digits::<_, _, extra::Err<Simple<char>>>(10)
-    ///     .slice()
+    ///     .to_slice()
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
     ///     .separated_by(just(','))
@@ -2928,16 +2977,18 @@ mod tests {
                 .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
                 .at_least(1)
-                .map_slice(Token::Ident);
+                .to_slice()
+                .map(Token::Ident);
 
             let string = just('"')
                 .then(any().filter(|c: &char| *c != '"').repeated())
                 .then(just('"'))
-                .map_slice(Token::String);
+                .to_slice()
+                .map(Token::String);
 
             ident
                 .or(string)
-                .map_with_span(|token, span| (span, token))
+                .map_with(|token, e| (e.span(), token))
                 .padded()
                 .repeated()
                 .collect_exactly()
@@ -2978,16 +3029,18 @@ mod tests {
                 .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
                 .at_least(1)
-                .map_slice(Token::Ident);
+                .to_slice()
+                .map(Token::Ident);
 
             let string = just('"')
                 .then(any().filter(|c: &char| *c != '"').repeated())
                 .then(just('"'))
-                .map_slice(Token::String);
+                .to_slice()
+                .map(Token::String);
 
             ident
                 .or(string)
-                .map_with_span(|token, span| (span, token))
+                .map_with(|token, e| (e.span(), token))
                 .padded()
                 .repeated()
                 .collect_exactly()
@@ -3024,7 +3077,8 @@ mod tests {
                 .repeated()
                 .at_least(1)
                 .at_most(3)
-                .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                .to_slice()
+                .map(|b: &str| b.parse::<u64>().unwrap())
                 .padded()
                 .separated_by(just(',').padded())
                 .allow_trailing()
@@ -3060,13 +3114,14 @@ mod tests {
                     .filter(|c: &char| c.is_ascii_alphabetic())
                     .repeated()
                     .at_least(1)
-                    .slice()
+                    .to_slice()
                     .padded(),
                 any()
                     .filter(|c: &char| c.is_ascii_digit())
                     .repeated()
                     .at_least(1)
-                    .map_slice(|s: &str| s.parse::<u64>().unwrap())
+                    .to_slice()
+                    .map(|s: &str| s.parse::<u64>().unwrap())
                     .padded(),
                 any().filter(|c: &char| !c.is_whitespace()).padded(),
             ))
@@ -3348,7 +3403,8 @@ mod tests {
                     .repeated()
                     .at_least(1)
                     .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .to_slice()
+                    .map(|b: &str| b.parse::<u64>().unwrap())
                     .padded()
                     .separated_by(just(',').padded())
                     .allow_trailing()
@@ -3380,7 +3436,8 @@ mod tests {
                     .repeated()
                     .at_least(1)
                     .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .to_slice()
+                    .map(|b: &str| b.parse::<u64>().unwrap())
                     .padded()
                     .separated_by(just(',').padded())
                     .allow_trailing()
@@ -3414,7 +3471,8 @@ mod tests {
                     .repeated()
                     .at_least(1)
                     .at_most(3)
-                    .map_slice(|b: &str| b.parse::<u64>().unwrap())
+                    .to_slice()
+                    .map(|b: &str| b.parse::<u64>().unwrap())
                     .padded()
                     .separated_by(just(',').padded())
                     .allow_trailing()
@@ -3506,7 +3564,7 @@ mod tests {
     #[cfg(feature = "unstable")]
     fn cached() {
         fn my_parser<'a>() -> impl Parser<'a, &'a str, &'a str, extra::Default> {
-            any().repeated().exactly(5).slice()
+            any().repeated().exactly(5).to_slice()
         }
 
         struct MyCache;
