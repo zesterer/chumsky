@@ -1,6 +1,6 @@
 [package]
 name = "chumsky"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 description = "A parser library for humans with powerful error recovery"
 authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>", "Elijah Hartvigsen <elijah.reed@hartvigsen.xyz", "Jakob Wiesmore <runetynan@gmail.com>"]
 repository = "https://github.com/zesterer/chumsky"
