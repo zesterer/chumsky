@@ -106,8 +106,6 @@ pub mod util;
 pub mod prelude {
     #[cfg(feature = "lexical-numbers")]
     pub use super::number::number;
-    #[cfg(feature = "pratt")]
-    pub use super::pratt::{InfixOp, Pratt};
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
@@ -2127,103 +2125,48 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParserSealed::boxed(self)
     }
 
-    /// Use pratt-parsing to efficiently parse expressions separated by
-    /// operators of different associativity and precedence.
+    /// Use [Pratt parsing](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) to ergonomically
+    /// parse this pattern separated by prefix, postfix, and infix operators of various associativites and precedence.
     ///
-    /// The pratt-parsing algorithm uses recursion to efficiently parse
-    /// arbitrarily nested expressions.
+    /// Pratt parsing is a powerful technique and is recommended when writing parsers for expressions.
     ///
     /// # Example
     ///
+    /// See the documentation in [`pratt`] for more extensive examples and details.
+    ///
     /// ```
-    /// use chumsky::prelude::*;
+    /// # use chumsky::prelude::*;
     /// use chumsky::pratt::*;
-    /// use chumsky::extra;
+    /// use std::ops::{Neg, Mul, Div, Add, Sub};
     ///
-    /// enum Expr {
-    ///     Add(Box<Self>, Box<Self>),
-    ///     Sub(Box<Self>, Box<Self>),
-    ///     Pow(Box<Self>, Box<Self>),
-    ///     Neg(Box<Self>),
-    ///     Fact(Box<Self>),
-    ///     Deref(Box<Self>),
-    ///     Literal(i32),
-    /// }
-    ///
-    /// impl std::fmt::Display for Expr {
-    ///     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    ///         match self {
-    ///             Self::Literal(literal) => write!(f, "{literal}"),
-    ///             Self::Fact(left) => write!(f, "({left}!)"),
-    ///             Self::Deref(left) => write!(f, "(*{left})"),
-    ///             Self::Neg(right) => write!(f, "(-{right})"),
-    ///             Self::Add(left, right) => write!(f, "({left} + {right})"),
-    ///             Self::Sub(left, right) => write!(f, "({left} - {right})"),
-    ///             Self::Pow(left, right) => write!(f, "({left} ^ {right})"),
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// let atom = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
-    ///     .map(Expr::Literal);
+    ///     .padded();
     ///
-    /// let operator = choice((
-    ///     // Our `-` and `+` bind the weakest, meaning that even if they occur
-    ///     // first in an expression, they will be the last executed
-    ///     left_infix(just('+'), 1, |l, r| Expr::Add(Box::new(l), Box::new(r))),
-    ///     left_infix(just('-'), 1, |l, r| Expr::Sub(Box::new(l), Box::new(r))),
-    ///     // Just like in math, we want that if we write -x^2, that our parser
-    ///     // parses that as -(x^2), so we need it to bind tighter than our
-    ///     // prefix operators
-    ///     right_infix(just('^'), 3, |l, r| Expr::Pow(Box::new(l), Box::new(r))),
-    /// ))
-    /// .padded();
+    /// let op = |c| just(c).padded();
     ///
-    /// let prefix_ops = choice((
-    ///     // Notice the conflict with our `Expr::Sub`. This will still
-    ///     // parse correctly. We want negation to happen before `+` and `-`,
-    ///     // so we set it's precedence higher.
-    ///     prefix(just('-'), 2, |rhs| Expr::Neg(Box::new(rhs))),
-    ///     prefix(just('*'), 2, |rhs| Expr::Deref(Box::new(rhs))),
-    /// ))
-    /// .padded();
+    /// let expr = int.pratt((
+    ///     prefix(2, op('-'), i64::neg),
+    ///     infix(left(1), op('*'), i64::mul),
+    ///     infix(left(1), op('/'), i64::div),
+    ///     infix(left(0), op('+'), i64::add),
+    ///     infix(left(0), op('-'), i64::sub),
+    /// ));
     ///
-    /// // We want factorial to happen before any negation, so we need it's
-    /// // precedence to be higher than `Expr::Neg`.
-    /// let factorial = postfix(just('!'), 4, |lhs| Expr::Fact(Box::new(lhs))).padded();
-    ///
-    /// let pratt = atom
-    ///     .pratt(operator)
-    ///     .with_prefix_ops(prefix_ops)
-    ///     .with_postfix_ops(factorial)
-    ///     .map(|x| x.to_string());
-    ///
-    /// assert_eq!(
-    ///     pratt.parse("*1 + -2! - -3^2").into_result(),
-    ///     Ok("(((*1) + (-(2!))) - (-(3 ^ 2)))".to_string()),
-    /// );
+    /// // Pratt parsing can handle unary operators...
+    /// assert_eq!(expr.parse("-7").into_result(), Ok(-7));
+    /// // ...and infix binary operators...
+    /// assert_eq!(expr.parse("6 + 3").into_result(), Ok(9));
+    /// // ...and arbitrary precedence levels between them.
+    /// assert_eq!(expr.parse("2 + 3 * -4").into_result(), Ok(-10));
     /// ```
     #[cfg(feature = "pratt")]
-    fn pratt<InfixOps, InfixOpsOut>(
-        self,
-        ops: InfixOps,
-    ) -> Pratt<I, O, E, Self, pratt::Infix<InfixOps, InfixOpsOut>>
+    fn pratt<Ops>(self, ops: Ops) -> pratt::Pratt<Self, Ops>
     where
-        I: Input<'a>,
-        E: ParserExtra<'a, I>,
-        InfixOps: Parser<'a, I, InfixOpsOut, E>,
         Self: Sized,
     {
-        Pratt {
-            atom: self,
-            ops: pratt::Infix {
-                infix: ops,
-                _phantom: EmptyPhantom::new(),
-            },
-            _phantom: EmptyPhantom::new(),
-        }
+        pratt::Pratt { atom: self, ops }
     }
 }
 

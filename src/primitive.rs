@@ -84,11 +84,6 @@ where
     go_extra!(());
 }
 
-// impl<'b, T, C: Container<T>> Container<T> for &'b C {
-//     type Iter<'a> = C::Iter<'a>;
-//     fn iter(&self) -> Self::Iter<'_> { (*self).iter() }
-// }
-
 /// Configuration for [`just`], used in [`ConfigParser::configure`]
 pub struct JustCfg<T> {
     seq: Option<T>,
