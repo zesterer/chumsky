@@ -9,14 +9,14 @@ enum Token<'a> {
 // This parser is guaranteed to never allocate!
 fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]> {
     let ident = any()
-        .filter(|c: &char| c.is_alphanumeric())
+        .filter(|c: &char| c.is_alphanumeric(), "alphanumeric")
         .repeated()
         .at_least(1)
         .to_slice()
         .map(Token::Ident);
 
     let string = just('"')
-        .then(any().filter(|c: &char| *c != '"').repeated())
+        .then(any().filter(|c: &char| *c != '"', "non-quote").repeated())
         .then(just('"'))
         .to_slice()
         .map(Token::String);

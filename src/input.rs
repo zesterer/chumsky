@@ -1458,9 +1458,10 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         expected: Exp,
         found: Option<MaybeRef<'a, I::Token>>,
         span: I::Span,
-    ) {
+    ) -> &mut E::Error {
         // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
-        self.errors.alt = Some(match self.errors.alt.take() {
+        let alt = self.errors.alt.take();
+        &mut self.errors.alt.insert(match alt {
             Some(alt) => match alt.pos.into().cmp(&at.into()) {
                 Ordering::Equal => {
                     Located::at(alt.pos, alt.err.merge_expected_found(expected, found, span))
@@ -1471,7 +1472,7 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
                 }
             },
             None => Located::at(at, Error::expected_found(expected, found, span)),
-        });
+        }).err
     }
 
     #[inline]

@@ -41,7 +41,7 @@ mod tests {
 
     fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
         any()
-            .filter(|c: &char| c.is_ascii_digit())
+            .filter(|c: &char| c.is_ascii_digit(), "digit")
             .repeated()
             .at_least(1)
             .at_most(3)

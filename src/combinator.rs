@@ -223,27 +223,31 @@ where
 }
 
 /// See [`Parser::filter`].
-pub struct Filter<A, F> {
+pub struct Filter<A, F, L> {
     pub(crate) parser: A,
     pub(crate) filter: F,
+    pub(crate) label: L,
 }
 
-impl<A: Copy, F: Copy> Copy for Filter<A, F> {}
-impl<A: Clone, F: Clone> Clone for Filter<A, F> {
+impl<A: Copy, F: Copy, L: Copy> Copy for Filter<A, F, L> {}
+impl<A: Clone, F: Clone, L: Clone> Clone for Filter<A, F, L> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             filter: self.filter.clone(),
+            label: self.label.clone(),
         }
     }
 }
 
-impl<'a, A, I, O, E, F> ParserSealed<'a, I, O, E> for Filter<A, F>
+impl<'a, A, I, O, E, F, L> ParserSealed<'a, I, O, E> for Filter<A, F, L>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E>,
     F: Fn(&O) -> bool,
+    E::Error: LabelError<'a, I, L>,
+    L: Clone,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -253,7 +257,9 @@ where
                 Ok(M::bind(|| out))
             } else {
                 let err_span = inp.span_since(before);
-                inp.add_alt(inp.offset().offset, None, None, err_span);
+                inp
+                    .add_alt(inp.offset().offset, None, None, err_span)
+                    .label_with(self.label.clone());
                 Err(())
             }
         })
