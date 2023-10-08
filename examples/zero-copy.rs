@@ -12,16 +12,18 @@ fn parser<'a>() -> impl Parser<'a, &'a str, [(SimpleSpan<usize>, Token<'a>); 6]>
         .filter(|c: &char| c.is_alphanumeric())
         .repeated()
         .at_least(1)
-        .map_slice(Token::Ident);
+        .to_slice()
+        .map(Token::Ident);
 
     let string = just('"')
         .then(any().filter(|c: &char| *c != '"').repeated())
         .then(just('"'))
-        .map_slice(Token::String);
+        .to_slice()
+        .map(Token::String);
 
     ident
         .or(string)
-        .map_with_span(|token, span| (span, token))
+        .map_with(|token, e| (e.span(), token))
         .padded()
         .repeated()
         .collect_exactly()

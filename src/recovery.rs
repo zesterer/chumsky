@@ -245,5 +245,5 @@ where
         }
     })
     .delimited_by(just(start), just(end))
-    .map_with_span(move |_, span| fallback(span))
+    .map_with(move |_, e| fallback(e.span()))
 }

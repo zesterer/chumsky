@@ -34,6 +34,6 @@ For this reason, unless otherwise specified, any closures/functions used inline 
 *semantically* [pure](https://en.wikipedia.org/wiki/Purely_functional_programming): that is, you should not assume that
 they are called any specific number of times. This does not mean that they are not permitted to have side effects, but
 that those side effects should be irrelevant to the correct functioning of the parser. For example,
-[string interning](https://en.wikipedia.org/wiki/String_interning) within [`Parser::map_with_state`] is an impure
-operation, but this impurity does not affect the correct functioning of the parser: interning a string that goes unused
-can be done any number of times or not at all without resulting in bad behaviour.
+[string interning](https://en.wikipedia.org/wiki/String_interning) within [`Parser::map_with`] is an impure operation,
+but this impurity does not affect the correct functioning of the parser: interning a string that goes unused can be done
+any number of times or not at all without resulting in bad behaviour.

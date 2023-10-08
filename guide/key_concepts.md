@@ -144,11 +144,11 @@ error types that have different tradeoffs:
   erroneously found
 
 - [`Rich`]: a very information-rich error type that records:
-    
+
     - The span that triggered the error
-    
+
     - The token that was erroneously found instead
-    
+
     - A list of tokens or patterns that were expected at the span location instead
 
 [`Rich`] also supports many additional features such as custom error messages, labelling (see [`Parser::labelled`]) and
@@ -172,4 +172,4 @@ the [`Span`] trait. Additionally, chumsky comes with a built-in span type, [`Sim
 implementations for types in Rust's standard library such as [`std::ops::Range<usize>`].
 
 Chumsky will use its internal knowledge of your parser to generate spans for you whenever you need them, such as for
-attaching to nodes of an abstract syntax tree. See [`Parser::map_with_span`] for more information.
+attaching to nodes of an abstract syntax tree. See [`Parser::map_with`] for more information.
