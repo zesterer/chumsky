@@ -1373,6 +1373,15 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
         self.slice_from_inner(range.start.offset..)
     }
 
+    /// Get a slice of the input that covers the given offset range.
+    #[inline]
+    pub fn slice_since(&self, range: RangeFrom<Offset<'a, 'parse, I>>) -> I::Slice
+    where
+        I: SliceInput<'a>,
+    {
+        self.slice_inner(range.start.offset..self.offset)
+    }
+
     // TODO: Unofy with `InputRef::slice`
     #[inline(always)]
     pub(crate) fn slice_inner(&self, range: Range<I::Offset>) -> I::Slice

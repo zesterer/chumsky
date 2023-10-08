@@ -270,7 +270,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let digits = text::digits::<_, _, extra::Err<Simple<char>>>(10).slice();
+/// let digits = text::digits::<_, _, extra::Err<Simple<char>>>(10).to_slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -347,7 +347,7 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
         .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
         .ignored()
         .or(just(C::digit_zero()).ignored())
-        .slice()
+        .to_slice()
 }
 
 /// Parsers and utilities for working with ASCII inputs.
@@ -379,7 +379,7 @@ pub mod ascii {
                     .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
                     .repeated(),
             )
-            .slice()
+            .to_slice()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -434,7 +434,7 @@ pub mod ascii {
                     Err(Error::expected_found(None, None, span))
                 }
             })
-            .slice()
+            .to_slice()
     }
 }
 
@@ -469,7 +469,7 @@ pub mod unicode {
                     .filter(|c: &C| c.is_ident_continue())
                     .repeated(),
             )
-            .slice()
+            .to_slice()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -528,7 +528,7 @@ pub mod unicode {
                     Err(Error::expected_found(None, None, span))
                 }
             })
-            .slice()
+            .to_slice()
     }
 }
 
