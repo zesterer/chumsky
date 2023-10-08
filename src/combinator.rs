@@ -2287,7 +2287,7 @@ where
     where
         Self: Sized,
     {
-        let mut a_out = M::bind(|| Vec::new());
+        let mut a_out = M::bind(Vec::new);
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
             #[cfg(debug_assertions)]
