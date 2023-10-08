@@ -185,7 +185,7 @@ where
     }
 }
 
-/// See [`Parser::slice`]
+/// See [`Parser::to_slice`]
 pub struct ToSlice<A, O> {
     pub(crate) parser: A,
     #[allow(dead_code)]

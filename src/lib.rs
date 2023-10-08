@@ -368,7 +368,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
-    /// The provided state will be passed on to parsers that expect it, such as [`map_with_state`](Parser::map_with_state).
+    /// The provided state will be passed on to parsers that expect it, such as [`map_with`](Parser::map_with).
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
     /// If you want to just use a default state value, use [`Parser::parse`] instead.
@@ -2246,7 +2246,7 @@ where
 ///
 /// Chumsky distinguishes 'state' from 'context'. State is not able to change what input a parser
 /// accepts, but may be used to change the contents of the type it emits. In this way state is expected
-/// to be idempotent - combinators such as [`Parser::map_with_state`] are allowed to not call the
+/// to be idempotent - combinators such as [`Parser::map_with`] are allowed to not call the
 /// provided closure at all if they don't emit any output. Context and configuration, on the other hand,
 /// is used to change what kind of input a parser may accept, and thus must always be evaluated. Context
 /// isn't usable in any map combinator however - while it may affect accepted input, it is not expected
