@@ -48,10 +48,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
                 just('r').to('\r'),
                 just('t').to('\t'),
                 just('u').ignore_then(text::digits(16).exactly(4).to_slice().validate(
-                    |digits, span, emitter| {
+                    |digits, e, emitter| {
                         char::from_u32(u32::from_str_radix(digits, 16).unwrap()).unwrap_or_else(
                             || {
-                                emitter.emit(Rich::custom(span, "invalid unicode character"));
+                                emitter.emit(Rich::custom(e.span(), "invalid unicode character"));
                                 '\u{FFFD}' // unicode replacement character
                             },
                         )

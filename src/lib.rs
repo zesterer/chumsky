@@ -440,24 +440,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         ParseResult::new(out, errs)
     }
 
-    /*
-    /// Map from a slice of the input based on the current parser's span to a value.
-    ///
-    /// The returned value may borrow data from the input slice, making this function very useful
-    /// for creating zero-copy AST output values
-    fn map_slice<U, F: Fn(I::Slice) -> U>(self, f: F) -> MapSlice<'a, Self, I, O, E, F, U>
-    where
-        Self: Sized,
-        I: SliceInput<'a>,
-    {
-        MapSlice {
-            parser: self,
-            mapper: f,
-            phantom: EmptyPhantom::new(),
-        }
-    }
-    */
-
     /// Convert the output of this parser into a slice of the input, based on the current parser's
     /// span.
     fn to_slice(self) -> ToSlice<Self, O>
@@ -539,6 +521,87 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Map the output of this parser to another value, with the opportunity to get extra metadata.
     ///
     /// The output type of this parser is `U`, the same as the function's output.
+    ///
+    /// # Examples
+    ///
+    /// Using the span of the output in the mapping function:
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
+    /// #[derive(Debug, PartialEq)]
+    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
+    ///
+    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
+    ///     .map_with(|ident, e| Spanned(ident, e.span())) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
+    ///     .padded();
+    ///
+    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
+    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
+    /// ```
+    ///
+    /// Using the parser state in the mapping function to intern strings:
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// use std::ops::Range;
+    /// use lasso::{Rodeo, Spur};
+    ///
+    /// // It's common for AST nodes to use interned versions of identifiers
+    /// // Keys are generally smaller, faster to compare, and can be `Copy`
+    /// #[derive(Copy, Clone)]
+    /// pub struct Ident(Spur);
+    ///
+    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    ///     .map_with(|ident, e| Ident(e.state().get_or_intern(ident)))
+    ///     .padded()
+    ///     .repeated()
+    ///     .at_least(1)
+    ///     .collect::<Vec<_>>();
+    ///
+    /// // Test out parser
+    ///
+    /// let mut interner = Rodeo::new();
+    ///
+    /// match ident.parse_with_state("hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(interner.resolve(&idents[0].0), "hello");
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
+    ///
+    /// match ident.parse_with_state("hello hello", &mut interner).into_result() {
+    ///     Ok(idents) => {
+    ///         assert_eq!(idents[0].0, idents[1].0);
+    ///     }
+    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
+    /// }
+    /// ```
+    ///
+    /// Using the parse context in the mapping function:
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    ///
+    /// fn palindrome_parser<'a>() -> impl Parser<'a, &'a str, String> {
+    ///     recursive(|chain| {
+    ///         choice((
+    ///             just(String::new())
+    ///                 .configure(|cfg, ctx: &String| cfg.seq(ctx.clone()))
+    ///                 .then_ignore(end()),
+    ///             any()
+    ///                 .map_with(|x, e| format!("{x}{}", e.ctx()))
+    ///                 .ignore_with_ctx(chain),
+    ///         ))
+    ///     })
+    ///     .with_ctx(String::new())
+    /// }
+    ///
+    /// assert_eq!(palindrome_parser().parse("abccba").into_result().as_deref(), Ok("cba"));
+    /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
+    /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
+    /// ```
     fn map_with<U, F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>) -> U>(
         self,
         f: F,
@@ -552,49 +615,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
-
-    /*
-    /// Works the same as [`Parser::map`], but the second argument for the mapper F is the parser's
-    /// current context.
-    ///
-    /// Primarily used to modify existing context using the result of a parser, before passing to a
-    /// `*_with_ctx` method. Also useful when the output of a parser is dependent on the currenct
-    /// context.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::{prelude::*, error::Simple};
-    ///
-    /// fn palindrome_parser<'a>() -> impl Parser<'a, &'a str, String> {
-    ///     recursive(|chain| {
-    ///         choice((
-    ///             just(String::new())
-    ///                 .configure(|cfg, ctx: &String| cfg.seq(ctx.clone()))
-    ///                 .then_ignore(end()),
-    ///             any()
-    ///                 .map_with_ctx(|x, ctx| format!("{x}{ctx}"))
-    ///                 .ignore_with_ctx(chain),
-    ///         ))
-    ///     })
-    ///     .with_ctx(String::new())
-    /// }
-    ///
-    /// assert_eq!(palindrome_parser().parse("abccba").into_result().as_deref(), Ok("cba"));
-    /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
-    /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
-    /// ```
-    fn map_with_ctx<U, F: Fn(O, &E::Context) -> U>(self, f: F) -> MapWithContext<Self, O, F>
-    where
-        Self: Sized,
-    {
-        MapWithContext {
-            parser: self,
-            mapper: f,
-            phantom: EmptyPhantom::new(),
-        }
-    }
-    */
 
     /// Map the output of this parser to another value.
     /// If the output of this parser isn't a tuple, use [`Parser::map`].
@@ -649,41 +669,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /*
-    /// Map the output of this parser to another value, making use of the pattern's span when doing so.
-    ///
-    /// This is very useful when generating an AST that attaches a span to each AST node.
-    ///
-    /// The output type of this parser is `U`, the same as the function's output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    ///
-    /// // It's common for AST nodes to use a wrapper type that allows attaching span information to them
-    /// #[derive(Debug, PartialEq)]
-    /// pub struct Spanned<T>(T, SimpleSpan<usize>);
-    ///
-    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
-    ///     .map_with_span(Spanned) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
-    ///     .padded();
-    ///
-    /// assert_eq!(ident.parse("hello").into_result(), Ok(Spanned("hello", (0..5).into())));
-    /// assert_eq!(ident.parse("       hello   ").into_result(), Ok(Spanned("hello", (7..12).into())));
-    /// ```
-    fn map_with_span<U, F: Fn(O, I::Span) -> U>(self, f: F) -> MapWithSpan<Self, O, F>
-    where
-        Self: Sized,
-    {
-        MapWithSpan {
-            parser: self,
-            mapper: f,
-            phantom: EmptyPhantom::new(),
-        }
-    }
-    */
-
     /// Transform the output of this parser to the pattern's span.
     ///
     /// This is commonly used when you know what pattern you've parsed and are only interested in the span of the
@@ -735,69 +720,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
-    /*
-    /// Map the output of this parser to another value, making use of the parser's state when doing so.
-    ///
-    /// This is very useful for parsing non context-free grammars.
-    ///
-    /// The output type of this parser is `U`, the same as the function's output.
-    ///
-    /// # Examples
-    ///
-    /// ## General
-    ///
-    /// ```
-    /// # use chumsky::prelude::*;
-    /// use std::ops::Range;
-    /// use lasso::{Rodeo, Spur};
-    ///
-    /// // It's common for AST nodes to use interned versions of identifiers
-    /// // Keys are generally smaller, faster to compare, and can be `Copy`
-    /// #[derive(Copy, Clone)]
-    /// pub struct Ident(Spur);
-    ///
-    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
-    ///     .map_with_state(|ident, span, state| Ident(state.get_or_intern(ident)))
-    ///     .padded()
-    ///     .repeated()
-    ///     .at_least(1)
-    ///     .collect::<Vec<_>>();
-    ///
-    /// // Test out parser
-    ///
-    /// let mut interner = Rodeo::new();
-    ///
-    /// match ident.parse_with_state("hello", &mut interner).into_result() {
-    ///     Ok(idents) => {
-    ///         assert_eq!(interner.resolve(&idents[0].0), "hello");
-    ///     }
-    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
-    /// }
-    ///
-    /// match ident.parse_with_state("hello hello", &mut interner).into_result() {
-    ///     Ok(idents) => {
-    ///         assert_eq!(idents[0].0, idents[1].0);
-    ///     }
-    ///     Err(e) => panic!("Parsing Failed: {:?}", e),
-    /// }
-    /// ```
-    ///
-    /// See [`Parser::foldl_with_state`] for an example showing arena allocation via parser state.
-    fn map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> U>(
-        self,
-        f: F,
-    ) -> MapWithState<Self, O, F>
-    where
-        Self: Sized,
-    {
-        MapWithState {
-            parser: self,
-            mapper: f,
-            phantom: EmptyPhantom::new(),
-        }
-    }
-    */
-
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
     ///
@@ -829,29 +751,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
             phantom: EmptyPhantom::new(),
         }
     }
-
-    /*
-    /// After a successful parse, apply a fallible function to the output, making use of the parser's state when
-    /// doing so. If the function produces an error, treat it as a parsing error.
-    ///
-    /// If you wish parsing of this pattern to continue when an error is generated instead of halting, consider using
-    /// [`Parser::validate`] instead.
-    ///
-    /// The output type of this parser is `U`, the [`Ok`] return value of the function.
-    fn try_map_with_state<U, F: Fn(O, I::Span, &mut E::State) -> Result<U, E::Error>>(
-        self,
-        f: F,
-    ) -> TryMapWithState<Self, O, F>
-    where
-        Self: Sized,
-    {
-        TryMapWithState {
-            parser: self,
-            mapper: f,
-            phantom: EmptyPhantom::new(),
-        }
-    }
-    */
 
     /// After a successful parse, apply a fallible function to the output, with the opportunity to get extra metadata.
     /// If the function produces an error, treat it as a parsing error.
@@ -1652,7 +1551,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// let sum = int
     ///     .clone()
-    ///     .foldl_with_state(just('+').ignore_then(int).repeated(), |a, b, state| (a + b) * *state);
+    ///     .foldl_with(just('+').ignore_then(int).repeated(), |a, b, e| (a + b) * *e.state());
     ///
     /// let mut multiplier = 2i32;
     /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(134));
@@ -1689,11 +1588,11 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///         e.state().insert(Expr::Int(s.parse().unwrap()))
     ///     );
     ///
-    /// let sum = int.foldl_with_state(
+    /// let sum = int.foldl_with(
     ///     just('+').padded().ignore_then(int).repeated(),
-    ///     |a: NodeId, b: NodeId, state: &mut NodeArena| {
+    ///     |a: NodeId, b: NodeId, e| {
     ///         // Inserting an item into the arena returns its ID
-    ///         state.insert(Expr::Add(a, b))
+    ///         e.state().insert(Expr::Add(a, b))
     ///     }
     /// );
     ///
@@ -1708,13 +1607,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// }
     /// ```
     #[cfg_attr(debug_assertions, track_caller)]
-    fn foldl_with_state<B, F, OB>(self, other: B, f: F) -> FoldlWithState<F, Self, B, OB, E>
+    fn foldl_with<B, F, OB>(self, other: B, f: F) -> FoldlWith<F, Self, B, OB, E>
     where
-        F: Fn(O, OB, &mut E::State) -> O,
+        F: Fn(O, OB, &mut MapExtra<'a, '_, '_, I, E>) -> O,
         B: IterParser<'a, I, OB, E>,
         Self: Sized,
     {
-        FoldlWithState {
+        FoldlWith {
             parser_a: self,
             parser_b: other,
             folder: f,
@@ -1953,8 +1852,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// let large_int = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
-    ///     .validate(|x: u32, span, emitter| {
-    ///         if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher.", x))) }
+    ///     .validate(|x: u32, e, emitter| {
+    ///         if x < 256 { emitter.emit(Rich::custom(e.span(), format!("{} must be 256 or higher.", x))) }
     ///         x
     ///     });
     ///
@@ -1972,8 +1871,8 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// let large_int_val = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///         .from_str()
     ///         .unwrapped()
-    ///         .validate(|x: u32, span, emitter| {
-    ///             if x < 256 { emitter.emit(Rich::custom(span, format!("{} must be 256 or higher", x))) }
+    ///         .validate(|x: u32, e, emitter| {
+    ///             if x < 256 { emitter.emit(Rich::custom(e.span(), format!("{} must be 256 or higher", x))) }
     ///             x
     ///         });
     ///
@@ -2026,7 +1925,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, I::Span, &mut Emitter<E::Error>) -> U,
+        F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>, &mut Emitter<E::Error>) -> U,
     {
         Validate {
             parser: self,
@@ -2618,9 +2517,9 @@ where
     /// let signed = just('+').to(1)
     ///     .or(just('-').to(-1))
     ///     .repeated()
-    ///     .foldr_with_state(int, |a, b, state| {
-    ///         (*state) += 1;
-    ///         (a * b)
+    ///     .foldr_with(int, |a, b, e| {
+    ///         *e.state() += 1;
+    ///         a * b
     ///     });
     ///
     /// // Test our parser
@@ -2632,13 +2531,13 @@ where
     ///
     ///
     #[cfg_attr(debug_assertions, track_caller)]
-    fn foldr_with_state<B, F, OA>(self, other: B, f: F) -> FoldrWithState<F, Self, B, O, E>
+    fn foldr_with<B, F, OA>(self, other: B, f: F) -> FoldrWith<F, Self, B, O, E>
     where
-        F: Fn(O, OA, &mut E::State) -> OA,
+        F: Fn(O, OA, &mut MapExtra<'a, '_, '_, I, E>) -> OA,
         B: Parser<'a, I, OA, E>,
         Self: Sized,
     {
-        FoldrWithState {
+        FoldrWith {
             parser_a: self,
             parser_b: other,
             folder: f,
@@ -3320,10 +3219,10 @@ mod tests {
         #[test]
         #[should_panic]
         #[cfg(debug_assertions)]
-        fn debug_assert_foldl_with_state() {
+        fn debug_assert_foldl_with() {
             let mut state = 100;
             empty::<&str, extra::Full<EmptyErr, i32, ()>>()
-                .foldl_with_state(empty().to(()).repeated(), |_, _, _| ())
+                .foldl_with(empty().to(()).repeated(), |_, _, _| ())
                 .parse_with_state("a+b+c", &mut state);
         }
 
@@ -3345,7 +3244,7 @@ mod tests {
             empty::<&str, extra::Default>()
                 .to(())
                 .repeated()
-                .foldr_with_state(empty(), |_, _, _| ())
+                .foldr_with(empty(), |_, _, _| ())
                 .parse_with_state("a+b+c", &mut ());
         }
 

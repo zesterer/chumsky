@@ -185,64 +185,6 @@ where
     }
 }
 
-/*
-/// See [`Parser::map_slice`].
-pub struct MapSlice<'a, A, I, O, E, F, U>
-where
-    I: SliceInput<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(I::Slice) -> U,
-{
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<(I::Slice, O, E)>,
-}
-
-impl<'a, A: Copy, I, O, E, F: Copy, U> Copy for MapSlice<'a, A, I, O, E, F, U>
-where
-    I: SliceInput<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(I::Slice) -> U,
-{
-}
-impl<'a, A: Clone, I, O, E, F: Clone, U> Clone for MapSlice<'a, A, I, O, E, F, U>
-where
-    I: Input<'a> + SliceInput<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(I::Slice) -> U,
-{
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, F, U> ParserSealed<'a, I, U, E> for MapSlice<'a, A, I, O, E, F, U>
-where
-    I: SliceInput<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    F: Fn(I::Slice) -> U,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U> {
-        let before = inp.offset();
-        self.parser.go::<Check>(inp)?;
-
-        Ok(M::bind(|| (self.mapper)(inp.slice_since(before..))))
-    }
-
-    go_extra!(U);
-}
-*/
-
 /// See [`Parser::slice`]
 pub struct ToSlice<A, O> {
     pub(crate) parser: A,
@@ -319,76 +261,6 @@ where
 
     go_extra!(O);
 }
-
-/*
-/// See [`Parser::map_with_ctx`].
-pub struct MapWithContext<A, OA, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
-}
-
-impl<A: Copy, OA, F: Copy> Copy for MapWithContext<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for MapWithContext<A, OA, F> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithContext<A, OA, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &E::Context) -> O,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, move |x| (self.mapper)(x, inp.ctx)))
-    }
-
-    go_extra!(O);
-}
-
-impl<'a, I, O, E, A, OA, F> IterParserSealed<'a, I, O, E> for MapWithContext<A, OA, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: IterParser<'a, I, OA, E>,
-    F: Fn(OA, &E::Context) -> O,
-{
-    type IterState<M: Mode> = A::IterState<M>
-    where
-        I: 'a;
-
-    #[inline(always)]
-    fn make_iter<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
-        self.parser.make_iter(inp)
-    }
-
-    #[inline(always)]
-    fn next<M: Mode>(
-        &self,
-        inp: &mut InputRef<'a, '_, I, E>,
-        state: &mut Self::IterState<M>,
-    ) -> IPResult<M, O> {
-        match self.parser.next::<M>(inp, state) {
-            Ok(Some(o)) => Ok(Some(M::map(o, move |x| (self.mapper)(x, inp.ctx)))),
-            Ok(None) => Ok(None),
-            Err(()) => Err(()),
-        }
-    }
-}
-*/
 
 /// See [`Parser::map`].
 pub struct Map<A, OA, F> {
@@ -642,47 +514,6 @@ where
     }
 }
 
-/*
-/// See [`Parser::map_with_span`].
-pub struct MapWithSpan<A, OA, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
-}
-
-impl<A: Copy, OA, F: Copy> Copy for MapWithSpan<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for MapWithSpan<A, OA, F> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithSpan<A, OA, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    F: Fn(OA, I::Span) -> O,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| {
-            let span = inp.span_since(before);
-            (self.mapper)(out, span)
-        }))
-    }
-
-    go_extra!(O);
-}
-*/
-
 /// See [`Parser::to_span`].
 pub struct ToSpan<A, OA> {
     pub(crate) parser: A,
@@ -715,48 +546,6 @@ where
 
     go_extra!(I::Span);
 }
-
-/*
-/// See [`Parser::map_with_state`].
-pub struct MapWithState<A, OA, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
-}
-
-impl<A: Copy, OA, F: Copy> Copy for MapWithState<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for MapWithState<A, OA, F> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for MapWithState<A, OA, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    F: Fn(OA, I::Span, &mut E::State) -> O,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
-        let out = self.parser.go::<Emit>(inp)?;
-        Ok(M::bind(|| {
-            let span = inp.span_since(before);
-            let state = inp.state();
-            (self.mapper)(out, span, state)
-        }))
-    }
-
-    go_extra!(O);
-}
-*/
 
 /// See [`Parser::try_map`].
 pub struct TryMap<A, OA, F> {
@@ -800,51 +589,6 @@ where
 
     go_extra!(O);
 }
-
-/*
-/// See [`Parser::try_map_with_state`].
-pub struct TryMapWithState<A, OA, F> {
-    pub(crate) parser: A,
-    pub(crate) mapper: F,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
-}
-
-impl<A: Copy, OA, F: Copy> Copy for TryMapWithState<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for TryMapWithState<A, OA, F> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            mapper: self.mapper.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'a, I, O, E, A, OA, F> ParserSealed<'a, I, O, E> for TryMapWithState<A, OA, F>
-where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, OA, E>,
-    F: Fn(OA, I::Span, &mut E::State) -> Result<O, E::Error>,
-{
-    #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
-        let out = self.parser.go::<Emit>(inp)?;
-        let span = inp.span_since(before);
-        match (self.mapper)(out, span, inp.state()) {
-            Ok(out) => Ok(M::bind(|| out)),
-            Err(err) => {
-                inp.add_alt_err(inp.offset().offset, err);
-                Err(())
-            }
-        }
-    }
-
-    go_extra!(O);
-}
-*/
 
 /// See [`Parser::try_map_with`].
 pub struct TryMapWith<A, OA, F> {
@@ -2505,8 +2249,8 @@ where
     go_extra!(O);
 }
 
-/// See [`IterParser::foldr_with_state`].
-pub struct FoldrWithState<F, A, B, OA, E> {
+/// See [`IterParser::foldr_with`].
+pub struct FoldrWith<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
@@ -2516,8 +2260,8 @@ pub struct FoldrWithState<F, A, B, OA, E> {
     pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
 
-impl<F: Copy, A: Copy, B: Copy, OA, E> Copy for FoldrWithState<F, A, B, OA, E> {}
-impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWithState<F, A, B, OA, E> {
+impl<F: Copy, A: Copy, B: Copy, OA, E> Copy for FoldrWith<F, A, B, OA, E> {}
+impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWith<F, A, B, OA, E> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -2530,13 +2274,13 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWithState<F, A, B, OA, 
     }
 }
 
-impl<'a, I, F, A, B, O, OA, E> ParserSealed<'a, I, O, E> for FoldrWithState<F, A, B, OA, E>
+impl<'a, I, F, A, B, O, OA, E> ParserSealed<'a, I, O, E> for FoldrWith<F, A, B, OA, E>
 where
     I: Input<'a>,
     A: IterParser<'a, I, OA, E>,
     B: Parser<'a, I, O, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(OA, O, &mut E::State) -> O,
+    F: Fn(OA, O, &mut MapExtra<'a, '_, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
@@ -2550,7 +2294,7 @@ where
             let before = inp.offset();
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
+                    M::combine_mut(&mut a_out, out, |a_out, item| a_out.push((item, before)));
                 }
                 Ok(None) => break,
                 Err(()) => return Err(()),
@@ -2568,10 +2312,9 @@ where
         let b_out = self.parser_b.go::<M>(inp)?;
 
         Ok(M::combine(a_out, b_out, |a_out, b_out| {
-            let state = inp.state();
-            a_out
-                .into_iter()
-                .rfold(b_out, |b, a| (self.folder)(a, b, state))
+            a_out.into_iter().rfold(b_out, |b, (a, before)| {
+                (self.folder)(a, b, &mut MapExtra { before, inp })
+            })
         }))
     }
 
@@ -2642,8 +2385,8 @@ where
     go_extra!(O);
 }
 
-/// See [`Parser::foldl_with_state`].
-pub struct FoldlWithState<F, A, B, OB, E> {
+/// See [`Parser::foldl_with`].
+pub struct FoldlWith<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
@@ -2653,8 +2396,8 @@ pub struct FoldlWithState<F, A, B, OB, E> {
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
 
-impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for FoldlWithState<F, A, B, OB, E> {}
-impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWithState<F, A, B, OB, E> {
+impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for FoldlWith<F, A, B, OB, E> {}
+impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWith<F, A, B, OB, E> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -2667,19 +2410,20 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWithState<F, A, B, OB, 
     }
 }
 
-impl<'a, I, F, A, B, O, OB, E> ParserSealed<'a, I, O, E> for FoldlWithState<F, A, B, OB, E>
+impl<'a, I, F, A, B, O, OB, E> ParserSealed<'a, I, O, E> for FoldlWith<F, A, B, OB, E>
 where
     I: Input<'a>,
     A: Parser<'a, I, O, E>,
     B: IterParser<'a, I, OB, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(O, OB, &mut E::State) -> O,
+    F: Fn(O, OB, &mut MapExtra<'a, '_, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
     {
+        let before_all = inp.offset();
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
@@ -2687,8 +2431,16 @@ where
             let before = inp.offset();
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
-                    let state = inp.state();
-                    out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out, state));
+                    out = M::combine(out, b_out, |out, b_out| {
+                        (self.folder)(
+                            out,
+                            b_out,
+                            &mut MapExtra {
+                                before: before_all,
+                                inp,
+                            },
+                        )
+                    })
                 }
                 Ok(None) => break Ok(out),
                 Err(()) => break Err(()),
@@ -2862,7 +2614,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, I::Span, &mut Emitter<E::Error>) -> U,
+    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>, &mut Emitter<E::Error>) -> U,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U>
@@ -2872,9 +2624,8 @@ where
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
 
-        let span = inp.span_since(before);
         let mut emitter = Emitter::new();
-        let out = (self.validator)(out, span, &mut emitter);
+        let out = (self.validator)(out, &mut MapExtra { before, inp }, &mut emitter);
         for err in emitter.errors() {
             inp.emit(inp.offset, err);
         }
