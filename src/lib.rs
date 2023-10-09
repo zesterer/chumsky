@@ -85,7 +85,7 @@ pub mod cache;
 pub mod combinator;
 pub mod container;
 #[cfg(feature = "either")]
-pub mod either;
+mod either;
 pub mod error;
 #[cfg(feature = "extension")]
 pub mod extension;
