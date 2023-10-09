@@ -70,14 +70,14 @@
 //!     // We want factorial to happen before any negation, so we need its precedence to be higher than `Expr::Neg`.
 //!     postfix(4, op('!'), |lhs| Expr::Factorial(Box::new(lhs))),
 //!     // Just like in math, we want that if we write -x^2, our parser parses that as -(x^2), so we need it to have
-//!     // exponents bind tighter than our prefix operators
+//!     // exponents bind tighter than our prefix operators.
 //!     infix(right(3), op('^'), |l, r| Expr::Pow(Box::new(l), Box::new(r))),
 //!     // Notice the conflict with our `Expr::Sub`. This will still parse correctly. We want negation to happen before
-//!     // `+` and `-`, so we set it's precedence higher.
+//!     // `+` and `-`, so we set its precedence higher.
 //!     prefix(2, op('-'), |rhs| Expr::Neg(Box::new(rhs))),
 //!     prefix(2, op('*'), |rhs| Expr::Deref(Box::new(rhs))),
 //!     // Our `-` and `+` bind the weakest, meaning that even if they occur first in an expression, they will be the
-//!     // last executed
+//!     // last executed.
 //!     infix(left(1), op('+'), |l, r| Expr::Add(Box::new(l), Box::new(r))),
 //!     infix(left(1), op('-'), |l, r| Expr::Sub(Box::new(l), Box::new(r))),
 //! ))
