@@ -417,17 +417,14 @@ where
 }
 
 /// See [`select!`].
-pub struct Select<'a, F, I: Input<'a>, O, E: ParserExtra<'a, I>>
-where
-    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>
-{
+pub struct Select<F, I, O, E> {
     filter: F,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(E, O, &'a I)>,
+    phantom: EmptyPhantom<(E, O, I)>,
 }
 
-impl<'a, F: Copy + Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>, I: Input<'a>, O, E: ParserExtra<'a, I>> Copy for Select<'a, F, I, O, E> {}
-impl<'a, F: Clone + Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Select<'a, F, I, O, E> {
+impl<F: Copy, I, O, E> Copy for Select<F, I, O, E> {}
+impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             filter: self.filter.clone(),
