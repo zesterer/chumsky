@@ -417,14 +417,17 @@ where
 }
 
 /// See [`select!`].
-pub struct Select<F, I, O, E> {
+pub struct Select<'a, F, I: Input<'a>, O, E: ParserExtra<'a, I>>
+where
+    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>
+{
     filter: F,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(E, O, I)>,
+    phantom: EmptyPhantom<(E, O, &'a I)>,
 }
 
-impl<F: Copy, I, O, E> Copy for Select<F, I, O, E> {}
-impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
+impl<'a, F: Copy + Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>, I: Input<'a>, O, E: ParserExtra<'a, I>> Copy for Select<'a, F, I, O, E> {}
+impl<'a, F: Clone + Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Select<'a, F, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             filter: self.filter.clone(),
@@ -434,12 +437,12 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
 }
 
 /// See [`select!`].
-pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
+pub const fn select<'a, F, I, O, E>(filter: F) -> Select<'a, F, I, O, E>
 where
     I: Input<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(I::Token, I::Span, &mut E::State) -> Option<O>,
+    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
 {
     Select {
         filter,
@@ -447,22 +450,20 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Select<F, I, O, E>
+impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Select<'a, F, I, O, E>
 where
     I: ValueInput<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(I::Token, I::Span, &mut E::State) -> Option<O>,
+    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let next = inp.next_inner();
         let err_span = inp.span_since(before);
-        let span_since = inp.span_since(before);
-        let state = inp.state();
         let (at, found) = match next {
-            (at, Some(tok)) => match (self.filter)(tok.clone(), span_since, state) {
+            (at, Some(tok)) => match (self.filter)(tok.clone(), &mut MapExtra { before, inp }) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => (at, Some(tok.into())),
             },
@@ -498,7 +499,7 @@ where
     I: BorrowInput<'a>,
     I::Token: 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, I::Span, &mut E::State) -> Option<O>,
+    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
 {
     SelectRef {
         filter,
@@ -511,17 +512,15 @@ where
     I: BorrowInput<'a>,
     I::Token: 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, I::Span, &mut E::State) -> Option<O>,
+    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let next = inp.next_ref_inner();
-        let span = inp.span_since(before);
         let err_span = inp.span_since(before);
-        let state = inp.state();
         let (at, found) = match next {
-            (at, Some(tok)) => match (self.filter)(tok, span, state) {
+            (at, Some(tok)) => match (self.filter)(tok, &mut MapExtra { before, inp }) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => (at, Some(tok.into())),
             },
