@@ -1,6 +1,6 @@
 [package]
 name = "chumsky"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 description = "A parser library for humans with powerful error recovery"
 authors = ["Joshua Barretto <joshua.s.barretto@gmail.com>", "Elijah Hartvigsen <elijah.reed@hartvigsen.xyz", "Jakob Wiesmore <runetynan@gmail.com>"]
 repository = "https://github.com/zesterer/chumsky"
@@ -59,6 +59,9 @@ regex = ["dep:regex-automata"]
 # Enable serde serialization support
 serde = ["dep:serde"]
 
+# Enable dependencies only needed for generation of documentation on docs.rs
+docsrs = ["dep:vergen"]
+
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
 # If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
@@ -94,7 +97,7 @@ lasso = "0.7"
 slotmap = "1.0"
 
 [build-dependencies]
-vergen = { version = "=8.1.1", features = ["git", "gitoxide"] }
+vergen = { version = "=8.1.1", optional = true, features = ["git", "gitoxide"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11", features = ["flamegraph", "criterion"] }
