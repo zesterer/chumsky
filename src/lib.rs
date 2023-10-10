@@ -2726,8 +2726,8 @@ where
 ///
 /// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
 /// select! {
-///     Token::Num(x) = span => Expr::Num(x).spanned(span),
-///     Token::Str(s) = span => Expr::Str(s).spanned(span),
+///     Token::Num(x) = extra => Expr::Num(x).spanned(extra.span()),
+///     Token::Str(s) = extra => Expr::Str(s).spanned(extra.span()),
 /// }
 /// # ;
 /// ```
@@ -2780,10 +2780,10 @@ where
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select(
-            move |x, span| match (x, span) {
-                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+            move |x, extra| match (x, extra) {
+                $(($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
@@ -2797,10 +2797,10 @@ macro_rules! select {
 /// `select_ref` requires that the parser input implements [`BorrowInput`].
 #[macro_export]
 macro_rules! select_ref {
-    ($($p:pat $(= $span:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select_ref(
-            move |x, span| match (x, span) {
-                $(($p $(,$span)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+            move |x, extra| match (x, extra) {
+                $(($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )

@@ -332,8 +332,8 @@ where
 
 /// See [`Parser::map_with`].
 pub struct MapExtra<'a, 'b, 'inv, I: Input<'a>, E: ParserExtra<'a, I>> {
-    before: Offset<'a, 'inv, I>,
-    inp: &'b mut InputRef<'a, 'inv, I, E>,
+    pub(crate) before: Offset<'a, 'inv, I>,
+    pub(crate) inp: &'b mut InputRef<'a, 'inv, I, E>,
 }
 
 impl<'a, 'b, 'inv, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, 'inv, I, E> {
