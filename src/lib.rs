@@ -2726,8 +2726,8 @@ where
 ///
 /// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
 /// select! {
-///     Token::Num(x) = span => Expr::Num(x).spanned(span),
-///     Token::Str(s) = span => Expr::Str(s).spanned(span),
+///     Token::Num(x) = extra => Expr::Num(x).spanned(extra.span()),
+///     Token::Str(s) = extra => Expr::Str(s).spanned(extra.span()),
 /// }
 /// # ;
 /// ```
