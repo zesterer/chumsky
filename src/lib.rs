@@ -2679,13 +2679,12 @@ where
 /// used for parsing, although it can also generally be used to select inputs and map them to outputs. Any unmapped
 /// input patterns will become syntax errors, just as with [`Parser::filter`].
 ///
-/// Internally, [`select!`] is very similar to [`Parser::try_map`] and thinking of it as such might make it less
-/// confusing.
+/// Internally, [`select!`] is very similar to a single-token [`Parser::filter`] and thinking of it as such might make
+/// it less confusing.
 ///
-/// `select!` requires that tokens implement [`Clone`] and the input type implements [`ValueInput`].
-///
-/// If you're trying to access tokens referentially (for the sake of nested parsing, or simply because you want to
-/// avoid cloning the token), see [`select_ref!`].
+/// `select!` requires that tokens implement [`Clone`] and the input type implements [`ValueInput`]. If you're trying
+/// to access tokens referentially (for the sake of nested parsing, or simply because you want to avoid cloning the
+/// token), see [`select_ref!`].
 ///
 /// # Examples
 ///
@@ -2709,7 +2708,8 @@ where
 /// # ;
 /// ```
 ///
-/// If you require access to the token's span, you may add an argument after a pattern to gain access to it:
+/// If you require access to the token's span or other metadata, you may add an argument after a pattern to gain access
+/// to it (see the docs for [`Parser::map_with`] and [`MapExtra`]):
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
@@ -2726,8 +2726,8 @@ where
 ///
 /// # let _: chumsky::primitive::Select<_, &[Token], (Expr, Span), extra::Default> =
 /// select! {
-///     Token::Num(x) = extra => Expr::Num(x).spanned(extra.span()),
-///     Token::Str(s) = extra => Expr::Str(s).spanned(extra.span()),
+///     Token::Num(x) = e => Expr::Num(x).spanned(e.span()),
+///     Token::Str(s) = e => Expr::Str(s).spanned(e.span()),
 /// }
 /// # ;
 /// ```
@@ -2794,7 +2794,9 @@ macro_rules! select {
 ///
 /// Useful if you want to extract elements from a token in a zero-copy manner.
 ///
-/// `select_ref` requires that the parser input implements [`BorrowInput`].
+/// See the docs for [`select!`] for more information.
+///
+/// Requires that the parser input implements [`BorrowInput`].
 #[macro_export]
 macro_rules! select_ref {
     ($($p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({

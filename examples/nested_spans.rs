@@ -17,7 +17,7 @@ fn parser<'a>() -> impl Parser<'a, TokenTreeInput<'a>, i64> {
         let parens = expr
             // Here we specify how the parser should come up with the nested tokens
             .nested_in(select_ref! {
-                Token::Parens(xs) = extra => xs.as_slice().spanned(SimpleSpan::to_end(&extra.span())),
+                Token::Parens(xs) = e => xs.as_slice().spanned(SimpleSpan::to_end(&e.span())),
             });
 
         let atom = num.or(parens);
