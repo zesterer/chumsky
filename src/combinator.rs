@@ -2290,7 +2290,6 @@ where
         let mut a_out = M::bind(Vec::new);
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
-            #[cfg(debug_assertions)]
             let before = inp.offset();
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
