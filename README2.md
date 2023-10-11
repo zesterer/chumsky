@@ -7,26 +7,28 @@
 
 Chumsky is a parser combinator library for Rust that makes writing expressive, high-performance parsers easy.
 
-Although chumsky is designed primarily for user-fancing parsers such as compilers, chumsky is just as much at home
-parsing binary protocols in a networking layer, configuration files, or any other form of complex input validation that
-you may need.
-
 <a href = "https://www.github.com/zesterer/tao">
     <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
 </a>
+
+Although chumsky is designed primarily for user-fancing parsers such as compilers, chumsky is just as much at home
+parsing binary protocols at the networking layer, configuration files, or any other form of complex input validation that
+you may need. It also has `no_std` support, making it suitable for embedded environments.
 
 ## Features
 
 - 🪄 **Expressive combinators** that make writing your parser a joy
 - 🎛️ **Fully generic** across input, token, output, span, and error types
-- 📑 **Zero-copy parsing** minimises your parser's need to allocate
+- 📑 **Zero-copy parsing** minimises allocation by having outputs hold references/slices of the input
 - 🚦 **Flexible error recovery** strategies out of the box
 - 🚀 **Internal optimiser** leverages the power of [GATs](https://smallcultfollowing.com/babysteps/blog/2022/06/27/many-modes-a-gats-pattern/) to optimise your parser for you
 - 📖 **Text-oriented parsers** for text inputs (i.e: `&[u8]` and `&str`)
 - 👁️‍🗨️ **Context-free grammars** are fully supported, with support for context-sensitivity
 - 🔄 **Left recursion and memoization** have opt-in support
-- 🪺 **Nested inputs** such as token trees are fully supported
+- 🪺 **Nested inputs** such as token trees are fully supported both as inputs and outputs
 - 🏷️ **Pattern labelling** for dynamic, user-friendly error messages
+- 🗃️ **Caching** allows parsers to be created once and reused many times
+- ↔️ **Pratt parsing** support for unary and binary operators
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
 
@@ -39,19 +41,18 @@ See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/ex
 ```rust
 use chumsky::prelude::*;
 
-/// Define out output AST (Abstract Syntax Tree)
+/// An AST (Abstract Syntax Tree) for Brainfuck instructions
 #[derive(Clone)]
 enum Instr {
     Left, Right,
     Incr, Decr,
     Read, Write,
-	// In Brainfuck, `[...]` blocks are loops
-    Loop(Vec<Self>),
+    Loop(Vec<Self>), // In Brainfuck, `[...]` loops contain sub-blocks of instructions
 }
 
 /// A function that returns an instance of our Brainfuck parser
 fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>> {
-	// Our parser is recursive: each instruction can contain many instructions (via `[...]` blocks)
+	// Brainfuck syntax is recursive: each block can contain many sub-blocks (via `[...]` loops)
     recursive(|bf| choice((
 		// All of the basic instructions are just single characters
         just('<').to(Instr::Left),
@@ -86,6 +87,32 @@ Other examples include:
 Chumsky has [a tutorial](https://github.com/zesterer/chumsky/blob/master/tutorial.md) that teaches you how to write a
 parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence, functions,
 let declarations, and calls.
+
+## Cargo Features
+
+Chumsky contains several optional features that extend the crate's functionality.
+
+- `pratt`: enables the [pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html) combinator
+
+- `regex`: enables the regex combinator
+
+- `serde`: enables `serde` (de)serialization support for several types
+
+- `either`: implements `Parser` for `either::Either`, allowing dynamic configuration of parsers at runtime
+
+- `sync`: enables thread-safe features
+
+- `extension`: enables the extension API, allowing you to write your own first-class combinators that integrate with and extend chumsky
+
+- `memoization`: enables [memoization](https://en.wikipedia.org/wiki/Memoization#Parsers) features
+
+- `spill-stack` (enabled by default): avoid stack overflows by spilling stack data to the heap
+
+- `unstable`: enables experimental chumsky features
+
+- `std` (enabled by default): support for standard library features
+
+- `nightly`: enable support for features only supported by the nightly Rust compiler
 
 ## *What* is a parser combinator?
 
