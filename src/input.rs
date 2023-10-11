@@ -1512,3 +1512,58 @@ impl<E> Emitter<E> {
         self.emitted.push(err)
     }
 }
+
+/// See [`Parser::map_with`].
+pub struct MapExtra<'a, 'b, I: Input<'a>, E: ParserExtra<'a, I>> {
+    before: I::Offset,
+    after: I::Offset,
+    inp: &'b I,
+    state: &'b mut E::State,
+    ctx: &'b E::Context,
+}
+
+impl<'a, 'b, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, I, E> {
+    #[inline(always)]
+    pub(crate) fn new<'parse>(
+        before: Offset<'a, 'parse, I>,
+        inp: &'b mut InputRef<'a, 'parse, I, E>,
+    ) -> Self {
+        Self {
+            before: before.offset,
+            after: inp.offset,
+            ctx: inp.ctx,
+            state: inp.state,
+            inp: inp.input,
+        }
+    }
+
+    /// Get the span corresponding to the output.
+    #[inline(always)]
+    pub fn span(&self) -> I::Span {
+        // SAFETY: The offsets both came from the same input
+        // TODO: Should this make `MapExtra::new` unsafe? Probably, but it's an internal API and we simply wouldn't
+        // ever abuse it in this way, even accidentally.
+        unsafe { self.inp.span(self.before..self.after) }
+    }
+
+    /// Get the slice corresponding to the output.
+    #[inline(always)]
+    pub fn slice(&self) -> I::Slice
+    where
+        I: SliceInput<'a>,
+    {
+        self.inp.slice(self.before..self.after)
+    }
+
+    /// Get the parser state.
+    #[inline(always)]
+    pub fn state(&mut self) -> &mut E::State {
+        self.state
+    }
+
+    /// Get the current parser context.
+    #[inline(always)]
+    pub fn ctx(&self) -> &E::Context {
+        self.ctx
+    }
+}

@@ -212,7 +212,7 @@ pub fn nested_delimiters<'a, I, O, E, F, const N: usize>(
     fallback: F,
 ) -> impl Parser<'a, I, O, E> + Clone
 where
-    I: ValueInput<'a> + 'a,
+    I: ValueInput<'a>,
     I::Token: PartialEq + Clone + MaybeSync,
     E: extra::ParserExtra<'a, I> + MaybeSync,
     F: Fn(I::Span) -> O + Clone,

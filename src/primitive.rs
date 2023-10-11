@@ -439,7 +439,7 @@ where
     I: Input<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
+    F: Fn(I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
 {
     Select {
         filter,
@@ -452,7 +452,7 @@ where
     I: ValueInput<'a>,
     I::Token: Clone + 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
+    F: Fn(I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -460,7 +460,7 @@ where
         let next = inp.next_inner();
         let err_span = inp.span_since(before);
         let (at, found) = match next {
-            (at, Some(tok)) => match (self.filter)(tok.clone(), &mut MapExtra { before, inp }) {
+            (at, Some(tok)) => match (self.filter)(tok.clone(), &mut MapExtra::new(before, inp)) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => (at, Some(tok.into())),
             },
@@ -496,7 +496,7 @@ where
     I: BorrowInput<'a>,
     I::Token: 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
+    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
 {
     SelectRef {
         filter,
@@ -509,7 +509,7 @@ where
     I: BorrowInput<'a>,
     I::Token: 'a,
     E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, '_, I, E>) -> Option<O>,
+    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -517,7 +517,7 @@ where
         let next = inp.next_ref_inner();
         let err_span = inp.span_since(before);
         let (at, found) = match next {
-            (at, Some(tok)) => match (self.filter)(tok, &mut MapExtra { before, inp }) {
+            (at, Some(tok)) => match (self.filter)(tok, &mut MapExtra::new(before, inp)) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => (at, Some(tok.into())),
             },
