@@ -3459,4 +3459,18 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    #[allow(dead_code)]
+    fn map_with_compiles() {
+        enum Token {}
+        enum Expr {}
+
+        fn expr<'src, I>() -> impl Parser<'src, I, (Expr, SimpleSpan)> + 'src
+        where
+            I: Input<'src, Token = Token, Span = SimpleSpan> + 'src,
+        {
+            todo().map_with(|expr, e| (expr, e.span()))
+        }
+    }
 }
