@@ -162,7 +162,7 @@ use self::{
     error::Error,
     extra::ParserExtra,
     input::{
-        BorrowInput, Emitter, ExactSizeInput, InputRef, Offset, SliceInput, StrInput, ValueInput,
+        BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
     prelude::*,
     primitive::Any,
@@ -611,10 +611,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
     /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
     /// ```
-    fn map_with<U, F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>) -> U>(
-        self,
-        f: F,
-    ) -> MapWith<Self, O, F>
+    fn map_with<U, F: Fn(O, &mut MapExtra<'a, '_, I, E>) -> U>(self, f: F) -> MapWith<Self, O, F>
     where
         Self: Sized,
     {
@@ -768,7 +765,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// [`Parser::validate`] instead.
     ///
     /// The output type of this parser is `U`, the [`Ok`] return value of the function.
-    fn try_map_with<U, F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>) -> Result<U, E::Error>>(
+    fn try_map_with<U, F: Fn(O, &mut MapExtra<'a, '_, I, E>) -> Result<U, E::Error>>(
         self,
         f: F,
     ) -> TryMapWith<Self, O, F>
@@ -1618,7 +1615,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     #[cfg_attr(debug_assertions, track_caller)]
     fn foldl_with<B, F, OB>(self, other: B, f: F) -> FoldlWith<F, Self, B, OB, E>
     where
-        F: Fn(O, OB, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+        F: Fn(O, OB, &mut MapExtra<'a, '_, I, E>) -> O,
         B: IterParser<'a, I, OB, E>,
         Self: Sized,
     {
@@ -1934,7 +1931,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     fn validate<U, F>(self, f: F) -> Validate<Self, O, F>
     where
         Self: Sized,
-        F: Fn(O, &mut MapExtra<'a, '_, '_, I, E>, &mut Emitter<E::Error>) -> U,
+        F: Fn(O, &mut MapExtra<'a, '_, I, E>, &mut Emitter<E::Error>) -> U,
     {
         Validate {
             parser: self,
@@ -2487,7 +2484,7 @@ where
     #[cfg_attr(debug_assertions, track_caller)]
     fn foldr_with<B, F, OA>(self, other: B, f: F) -> FoldrWith<F, Self, B, O, E>
     where
-        F: Fn(O, OA, &mut MapExtra<'a, '_, '_, I, E>) -> OA,
+        F: Fn(O, OA, &mut MapExtra<'a, '_, I, E>) -> OA,
         B: Parser<'a, I, OA, E>,
         Self: Sized,
     {

@@ -331,41 +331,6 @@ where
 }
 
 /// See [`Parser::map_with`].
-pub struct MapExtra<'a, 'b, 'inv, I: Input<'a>, E: ParserExtra<'a, I>> {
-    pub(crate) before: Offset<'a, 'inv, I>,
-    pub(crate) inp: &'b mut InputRef<'a, 'inv, I, E>,
-}
-
-impl<'a, 'b, 'inv, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, 'inv, I, E> {
-    /// Get the span corresponding to the output.
-    #[inline(always)]
-    pub fn span(&self) -> I::Span {
-        self.inp.span_since(self.before)
-    }
-
-    /// Get the slice corresponding to the output.
-    #[inline(always)]
-    pub fn slice(&self) -> I::Slice
-    where
-        I: SliceInput<'a>,
-    {
-        self.inp.slice_since(self.before..)
-    }
-
-    /// Get the parser state.
-    #[inline(always)]
-    pub fn state(&mut self) -> &mut E::State {
-        self.inp.state()
-    }
-
-    /// Get the current parser context.
-    #[inline(always)]
-    pub fn ctx(&self) -> &E::Context {
-        self.inp.ctx()
-    }
-}
-
-/// See [`Parser::map_with`].
 pub struct MapWith<A, OA, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
@@ -389,14 +354,14 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| {
-            (self.mapper)(out, &mut MapExtra { before, inp })
+            (self.mapper)(out, &mut MapExtra::new(before, inp))
         }))
     }
 
@@ -408,7 +373,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: IterParser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     type IterState<M: Mode> = A::IterState<M>
     where
@@ -431,7 +396,7 @@ where
         let before = inp.offset();
         match self.parser.next::<M>(inp, state) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| {
-                (self.mapper)(o, &mut MapExtra { before, inp })
+                (self.mapper)(o, &mut MapExtra::new(before, inp))
             }))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
@@ -614,13 +579,13 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> Result<O, E::Error>,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> Result<O, E::Error>,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         let before = inp.offset();
         let out = self.parser.go::<Emit>(inp)?;
-        match (self.mapper)(out, &mut MapExtra { before, inp }) {
+        match (self.mapper)(out, &mut MapExtra::new(before, inp)) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
                 inp.add_alt_err(inp.offset().offset, err);
@@ -2280,7 +2245,7 @@ where
     A: IterParser<'a, I, OA, E>,
     B: Parser<'a, I, O, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(OA, O, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, O, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
@@ -2312,7 +2277,7 @@ where
 
         Ok(M::combine(a_out, b_out, |a_out, b_out| {
             a_out.into_iter().rfold(b_out, |b, (a, before)| {
-                (self.folder)(a, b, &mut MapExtra { before, inp })
+                (self.folder)(a, b, &mut MapExtra::new(before, inp))
             })
         }))
     }
@@ -2415,7 +2380,7 @@ where
     A: Parser<'a, I, O, E>,
     B: IterParser<'a, I, OB, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(O, OB, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(O, OB, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
@@ -2431,14 +2396,7 @@ where
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| {
-                        (self.folder)(
-                            out,
-                            b_out,
-                            &mut MapExtra {
-                                before: before_all,
-                                inp,
-                            },
-                        )
+                        (self.folder)(out, b_out, &mut MapExtra::new(before_all, inp))
                     })
                 }
                 Ok(None) => break Ok(out),
@@ -2613,7 +2571,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>, &mut Emitter<E::Error>) -> U,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>, &mut Emitter<E::Error>) -> U,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U>
@@ -2624,7 +2582,7 @@ where
         let out = self.parser.go::<Emit>(inp)?;
 
         let mut emitter = Emitter::new();
-        let out = (self.validator)(out, &mut MapExtra { before, inp }, &mut emitter);
+        let out = (self.validator)(out, &mut MapExtra::new(before, inp), &mut emitter);
         for err in emitter.errors() {
             inp.emit(inp.offset, err);
         }
