@@ -104,13 +104,13 @@ where
 
     fn op_parser(&self) -> &Self::OpParser;
     fn associativity(&self) -> Associativity;
-    fn fold_infix(&self, _lhs: O, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
+    fn fold_infix(&self, _lhs: O, _op: Self::Op, _rhs: O, _span: I::Span, _state: &mut <E as ParserExtra<'a, I>>::State) -> O {
         unreachable!()
     }
-    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
+    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _span: I::Span, _state: &mut <E as ParserExtra<'a, I>>::State) -> O {
         unreachable!()
     }
-    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _span: I::Span) -> O {
+    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _span: I::Span, _state: &mut <E as ParserExtra<'a, I>>::State) -> O {
         unreachable!()
     }
 }
@@ -212,7 +212,7 @@ pub const fn infix<A, F, Op, Args>(
 }
 
 macro_rules! infix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $span:ident, $state:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -225,7 +225,7 @@ macro_rules! infix_op {
             const IS_INFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { self.associativity }
-            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span, $state: &mut <E as ParserExtra<'a, I>>::State,) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -287,7 +287,7 @@ pub const fn prefix<A, F, Op, Args>(
 }
 
 macro_rules! prefix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $span:ident, $state:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -300,17 +300,19 @@ macro_rules! prefix_op {
             const IS_PREFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span, $state: &mut <E as ParserExtra<'a, I>>::State,) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
 
 // Allow `|rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(O) -> O, _op, rhs, _span| f(rhs));
+prefix_op!(|f: Fn(O) -> O, _op, rhs, _span, _state| f(rhs));
 // Allow `|op, rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _span| f(op, rhs));
+prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _span, _state| f(op, rhs));
 // Allow `|op, rhs, span| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O, I::Span) -> O, op, rhs, span| f(op, rhs, span));
+prefix_op!(|f: Fn(Op, O, I::Span) -> O, op, rhs, span, _state| f(op, rhs, span));
+// Allow `|op, rhs, span, state| <expr>` to be used as a fold closure for prefix operators
+prefix_op!(|f: Fn(Op, O, I::Span, &mut <E as ParserExtra<'a, I>>::State) -> O, op, rhs, span, _state| f(op, rhs, span));
 
 /// See [`postfix`].
 pub struct Postfix<A, F, Op, Args> {
@@ -362,7 +364,7 @@ pub const fn postfix<A, F, Op, Args>(
 }
 
 macro_rules! postfix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $span:ident, $state:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -375,17 +377,19 @@ macro_rules! postfix_op {
             const IS_POSTFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span, $state: &mut <E as ParserExtra<'a, I>>::State) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
 
 // Allow `|lhs| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O) -> O, lhs, _op, _span| f(lhs));
+postfix_op!(|f: Fn(O) -> O, lhs, _op, _span, _state| f(lhs));
 // Allow `|lhs, op| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _span| f(lhs, op));
+postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _span, _state| f(lhs, op));
 // Allow `|lhs, op, span| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op, I::Span) -> O, lhs, op, span| f(lhs, op, span));
+postfix_op!(|f: Fn(O, Op, I::Span) -> O, lhs, op, span, _state| f(lhs, op, span));
+// Allow `|lhs, op, span, state| <expr>` to be used as a fold closure for postfix operators
+postfix_op!(|f: Fn(O, Op, I::Span, &mut <E as ParserExtra<'a, I>>::State) -> O, lhs, op, span, state| f(lhs, op, span, state));
 
 /// See [`Parser::pratt`].
 #[derive(Copy, Clone)]
@@ -423,7 +427,7 @@ macro_rules! impl_pratt_for_tuple {
                                     match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power())) {
                                         Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
                                             let span = inp.span_since(pre_expr.offset());
-                                            $X.fold_prefix(op, rhs, span)
+                                            $X.fold_prefix(op, rhs, span, inp.state)
                                         }),
                                         Err(()) => inp.rewind(pre_expr),
                                     }
@@ -449,7 +453,7 @@ macro_rules! impl_pratt_for_tuple {
                                 Ok(op) => {
                                     lhs = M::combine(lhs, op, |lhs, op| {
                                         let span = inp.span_since(pre_expr.offset());
-                                        $X.fold_postfix(lhs, op, span)
+                                        $X.fold_postfix(lhs, op, span, inp.state)
                                     });
                                     continue
                                 },
@@ -470,7 +474,7 @@ macro_rules! impl_pratt_for_tuple {
                                             op,
                                             |(lhs, rhs), op| {
                                                 let span = inp.span_since(pre_expr.offset());
-                                                $X.fold_infix(lhs, op, rhs, span)
+                                                $X.fold_infix(lhs, op, rhs, span, inp.state)
                                             },
                                         );
                                         continue
