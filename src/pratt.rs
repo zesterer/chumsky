@@ -24,8 +24,8 @@
 //! [`prefix`], and [`postfix`].
 //!
 //! Fold functions have several overloads, allowing you to make use of only the operands, the operands and the
-//! operators, and even additionally a [`Span`] that covers the entire operation. See the documentation for each
-//! function to see which fold signatures can be used.
+//! operators, and even additionally [`MapExtra`], providing access to the span, slice, and parser state. See the
+//! documentation for each function to see which fold signatures can be used.
 //!
 //! # Examples
 //!
@@ -104,13 +104,19 @@ where
 
     fn op_parser(&self) -> &Self::OpParser;
     fn associativity(&self) -> Associativity;
-    fn fold_infix(&self, _lhs: O, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
+    fn fold_infix(
+        &self,
+        _lhs: O,
+        _op: Self::Op,
+        _rhs: O,
+        _extra: &mut MapExtra<'a, '_, I, E>,
+    ) -> O {
         unreachable!()
     }
-    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _span: I::Span) -> O {
+    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _extra: &mut MapExtra<'a, '_, I, E>) -> O {
         unreachable!()
     }
-    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _span: I::Span) -> O {
+    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _extra: &mut MapExtra<'a, '_, I, E>) -> O {
         unreachable!()
     }
 }
@@ -195,8 +201,8 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Infix<A, F, Op, Args> {
 /// impl Fn(O, O) -> O
 /// // Combine the left operand, the operator itself, and the right operand
 /// impl Fn(O, Op, O) -> O
-/// // Combine the left operand, the operator itself, the right operand, and the span that covers the whole operation
-/// impl Fn(O, Op, O, I::Span) -> O
+/// // Combine the left operand, the operator itself, the right operand, and a [`MapExtra`] covering the whole operation
+/// impl Fn(O, Op, O, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
 pub const fn infix<A, F, Op, Args>(
     associativity: Associativity,
@@ -212,7 +218,7 @@ pub const fn infix<A, F, Op, Args>(
 }
 
 macro_rules! infix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $extra:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -225,17 +231,19 @@ macro_rules! infix_op {
             const IS_INFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { self.associativity }
-            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
 
 // Allow `|lhs, rhs| <expr>` to be used as a fold closure for infix operators
-infix_op!(|f: Fn(O, O) -> O, lhs, _op, rhs, _span| f(lhs, rhs));
+infix_op!(|f: Fn(O, O) -> O, lhs, _op, rhs, _extra| f(lhs, rhs));
 // Allow `|lhs, op, rhs| <expr>` to be used as a fold closure for infix operators
-infix_op!(|f: Fn(O, Op, O) -> O, lhs, op, rhs, _span| f(lhs, op, rhs));
-// Allow `|lhs, op, rhs, span| <expr>` to be used as a fold closure for infix operators
-infix_op!(|f: Fn(O, Op, O, I::Span) -> O, lhs, op, rhs, span| f(lhs, op, rhs, span));
+infix_op!(|f: Fn(O, Op, O) -> O, lhs, op, rhs, _extra| f(lhs, op, rhs));
+// Allow `|lhs, op, rhs, extra| <expr>` to be used as a fold closure for infix operators
+infix_op!(
+    |f: Fn(O, Op, O, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, rhs, extra| f(lhs, op, rhs, extra)
+);
 
 /// See [`prefix`].
 pub struct Prefix<A, F, Op, Args> {
@@ -270,8 +278,8 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Prefix<A, F, Op, Args> {
 /// impl Fn(O) -> O
 /// // Combine the operator itself and the operand
 /// impl Fn(Op, O) -> O
-/// // Combine the operator itself, the operand, and the span that covers the whole operation
-/// impl Fn(Op, O, I::Span) -> O
+/// // Combine the operator itself, the operand, and a [`MapExtra`] covering the whole operation
+/// impl Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
 pub const fn prefix<A, F, Op, Args>(
     binding_power: u16,
@@ -287,7 +295,7 @@ pub const fn prefix<A, F, Op, Args>(
 }
 
 macro_rules! prefix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $extra:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -300,17 +308,17 @@ macro_rules! prefix_op {
             const IS_PREFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
 
 // Allow `|rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(O) -> O, _op, rhs, _span| f(rhs));
+prefix_op!(|f: Fn(O) -> O, _op, rhs, _extra| f(rhs));
 // Allow `|op, rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _span| f(op, rhs));
+prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _extra| f(op, rhs));
 // Allow `|op, rhs, span| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O, I::Span) -> O, op, rhs, span| f(op, rhs, span));
+prefix_op!(|f: Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O, op, rhs, extra| f(op, rhs, extra));
 
 /// See [`postfix`].
 pub struct Postfix<A, F, Op, Args> {
@@ -345,8 +353,8 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Postfix<A, F, Op, Args> {
 /// impl Fn(O) -> O
 /// // Combine the operand and the operator itself
 /// impl Fn(O, Op) -> O
-/// // Combine the operand, the operator itself, and the span that covers the whole operation
-/// impl Fn(Op, O, I::Span) -> O
+/// // Combine the operand, the operator itself, and a [`MapExtra`] covering the whole operation
+/// impl Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
 pub const fn postfix<A, F, Op, Args>(
     binding_power: u16,
@@ -362,7 +370,7 @@ pub const fn postfix<A, F, Op, Args>(
 }
 
 macro_rules! postfix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $span:ident| $invoke:expr) => {
+    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $extra:ident| $invoke:expr) => {
         impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, ($($Arg,)*)>
         where
             I: Input<'a>,
@@ -375,17 +383,17 @@ macro_rules! postfix_op {
             const IS_POSTFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $span: I::Span) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
 
 // Allow `|lhs| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O) -> O, lhs, _op, _span| f(lhs));
+postfix_op!(|f: Fn(O) -> O, lhs, _op, _extra| f(lhs));
 // Allow `|lhs, op| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _span| f(lhs, op));
+postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _extra| f(lhs, op));
 // Allow `|lhs, op, span| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op, I::Span) -> O, lhs, op, span| f(lhs, op, span));
+postfix_op!(|f: Fn(O, Op, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, extra| f(lhs, op, extra));
 
 /// See [`Parser::pratt`].
 #[derive(Copy, Clone)]
@@ -422,8 +430,7 @@ macro_rules! impl_pratt_for_tuple {
                                 Ok(op) => {
                                     match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power())) {
                                         Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
-                                            let span = inp.span_since(pre_expr.offset());
-                                            $X.fold_prefix(op, rhs, span)
+                                            $X.fold_prefix(op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
                                         }),
                                         Err(()) => inp.rewind(pre_expr),
                                     }
@@ -448,8 +455,7 @@ macro_rules! impl_pratt_for_tuple {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => {
                                     lhs = M::combine(lhs, op, |lhs, op| {
-                                        let span = inp.span_since(pre_expr.offset());
-                                        $X.fold_postfix(lhs, op, span)
+                                        $X.fold_postfix(lhs, op, &mut MapExtra::new(pre_expr.offset(), inp))
                                     });
                                     continue
                                 },
@@ -469,8 +475,7 @@ macro_rules! impl_pratt_for_tuple {
                                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                                             op,
                                             |(lhs, rhs), op| {
-                                                let span = inp.span_since(pre_expr.offset());
-                                                $X.fold_infix(lhs, op, rhs, span)
+                                                $X.fold_infix(lhs, op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
                                             },
                                         );
                                         continue
