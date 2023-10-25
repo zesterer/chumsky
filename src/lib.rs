@@ -93,7 +93,6 @@ pub mod extra;
 #[cfg(docsrs)]
 pub mod guide;
 pub mod input;
-#[cfg(feature = "label")]
 pub mod label;
 #[cfg(feature = "lexical-numbers")]
 pub mod number;
@@ -154,7 +153,6 @@ use hashbrown::HashMap;
 #[cfg(feature = "serde")]
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-#[cfg(feature = "label")]
 use self::label::{LabelError, Labelled};
 use self::{
     combinator::*,
@@ -470,7 +468,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     /// let lowercase = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(char::is_ascii_lowercase)
+    ///     .filter(char::is_ascii_lowercase, "lowercase")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -478,13 +476,15 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// assert_eq!(lowercase.parse("hello").into_result(), Ok("hello".to_string()));
     /// assert!(lowercase.parse("Hello").has_errors());
     /// ```
-    fn filter<F: Fn(&O) -> bool>(self, f: F) -> Filter<Self, F>
+    fn filter<F: Fn(&O) -> bool, L>(self, f: F, label: L) -> Filter<Self, F, L>
     where
         Self: Sized,
+        E::Error: LabelError<'a, I, L>,
     {
         Filter {
             parser: self,
             filter: f,
+            label,
         }
     }
 
@@ -500,13 +500,13 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// enum Token { Word(String), Num(u64) }
     ///
     /// let word = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .filter(|c: &char| c.is_alphabetic(), "alphabetic")
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(Token::Word);
     ///
     /// let num = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_ascii_digit())
+    ///     .filter(|c: &char| c.is_ascii_digit(), "digit")
     ///     .repeated().at_least(1)
     ///     .collect::<String>()
     ///     .map(|s| Token::Num(s.parse().unwrap()));
@@ -794,7 +794,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// # use chumsky::{prelude::*, error::Simple};
     /// // A parser that parses any number of whitespace characters without allocating
     /// let whitespace = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_whitespace())
+    ///     .filter(|c: &char| c.is_whitespace(), "whitespace")
     ///     .ignored()
     ///     .repeated()
     ///     .collect::<Vec<_>>();
@@ -866,7 +866,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// within the parser. For example, labelling a parser for an expression would yield "expected expression" errors
     /// rather than "expected integer, string, binary op, etc." errors.
     // TODO: Example
-    #[cfg(feature = "label")]
     fn labelled<L>(self, label: L) -> Labelled<Self, L>
     where
         Self: Sized,
@@ -888,7 +887,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     /// let word = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .filter(|c: &char| c.is_alphabetic(), "alphabetic")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -916,12 +915,14 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let zeroes = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| *c == '0').ignored().repeated().collect::<Vec<_>>();
-    /// let digits = any().filter(|c: &char| c.is_ascii_digit())
-    ///     .repeated()
-    ///     .collect::<String>();
+    /// let zeroes = any::<_, extra::Err<Simple<char>>>()
+    ///     .filter(|c: &char| *c == '0', "zero")
+    ///     .repeated();
+    /// let digits = any()
+    ///     .filter(|c: &char| c.is_ascii_digit(), "digit")
+    ///     .repeated();
     /// let integer = zeroes
-    ///     .ignore_then(digits)
+    ///     .ignore_then(digits.to_slice())
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -948,7 +949,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     /// let word = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_alphabetic())
+    ///     .filter(|c: &char| c.is_alphabetic(), "alphabetic")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -1210,7 +1211,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     List(Vec<SExpr>),
     /// }
     ///
-    /// let ident = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic())
+    /// let ident = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic(), "alphabetic")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -1334,7 +1335,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let word = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic())
+    /// let word = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic(), "alphabetic")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>();
@@ -1434,7 +1435,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
     /// let num = any::<_, extra::Err<Simple<char>>>()
-    ///     .filter(|c: &char| c.is_ascii_digit())
+    ///     .filter(|c: &char| c.is_ascii_digit(), "digit")
     ///     .repeated()
     ///     .at_least(1)
     ///     .collect::<String>()
@@ -2310,7 +2311,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let word = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic()) // This parser produces an output of `char`
+    /// let word = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_alphabetic(), "alphabetic") // This parser produces an output of `char`
     ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
     ///     .collect::<String>(); // We collect the `char`s into a `String`
     ///
@@ -2340,7 +2341,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let three_digit = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_numeric())
+    /// let three_digit = any::<_, extra::Err<Simple<char>>>().filter(|c: &char| c.is_numeric(), "digit")
     ///     .repeated()
     ///     .collect_exactly::<[_; 3]>();
     ///
@@ -2826,14 +2827,14 @@ mod tests {
 
         fn parser<'a>() -> impl Parser<'a, WithContext<Span, &'a str>, [(Span, Token<'a>); 6]> {
             let ident = any()
-                .filter(|c: &char| c.is_alphanumeric())
+                .filter(|c: &char| c.is_alphanumeric(), "alphanumeric")
                 .repeated()
                 .at_least(1)
                 .to_slice()
                 .map(Token::Ident);
 
             let string = just('"')
-                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(any().filter(|c: &char| *c != '"', "non-quote").repeated())
                 .then(just('"'))
                 .to_slice()
                 .map(Token::String);
@@ -2878,14 +2879,14 @@ mod tests {
         fn parser<'a, F: Fn(SimpleSpan) -> Span<'a> + 'a>(
         ) -> impl Parser<'a, MappedSpan<Span<'a>, &'a str, F>, [(Span<'a>, Token<'a>); 6]> {
             let ident = any()
-                .filter(|c: &char| c.is_alphanumeric())
+                .filter(|c: &char| c.is_alphanumeric(), "alphanumeric")
                 .repeated()
                 .at_least(1)
                 .to_slice()
                 .map(Token::Ident);
 
             let string = just('"')
-                .then(any().filter(|c: &char| *c != '"').repeated())
+                .then(any().filter(|c: &char| *c != '"', "non-quote").repeated())
                 .then(just('"'))
                 .to_slice()
                 .map(Token::String);
@@ -2925,7 +2926,7 @@ mod tests {
 
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             any()
-                .filter(|c: &char| c.is_ascii_digit())
+                .filter(|c: &char| c.is_ascii_digit(), "digit")
                 .repeated()
                 .at_least(1)
                 .at_most(3)
@@ -2963,19 +2964,19 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, (&'a str, u64, char)> {
             group((
                 any()
-                    .filter(|c: &char| c.is_ascii_alphabetic())
+                    .filter(|c: &char| c.is_ascii_alphabetic(), "alphabetic")
                     .repeated()
                     .at_least(1)
                     .to_slice()
                     .padded(),
                 any()
-                    .filter(|c: &char| c.is_ascii_digit())
+                    .filter(|c: &char| c.is_ascii_digit(), "digit")
                     .repeated()
                     .at_least(1)
                     .to_slice()
                     .map(|s: &str| s.parse::<u64>().unwrap())
                     .padded(),
-                any().filter(|c: &char| !c.is_whitespace()).padded(),
+                any().filter(|c: &char| !c.is_whitespace(), "non-whitespace").padded(),
             ))
         }
 
@@ -3042,7 +3043,7 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, String> {
             recursive(|expr| {
                 let atom = any()
-                    .filter(|c: &char| c.is_alphabetic())
+                    .filter(|c: &char| c.is_alphabetic(), "alphabetic")
                     .repeated()
                     .at_least(1)
                     .collect()
@@ -3072,7 +3073,7 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, String> {
             recursive(|expr| {
                 let atom = any()
-                    .filter(|c: &char| c.is_alphabetic())
+                    .filter(|c: &char| c.is_alphabetic(), "alphabetic")
                     .repeated()
                     .at_least(1)
                     .collect();
@@ -3102,7 +3103,7 @@ mod tests {
         // fn debug_assert_left_recursive() {
         //     recursive(|expr| {
         //         let atom = any::<&str, extra::Default>()
-        //             .filter(|c: &char| c.is_alphabetic())
+        //             .filter(|c: &char| c.is_alphabetic(), "alphabetic")
         //             .repeated()
         //             .at_least(1)
         //             .collect();
@@ -3220,7 +3221,7 @@ mod tests {
         let mut expr = Recursive::declare();
         expr.define({
             let atom = any::<&str, extra::Default>()
-                .filter(|c: &char| c.is_alphabetic())
+                .filter(|c: &char| c.is_alphabetic(), "alphabetic")
                 .repeated()
                 .at_least(1)
                 .collect();
@@ -3251,7 +3252,7 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             Arc::new(
                 any()
-                    .filter(|c: &char| c.is_ascii_digit())
+                    .filter(|c: &char| c.is_ascii_digit(), "digit")
                     .repeated()
                     .at_least(1)
                     .at_most(3)
@@ -3284,7 +3285,7 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             Box::new(
                 any()
-                    .filter(|c: &char| c.is_ascii_digit())
+                    .filter(|c: &char| c.is_ascii_digit(), "digit")
                     .repeated()
                     .at_least(1)
                     .at_most(3)
@@ -3319,7 +3320,7 @@ mod tests {
         fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
             Rc::new(
                 any()
-                    .filter(|c: &char| c.is_ascii_digit())
+                    .filter(|c: &char| c.is_ascii_digit(), "digit")
                     .repeated()
                     .at_least(1)
                     .at_most(3)

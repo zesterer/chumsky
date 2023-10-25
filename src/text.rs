@@ -10,6 +10,45 @@ use crate::prelude::*;
 
 use super::*;
 
+/// A label referring to some text pattern.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TextLabel {
+    /// Any whitespace character.
+    Whitespace,
+    /// Any inline whitespace character.
+    InlineWhitespace,
+    /// Any newline sequence.
+    Newline,
+    /// Any digit.
+    Digit,
+    /// Any non-zero digit.
+    NonZeroDigit,
+    /// Any alphabetic or underscore character.
+    AlphabeticOrUnderscore,
+    /// Any alphanumeric or underscore character.
+    AlphanumericOrUnderscore,
+    /// Any unicode XID_Start character.
+    IdentStart,
+    /// Any unicode XID_Continue character.
+    IdentContinue,
+}
+
+impl fmt::Display for TextLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Whitespace => write!(f, "whitespace"),
+            Self::InlineWhitespace => write!(f, "inline whitespace"),
+            Self::Newline => write!(f, "newline"),
+            Self::Digit => write!(f, "digit"),
+            Self::NonZeroDigit => write!(f, "non-zero digit"),
+            Self::AlphabeticOrUnderscore => write!(f, "alphabetic or underscore"),
+            Self::AlphanumericOrUnderscore => write!(f, "alphanumeric or underscore"),
+            Self::IdentStart => write!(f, "identifier start"),
+            Self::IdentContinue => write!(f, "identifier continue"),
+        }
+    }
+}
+
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
@@ -169,9 +208,10 @@ pub fn whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExt
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
+    E::Error: LabelError<'a, I, TextLabel>,
 {
     any()
-        .filter(|c: &I::Token| c.is_whitespace())
+        .filter(|c: &I::Token| c.is_whitespace(), TextLabel::Whitespace)
         .ignored()
         .repeated()
 }
@@ -199,9 +239,10 @@ pub fn inline_whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: Pa
 ) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
 where
     I::Token: Char,
+    E::Error: LabelError<'a, I, TextLabel>,
 {
     any()
-        .filter(|c: &I::Token| c.is_inline_whitespace())
+        .filter(|c: &I::Token| c.is_inline_whitespace(), TextLabel::InlineWhitespace)
         .ignored()
         .repeated()
 }
@@ -241,6 +282,7 @@ pub fn newline<'a, I: ValueInput<'a>, E: ParserExtra<'a, I>>(
 ) -> impl Parser<'a, I, (), E> + Copy + Clone
 where
     I::Token: Char,
+    E::Error: LabelError<'a, I, TextLabel>,
 {
     just(I::Token::from_ascii(b'\r'))
         .or_not()
@@ -255,7 +297,7 @@ where
                 '\u{2029}', // Paragraph separator
             ]
             .contains(&c.to_char())
-        }))
+        }, TextLabel::Newline))
         .ignored()
 }
 
@@ -286,16 +328,10 @@ where
     C: Char,
     I: ValueInput<'a> + Input<'a, Token = C>,
     E: ParserExtra<'a, I>,
+    E::Error: LabelError<'a, I, TextLabel>,
 {
     any()
-        // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| {
-            if c.is_digit(radix) {
-                Ok(c)
-            } else {
-                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
-            }
-        })
+        .filter(move |c: &C| c.is_digit(radix), TextLabel::Digit)
         .repeated()
         .at_least(1)
 }
@@ -333,18 +369,13 @@ where
 #[must_use]
 pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+where
+    E::Error: LabelError<'a, I, TextLabel>,
+{
     any()
-        // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| {
-            if c.is_digit(radix) && c != C::digit_zero() {
-                Ok(c)
-            } else {
-                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
-            }
-        })
-        // This error never appears due to `repeated` so can use `filter`
-        .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
+        .filter(move |c: &C| c.is_digit(radix) && *c != C::digit_zero(), TextLabel::NonZeroDigit)
+        .then(any().filter(move |c: &C| c.is_digit(radix), TextLabel::Digit).repeated())
         .ignored()
         .or(just(C::digit_zero()).ignored())
         .to_slice()
@@ -363,20 +394,15 @@ pub mod ascii {
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
     pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+    where
+        E::Error: LabelError<'a, I, TextLabel>,
+    {
         any()
-            // Use try_map over filter to get a better error on failure
-            .try_map(|c: C, span| {
-                if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
-                    Ok(c)
-                } else {
-                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
-                }
-            })
+            .filter(|c: &C| c.to_char().is_ascii_alphabetic() || c.to_char() == '_', TextLabel::AlphabeticOrUnderscore)
             .then(
                 any()
-                    // This error never appears due to `repeated` so can use `filter`
-                    .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                    .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', TextLabel::AlphanumericOrUnderscore)
                     .repeated(),
             )
             .to_slice()
@@ -413,6 +439,8 @@ pub mod ascii {
     ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
     where
         C::Str: PartialEq,
+        E::Error: LabelError<'a, I, TextLabel>,
+        E::Error: LabelError<'a, I, Str>,
     {
         #[cfg(debug_assertions)]
         {
@@ -427,13 +455,7 @@ pub mod ascii {
             }
         }
         ident()
-            .try_map(move |s: &C::Str, span| {
-                if s == keyword.as_ref() {
-                    Ok(())
-                } else {
-                    Err(Error::expected_found(None, None, span))
-                }
-            })
+            .filter({ let keyword = keyword.clone(); move |s: &&C::Str| *s == keyword.as_ref() }, keyword)
             .to_slice()
     }
 }
@@ -453,20 +475,15 @@ pub mod unicode {
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
     pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone
+    where
+        E::Error: LabelError<'a, I, TextLabel>,
+    {
         any()
-            // Use try_map over filter to get a better error on failure
-            .try_map(|c: C, span| {
-                if c.is_ident_start() {
-                    Ok(c)
-                } else {
-                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
-                }
-            })
+            .filter(|c: &C| c.is_ident_start(), TextLabel::IdentStart)
             .then(
                 any()
-                    // This error never appears due to `repeated` so can use `filter`
-                    .filter(|c: &C| c.is_ident_continue())
+                    .filter(|c: &C| c.is_ident_continue(), TextLabel::IdentContinue)
                     .repeated(),
             )
             .to_slice()
@@ -503,6 +520,8 @@ pub mod unicode {
     ) -> impl Parser<'a, I, &'a C::Str, E> + Clone + 'a
     where
         C::Str: PartialEq,
+        E::Error: LabelError<'a, I, TextLabel>,
+        E::Error: LabelError<'a, I, Str>,
     {
         #[cfg(debug_assertions)]
         {
@@ -521,13 +540,7 @@ pub mod unicode {
             }
         }
         ident()
-            .try_map(move |s: &C::Str, span| {
-                if s == keyword.as_ref() {
-                    Ok(())
-                } else {
-                    Err(Error::expected_found(None, None, span))
-                }
-            })
+            .filter({ let keyword = keyword.clone(); move |s: &&C::Str| *s == keyword.as_ref() }, keyword)
             .to_slice()
     }
 }

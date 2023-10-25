@@ -131,6 +131,18 @@ impl fmt::Display for EmptyErr {
     }
 }
 
+impl<'a, I: Input<'a>, L> LabelError<'a, I, L> for EmptyErr {
+    #[inline]
+    fn label_with(&mut self, _label: L) {
+        // Stub
+    }
+
+    #[inline]
+    fn in_context(&mut self, _label: L, _span: I::Span) {
+        // Stub
+    }
+}
+
 /// A very cheap error type that tracks only the error span. This type is most useful when you want fast parsing but do
 /// not particularly care about the quality of error messages.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -166,6 +178,18 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
+    }
+}
+
+impl<'a, I: Input<'a>, L> LabelError<'a, I, L> for Cheap<I::Span> {
+    #[inline]
+    fn label_with(&mut self, _label: L) {
+        // Stub
+    }
+
+    #[inline]
+    fn in_context(&mut self, _label: L, _span: I::Span) {
+        // Stub
     }
 }
 
@@ -228,10 +252,22 @@ where
     }
 }
 
+impl<'a, I: Input<'a>, L> LabelError<'a, I, L> for Simple<'a, I::Token, I::Span> {
+    #[inline]
+    fn label_with(&mut self, _label: L) {
+        // Stub
+    }
+
+    #[inline]
+    fn in_context(&mut self, _label: L, _span: I::Span) {
+        // Stub
+    }
+}
+
 /// An expected pattern for a [`Rich`] error.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum RichPattern<'a, T, L = &'static str> {
+pub enum RichPattern<'a, T, L = RichLabel> {
     /// A specific token was expected.
     Token(MaybeRef<'a, T>),
     /// A labelled pattern was expected.
@@ -318,7 +354,7 @@ where
 /// The reason for a [`Rich`] error.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum RichReason<'a, T, L = &'static str> {
+pub enum RichReason<'a, T, L = RichLabel> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
@@ -361,7 +397,6 @@ impl<'a, T, L> RichReason<'a, T, L> {
         }
     }
 
-    #[cfg(feature = "label")]
     fn take_found(&mut self) -> Option<MaybeRef<'a, T>> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.take(),
@@ -516,10 +551,9 @@ where
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Rich<'a, T, S = SimpleSpan<usize>, L = &'static str> {
+pub struct Rich<'a, T, S = SimpleSpan<usize>, L = RichLabel> {
     span: S,
     reason: Box<RichReason<'a, T, L>>,
-    #[cfg(feature = "label")]
     context: Vec<(L, S)>,
 }
 
@@ -549,7 +583,6 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         Rich {
             span,
             reason: Box::new(RichReason::Custom(msg.to_string())),
-            #[cfg(feature = "label")]
             context: Vec::new(),
         }
     }
@@ -578,7 +611,6 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
     ///
     /// 'Context' here means parser patterns that the parser was in the process of parsing when the error occurred. To
     /// add labelled contexts, see [`Parser::labelled`].
-    #[cfg(feature = "label")]
     pub fn contexts(&self) -> impl Iterator<Item = (&L, &S)> {
         self.context.iter().map(|(l, s)| (l, s))
     }
@@ -622,7 +654,6 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
         Rich {
             span: self.span,
             reason: Box::new(self.reason.map_token(f)),
-            #[cfg(feature = "label")]
             context: self.context,
         }
     }
@@ -651,7 +682,6 @@ where
                     .collect(),
                 found,
             }),
-            #[cfg(feature = "label")]
             context: Vec::new(),
         }
     }
@@ -662,7 +692,6 @@ where
         Self {
             span: self.span,
             reason: Box::new(new_reason),
-            #[cfg(feature = "label")]
             context: self.context, // TOOD: Merge contexts
         }
     }
@@ -746,20 +775,41 @@ where
                 });
             }
         }
-        #[cfg(feature = "label")]
         self.context.clear();
         self
     }
 }
 
-#[cfg(feature = "label")]
-impl<'a, I: Input<'a>, L> LabelError<'a, I, L> for Rich<'a, I::Token, I::Span, L>
+/// A rich label representing some input pattern.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RichLabel {
+    /// A text-specific label.
+    Text(text::TextLabel),
+    /// A label named by a string.
+    Named(&'static str),
+}
+
+impl From<text::TextLabel> for RichLabel { fn from(l: text::TextLabel) -> Self { Self::Text(l) } }
+impl From<&'static str> for RichLabel { fn from(s: &'static str) -> Self { Self::Named(s) } }
+
+impl fmt::Display for RichLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Text(t) => t.fmt(f),
+            Self::Named(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+impl<'a, I: Input<'a>, L, L2> LabelError<'a, I, L2> for Rich<'a, I::Token, I::Span, L>
 where
     I::Token: PartialEq,
+    L2: Into<L>,
     L: PartialEq,
 {
     #[inline]
-    fn label_with(&mut self, label: L) {
+    fn label_with(&mut self, label: L2) {
+        let label = label.into();
         // Opportunistically attempt to reuse allocations if we can
         match &mut *self.reason {
             RichReason::ExpectedFound { expected, found: _ } => {
@@ -776,7 +826,8 @@ where
     }
 
     #[inline]
-    fn in_context(&mut self, label: L, span: I::Span) {
+    fn in_context(&mut self, label: L2, span: I::Span) {
+        let label = label.into();
         if self.context.iter().all(|(l, _)| l != &label) {
             self.context.push((label, span));
         }

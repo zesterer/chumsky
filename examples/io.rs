@@ -13,7 +13,7 @@ struct Foo {
 
 fn ident<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<File>, String, E> {
     any()
-        .filter(u8::is_ascii_alphabetic)
+        .filter(u8::is_ascii_alphabetic, "alphabetic")
         .repeated()
         .at_least(1)
         .collect::<Vec<_>>()
@@ -22,7 +22,7 @@ fn ident<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<Fil
 
 fn digits<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<File>, String, E> {
     any()
-        .filter(u8::is_ascii_digit)
+        .filter(u8::is_ascii_digit, "digit")
         .repeated()
         .at_least(1)
         .collect::<Vec<_>>()
