@@ -811,11 +811,7 @@ fn write_token<T>(
     tok: Option<&T>,
 ) -> fmt::Result {
     match tok {
-        Some(tok) => {
-            write!(f, "'")?;
-            fmt_token(tok, f)?;
-            write!(f, "'")
-        }
+        Some(tok) => fmt_token(tok, f),
         None => write!(f, "end of input"),
     }
 }

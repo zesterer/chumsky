@@ -170,8 +170,7 @@ pub fn whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExt
 where
     I::Token: Char,
 {
-    any()
-        .filter(|c: &I::Token| c.is_whitespace())
+    select! { c if (c as I::Token).is_whitespace() => () }
         .ignored()
         .repeated()
 }
@@ -200,8 +199,7 @@ pub fn inline_whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: Pa
 where
     I::Token: Char,
 {
-    any()
-        .filter(|c: &I::Token| c.is_inline_whitespace())
+    select! { c if (c as I::Token).is_inline_whitespace() => () }
         .ignored()
         .repeated()
 }
@@ -245,8 +243,8 @@ where
     just(I::Token::from_ascii(b'\r'))
         .or_not()
         .ignore_then(just(I::Token::from_ascii(b'\n')))
-        .or(any().filter(|c: &I::Token| {
-            [
+        .or(select! {
+            c if [
                 '\r',       // Carriage return
                 '\x0B',     // Vertical tab
                 '\x0C',     // Form feed
@@ -254,8 +252,8 @@ where
                 '\u{2028}', // Line separator
                 '\u{2029}', // Paragraph separator
             ]
-            .contains(&c.to_char())
-        }))
+            .contains(&(c as I::Token).to_char()) => c,
+        })
         .ignored()
 }
 
@@ -344,7 +342,7 @@ pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, 
             }
         })
         // This error never appears due to `repeated` so can use `filter`
-        .then(any().filter(move |c: &C| c.is_digit(radix)).repeated())
+        .then(select! { c if (c as I::Token).is_digit(radix) => () }.repeated())
         .ignored()
         .or(just(C::digit_zero()).ignored())
         .to_slice()
@@ -374,9 +372,7 @@ pub mod ascii {
                 }
             })
             .then(
-                any()
-                    // This error never appears due to `repeated` so can use `filter`
-                    .filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                select! { c if (c as I::Token).to_char().is_ascii_alphanumeric() || (c as I::Token).to_char() == '_' => () }
                     .repeated(),
             )
             .to_slice()
@@ -463,12 +459,7 @@ pub mod unicode {
                     Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
                 }
             })
-            .then(
-                any()
-                    // This error never appears due to `repeated` so can use `filter`
-                    .filter(|c: &C| c.is_ident_continue())
-                    .repeated(),
-            )
+            .then(select! { c if (c as C).is_ident_continue() => () }.repeated())
             .to_slice()
     }
 
