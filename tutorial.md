@@ -1,6 +1,6 @@
 # Chumsky: A Tutorial
 
-*Please note that this tutorial is kept up to date with the `master` branch and not the most stable release: small
+*Please note that this tutorial is kept up to date with the `main` branch and not the most stable release: small
 details may differ!*
 
 In this tutorial, we'll develop a parser (and interpreter!) for a programming language called 'Foo'.
@@ -20,7 +20,7 @@ By the end of this tutorial, you'll have an interpreter that will let you run th
 
 This tutorial should take somewhere between 30 and 100 minutes to complete, depending on factors such as knowledge of Rust and compiler theory.
 
-*You can find the source code for the full interpreter in [`examples/foo.rs`](https://github.com/zesterer/chumsky/blob/master/examples/foo.rs) in the main repository.*
+*You can find the source code for the full interpreter in [`examples/foo.rs`](https://github.com/zesterer/chumsky/blob/main/examples/foo.rs) in the main repository.*
 
 ## Assumptions
 
@@ -34,7 +34,7 @@ This tutorial is here to show you how to use Chumsky: it's not a general-purpose
 
 As we go, we'll be encountering many functions and concepts from Chumsky. I strongly recommend you keep [Chumsky's documentation](https://docs.rs/chumsky/) open in another browser tab and use it to cross-reference your understanding or gain more insight into specific things that you'd like more clarification on. In particular, most of the functions we'll be using come from the [`Parser`](https://docs.rs/chumsky/latest/chumsky/trait.Parser.html) trait. Chumsky's docs include extensive doc examples for almost every function, so be sure to make use of them!
 
-Chumsky also has [several longer examples](https://github.com/zesterer/chumsky/tree/master/examples) in the main repository: looking at these may help improve your understanding if you get stuck.
+Chumsky also has [several longer examples](https://github.com/zesterer/chumsky/tree/main/examples) in the main repository: looking at these may help improve your understanding if you get stuck.
 
 ## A note on imperative vs declarative parsers
 
