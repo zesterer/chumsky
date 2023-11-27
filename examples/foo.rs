@@ -27,6 +27,7 @@ enum Expr<'a> {
     },
 }
 
+#[allow(clippy::let_and_return)]
 fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     let ident = text::ascii::ident().padded();
 

@@ -23,11 +23,11 @@ jobs:
             toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo check (all features)
-        run: cargo check --tests --verbose --all-features
+        run: cargo check --benches --examples --tests --verbose --all-features
       - name: Run cargo check (no features)
-        run: cargo check --tests --verbose --no-default-features
+        run: cargo check --benches --examples --tests --verbose --no-default-features
       - name: Run cargo clippy
-        run: cargo clippy --verbose --all-features -- -D warnings
+        run: cargo clippy --benches --examples --tests --verbose --all-features -- -D warnings
       - name: Run cargo fmt
         run: cargo fmt --verbose --check
       - name: Run cargo doc

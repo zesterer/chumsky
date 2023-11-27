@@ -26,7 +26,7 @@ pub enum Token<'a> {
     Comma,
 }
 
-static SAMPLE: &'static [u8] = include_bytes!("tokens.txt");
+static SAMPLE: &[u8] = include_bytes!("tokens.txt");
 
 fn bench_lex(c: &mut Criterion) {
     c.bench_function("lex_chumsky_zero_copy", {
@@ -126,7 +126,7 @@ mod chumsky_zero_copy {
     use std::str;
 
     pub fn parser<'a>() -> impl Parser<'a, &'a [u8], Vec<Token<'a>>> {
-        let digits = one_of(b'0'..=b'9').repeated().slice();
+        let digits = one_of(b'0'..=b'9').repeated().to_slice();
 
         let int = one_of(b'1'..=b'9')
             .repeated()
@@ -148,7 +148,8 @@ mod chumsky_zero_copy {
             .then(int)
             .then(frac.or_not())
             .then(exp.or_not())
-            .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
+            .to_slice()
+            .map(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
             .boxed();
 
         let escape = just(b'\\')
@@ -169,11 +170,11 @@ mod chumsky_zero_copy {
             .ignored()
             .or(escape)
             .repeated()
-            .slice()
+            .to_slice()
             .delimited_by(just(b'"'), just(b'"'))
             .boxed();
 
-        let ident = text::ascii::ident().map_slice(Token::Ident);
+        let ident = text::ascii::ident().to_slice().map(Token::Ident);
 
         choice((
             just(b"null").to(Token::Null),

@@ -130,9 +130,9 @@ mod tests {
         #[test]
         fn subnorm() {
             for bits in 0u32..(1 << 21) {
-                let single: f32 = unsafe { core::mem::transmute(bits) };
+                let single: f32 = f32::from_bits(bits);
                 validate(&format!("{:e}", single));
-                let double: f64 = unsafe { core::mem::transmute(bits as u64) };
+                let double: f64 = f64::from_bits(bits as u64);
                 validate(&format!("{:e}", double));
             }
         }

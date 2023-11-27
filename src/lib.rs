@@ -3027,7 +3027,7 @@ mod tests {
         }
 
         let mut chars = String::new();
-        for c in parser().parse_iter(&"abcdefg").into_result().unwrap() {
+        for c in parser().parse_iter("abcdefg").into_result().unwrap() {
             chars.push(c);
         }
 
@@ -3409,7 +3409,7 @@ mod tests {
             many_as.into_iter().collect()
         }
 
-        assert_eq!(parser().parse("aaa").into_result().unwrap(), ());
+        assert_eq!(parser().parse("aaa").into_result(), Ok(()));
     }
 
     #[test]
@@ -3437,10 +3437,7 @@ mod tests {
                 let s = "hello".to_string();
 
                 assert_eq!(parser.get().parse(&s).into_result(), Ok("hello"));
-                assert!(matches!(
-                    parser.get().parse("goodbye").into_result(),
-                    Err(_)
-                ));
+                assert!(parser.get().parse("goodbye").into_result().is_err());
             }
         }
 
@@ -3452,10 +3449,7 @@ mod tests {
                 let parser = crate::cache::Cache::new(MyCache);
 
                 assert_eq!(parser.get().parse(&s).into_result(), Ok("hello"));
-                assert!(matches!(
-                    parser.get().parse("goodbye").into_result(),
-                    Err(_)
-                ));
+                assert!(parser.get().parse("goodbye").into_result().is_err());
             }
         }
     }

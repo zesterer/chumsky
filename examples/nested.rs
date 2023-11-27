@@ -9,6 +9,7 @@ enum Token {
     Parens(Vec<Token>),
 }
 
+#[allow(clippy::let_and_return)]
 fn parser<'a>() -> impl Parser<'a, &'a [Token], i64> {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };
