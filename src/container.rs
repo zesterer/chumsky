@@ -812,6 +812,7 @@ mod test {
         for idx in 0..C::LEN {
             C::write(&mut uninit, idx, idx);
         }
+        // SAFETY: All elements were initialized.
         unsafe { C::take(uninit) }
     }
 
@@ -820,6 +821,7 @@ mod test {
         for idx in 0..(C::LEN / 2) {
             C::write(&mut uninit, idx, idx);
         }
+        // SAFETY: All elements up to this point were initialized.
         unsafe { C::drop_before(&mut uninit, C::LEN / 2) };
     }
 

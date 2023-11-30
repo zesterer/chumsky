@@ -3,7 +3,7 @@ use std::hint::black_box;
 
 mod utils;
 
-static CBOR: &'static [u8] = include_bytes!("samples/sample.cbor");
+static CBOR: &[u8] = include_bytes!("samples/sample.cbor");
 
 fn bench_cbor(c: &mut Criterion) {
     // c.bench_function("cbor_nom", {
@@ -125,7 +125,8 @@ mod chumsky_zero_copy {
                     };
                     cfg.exactly(num)
                 }))
-                .map_slice(int_out);
+                .to_slice()
+                .map(int_out);
 
             let uint = read_int.map(CborZero::Int);
             let nint = read_int.map(|i| CborZero::Int(-1 - i));
@@ -134,14 +135,16 @@ mod chumsky_zero_copy {
                 any()
                     .repeated()
                     .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
-                    .map_slice(CborZero::Bytes),
+                    .to_slice()
+                    .map(CborZero::Bytes),
             );
 
             let str = read_int.ignore_with_ctx(
                 any()
                     .repeated()
                     .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
-                    .map_slice(|slice| CborZero::String(std::str::from_utf8(slice).unwrap())),
+                    .to_slice()
+                    .map(|slice| CborZero::String(std::str::from_utf8(slice).unwrap())),
             );
 
             let array = read_int.ignore_with_ctx(

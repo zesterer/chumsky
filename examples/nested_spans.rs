@@ -11,6 +11,7 @@ enum Token {
 
 type TokenTreeInput<'a> = SpannedInput<Token, SimpleSpan, &'a [(Token, SimpleSpan)]>;
 
+#[allow(clippy::let_and_return)]
 fn parser<'a>() -> impl Parser<'a, TokenTreeInput<'a>, i64> {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };

@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err, clippy::type_complexity)]
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 mod utils;
@@ -22,7 +24,7 @@ pub enum JsonZero<'a> {
     Object(Vec<(&'a [u8], JsonZero<'a>)>),
 }
 
-static JSON: &'static [u8] = include_bytes!("samples/sample.json");
+static JSON: &[u8] = include_bytes!("samples/sample.json");
 
 fn bench_json(c: &mut Criterion) {
     c.bench_function("json_nom", {
@@ -142,7 +144,8 @@ mod chumsky_zero_copy {
                 .then(int)
                 .then(frac.or_not())
                 .then(exp.or_not())
-                .map_slice(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
+                .to_slice()
+                .map(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
                 .boxed();
 
             let escape = just(b'\\').then_ignore(one_of(b"\\/\"bfnrt"));
@@ -150,7 +153,7 @@ mod chumsky_zero_copy {
             let string = none_of(b"\\\"")
                 .or(escape)
                 .repeated()
-                .slice()
+                .to_slice()
                 .delimited_by(just(b'"'), just(b'"'))
                 .boxed();
 
@@ -197,14 +200,14 @@ mod pom {
     }
 
     fn number() -> Parser<u8, f64> {
-        let integer = one_of(b"123456789") - one_of(b"0123456789").repeat(0..) | sym(b'0');
+        let integer = (one_of(b"123456789") - one_of(b"0123456789").repeat(0..)) | sym(b'0');
         let frac = sym(b'.') + one_of(b"0123456789").repeat(1..);
         let exp = one_of(b"eE") + one_of(b"+-").opt() + one_of(b"0123456789").repeat(1..);
         let number = sym(b'-').opt() + integer + frac.opt() + exp.opt();
         number
             .collect()
             .convert(str::from_utf8)
-            .convert(|s| f64::from_str(&s))
+            .convert(f64::from_str)
     }
 
     fn string() -> Parser<u8, String> {
@@ -237,10 +240,10 @@ mod pom {
         (seq(b"null").map(|_| Json::Null)
             | seq(b"true").map(|_| Json::Bool(true))
             | seq(b"false").map(|_| Json::Bool(false))
-            | number().map(|num| Json::Num(num))
-            | string().map(|text| Json::Str(text))
-            | array().map(|arr| Json::Array(arr))
-            | object().map(|obj| Json::Object(obj)))
+            | number().map(Json::Num)
+            | string().map(Json::Str)
+            | array().map(Json::Array)
+            | object().map(Json::Object))
             - space()
     }
 
@@ -344,7 +347,7 @@ mod nom {
         terminated(value, space)(i)
     }
 
-    pub fn json<'a>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, (&'a [u8], nom::error::ErrorKind)> {
+    pub fn json(i: &[u8]) -> IResult<&[u8], JsonZero, (&[u8], nom::error::ErrorKind)> {
         root(i)
     }
 }
@@ -352,7 +355,7 @@ mod nom {
 mod winnow {
     use winnow::{
         ascii::{digit0, digit1, escaped},
-        combinator::separated0,
+        combinator::separated,
         combinator::{alt, dispatch},
         combinator::{cut_err, fail, opt, peek},
         combinator::{preceded, separated_pair, terminated},
@@ -403,7 +406,7 @@ mod winnow {
         preceded(
             '[',
             cut_err(terminated(
-                separated0(value, preceded(space, ',')),
+                separated(0.., value, preceded(space, ',')),
                 preceded(space, ']'),
             )),
         )
@@ -427,7 +430,7 @@ mod winnow {
         preceded(
             '{',
             cut_err(terminated(
-                separated0(member, preceded(space, ',')),
+                separated(0.., member, preceded(space, ',')),
                 preceded(space, '}'),
             )),
         )

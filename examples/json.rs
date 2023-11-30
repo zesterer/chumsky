@@ -21,12 +21,12 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
     recursive(|value| {
         let digits = text::digits(10).to_slice();
 
-        let frac = just('.').then(digits.clone());
+        let frac = just('.').then(digits);
 
         let exp = just('e')
             .or(just('E'))
             .then(one_of("+-").or_not())
-            .then(digits.clone());
+            .then(digits);
 
         let number = just('-')
             .or_not()

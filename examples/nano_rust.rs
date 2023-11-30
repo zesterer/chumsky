@@ -454,7 +454,7 @@ fn funcs_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             for ((name, name_span), f) in fs {
                 if funcs.insert(name, f).is_some() {
                     emitter.emit(Rich::custom(
-                        name_span.clone(),
+                        name_span,
                         format!("Function '{}' already exists", name),
                     ));
                 }
@@ -489,7 +489,7 @@ fn eval_expr<'src>(
             .map(|(_, v)| v.clone())
             .or_else(|| Some(Value::Func(name)).filter(|_| funcs.contains_key(name)))
             .ok_or_else(|| Error {
-                span: expr.1.clone(),
+                span: expr.1,
                 msg: format!("No such variable '{}' in scope", name),
             })?,
         Expr::Let(local, val, body) => {
@@ -504,20 +504,16 @@ fn eval_expr<'src>(
             eval_expr(b, funcs, stack)?
         }
         Expr::Binary(a, BinaryOp::Add, b) => Value::Num(
-            eval_expr(a, funcs, stack)?.num(a.1.clone())?
-                + eval_expr(b, funcs, stack)?.num(b.1.clone())?,
+            eval_expr(a, funcs, stack)?.num(a.1)? + eval_expr(b, funcs, stack)?.num(b.1)?,
         ),
         Expr::Binary(a, BinaryOp::Sub, b) => Value::Num(
-            eval_expr(a, funcs, stack)?.num(a.1.clone())?
-                - eval_expr(b, funcs, stack)?.num(b.1.clone())?,
+            eval_expr(a, funcs, stack)?.num(a.1)? - eval_expr(b, funcs, stack)?.num(b.1)?,
         ),
         Expr::Binary(a, BinaryOp::Mul, b) => Value::Num(
-            eval_expr(a, funcs, stack)?.num(a.1.clone())?
-                * eval_expr(b, funcs, stack)?.num(b.1.clone())?,
+            eval_expr(a, funcs, stack)?.num(a.1)? * eval_expr(b, funcs, stack)?.num(b.1)?,
         ),
         Expr::Binary(a, BinaryOp::Div, b) => Value::Num(
-            eval_expr(a, funcs, stack)?.num(a.1.clone())?
-                / eval_expr(b, funcs, stack)?.num(b.1.clone())?,
+            eval_expr(a, funcs, stack)?.num(a.1)? / eval_expr(b, funcs, stack)?.num(b.1)?,
         ),
         Expr::Binary(a, BinaryOp::Eq, b) => {
             Value::Bool(eval_expr(a, funcs, stack)? == eval_expr(b, funcs, stack)?)
@@ -532,7 +528,7 @@ fn eval_expr<'src>(
                     let f = &funcs[&name];
                     let mut stack = if f.args.len() != args.0.len() {
                         return Err(Error {
-                            span: expr.1.clone(),
+                            span: expr.1,
                             msg: format!("'{}' called with wrong number of arguments (expected {}, found {})", name, f.args.len(), args.0.len()),
                         });
                     } else {
@@ -546,7 +542,7 @@ fn eval_expr<'src>(
                 }
                 f => {
                     return Err(Error {
-                        span: func.1.clone(),
+                        span: func.1,
                         msg: format!("'{:?}' is not callable", f),
                     })
                 }
@@ -559,7 +555,7 @@ fn eval_expr<'src>(
                 Value::Bool(false) => eval_expr(b, funcs, stack)?,
                 c => {
                     return Err(Error {
-                        span: cond.1.clone(),
+                        span: cond.1,
                         msg: format!("Conditions must be booleans, found '{:?}'", c),
                     })
                 }
@@ -588,10 +584,10 @@ fn main() {
 
         if let Some((funcs, file_span)) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
             if let Some(main) = funcs.get("main") {
-                if main.args.len() != 0 {
+                if !main.args.is_empty() {
                     errs.push(Rich::custom(
                         main.span,
-                        format!("The main function cannot have arguments"),
+                        "The main function cannot have arguments".to_string(),
                     ))
                 } else {
                     match eval_expr(&main.body, &funcs, &mut Vec::new()) {
@@ -602,7 +598,7 @@ fn main() {
             } else {
                 errs.push(Rich::custom(
                     file_span,
-                    format!("Programs need a main function but none was found"),
+                    "Programs need a main function but none was found".to_string(),
                 ));
             }
         }
