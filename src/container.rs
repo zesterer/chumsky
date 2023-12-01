@@ -215,6 +215,8 @@ where
     }
 }
 
+/*
+// TODO: Unsound!
 // Safety: `Rc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
 //         this trait soundly
 unsafe impl<T, C> ContainerExactly<T> for Rc<C>
@@ -238,7 +240,10 @@ where
         Rc::from_raw(Rc::into_raw(uninit) as *mut C)
     }
 }
+*/
 
+/*
+// TODO: Unsound!
 #[allow(clippy::arc_with_non_send_sync)]
 // SAFETY: `Arc<UnsafeCell<C::Uninit>>` is sound to reinterpret assuming the inner `C` implements
 //         this trait soundly
@@ -263,6 +268,7 @@ where
         Arc::from_raw(Arc::into_raw(uninit) as *mut C)
     }
 }
+*/
 
 /// A utility trait to abstract over container-like things.
 ///
@@ -832,24 +838,24 @@ mod test {
         drop_container::<[usize; 4]>();
     }
 
-    #[test]
-    fn exact_rc_array() {
-        let c = init_container::<Rc<[usize; 4]>>();
-        assert_eq!(&*c, &[0, 1, 2, 3]);
-        drop_container::<Rc<[usize; 4]>>();
-    }
+    // #[test]
+    // fn exact_rc_array() {
+    //     let c = init_container::<Rc<[usize; 4]>>();
+    //     assert_eq!(&*c, &[0, 1, 2, 3]);
+    //     drop_container::<Rc<[usize; 4]>>();
+    // }
 
-    #[test]
-    fn exact_rc_box_array() {
-        let c = init_container::<Rc<Box<[usize; 4]>>>();
-        assert_eq!(&**c, &[0, 1, 2, 3]);
-        drop_container::<Rc<Box<[usize; 4]>>>();
-    }
+    // #[test]
+    // fn exact_rc_box_array() {
+    //     let c = init_container::<Rc<Box<[usize; 4]>>>();
+    //     assert_eq!(&**c, &[0, 1, 2, 3]);
+    //     drop_container::<Rc<Box<[usize; 4]>>>();
+    // }
 
-    #[test]
-    fn exact_box_rc_array() {
-        let c = init_container::<Box<Rc<[usize; 4]>>>();
-        assert_eq!(&**c, &[0, 1, 2, 3]);
-        drop_container::<Box<Rc<[usize; 4]>>>();
-    }
+    // #[test]
+    // fn exact_box_rc_array() {
+    //     let c = init_container::<Box<Rc<[usize; 4]>>>();
+    //     assert_eq!(&**c, &[0, 1, 2, 3]);
+    //     drop_container::<Box<Rc<[usize; 4]>>>();
+    // }
 }
