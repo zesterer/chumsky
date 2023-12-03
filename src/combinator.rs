@@ -2085,6 +2085,54 @@ where
     go_extra!(());
 }
 
+/// See [`Parser::not_ref`].
+pub struct NotRef<A, OA> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+impl<A: Copy, OA> Copy for NotRef<A, OA> {}
+impl<A: Clone, OA> Clone for NotRef<A, OA> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'a, I, E, A, OA> ParserSealed<'a, I, (), E> for NotRef<A, OA>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, OA, E>,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+        let before = inp.save();
+
+        let alt = inp.errors.alt.take();
+
+        let result = self.parser.go::<Check>(inp);
+        let result_span = inp.span_since(before.offset());
+        inp.rewind(before);
+
+        inp.errors.alt = alt;
+
+        match result {
+            Ok(()) => {
+                let (at, found) = inp.next_ref_inner();
+                inp.add_alt(at, None, found.map(|f| f.into()), result_span);
+                Err(())
+            }
+            Err(()) => Ok(M::bind(|| ())),
+        }
+    }
+
+    go_extra!(());
+}
+
 /// See [`Parser::and_is`].
 pub struct AndIs<A, B, OB> {
     pub(crate) parser_a: A,

@@ -1421,6 +1421,38 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         }
     }
 
+    /// Invert the result of the contained parser, failing if it succeeds and succeeding if it fails.
+    /// The output of this parser is always `()`, the unit type.
+    ///
+    /// This function is the borrowing equivalent of [`Parser::not`]. Where possible, it's recommended to use [`Parser::not`] instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let not_dashes = any_ref::<_, extra::Err<Simple<char>>>()
+    ///     .and_is(just('-').not_ref())
+    ///     .map(|c| *c)
+    ///     .repeated()
+    ///     .collect::<String>();
+    ///
+    /// let v1 = "abcdef".chars().collect::<Vec<_>>();
+    /// assert_eq!(not_dashes.parse(v1.as_slice()).into_result(), Ok("abcdef".to_string()));
+    /// let v2 = "09Qr-X-*&".chars().collect::<Vec<_>>();
+    /// assert!(not_dashes.parse(v2.as_slice()).has_errors());
+    /// let v3 = "-91024".chars().collect::<Vec<_>>();
+    /// assert!(not_dashes.parse(v3.as_slice()).has_errors());
+    /// ```
+    fn not_ref(self) -> NotRef<Self, O>
+    where
+        Self: Sized,
+    {
+        NotRef {
+            parser: self,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Parse a pattern zero or more times (analog to Regex's `<PAT>*`).
     ///
     /// Input is eagerly parsed. Be aware that the parser will accept no occurrences of the pattern too. Consider using
