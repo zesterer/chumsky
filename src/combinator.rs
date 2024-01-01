@@ -2068,7 +2068,7 @@ where
             Ok(item) => {
                 *finished = true;
                 Ok(Some(item))
-            },
+            }
             Err(()) => {
                 inp.rewind(before);
                 *finished = true;
@@ -2136,6 +2136,7 @@ pub struct Flatten<A, O> {
 
 #[cfg(feature = "nightly")]
 impl<A: Copy, O> Copy for Flatten<A, O> {}
+#[cfg(feature = "nightly")]
 impl<A: Clone, O> Clone for Flatten<A, O> {
     fn clone(&self) -> Self {
         Self {
@@ -2169,7 +2170,10 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         (st, iter): &mut Self::IterState<M>,
     ) -> IPResult<M, O::Item> {
-        if let Some(item) = iter.as_mut().and_then(|i| M::get_or(M::map(M::from_mut(i), |i| i.next()), || None)) {
+        if let Some(item) = iter
+            .as_mut()
+            .and_then(|i| M::get_or(M::map(M::from_mut(i), |i| i.next()), || None))
+        {
             return Ok(Some(M::bind(move || item)));
         }
 
@@ -2177,7 +2181,13 @@ where
         loop {
             let before = inp.save();
             match self.parser.next::<M>(inp, st) {
-                Ok(Some(item)) => match M::get_or(M::map(M::from_mut(iter.insert(M::map(item, |i| i.into_iter()))), |i| i.next().map(Some)), || Some(None)) {
+                Ok(Some(item)) => match M::get_or(
+                    M::map(
+                        M::from_mut(iter.insert(M::map(item, |i| i.into_iter()))),
+                        |i| i.next().map(Some),
+                    ),
+                    || Some(None),
+                ) {
                     Some(Some(item)) => break Ok(Some(M::bind(move || item))),
                     Some(None) => break Ok(Some(M::bind(|| unreachable!()))),
                     None => continue,
@@ -2185,7 +2195,7 @@ where
                 Ok(None) => break Ok(None),
                 Err(()) => {
                     inp.rewind(before);
-                    break Err(())
+                    break Err(());
                 }
             }
         }

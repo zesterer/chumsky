@@ -116,9 +116,13 @@ impl Mode for Emit {
     }
 
     #[inline(always)]
-    fn from_mut<T>(r: &mut Self::Output<T>) -> Self::Output<&mut T> { r }
+    fn from_mut<T>(r: &mut Self::Output<T>) -> Self::Output<&mut T> {
+        r
+    }
     #[inline(always)]
-    fn get_or<T, F: FnOnce() -> T>(r: Self::Output<T>, f: F) -> T { r }
+    fn get_or<T, F: FnOnce() -> T>(r: Self::Output<T>, _f: F) -> T {
+        r
+    }
 
     #[inline(always)]
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
@@ -174,9 +178,11 @@ impl Mode for Check {
     #[inline(always)]
     fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
     #[inline(always)]
-    fn from_mut<T>(r: &mut Self::Output<T>) -> Self::Output<&mut T> {}
+    fn from_mut<T>(_r: &mut Self::Output<T>) -> Self::Output<&mut T> {}
     #[inline(always)]
-    fn get_or<T, F: FnOnce() -> T>(r: Self::Output<T>, f: F) -> T { f() }
+    fn get_or<T, F: FnOnce() -> T>(_r: Self::Output<T>, f: F) -> T {
+        f()
+    }
 
     #[inline(always)]
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
