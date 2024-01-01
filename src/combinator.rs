@@ -2037,6 +2037,47 @@ where
     go_extra!(Option<O>);
 }
 
+impl<'a, A, O, I, E> IterParserSealed<'a, I, O, E> for OrNot<A>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: Parser<'a, I, O, E>,
+{
+    type IterState<M: Mode> = bool;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        _inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok(false)
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        finished: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        if *finished {
+            return Ok(None);
+        }
+
+        let before = inp.save();
+        match self.parser.go::<M>(inp) {
+            Ok(item) => {
+                *finished = true;
+                Ok(Some(item))
+            },
+            Err(()) => {
+                inp.rewind(before);
+                *finished = true;
+                Ok(None)
+            }
+        }
+    }
+}
+
 /// See [`Parser::not`].
 pub struct Not<A, OA> {
     pub(crate) parser: A,
@@ -2083,6 +2124,72 @@ where
     }
 
     go_extra!(());
+}
+
+/// See [`IterParser::flatten`].
+#[cfg(feature = "nightly")]
+pub struct Flatten<A, O> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<O>,
+}
+
+#[cfg(feature = "nightly")]
+impl<A: Copy, O> Copy for Flatten<A, O> {}
+impl<A: Clone, O> Clone for Flatten<A, O> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, A, O, I, E> IterParserSealed<'a, I, O::Item, E> for Flatten<A, O>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A: IterParser<'a, I, O, E>,
+    O: IntoIterator,
+{
+    type IterState<M: Mode> = (A::IterState<M>, Option<M::Output<O::IntoIter>>);
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok((self.parser.make_iter(inp)?, None))
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        (st, iter): &mut Self::IterState<M>,
+    ) -> IPResult<M, O::Item> {
+        if let Some(item) = iter.as_mut().and_then(|i| M::get_or(M::map(M::from_mut(i), |i| i.next()), || None)) {
+            return Ok(Some(M::bind(move || item)));
+        }
+
+        // TODO: Debug looping check
+        loop {
+            let before = inp.save();
+            match self.parser.next::<M>(inp, st) {
+                Ok(Some(item)) => match M::get_or(M::map(M::from_mut(iter.insert(M::map(item, |i| i.into_iter()))), |i| i.next().map(Some)), || Some(None)) {
+                    Some(Some(item)) => break Ok(Some(M::bind(move || item))),
+                    Some(None) => break Ok(Some(M::bind(|| unreachable!()))),
+                    None => continue,
+                },
+                Ok(None) => break Ok(None),
+                Err(()) => {
+                    inp.rewind(before);
+                    break Err(())
+                }
+            }
+        }
+    }
 }
 
 /// See [`Parser::and_is`].
