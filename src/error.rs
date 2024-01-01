@@ -139,6 +139,13 @@ pub struct Cheap<S = SimpleSpan<usize>> {
     span: S,
 }
 
+impl<S> Cheap<S> {
+    /// Get the span than that error related to.
+    pub fn span(&self) -> &S {
+        &self.span
+    }
+}
+
 impl<'a, I: Input<'a>> Error<'a, I> for Cheap<I::Span> {
     #[inline]
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
@@ -176,6 +183,18 @@ where
 pub struct Simple<'a, T, S = SimpleSpan<usize>> {
     span: S,
     found: Option<MaybeRef<'a, T>>,
+}
+
+impl<'a, T, S> Simple<'a, T, S> {
+    /// Get the span than that error related to.
+    pub fn span(&self) -> &S {
+        &self.span
+    }
+
+    /// Get the token, if any, that was found at the error location.
+    pub fn found(&self) -> Option<&T> {
+        self.found.as_deref()
+    }
 }
 
 impl<'a, T, S> Simple<'a, T, S> {
