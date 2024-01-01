@@ -135,12 +135,12 @@ pub mod prelude {
 }
 
 use crate::input::InputOwn;
-use alloc::{boxed::Box, rc::Rc, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 #[cfg(feature = "nightly")]
 use core::marker::Tuple;
 use core::{
     borrow::Borrow,
-    cell::{Cell, RefCell, UnsafeCell},
+    cell::{Cell, RefCell},
     cmp::{Eq, Ordering},
     fmt,
     hash::Hash,

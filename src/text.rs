@@ -166,7 +166,7 @@ where
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Copy, (), I, E>
 where
     I::Token: Char,
 {
@@ -195,7 +195,7 @@ where
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: ValueInput<'a> + StrInput<'a, C>, E: ParserExtra<'a, I>>(
-) -> Repeated<impl Parser<'a, I, (), E> + Copy + Clone, (), I, E>
+) -> Repeated<impl Parser<'a, I, (), E> + Copy, (), I, E>
 where
     I::Token: Char,
 {
@@ -235,8 +235,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'a, I: ValueInput<'a>, E: ParserExtra<'a, I>>(
-) -> impl Parser<'a, I, (), E> + Copy + Clone
+pub fn newline<'a, I: ValueInput<'a>, E: ParserExtra<'a, I>>() -> impl Parser<'a, I, (), E> + Copy
 where
     I::Token: Char,
 {
@@ -279,7 +278,7 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy + Clone, C, I, E>
+pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy, C, I, E>
 where
     C: Char,
     I: ValueInput<'a> + Input<'a, Token = C>,
@@ -331,7 +330,7 @@ where
 #[must_use]
 pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
-) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+) -> impl Parser<'a, I, &'a C::Str, E> + Copy {
     any()
         // Use try_map over filter to get a better error on failure
         .try_map(move |c: C, span| {
@@ -361,7 +360,7 @@ pub mod ascii {
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
     pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy {
         any()
             // Use try_map over filter to get a better error on failure
             .try_map(|c: C, span| {
@@ -449,7 +448,7 @@ pub mod unicode {
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
     pub fn ident<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
-    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy + Clone {
+    ) -> impl Parser<'a, I, &'a C::Str, E> + Copy {
         any()
             // Use try_map over filter to get a better error on failure
             .try_map(|c: C, span| {
