@@ -490,6 +490,8 @@ where
             .input
             .next_maybe(range.start)
             .1
+            .or_else(|| self.input.next_maybe(self.input.start()).1)
+            // TODO: Should EOI actually be 'full input'?
             .map_or(self.eoi.start(), |tok| tok.borrow().1.start());
         let end = self
             .input
