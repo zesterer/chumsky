@@ -3,7 +3,7 @@
 #![cfg_attr(feature = "nightly", allow(internal_features))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, rustc_attrs, fn_traits, tuple_trait, unboxed_closures)
+    feature(never_type, fn_traits, tuple_trait, unboxed_closures, diagnostic_namespace)
 )]
 //
 // README.md links these files via the main branch. For docs.rs we however want to link them
@@ -351,9 +351,9 @@ impl<T, E> ParseResult<T, E> {
 ///    implement it in chumsky itself.
 #[cfg_attr(
     feature = "nightly",
-    rustc_on_unimplemented(
-        message = "`{Self}` is not a parser from `{I}` to `{O}`",
-        label = "This parser is not compatible because it does not implement `Parser<{I}, {O}>`",
+    diagnostic::on_unimplemented(
+        message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
+        label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
         note = "You should check that the output types of your parsers are consistent with the combinators you're using",
     )
 )]
@@ -3500,4 +3500,9 @@ mod tests {
             todo().map_with(|expr, e| (expr, e.span()))
         }
     }
+}
+
+fn foo() {
+    use prelude::*;
+    let p = any::<&str, extra::Default>().or(any().to(()));
 }
