@@ -3501,8 +3501,3 @@ mod tests {
         }
     }
 }
-
-fn foo() {
-    use prelude::*;
-    let p = any::<&str, extra::Default>().or(any().to(()));
-}
