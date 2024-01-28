@@ -3,7 +3,13 @@
 #![cfg_attr(feature = "nightly", allow(internal_features))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures, diagnostic_namespace)
+    feature(
+        never_type,
+        fn_traits,
+        tuple_trait,
+        unboxed_closures,
+        diagnostic_namespace
+    )
 )]
 //
 // README.md links these files via the main branch. For docs.rs we however want to link them
@@ -2599,8 +2605,8 @@ where
 
 /// See [`Parser::boxed`].
 ///
-/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
-/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`](std::rc::Rc) to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`](std::rc::Rc) has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc
 pub struct Boxed<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> {
