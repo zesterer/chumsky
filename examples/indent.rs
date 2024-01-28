@@ -1,7 +1,7 @@
 use chumsky::prelude::*;
 
 #[derive(Clone, Debug)]
-enum Stmt {
+pub enum Stmt {
     Expr,
     Loop(Vec<Stmt>),
 }

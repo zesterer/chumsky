@@ -7,7 +7,7 @@ use chumsky::prelude::*;
 use std::{collections::HashMap, env, fs};
 
 #[derive(Clone, Debug)]
-enum Json {
+pub enum Json {
     Invalid,
     Null,
     Bool(bool),
