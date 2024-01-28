@@ -212,6 +212,14 @@ impl Mode for Check {
 // TODO: Consider removing these sealed traits in favour of `Sealed`, with the given methods just being on `Parser`
 // with doc(hidden)
 
+#[cfg_attr(
+    feature = "nightly",
+    diagnostic::on_unimplemented(
+        message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
+        label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
+        note = "You should check that the output types of your parsers are consistent with the combinators you're using",
+    )
+)]
 pub trait ParserSealed<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where

@@ -122,7 +122,7 @@ where
         }
 
         // Get the token at the given offset
-        let tok = vec.get(offset).map(I::Item::clone);
+        let tok = vec.get(offset).cloned();
 
         self.tokens.swap(&other);
 
