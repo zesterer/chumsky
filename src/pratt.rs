@@ -131,6 +131,8 @@ pub enum Associativity {
     Left(u16),
     /// Specifies that the operator should be right-associative, with the given binding power (see [`right`]).
     Right(u16),
+    /// Specifies that the operator should be non-associative, with the given binding power.
+    Non(u16),
 }
 
 /// Specifies a left [`Associativity`] with the given binding power.
@@ -149,18 +151,33 @@ pub fn right(binding_power: u16) -> Associativity {
     Associativity::Right(binding_power)
 }
 
+/// Specifies a not-associative [`Associativity`] with the given binding power.
+///
+/// Not-associative operators are evaluated from the left-most terms, moving rightward.
+pub fn non(binding_power: u16) -> Associativity {Associativity::Non(binding_power)}
+
 impl Associativity {
     fn left_power(&self) -> u32 {
         match self {
-            Self::Left(x) => *x as u32 * 2,
-            Self::Right(x) => *x as u32 * 2 + 1,
+            Self::Left(x) => *x as u32 * 3,
+            Self::Right(x) => *x as u32 * 3,
+            Self::Non(x) => *x as u32 * 3,
         }
     }
 
     fn right_power(&self) -> u32 {
         match self {
-            Self::Left(x) => *x as u32 * 2 + 1,
-            Self::Right(x) => *x as u32 * 2,
+            Self::Left(x) => *x as u32 * 3 + 1,
+            Self::Right(x) => *x as u32 * 3,
+            Self::Non(x) => *x as u32 * 3 + 1,
+        }
+    }
+
+    fn next_power(&self) -> u32 {
+        match self {
+            Self::Left(x) => *x as u32 * 3,
+            Self::Left(x) => *x as u32 * 3,
+            Self::Non(x) => *x as u32 * 3 - 1,
         }
     }
 }
@@ -467,7 +484,8 @@ macro_rules! impl_pratt_for_tuple {
                     // Infix binary operators
                     $(
                         let assoc = $X.associativity();
-                        if $X::IS_INFIX && assoc.left_power() >= min_power {
+                        let mut upper_bound: u32 = u32::MAX;
+                        if $X::IS_INFIX && assoc.left_power() >= min_power && assoc.left_power() <= upper_bound {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, assoc.right_power())) {
                                     Ok(rhs) => {
@@ -478,6 +496,7 @@ macro_rules! impl_pratt_for_tuple {
                                                 $X.fold_infix(lhs, op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
                                             },
                                         );
+                                        upper_bound = assoc.next_power();
                                         continue
                                     },
                                     Err(()) => inp.rewind(pre_op),
