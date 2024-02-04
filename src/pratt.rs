@@ -176,7 +176,7 @@ impl Associativity {
     fn next_power(&self) -> u32 {
         match self {
             Self::Left(x) => *x as u32 * 3,
-            Self::Left(x) => *x as u32 * 3,
+            Self::Right(x) => *x as u32 * 3,
             Self::Non(x) => *x as u32 * 3 - 1,
         }
     }
