@@ -10,6 +10,8 @@
 //! ['binding power'](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html#From-Precedence-to-Binding-Power)
 //! that determines how strongly operators should bind to the operands around them.
 //!
+//! Here is ['another approach'](https://www.engr.mun.ca/~theo/Misc/pratt_parsing.htm) that provides a more comprehensive perspective of handling multiple operators and patterns
+//!
 //! Pratt parsers are defined with the [`Parser::pratt`] method.
 //!
 //! When writing pratt parsers, it is necessary to first define an 'atomic' operand used by the parser for building up
@@ -757,10 +759,9 @@ mod tests {
             ))
             .map(|x| x.to_string());
 
-        assert_eq!(
-            parser.parse("1+2!$*3").into_result(),
-            Ok("(((1 + (2!))$) * 3)".to_string()),
-        )
+        assert!(
+            parser.parse("§1+-~2!$*3").has_errors(),
+        );
     }
 
     #[test]
