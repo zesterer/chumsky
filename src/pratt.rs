@@ -109,14 +109,14 @@ where
         _lhs: O,
         _op: Self::Op,
         _rhs: O,
-        _extra: &mut MapExtra<'a, '_, I, E>,
+        _extra: &mut MapExtra<'a, '_, '_, I, E>,
     ) -> O {
         unreachable!()
     }
-    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _extra: &mut MapExtra<'a, '_, I, E>) -> O {
+    fn fold_prefix(&self, _op: Self::Op, _rhs: O, _extra: &mut MapExtra<'a, '_, '_, I, E>) -> O {
         unreachable!()
     }
-    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _extra: &mut MapExtra<'a, '_, I, E>) -> O {
+    fn fold_postfix(&self, _lhs: O, _op: Self::Op, _extra: &mut MapExtra<'a, '_, '_, I, E>) -> O {
         unreachable!()
     }
 }
@@ -231,7 +231,7 @@ macro_rules! infix_op {
             const IS_INFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { self.associativity }
-            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -242,7 +242,9 @@ infix_op!(|f: Fn(O, O) -> O, lhs, _op, rhs, _extra| f(lhs, rhs));
 infix_op!(|f: Fn(O, Op, O) -> O, lhs, op, rhs, _extra| f(lhs, op, rhs));
 // Allow `|lhs, op, rhs, extra| <expr>` to be used as a fold closure for infix operators
 infix_op!(
-    |f: Fn(O, Op, O, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, rhs, extra| f(lhs, op, rhs, extra)
+    |f: Fn(O, Op, O, &mut MapExtra<'a, '_, '_, I, E>) -> O, lhs, op, rhs, extra| f(
+        lhs, op, rhs, extra
+    )
 );
 
 /// See [`prefix`].
@@ -308,7 +310,7 @@ macro_rules! prefix_op {
             const IS_PREFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -318,7 +320,7 @@ prefix_op!(|f: Fn(O) -> O, _op, rhs, _extra| f(rhs));
 // Allow `|op, rhs| <expr>` to be used as a fold closure for prefix operators
 prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _extra| f(op, rhs));
 // Allow `|op, rhs, span| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O, op, rhs, extra| f(op, rhs, extra));
+prefix_op!(|f: Fn(Op, O, &mut MapExtra<'a, '_, '_, I, E>) -> O, op, rhs, extra| f(op, rhs, extra));
 
 /// See [`postfix`].
 pub struct Postfix<A, F, Op, Args> {
@@ -383,7 +385,7 @@ macro_rules! postfix_op {
             const IS_POSTFIX: bool = true;
             #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
             #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
+            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $extra: &mut MapExtra<'a, '_, '_, I, E>) -> O { let $f = &self.fold; $invoke }
         }
     };
 }
@@ -393,7 +395,7 @@ postfix_op!(|f: Fn(O) -> O, lhs, _op, _extra| f(lhs));
 // Allow `|lhs, op| <expr>` to be used as a fold closure for postfix operators
 postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _extra| f(lhs, op));
 // Allow `|lhs, op, span| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, extra| f(lhs, op, extra));
+postfix_op!(|f: Fn(O, Op, &mut MapExtra<'a, '_, '_, I, E>) -> O, lhs, op, extra| f(lhs, op, extra));
 
 /// See [`Parser::pratt`].
 #[derive(Copy, Clone)]

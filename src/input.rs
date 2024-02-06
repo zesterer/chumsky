@@ -1518,36 +1518,28 @@ impl<E> Emitter<E> {
 }
 
 /// See [`Parser::map_with`].
-pub struct MapExtra<'a, 'b, I: Input<'a>, E: ParserExtra<'a, I>> {
-    before: I::Offset,
-    after: I::Offset,
-    inp: &'b I,
-    state: &'b mut E::State,
-    ctx: &'b E::Context,
+/// Note: 'a is the lifetime of the Input, 'b is the lifetime of the embedded InputRef, 'parse if the lifetime of the parser and corresponding state.
+pub struct MapExtra<'a, 'b, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> {
+    before: Offset<'a, 'parse, I>,
+    inp: &'b mut InputRef<'a, 'parse, I, E>,
 }
 
-impl<'a, 'b, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, I, E> {
-    #[inline(always)]
-    pub(crate) fn new<'parse>(
+impl<'a, 'b, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, 'parse, I, E> {
+    /// Create new MapExtra
+    /// SAFETY: `before` Offset must be from a previous call to inp.offset().
+    pub(crate) fn new(
         before: Offset<'a, 'parse, I>,
         inp: &'b mut InputRef<'a, 'parse, I, E>,
     ) -> Self {
-        Self {
-            before: before.offset,
-            after: inp.offset,
-            ctx: inp.ctx,
-            state: inp.state,
-            inp: inp.input,
-        }
+        MapExtra { before, inp }
     }
-
     /// Get the span corresponding to the output.
+    // SAFETY: The offsets both came from the same input
+    // TODO: Should this make `MapExtra::new` unsafe? Probably, but it's an internal API and we simply wouldn't
+    // ever abuse it in this way, even accidentally.
     #[inline(always)]
     pub fn span(&self) -> I::Span {
-        // SAFETY: The offsets both came from the same input
-        // TODO: Should this make `MapExtra::new` unsafe? Probably, but it's an internal API and we simply wouldn't
-        // ever abuse it in this way, even accidentally.
-        unsafe { self.inp.span(self.before..self.after) }
+        self.inp.span(self.before..self.inp.offset())
     }
 
     /// Get the slice corresponding to the output.
@@ -1556,18 +1548,18 @@ impl<'a, 'b, I: Input<'a>, E: ParserExtra<'a, I>> MapExtra<'a, 'b, I, E> {
     where
         I: SliceInput<'a>,
     {
-        self.inp.slice(self.before..self.after)
+        self.inp.slice(self.before..self.inp.offset())
     }
 
     /// Get the parser state.
     #[inline(always)]
     pub fn state(&mut self) -> &mut E::State {
-        self.state
+        self.inp.state()
     }
 
     /// Get the current parser context.
     #[inline(always)]
     pub fn ctx(&self) -> &E::Context {
-        self.ctx
+        self.inp.ctx()
     }
 }
