@@ -361,7 +361,7 @@ mod winnow {
         combinator::{preceded, separated_pair, terminated},
         error::{InputError, ParserError},
         prelude::*,
-        token::{any, none_of, one_of, tag, take_while},
+        token::{any, none_of, one_of, take_while},
     };
 
     use super::JsonZero;
@@ -441,9 +441,9 @@ mod winnow {
         preceded(
             space,
             dispatch!(peek(any);
-                b'n' => tag("null").value(JsonZero::Null),
-                b't' => tag("true").value(JsonZero::Bool(true)),
-                b'f' => tag("false").value(JsonZero::Bool(false)),
+                b'n' => "null".value(JsonZero::Null),
+                b't' => "true".value(JsonZero::Bool(true)),
+                b'f' => "false".value(JsonZero::Bool(false)),
                 b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
                 b'"' => string.map(JsonZero::Str),
                 b'[' => array.map(JsonZero::Array),
