@@ -180,7 +180,8 @@ fn eval<'a>(
 }
 
 fn main() {
-    let src = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
+    let usage = "Run `cargo run --example foo -- examples/sample.foo`";
+    let src = std::fs::read_to_string(std::env::args().nth(1).expect(usage)).expect(usage);
 
     match parser().parse(&src).into_result() {
         Ok(ast) => match eval(&ast, &mut Vec::new(), &mut Vec::new()) {
