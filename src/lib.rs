@@ -892,6 +892,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// The output type of this parser is `(O, U)`, a combination of the outputs of both parsers.
     ///
+    /// If you instead only need the output of __one__ of the parsers, use [`ignore_then`](Self::ignore_then)
+    /// or [`then_ignore`](Self::then_ignore).
+    ///
     /// # Examples
     ///
     /// ```
@@ -920,6 +923,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Parse one thing and then another thing, yielding only the output of the latter.
     ///
     /// The output type of this parser is `U`, the same as the second parser.
+    ///
+    /// If you instead only need the output of the first parser, use [`then_ignore`](Self::then_ignore).
+    /// If you need the output of __both__ parsers, use [`then`](Self::then).
     ///
     /// # Examples
     ///
@@ -951,6 +957,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// Parse one thing and then another thing, yielding only the output of the former.
     ///
     /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// If you instead only need the output of the second parser, use [`ignore_then`](Self::ignore_then).
+    /// If you need the output of __both__ parsers, use [`then`](Self::then).
     ///
     /// # Examples
     ///
