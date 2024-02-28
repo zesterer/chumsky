@@ -57,7 +57,7 @@ where
         inp.errors.alt = old_alt;
 
         if let Some(mut new_alt) = new_alt {
-            let before_next = before.offset.into() + 1;
+            let before_next = before.offset.into();
             if new_alt.pos.into() == before_next {
                 new_alt.err.label_with(self.label.clone());
             } else if self.is_context && new_alt.pos.into() > before_next {

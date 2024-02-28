@@ -3518,4 +3518,30 @@ mod tests {
             todo().map_with(|expr, e| (expr, e.span()))
         }
     }
+
+    #[cfg(feature = "label")]
+    #[test]
+    fn label() {
+        use crate::label::LabelError;
+
+        fn parser<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
+            just("hello").labelled("greeting").as_context().ignored()
+        }
+
+        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
+            Some(Some('h'.into())),
+            Some('g'.into()),
+            (0..1).into(),
+        );
+        <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
+        assert_eq!(parser().parse("goodbye").into_errors(), vec![err]);
+
+        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
+            Some(Some('l'.into())),
+            Some('p'.into()),
+            (3..4).into(),
+        );
+        <Rich<_, _, _> as LabelError<&str, _>>::in_context(&mut err, "greeting", (0..3).into());
+        assert_eq!(parser().parse("help").into_errors(), vec![err]);
+    }
 }
