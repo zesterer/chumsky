@@ -8,13 +8,8 @@
 pub use crate::stream::{BoxedExactSizeStream, BoxedStream, Stream};
 
 use super::*;
-#[cfg(feature = "memoization")]
-use hashbrown::HashMap;
 #[cfg(feature = "std")]
-use std::{
-    cell::RefCell,
-    io::{BufReader, Read, Seek},
-};
+use std::io::{BufReader, Read, Seek};
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.

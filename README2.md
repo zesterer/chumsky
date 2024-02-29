@@ -29,6 +29,7 @@ you may need. It also has `no_std` support, making it suitable for embedded envi
 - 🏷️ **Pattern labelling** for dynamic, user-friendly error messages
 - 🗃️ **Caching** allows parsers to be created once and reused many times
 - ↔️ **Pratt parsing** support for unary and binary operators
+- 🪛 **no_std** support, allowing chumsky to run in embedded environments
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
 

@@ -1427,6 +1427,7 @@ where
     A: Parser<'a, I, OA, E>,
 {
     #[inline(always)]
+    #[allow(clippy::nonminimal_bool)] // TODO: Remove this, lint is currently buggy
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
         if self.at_most == !0 && self.at_least == 0 {
             loop {

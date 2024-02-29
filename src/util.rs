@@ -3,8 +3,7 @@
 use super::*;
 
 use core::{
-    cmp::{Ord, PartialEq, PartialOrd},
-    hash::{Hash, Hasher},
+    hash::Hasher,
     ops::{Deref, DerefMut},
 };
 

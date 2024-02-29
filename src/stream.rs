@@ -1,7 +1,5 @@
 use super::*;
 
-use core::cell::Cell;
-
 /// An input that dynamically pulls tokens from an [`Iterator`].
 ///
 /// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is

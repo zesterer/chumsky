@@ -7,6 +7,7 @@
 //! like [`Cheap`], [`Simple`] or [`Rich`].
 
 use super::*;
+#[cfg(not(feature = "std"))]
 use alloc::string::ToString;
 
 /// A trait that describes parser error types.

@@ -463,6 +463,7 @@ mod winnow {
     }
 }
 
+#[allow(clippy::empty_docs)] // TODO: Remove, pest does things clippy doesn't like for some reason
 mod pest {
     use super::JsonZero;
 
