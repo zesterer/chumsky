@@ -16,10 +16,10 @@ mod private {
 
 use private::RecursiveState;
 
-/// A State which represents when a [`Recursive`](Recursive) has been declared, but not defined
+/// A State which represents when a [`Recursive`] has been declared, but not defined
 pub struct Declared;
 
-/// A State which represents when a [`Recursive`](Recursive) has been both defined and declared
+/// A State which represents when a [`Recursive`] has been both defined and declared
 pub struct Defined;
 
 impl RecursiveState for Declared {}
