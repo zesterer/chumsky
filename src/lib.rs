@@ -3543,5 +3543,20 @@ mod tests {
         );
         <Rich<_, _, _> as LabelError<&str, _>>::in_context(&mut err, "greeting", (0..3).into());
         assert_eq!(parser().parse("help").into_errors(), vec![err]);
+
+        fn parser2<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
+            text::keyword("hello")
+                .labelled("greeting")
+                .as_context()
+                .ignored()
+        }
+
+        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
+            Some(Some('h'.into())),
+            None,
+            (0..7).into(),
+        );
+        <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
+        assert_eq!(parser2().parse("goodbye").into_errors(), vec![err]);
     }
 }
