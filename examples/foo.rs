@@ -149,9 +149,10 @@ fn eval<'a>(
                         .zip(arg_names.iter())
                         .map(|(val, name)| Ok((*name, val?)))
                         .collect::<Result<_, String>>()?;
+                    let old_vars = vars.len();
                     vars.append(&mut args);
                     let output = eval(body, vars, funcs);
-                    vars.truncate(vars.len() - args.len());
+                    vars.truncate(old_vars);
                     output
                 } else {
                     Err(format!(
