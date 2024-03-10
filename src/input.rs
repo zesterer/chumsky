@@ -1485,6 +1485,52 @@ impl<'a, 'parse, I: Input<'a>, E: ParserExtra<'a, I>> InputRef<'a, 'parse, I, E>
             None => Located::at(at, err),
         });
     }
+    
+    // Returns `None` if we know we don't need to producing an error because another branch has higher priority
+    #[inline]
+    fn begin_err(&mut self, at: I::Offset, f: impl FnOnce() -> E::Error) -> Option<&mut E::Error> {
+        let mut alt = &mut self.errors.alt;
+        if let Some(alt) = alt {
+            match alt.pos.into().cmp(&at.into()) {
+                // Another branch had the same priority, unify the two
+                Ordering::Equal => Some(&mut alt.err),
+                // Another branch has greater priority, don't start the error
+                Ordering::Greater => None,
+                // Another branch had less priority, overwrite it
+                Ordering::Less => {
+                    *alt = Located::at(at, f());
+                    Some(&mut alt.err)
+                },
+            }
+        } else {
+            // No other errors exist from other branches, begin a new one
+            Some(&mut alt.insert(Located::at(at, f())).err)
+        }
+    }
+    
+    #[inline]
+    pub(crate) fn unexpected_end<P>(&mut self, at: I::Offset, span: I::Span) -> Option<&mut E::Error> {
+        self.begin_err(at, || E::Error::unexpected_end(span))
+    }
+    
+    #[inline]
+    pub(crate) fn unexpected_pattern<P>(&mut self, at: I::Offset, span: I::Span, pat: P) -> Option<&mut E::Error>
+    where
+        E::Error: LabelError<'a, I, P>,
+    {
+        self.begin_err(at, || E::Error::unexpected_pattern(span, pat))
+    }
+    
+    #[inline]
+    pub(crate) fn unexpected<P>(&mut self, at: I::Offset, span: I::Span, pat: Option<P>) -> Option<&mut E::Error>
+    where
+        E::Error: LabelError<'a, I, P>,
+    {
+        self.begin_err(at, || match pat {
+            Some(pat) => E::Error::unexpected_pattern(span, pat),
+            None => E::Error::unexpected_end(span),
+        })
+    }
 }
 
 /// Struct used in [`Parser::validate`] to collect user-emitted errors

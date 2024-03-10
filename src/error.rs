@@ -68,11 +68,17 @@ use alloc::string::ToString;
 /// ```
 // TODO: Add support for more specialised kinds of error: unclosed delimiters, and more
 pub trait Error<'a, I: Input<'a>>: Sized {
+    /// Create a new error that represents a parser having encountered an unexpected end of input at the given span.
+    fn unexpected_end(span: I::Span) -> Self {
+        Self::expected_found([], None, span)
+    }
+
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
     ///
     /// An expected input having the value `None` indicates that the end of input was expected.
+    // TODO: Remove in favour of `LabelError::unexpected`
     fn expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         expected: E,
         found: Option<MaybeRef<'a, I::Token>>,
@@ -796,6 +802,17 @@ where
     I::Token: PartialEq,
     L: PartialEq,
 {
+    #[inline]
+    fn unexpected_pattern(span: I::Span, pat: L) -> Self {
+        #[cfg(not(feature = "_test_msrv"))]
+        todo!()
+    }
+    
+    #[inline]
+    fn add_expected(&mut self, pat: L) {
+        <Self as LabelError<I, _>>::label_with(self, pat);
+    }
+
     #[inline]
     fn label_with(&mut self, label: L) {
         // Opportunistically attempt to reuse allocations if we can

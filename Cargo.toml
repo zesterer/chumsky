@@ -62,10 +62,10 @@ serde = ["dep:serde"]
 # Enable dependencies only needed for generation of documentation on docs.rs
 docsrs = ["dep:vergen"]
 
-# An alias of all features that work with the stable compiler.
+# An alias of all features that work with the MSRV compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
 # If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
-_test_stable = ["std", "spill-stack", "memoization", "extension", "label", "sync"]
+_test_msrv = ["std", "spill-stack", "memoization", "extension", "label", "sync"]
 
 [package.metadata.docs.rs]
 all-features = true

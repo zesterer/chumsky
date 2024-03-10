@@ -157,6 +157,7 @@ where
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: OrderedSeq<'a, I::Token> + Clone,
+    E::Error: LabelError<'a, I, MaybeRef<'a, I::Token>>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T> {
@@ -172,6 +173,7 @@ where
     E: ParserExtra<'a, I>,
     I::Token: PartialEq,
     T: OrderedSeq<'a, I::Token> + Clone,
+    E::Error: LabelError<'a, I, MaybeRef<'a, I::Token>>,
 {
     type Config = JustCfg<T>;
 
@@ -194,6 +196,9 @@ where
                         found.map(|f| f.into()),
                         inp.span_since(before),
                     );
+                    if let Some(err) = inp.unexpected(at, inp.span_since(before), found.map(|f| f.into())) {
+                        err.add_expected(T::to_maybe_ref(next));
+                    }
                     Some(())
                 }
             }

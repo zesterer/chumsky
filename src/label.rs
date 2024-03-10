@@ -4,6 +4,15 @@ use super::*;
 
 /// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
 pub trait LabelError<'a, I: Input<'a>, L>: Error<'a, I> {
+    /// Create a new error that represents a parser having encountered an unexpected pattern at the given span.
+    fn unexpected_pattern(span: I::Span, pat: L) -> Self;
+    
+    /// Add the given pattern to the set of patterns that were expected at the location of the error.
+    fn add_expected(&mut self, pat: L);
+    
+    /// Add the given pattern to the set of patterns that were expected at the location of the error.
+    fn with_expected(mut self, pat: L) -> Self { self.add_expected(pat); self }
+    
     /// Annotate the expected patterns within this parser with the given label.
     ///
     /// In practice, this usually removes all other labels and expected tokens in favor of a single label that
