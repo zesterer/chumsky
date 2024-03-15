@@ -8,7 +8,6 @@
         fn_traits,
         tuple_trait,
         unboxed_closures,
-        diagnostic_namespace
     )
 )]
 //
