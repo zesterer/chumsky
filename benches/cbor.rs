@@ -6,9 +6,9 @@ mod utils;
 static CBOR: &[u8] = include_bytes!("samples/sample.cbor");
 
 fn bench_cbor(c: &mut Criterion) {
-    // c.bench_function("cbor_nom", {
-    //     move |b| b.iter(|| black_box(nom::cbor(black_box(CBOR)).unwrap()))
-    // });
+    c.bench_function("cbor_nom", {
+        move |b| b.iter(|| black_box(nom::cbor(black_box(CBOR)).unwrap()))
+    });
 
     // c.bench_function("cbor_winnow", {
     //     move |b| b.iter(|| black_box(winnow::cbor(black_box(JSON)).unwrap()))
@@ -87,6 +87,8 @@ pub enum CborZero<'a> {
     Array(Vec<CborZero<'a>>),
     Map(Vec<(CborZero<'a>, CborZero<'a>)>),
     Tag(u64, Box<CborZero<'a>>),
+    // Byte(u8)
+    // HalfFloat(f16),
     SingleFloat(f32),
     DoubleFloat(f64),
 }
@@ -220,5 +222,123 @@ mod chumsky_zero_copy {
                 major(7).ignore_then(float_simple),
             ))
         })
+    }
+}
+
+mod nom {
+    use super::CborZero;
+    use nom::{
+        bits::{bits, bytes},
+        branch::alt,
+        bytes::complete::take as take_bytes,
+        combinator::{map, value as to, verify},
+        complete::{tag, take},
+        multi::count,
+        number::complete::{be_f32, be_f64},
+        sequence::{pair, preceded},
+        IResult,
+    };
+
+    fn integer(i: (&[u8], usize)) -> IResult<(&[u8], usize), u64> {
+        alt((
+            verify(take(5usize), |&v| v < 24),
+            preceded(tag(24, 5usize), take(8usize)),
+            preceded(tag(25, 5usize), take(16usize)),
+            preceded(tag(26, 5usize), take(32usize)),
+            preceded(tag(27, 5usize), take(64usize)),
+        ))(i)
+    }
+
+    fn uint<'a>(i: &[u8]) -> IResult<&[u8], CborZero<'a>> {
+        bits(preceded(
+            tag(0, 3usize),
+            map(integer, |v| CborZero::Int(v.try_into().unwrap())),
+        ))(i)
+    }
+
+    fn nint<'a>(i: &[u8]) -> IResult<&[u8], CborZero<'a>> {
+        bits(preceded(
+            tag(1, 3usize),
+            map(integer, |v| CborZero::Int(-1 - i64::try_from(v).unwrap())),
+        ))(i)
+    }
+
+    fn bstr<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        // TODO: Handle indefinite length
+        let (i, length) = bits(preceded(tag(2, 3usize), integer))(i)?;
+        let length = usize::try_from(length).unwrap();
+        let (i, data) = take_bytes(length)(i)?;
+        Ok((i, CborZero::Bytes(data)))
+    }
+
+    fn str<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        // TODO: Handle indefinite length
+        let (i, length) = bits(preceded(tag(3, 3usize), integer))(i)?;
+        let length = usize::try_from(length).unwrap();
+        let (i, data) = take_bytes(length)(i)?;
+        Ok((i, CborZero::String(std::str::from_utf8(data).unwrap())))
+    }
+
+    fn array<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        // TODO: Handle indefinite length
+        let (i, length) = bits(preceded(tag(4, 3usize), integer))(i)?;
+        let (i, data) = count(value, length as usize)(i)?;
+        Ok((i, CborZero::Array(data)))
+    }
+
+    fn cbor_map<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        // TODO: Handle indefinite length
+        let (i, length) = bits(preceded(tag(5, 3usize), integer))(i)?;
+        let (i, data) = count(pair(value, value), length as usize)(i)?;
+        Ok((i, CborZero::Map(data)))
+    }
+
+    fn cbor_tag<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        let (i, tag) = bits(preceded(tag(6, 3usize), integer))(i)?;
+        let (i, value) = value(i)?;
+        Ok((i, CborZero::Tag(tag, Box::new(value))))
+    }
+
+    fn float_simple<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        bits(preceded(
+            tag(7, 3usize),
+            alt((
+                to(CborZero::Bool(false), tag(20, 5usize)),
+                to(CborZero::Bool(true), tag(21, 5usize)),
+                to(CborZero::Null, tag(22, 5usize)),
+                to(CborZero::Undef, tag(23, 5usize)),
+                // preceded(tag(24, 5usize), ...), // u8
+                // preceded(tag(25, 5usize), map(be_f16, |v| CborZero::HalfFloat(v))),
+                preceded(
+                    tag(26, 5usize),
+                    map(bytes(be_f32::<_, nom::error::Error<&'a [u8]>>), |v| {
+                        CborZero::SingleFloat(v)
+                    }),
+                ),
+                preceded(
+                    tag(27, 5usize),
+                    map(bytes(be_f64::<_, nom::error::Error<&'a [u8]>>), |v| {
+                        CborZero::DoubleFloat(v)
+                    }),
+                ),
+            )),
+        ))(i)
+    }
+
+    fn value<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        alt((
+            uint,
+            nint,
+            bstr,
+            str,
+            array,
+            cbor_map,
+            cbor_tag,
+            float_simple,
+        ))(i)
+    }
+
+    pub fn cbor<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+        value(i)
     }
 }
