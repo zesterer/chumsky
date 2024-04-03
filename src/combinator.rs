@@ -354,7 +354,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -373,7 +373,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: IterParser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     type IterState<M: Mode> = A::IterState<M>
     where
@@ -579,7 +579,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>) -> Result<O, E::Error>,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> Result<O, E::Error>,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -2363,7 +2363,7 @@ where
     A: IterParser<'a, I, OA, E>,
     B: Parser<'a, I, O, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(OA, O, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(OA, O, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
@@ -2498,7 +2498,7 @@ where
     A: Parser<'a, I, O, E>,
     B: IterParser<'a, I, OB, E>,
     E: ParserExtra<'a, I>,
-    F: Fn(O, OB, &mut MapExtra<'a, '_, '_, I, E>) -> O,
+    F: Fn(O, OB, &mut MapExtra<'a, '_, I, E>) -> O,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
@@ -2689,7 +2689,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, OA, E>,
-    F: Fn(OA, &mut MapExtra<'a, '_, '_, I, E>, &mut Emitter<E::Error>) -> U,
+    F: Fn(OA, &mut MapExtra<'a, '_, I, E>, &mut Emitter<E::Error>) -> U,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, U>
