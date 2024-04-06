@@ -3,13 +3,7 @@
 #![cfg_attr(feature = "nightly", allow(internal_features))]
 #![cfg_attr(
     feature = "nightly",
-    feature(
-        never_type,
-        fn_traits,
-        tuple_trait,
-        unboxed_closures,
-        diagnostic_namespace
-    )
+    feature(never_type, fn_traits, tuple_trait, unboxed_closures)
 )]
 //
 // README.md links these files via the main branch. For docs.rs we however want to link them
