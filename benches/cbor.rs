@@ -263,7 +263,7 @@ mod nom {
         ))(i)
     }
 
-    fn bstr<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn bstr(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         // TODO: Handle indefinite length
         let (i, length) = bits(preceded(tag(2, 3usize), integer))(i)?;
         let length = usize::try_from(length).unwrap();
@@ -271,7 +271,7 @@ mod nom {
         Ok((i, CborZero::Bytes(data)))
     }
 
-    fn str<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn str(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         // TODO: Handle indefinite length
         let (i, length) = bits(preceded(tag(3, 3usize), integer))(i)?;
         let length = usize::try_from(length).unwrap();
@@ -279,21 +279,21 @@ mod nom {
         Ok((i, CborZero::String(std::str::from_utf8(data).unwrap())))
     }
 
-    fn array<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn array(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         // TODO: Handle indefinite length
         let (i, length) = bits(preceded(tag(4, 3usize), integer))(i)?;
         let (i, data) = count(value, length as usize)(i)?;
         Ok((i, CborZero::Array(data)))
     }
 
-    fn cbor_map<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn cbor_map(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         // TODO: Handle indefinite length
         let (i, length) = bits(preceded(tag(5, 3usize), integer))(i)?;
         let (i, data) = count(pair(value, value), length as usize)(i)?;
         Ok((i, CborZero::Map(data)))
     }
 
-    fn cbor_tag<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn cbor_tag(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         let (i, tag) = bits(preceded(tag(6, 3usize), integer))(i)?;
         let (i, value) = value(i)?;
         Ok((i, CborZero::Tag(tag, Box::new(value))))
@@ -325,7 +325,7 @@ mod nom {
         ))(i)
     }
 
-    fn value<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn value(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         alt((
             uint,
             nint,
@@ -338,7 +338,7 @@ mod nom {
         ))(i)
     }
 
-    pub fn cbor<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    pub fn cbor(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         value(i)
     }
 }
