@@ -80,7 +80,7 @@ impl Char for char {
     }
 
     fn is_ident_start(&self) -> bool {
-        unicode_ident::is_xid_start(*self)
+        unicode_ident::is_xid_start(*self) || *self == '_'
     }
 
     fn is_ident_continue(&self) -> bool {
@@ -546,6 +546,26 @@ mod tests {
         text::unicode::keyword(s).ignored()
     }
 
+    fn test_ok<'a, P: Parser<'a, &'a str, &'a str>>(parser: P, input: &'a str) {
+        assert_eq!(
+            parser.parse(input),
+            ParseResult {
+                output: Some(input),
+                errs: vec![]
+            }
+        );
+    }
+
+    fn test_err<'a, P: Parser<'a, &'a str, &'a str>>(parser: P, input: &'a str) {
+        assert_eq!(
+            parser.parse(input),
+            ParseResult {
+                output: None,
+                errs: vec![EmptyErr::default()]
+            }
+        );
+    }
+
     #[test]
     fn keyword_good() {
         make_ascii_kw_parser::<char, &str>("hello");
@@ -554,6 +574,21 @@ mod tests {
         make_unicode_kw_parser::<char, &str>("שלום");
         make_unicode_kw_parser::<char, &str>("привет");
         make_unicode_kw_parser::<char, &str>("你好");
+    }
+
+    #[test]
+    fn ident() {
+        let ident = text::ident::<&str, char, extra::Default>();
+        test_ok(ident, "foo");
+        test_ok(ident, "foo_bar");
+        test_ok(ident, "foo_");
+        test_ok(ident, "_foo");
+        test_ok(ident, "_");
+        test_ok(ident, "__");
+        test_ok(ident, "__init__");
+        test_err(ident, "");
+        test_err(ident, ".");
+        test_err(ident, "123");
     }
 
     #[test]
