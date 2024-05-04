@@ -130,11 +130,11 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>>
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// let chain = Recursive::define(just::<_, _, extra::Err<Simple<char>>>('+')
+    /// let chain = chain.clone().define(just::<_, _, extra::Err<Simple<char>>>('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
-    ///     .map(|chain| chain.unwrap_or(Chain::End)), chain);
+    ///     .map(|chain| chain.unwrap_or(Chain::End)));
     ///
     /// assert_eq!(chain.parse("").into_result(), Ok(Chain::End));
     /// assert_eq!(
@@ -155,12 +155,11 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>>
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
     pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(
+        self,
         parser: P,
-        declaration: Self,
     ) -> Recursive<Indirect<'a, 'b, I, O, E>, Defined> {
         let location = *Location::caller();
-        declaration
-            .parser()
+        self.parser()
             .inner
             .set(Box::new(parser))
             .unwrap_or_else(|_| {
@@ -171,7 +170,7 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>>
 
         Recursive {
             state: EmptyPhantom::new(),
-            inner: declaration.inner,
+            inner: self.inner,
         }
     }
 }
