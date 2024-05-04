@@ -349,13 +349,10 @@ impl<T, E> ParseResult<T, E> {
 ///
 /// 4) If you believe you've found a common use-case that's missing from chumsky, you could open a pull request to
 ///    implement it in chumsky itself.
-#[cfg_attr(
-    feature = "nightly",
-    diagnostic::on_unimplemented(
-        message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
-        label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
-        note = "You should check that the output types of your parsers are consistent with the combinators you're using",
-    )
+#[diagnostic::on_unimplemented(
+    message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
+    label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
+    note = "You should check that the output types of your parsers are consistent with the combinators you're using"
 )]
 pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ParserSealed<'a, I, O, E>
