@@ -10,6 +10,21 @@
 
 use super::*;
 
+mod private {
+    pub trait RecursiveState {}
+}
+
+use private::RecursiveState;
+
+/// A State which represents when a [`Recursive`] has been declared, but not defined
+pub struct Declared;
+
+/// A State which represents when a [`Recursive`] has been both defined and declared
+pub struct Defined;
+
+impl RecursiveState for Declared {}
+impl RecursiveState for Defined {}
+
 #[cfg(not(feature = "sync"))]
 struct OnceCell<T>(core::cell::Cell<Option<T>>);
 #[cfg(not(feature = "sync"))]
@@ -80,11 +95,15 @@ pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
-pub struct Recursive<P: ?Sized> {
+pub struct Recursive<P: ?Sized, S: RecursiveState> {
     inner: RecursiveInner<P>,
+    #[allow(dead_code)]
+    state: EmptyPhantom<S>,
 }
 
-impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
+impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>>
+    Recursive<Indirect<'a, 'b, I, O, E>, Declared>
+{
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -111,7 +130,7 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     ///
     /// // Define the parser in terms of itself.
     /// // In this case, the parser parses a right-recursive list of '+' into a singly linked list
-    /// chain.define(just::<_, _, extra::Err<Simple<char>>>('+')
+    /// let chain = chain.clone().define(just::<_, _, extra::Err<Simple<char>>>('+')
     ///     .then(chain.clone())
     ///     .map(|(c, chain)| Chain::Link(c, Box::new(chain)))
     ///     .or_not()
@@ -128,24 +147,35 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
             inner: RecursiveInner::Owned(RefC::new(Indirect {
                 inner: OnceCell::new(),
             })),
+            state: EmptyPhantom::new(),
         }
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
-    pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(&mut self, parser: P) {
+    pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(
+        self,
+        parser: P,
+    ) -> Recursive<Indirect<'a, 'b, I, O, E>, Defined> {
         let location = *Location::caller();
         self.parser()
             .inner
             .set(Box::new(parser))
             .unwrap_or_else(|_| {
-                panic!("recursive parsers can only be defined once, trying to redefine it at {location}")
+                panic!(
+                "recursive parsers can only be defined once, trying to redefine it at {location}"
+            )
             });
+
+        Recursive {
+            state: EmptyPhantom::new(),
+            inner: self.inner,
+        }
     }
 }
 
-impl<P: ?Sized> Recursive<P> {
+impl<P: ?Sized, S: RecursiveState> Recursive<P, S> {
     #[inline]
     fn parser(&self) -> RefC<P> {
         match &self.inner {
@@ -157,9 +187,22 @@ impl<P: ?Sized> Recursive<P> {
     }
 }
 
-impl<P: ?Sized> Clone for Recursive<P> {
+impl<P: ?Sized> Clone for Recursive<P, Declared> {
     fn clone(&self) -> Self {
         Self {
+            state: EmptyPhantom::new(),
+            inner: match &self.inner {
+                RecursiveInner::Owned(x) => RecursiveInner::Unowned(RefC::downgrade(x)),
+                RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
+            },
+        }
+    }
+}
+
+impl<P: ?Sized> Clone for Recursive<P, Defined> {
+    fn clone(&self) -> Self {
+        Self {
+            state: EmptyPhantom::new(),
             inner: match &self.inner {
                 RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
                 RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
@@ -179,10 +222,11 @@ pub(crate) fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, 'b, I, O, E>>
+impl<'a, 'b, I, O, E, S> ParserSealed<'a, I, O, E> for Recursive<Indirect<'a, 'b, I, O, E>, S>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
+    S: RecursiveState,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -201,10 +245,11 @@ where
     go_extra!(O);
 }
 
-impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, 'b, I, O, E>>
+impl<'a, 'b, I, O, E, S> ParserSealed<'a, I, O, E> for Recursive<Direct<'a, 'b, I, O, E>, S>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
+    S: RecursiveState,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -264,17 +309,18 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
-pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>>
+pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>, Defined>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, E> + Clone + MaybeSync + 'b,
-    F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
+    F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>, Declared>) -> A,
 {
     let rc = RefC::new_cyclic(|rc| {
         let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
+            state: EmptyPhantom::<Declared>::new(),
         };
 
         f(parser)
@@ -282,5 +328,6 @@ where
 
     Recursive {
         inner: RecursiveInner::Owned(rc),
+        state: EmptyPhantom::new(),
     }
 }
