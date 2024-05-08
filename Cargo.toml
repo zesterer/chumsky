@@ -79,6 +79,7 @@ spin = { version = "0.9", features = ["once"], default-features = false, optiona
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
 either = { version = "1.8.1", optional = true }
 serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
+typle = "0.9.6"
 unicode-ident =  "1.0.10"
 
 [dev-dependencies]

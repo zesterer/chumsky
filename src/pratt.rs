@@ -89,6 +89,8 @@
 //! );
 //! ```
 
+use typle::typle;
+
 use super::*;
 
 trait Operator<'a, I, O, E>
@@ -402,117 +404,124 @@ pub struct Pratt<Atom, Ops> {
     pub(crate) ops: Ops,
 }
 
-macro_rules! impl_pratt_for_tuple {
-    () => {};
-    ($head:ident $($X:ident)*) => {
-        impl_pratt_for_tuple!($($X)*);
-        impl_pratt_for_tuple!(~ $head $($X)*);
-    };
-    (~ $($X:ident)+) => {
-        #[allow(unused_variables, non_snake_case)]
-        impl<'a, Atom, $($X),*> Pratt<Atom, ($($X,)*)> {
-            #[inline]
-            fn pratt_go<M: Mode, I, O, E>(&self, inp: &mut InputRef<'a, '_, I, E>, min_power: u32) -> PResult<M, O>
-            where
-                I: Input<'a>,
-                E: ParserExtra<'a, I>,
-                Atom: Parser<'a, I, O, E>,
-                $($X: Operator<'a, I, O, E>),*
-            {
-                let pre_expr = inp.save();
-                let mut lhs = 'choice: {
-                    let ($($X,)*) = &self.ops;
-
-                    // Prefix unary operators
-                    $(
-                        if $X::IS_PREFIX {
-                            match $X.op_parser().go::<M>(inp) {
-                                Ok(op) => {
-                                    match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power())) {
-                                        Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
-                                            $X.fold_prefix(op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
-                                        }),
-                                        Err(()) => inp.rewind(pre_expr),
-                                    }
-                                },
+#[typle(Tuple for 1..=26)]
+impl<'a, Atom, T: Tuple> Pratt<Atom, T> {
+    #[inline]
+    fn pratt_go<M: Mode, I, O, E>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_power: u32,
+    ) -> PResult<M, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Atom: Parser<'a, I, O, E>,
+        T<_>: Operator<'a, I, O, E>,
+    {
+        let pre_expr = inp.save();
+        let mut lhs = 'choice: {
+            // Prefix unary operators
+            for typle_index!(i) in 0..T::LEN {
+                if T::<{ i }>::IS_PREFIX {
+                    let t = &self.ops[[i]];
+                    match t.op_parser().go::<M>(inp) {
+                        Ok(op) => {
+                            match recursive::recurse(|| {
+                                self.pratt_go::<M, _, _, _>(inp, t.associativity().left_power())
+                            }) {
+                                Ok(rhs) => {
+                                    break 'choice M::combine(op, rhs, |op, rhs| {
+                                        t.fold_prefix(
+                                            op,
+                                            rhs,
+                                            &mut MapExtra::new(pre_expr.offset(), inp),
+                                        )
+                                    })
+                                }
                                 Err(()) => inp.rewind(pre_expr),
                             }
                         }
-                    )*
-
-                    self.atom.go::<M>(inp)?
-                };
-
-                loop {
-                    let ($($X,)*) = &self.ops;
-
-                    let pre_op = inp.save();
-
-                    // Postfix unary operators
-                    $(
-                        let assoc = $X.associativity();
-                        if $X::IS_POSTFIX && assoc.right_power() >= min_power {
-                            match $X.op_parser().go::<M>(inp) {
-                                Ok(op) => {
-                                    lhs = M::combine(lhs, op, |lhs, op| {
-                                        $X.fold_postfix(lhs, op, &mut MapExtra::new(pre_expr.offset(), inp))
-                                    });
-                                    continue
-                                },
-                                Err(()) => inp.rewind(pre_op),
-                            }
-                        }
-                    )*
-
-                    // Infix binary operators
-                    $(
-                        let assoc = $X.associativity();
-                        if $X::IS_INFIX && assoc.left_power() >= min_power {
-                            match $X.op_parser().go::<M>(inp) {
-                                Ok(op) => match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, assoc.right_power())) {
-                                    Ok(rhs) => {
-                                        lhs = M::combine(
-                                            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                                            op,
-                                            |(lhs, rhs), op| {
-                                                $X.fold_infix(lhs, op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
-                                            },
-                                        );
-                                        continue
-                                    },
-                                    Err(()) => inp.rewind(pre_op),
-                                },
-                                Err(()) => inp.rewind(pre_op),
-                            }
-                        }
-                    )*
-
-                    inp.rewind(pre_op);
-                    break;
+                        Err(()) => inp.rewind(pre_expr),
+                    }
                 }
-
-                Ok(lhs)
-            }
-        }
-
-        #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, O, E, Atom, $($X),*> ParserSealed<'a, I, O, E> for Pratt<Atom, ($($X,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            Atom: Parser<'a, I, O, E>,
-            $($X: Operator<'a, I, O, E>),*
-        {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-                self.pratt_go::<M, _, _, _>(inp, 0)
             }
 
-            go_extra!(O);
+            self.atom.go::<M>(inp)?
+        };
+
+        'start: loop {
+            let pre_op = inp.save();
+
+            // Postfix unary operators
+            for typle_index!(i) in 0..T::LEN {
+                let t = &self.ops[[i]];
+                let assoc = t.associativity();
+                if T::<{ i }>::IS_POSTFIX && assoc.right_power() >= min_power {
+                    match t.op_parser().go::<M>(inp) {
+                        Ok(op) => {
+                            lhs = M::combine(lhs, op, |lhs, op| {
+                                t.fold_postfix(lhs, op, &mut MapExtra::new(pre_expr.offset(), inp))
+                            });
+                            continue 'start;
+                        }
+                        Err(()) => inp.rewind(pre_op),
+                    }
+                }
+            }
+
+            // Infix binary operators
+            for typle_index!(i) in 0..T::LEN {
+                let t = &self.ops[[i]];
+                let assoc = t.associativity();
+                if T::<{ i }>::IS_INFIX && assoc.left_power() >= min_power {
+                    match t.op_parser().go::<M>(inp) {
+                        Ok(op) => match recursive::recurse(|| {
+                            self.pratt_go::<M, _, _, _>(inp, assoc.right_power())
+                        }) {
+                            Ok(rhs) => {
+                                lhs = M::combine(
+                                    M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                                    op,
+                                    |(lhs, rhs), op| {
+                                        t.fold_infix(
+                                            lhs,
+                                            op,
+                                            rhs,
+                                            &mut MapExtra::new(pre_expr.offset(), inp),
+                                        )
+                                    },
+                                );
+                                continue 'start;
+                            }
+                            Err(()) => inp.rewind(pre_op),
+                        },
+                        Err(()) => inp.rewind(pre_op),
+                    }
+                }
+            }
+
+            inp.rewind(pre_op);
+            break;
         }
-    };
+
+        Ok(lhs)
+    }
 }
 
-impl_pratt_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+#[typle(Tuple for 1..=26)]
+impl<'a, I, O, E, Atom, T: Tuple> ParserSealed<'a, I, O, E> for Pratt<Atom, T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    Atom: Parser<'a, I, O, E>,
+    T<_>: Operator<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        self.pratt_go::<M, _, _, _>(inp, 0)
+    }
+
+    go_extra!(O);
+}
 
 #[cfg(test)]
 mod tests {

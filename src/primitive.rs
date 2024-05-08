@@ -15,6 +15,8 @@
 //! - [`none_of`]: parses any input that does not appear in a sequence of inputs
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
+use typle::typle;
+
 use super::*;
 
 /// See [`end`].
@@ -867,63 +869,31 @@ pub const fn choice<T>(parsers: T) -> Choice<T> {
     Choice { parsers }
 }
 
-macro_rules! impl_choice_for_tuple {
-    () => {};
-    ($head:ident $($X:ident)*) => {
-        impl_choice_for_tuple!($($X)*);
-        impl_choice_for_tuple!(~ $head $($X)*);
-    };
-    (~ $Head:ident $($X:ident)+) => {
-        #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $Head, $($X),*, O> ParserSealed<'a, I, O, E> for Choice<($Head, $($X,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $Head: Parser<'a, I, O, E>,
-            $($X: Parser<'a, I, O, E>),*
-        {
-            #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-                let before = inp.save();
+#[typle(Tuple for 1..=26)]
+impl<'a, I, E, T, O> ParserSealed<'a, I, O, E> for Choice<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Tuple,
+    T<_>: Parser<'a, I, O, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        if typle_const!(T::LEN > 1) {
+            let before = inp.save();
 
-                let Choice { parsers: ($Head, $($X,)*), .. } = self;
-
-                match $Head.go::<M>(inp) {
+            for typle_index!(i) in 0..T::LEN - 1 {
+                match self.parsers[[i]].go::<M>(inp) {
                     Ok(out) => return Ok(out),
                     Err(()) => inp.rewind(before),
                 }
-
-                $(
-                    match $X.go::<M>(inp) {
-                        Ok(out) => return Ok(out),
-                        Err(()) => inp.rewind(before),
-                    }
-                )*
-
-                Err(())
             }
-
-            go_extra!(O);
         }
-    };
-    (~ $Head:ident) => {
-        impl<'a, I, E, $Head, O> ParserSealed<'a, I, O, E> for Choice<($Head,)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $Head:  Parser<'a, I, O, E>,
-        {
-            #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-                self.parsers.0.go::<M>(inp)
-            }
+        self.parsers[[T::LEN - 1]].go::<M>(inp)
+    }
 
-            go_extra!(O);
-        }
-    };
+    go_extra!(O);
 }
-
-impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
 impl<'a, 'b, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&'b [A]>
 where
@@ -1020,90 +990,28 @@ where
     go_extra!([O; N]);
 }
 
-macro_rules! flatten_map {
-    // map a single element into a 1-tuple
-    (<$M:ident> $head:ident) => {
-        $M::map(
-            $head,
-            |$head| ($head,),
-        )
-    };
-    // combine two elements into a 2-tuple
-    (<$M:ident> $head1:ident $head2:ident) => {
-        $M::combine(
-            $head1,
-            $head2,
-            |$head1, $head2| ($head1, $head2),
-        )
-    };
-    // combine and flatten n-tuples from recursion
-    (<$M:ident> $head:ident $($X:ident)+) => {
-        $M::combine(
-            $head,
-            flatten_map!(
-                <$M>
-                $($X)+
-            ),
-            |$head, ($($X),+)| ($head, $($X),+),
-        )
-    };
-}
+#[typle(Tuple for 1..=26)]
+impl<'a, I, E, T, O> ParserSealed<'a, I, O, E> for Group<T>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    T: Tuple,
+    O: Tuple,
+    typle_bound!(i in ..T::LEN => T<{i}>): Parser<'a, I, O<{ i }>, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        let outputs = typle_for!(i in ..T::LEN => self.parsers[[i]].go::<M>(inp)?);
+        let result = typle_fold!(
+            M::map(outputs.0, |b| (b,));
+            i in 1..T::LEN => |acc| M::combine(
+                acc,
+                outputs[[i]],
+                |a, b| typle_for!(j in ..=i => if typle_const!(j < i) { a[[j]] } else { b })
+            )
+        );
+        Ok(result)
+    }
 
-macro_rules! impl_group_for_tuple {
-    () => {};
-    ($head:ident $ohead:ident $($X:ident $O:ident)*) => {
-        impl_group_for_tuple!($($X $O)*);
-        impl_group_for_tuple!(~ $head $ohead $($X $O)*);
-    };
-    (~ $($X:ident $O:ident)*) => {
-        #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $($X),*, $($O),*> ParserSealed<'a, I, ($($O,)*), E> for Group<($($X,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $($X: Parser<'a, I, $O, E>),*
-        {
-            #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*)> {
-                let Group { parsers: ($($X,)*) } = self;
-
-                $(
-                    let $X = $X.go::<M>(inp)?;
-                )*
-
-                Ok(flatten_map!(<M> $($X)*))
-            }
-
-            go_extra!(($($O,)*));
-        }
-    };
-}
-
-impl_group_for_tuple! {
-    A_ OA
-    B_ OB
-    C_ OC
-    D_ OD
-    E_ OE
-    F_ OF
-    G_ OG
-    H_ OH
-    I_ OI
-    J_ OJ
-    K_ OK
-    L_ OL
-    M_ OM
-    N_ ON
-    O_ OO
-    P_ OP
-    Q_ OQ
-    R_ OR
-    S_ OS
-    T_ OT
-    U_ OU
-    V_ OV
-    W_ OW
-    X_ OX
-    Y_ OY
-    Z_ OZ
+    go_extra!(typle_ty!(O));
 }
