@@ -103,6 +103,7 @@ where
     }
 }
 
+// TODO: impl BorrowInput!
 impl<'a, I: Iterator + 'a> ValueInput<'a> for Stream<I>
 where
     I::Item: Clone,
