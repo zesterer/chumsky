@@ -97,7 +97,7 @@ lasso = "0.7"
 slotmap = "1.0"
 
 [build-dependencies]
-vergen = { version = "=8.1.1", optional = true, features = ["git", "gitoxide"] }
+vergen = { version = "=8.3.1", optional = true, features = ["git", "gitoxide"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.13", features = ["flamegraph", "criterion"] }
