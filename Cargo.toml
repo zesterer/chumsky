@@ -10,7 +10,7 @@ categories = ["parsing", "text-processing"]
 edition = "2021"
 exclude = [
     "/misc/*",
-	"/benches/samples/*",
+    "/benches/samples/*",
 ]
 build = "build.rs"
 
@@ -74,12 +74,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 hashbrown = "0.14"
 stacker = { version = "0.1", optional = true }
-regex-automata = { version = "0.3", default-features = false, optional = true, features = ["alloc", "meta", "perf", "unicode", "nfa", "dfa", "hybrid"] }
+regex-automata = { version = "0.4", default-features = false, optional = true, features = ["alloc", "meta", "perf", "unicode", "nfa", "dfa", "hybrid"] }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
 either = { version = "1.8.1", optional = true }
 serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
-unicode-ident =  "1.0.10"
+unicode-ident = "1.0.10"
 
 [dev-dependencies]
 ariadne = "0.2"
