@@ -400,13 +400,13 @@ impl<'a, T, L> RichReason<'a, T, L> {
     {
         fn map_token_inner<'a, T: Clone, U, F: FnMut(T) -> U, L>(
             reason: RichReason<'a, T, L>,
-            mut f: &mut F,
+            f: &mut F,
         ) -> RichReason<'a, U, L> {
             match reason {
                 RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
                     expected: expected
                         .into_iter()
-                        .map(|pat| pat.map_token(&mut f))
+                        .map(|pat| pat.map_token(&mut *f))
                         .collect(),
                     found: found.map(|found| f(found.into_inner()).into()),
                 },

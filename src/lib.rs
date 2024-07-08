@@ -44,6 +44,8 @@ macro_rules! blob_url_prefix {
     };
 }
 
+use blob_url_prefix;
+
 macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]

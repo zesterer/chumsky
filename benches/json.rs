@@ -354,7 +354,7 @@ mod nom {
 
 mod winnow {
     use winnow::{
-        ascii::{digit0, digit1, escaped},
+        ascii::{digit0, digit1, take_escaped},
         combinator::separated,
         combinator::{alt, dispatch},
         combinator::{cut_err, fail, opt, peek},
@@ -391,7 +391,7 @@ mod winnow {
         preceded(
             '"',
             cut_err(terminated(
-                escaped(
+                take_escaped(
                     none_of([b'\\', b'"']),
                     '\\',
                     one_of([b'\\', b'/', b'"', b'b', b'f', b'n', b'r', b't']),
