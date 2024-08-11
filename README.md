@@ -3,12 +3,12 @@
 [![crates.io](https://img.shields.io/crates/v/chumsky.svg)](https://crates.io/crates/chumsky)
 [![crates.io](https://docs.rs/chumsky/badge.svg)](https://docs.rs/chumsky)
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
-[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
+[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=main)](https://github.com/zesterer/chumsky/actions)
 
 A parser library for humans with powerful error recovery.
 
 <a href = "https://www.github.com/zesterer/tao">
-    <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
+    <img src="https://raw.githubusercontent.com/zesterer/chumsky/main/misc/example.png" alt="Example usage with my own language, Tao"/>
 </a>
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
@@ -144,7 +144,7 @@ up with the rest of your compiler! Unfortunately, it's *extremely* difficult to 
 that exactly how Chumsky performs depends entirely on what you are parsing, how you structure your parser, which
 patterns the parser attempts to match first, how complex your error type is, what is involved in constructing your AST,
 etc. All that said, here are some numbers from the
-[JSON benchmark](https://github.com/zesterer/chumsky/blob/master/benches/json.rs) included in the repository running on
+[JSON benchmark](https://github.com/zesterer/chumsky/blob/main/benches/json.rs) included in the repository running on
 my Ryzen 7 3700x.
 
 ```ignore
@@ -188,7 +188,7 @@ My apologies to Noam for choosing such an absurd name.
 Chumsky is licensed under the MIT license (see `LICENSE` in the main repository).
 
 <!-- These link destinations are defined like this so that src/lib.rs can override them. -->
-[`examples/brainfuck.rs`]: https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs
-[JSON parser]: https://github.com/zesterer/chumsky/blob/master/examples/json.rs
-[examples/nano_rust.rs]: https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs
-[tutorial]: https://github.com/zesterer/chumsky/blob/master/tutorial.md
+[`examples/brainfuck.rs`]: https://github.com/zesterer/chumsky/blob/main/examples/brainfuck.rs
+[JSON parser]: https://github.com/zesterer/chumsky/blob/main/examples/json.rs
+[examples/nano_rust.rs]: https://github.com/zesterer/chumsky/blob/main/examples/nano_rust.rs
+[tutorial]: https://github.com/zesterer/chumsky/blob/main/tutorial.md
