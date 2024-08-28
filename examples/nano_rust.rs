@@ -56,9 +56,8 @@ fn lexer<'src>(
 
     // A parser for strings
     let str_ = just('"')
-        .ignore_then(none_of('"').repeated())
+        .ignore_then(none_of('"').repeated().to_slice())
         .then_ignore(just('"'))
-        .to_slice()
         .map(Token::Str);
 
     // A parser for operators
