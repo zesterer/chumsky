@@ -2175,7 +2175,9 @@ where
     go_extra!(O);
 }
 
-/// A [`Parser`] that can be configured with runtime context. This allows for context-sensitive parsing
+/// A [`Parser`] that can be configured with runtime context.
+///
+/// This allows for context-sensitive parsing
 /// of input. Note that chumsky only supports 'left'-sensitive parsing, where the context for a parser
 /// is derived from earlier in the input.
 ///

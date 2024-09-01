@@ -8,6 +8,7 @@ type DefaultState = ();
 type DefaultCtx = ();
 
 /// A trait for extra types on a [`Parser`] that control the behavior of certain combinators and output.
+///
 /// Currently, this consists of the error type emitted, the state type used in the `*_state` combinators,
 /// and the context type used in the `*_ctx` and `*configure` parsers.
 ///

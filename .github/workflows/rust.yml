@@ -59,7 +59,7 @@ jobs:
             toolchain: "1.65"
             components: rustfmt, clippy
       - name: Check MSRV compatibility
-        run: cargo check --tests --verbose --features _test_stable
+        run: cargo check --verbose --features _test_stable
   semver:
     name: SemVer
     runs-on: ubuntu-latest

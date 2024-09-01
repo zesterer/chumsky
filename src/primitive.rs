@@ -679,9 +679,10 @@ where
     go_extra!(O);
 }
 
-/// Apply a mapping function to the context of this parser. Note that this combinator will
-/// behave differently from all other maps, in terms of which parsers it effects - while
-/// other maps apply to the output of the parser, and thus read left-to-right, this one
+/// Apply a mapping function to the context of this parser.
+///
+/// Note that this combinator will behave differently from all other maps, in terms of which
+/// parsers it effects - while other maps apply to the output of the parser, and thus read left-to-right, this one
 /// applies to the _input_ of the parser, and as such applies right-to-left.
 ///
 /// More technically, if all combinators form a 'tree' of parsers, where each node executes

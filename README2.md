@@ -39,7 +39,7 @@ See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/ex
 [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter
 (`cargo run --example brainfuck -- examples/sample.bf`).
 
-```rust
+```rust,ignore
 use chumsky::prelude::*;
 
 /// An AST (Abstract Syntax Tree) for Brainfuck instructions

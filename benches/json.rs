@@ -354,7 +354,7 @@ mod nom {
 
 mod winnow {
     use winnow::{
-        ascii::{digit0, digit1, escaped},
+        ascii::{digit0, digit1, take_escaped},
         combinator::separated,
         combinator::{alt, dispatch},
         combinator::{cut_err, fail, opt, peek},
@@ -382,7 +382,7 @@ mod winnow {
                 cut_err(digit1),
             )),
         )
-            .recognize()
+            .take()
             .map(|bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap())
             .parse_next(i)
     }
@@ -391,7 +391,7 @@ mod winnow {
         preceded(
             '"',
             cut_err(terminated(
-                escaped(
+                take_escaped(
                     none_of([b'\\', b'"']),
                     '\\',
                     one_of([b'\\', b'/', b'"', b'b', b'f', b'n', b'r', b't']),
