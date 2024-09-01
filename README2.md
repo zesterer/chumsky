@@ -107,7 +107,7 @@ Chumsky contains several optional features that extend the crate's functionality
 
 - `memoization`: enables [memoization](https://en.wikipedia.org/wiki/Memoization#Parsers) features
 
-- `spill-stack` (enabled by default): avoid stack overflows by spilling stack data to the heap
+- `stacker` (enabled by default): avoid stack overflows by spilling stack data to the heap via the `stacker` crate
 
 - `unstable`: enables experimental chumsky features
 

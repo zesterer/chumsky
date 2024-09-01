@@ -15,7 +15,7 @@ exclude = [
 build = "build.rs"
 
 [features]
-default = ["std", "spill-stack"]
+default = ["std", "stacker"]
 
 # Integrate with the standard library.
 std = [
@@ -27,7 +27,7 @@ std = [
 nightly = []
 
 # Allows deeper recursion by dynamically spilling stack state on to the heap.
-spill-stack = ["dep:stacker", "std"]
+stacker = ["dep:stacker", "std"]
 
 # Allows parser memoization, speeding up heavily back-tracking parsers and allowing left recursion.
 memoization = []
@@ -60,12 +60,12 @@ regex = ["dep:regex-automata"]
 serde = ["dep:serde"]
 
 # Enable dependencies only needed for generation of documentation on docs.rs
-docsrs = ["dep:vergen"]
+docsrs = ["dep:vergen-gix"]
 
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
 # If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
-_test_stable = ["std", "spill-stack", "memoization", "extension", "label", "sync"]
+_test_stable = ["std", "stacker", "memoization", "extension", "label", "sync"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -97,7 +97,7 @@ lasso = "0.7"
 slotmap = "1.0"
 
 [build-dependencies]
-vergen = { version = "=8.1.1", optional = true, features = ["git", "gitoxide"] }
+vergen-gix = { version = "1.0", optional = true, features = ["emit_and_set"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.11", features = ["flamegraph", "criterion"] }

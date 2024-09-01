@@ -4,15 +4,11 @@
     feature = "nightly",
     feature(never_type, fn_traits, tuple_trait, unboxed_closures)
 )]
-//
-// README.md links these files via the main branch. For docs.rs we however want to link them
-// to the version of the documented crate since the files in the main branch may diverge.
-#![doc = concat!("[`examples/brainfuck.rs`]: ", blob_url_prefix!(), "/examples/brainfuck.rs")]
-#![doc = concat!("[JSON parser]: ", blob_url_prefix!(), "/examples/json.rs")]
-#![doc = concat!("[examples/nano_rust.rs]: ", blob_url_prefix!(), "/examples/nano_rust.rs")]
-#![doc = concat!("[tutorial]: ", blob_url_prefix!(), "/tutorial.md")]
-//
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../README2.md")]
+#![doc = "## Examples"]
+#![doc = concat!("-", "[Brainfuck parser](", env!("CHUMSKY_REPO_URL"), "/examples/brainfuck.rs", ")\n\n")]
+#![doc = concat!("-", "[JSON parser](", env!("CHUMSKY_REPO_URL"), "/examples/json.rs", ")\n\n")]
+#![doc = concat!("-", "[A small Rust-like language](", env!("CHUMSKY_REPO_URL"), "/examples/nano_rust.rs", ")\n\n")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
     clippy::should_implement_trait,
@@ -23,26 +19,6 @@
 
 extern crate alloc;
 extern crate core;
-
-#[cfg(feature = "docsrs")]
-macro_rules! blob_url_prefix {
-    () => {
-        concat!(
-            "https://github.com/zesterer/chumsky/blob/",
-            env!("VERGEN_GIT_SHA")
-        )
-    };
-}
-
-#[cfg(not(feature = "docsrs"))]
-macro_rules! blob_url_prefix {
-    () => {
-        concat!(
-            "https://github.com/zesterer/chumsky/blob/",
-            env!("CARGO_PKG_VERSION")
-        )
-    };
-}
 
 macro_rules! go_extra {
     ( $O :ty ) => {

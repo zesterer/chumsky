@@ -1,20 +1,27 @@
 use std::error::Error;
-#[cfg(feature = "docsrs")]
-use vergen::EmitBuilder;
+
+const URL_START: &str = "https://github.com/zesterer/chumsky/blob/";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    emit_git_metadata()?;
-    Ok(())
-}
+    #[cfg(feature = "docsrs")]
+    {
+        use vergen_gix::{Emitter, GixBuilder};
 
-#[cfg(feature = "docsrs")]
-fn emit_git_metadata() -> Result<(), Box<dyn Error>> {
-    // Emit the instructions
-    EmitBuilder::builder().all_git().emit()?;
-    Ok(())
-}
-
-#[cfg(not(feature = "docsrs"))]
-fn emit_git_metadata() -> Result<(), Box<dyn Error>> {
+        let gitcl = GixBuilder::all_git()?;
+        Emitter::default()
+            .add_instructions(&gitcl)?
+            .emit_and_set()?;
+        println!(
+            "cargo:rustc-env=CHUMSKY_REPO_URL={URL_START}{}",
+            std::env::var("VERGEN_GIT_SHA").unwrap()
+        );
+    }
+    #[cfg(not(feature = "docsrs"))]
+    {
+        println!(
+            "cargo:rustc-env=CHUMSKY_REPO_URL={URL_START}{}",
+            std::env::var("CARGO_PKG_VERSION").unwrap()
+        );
+    }
     Ok(())
 }
