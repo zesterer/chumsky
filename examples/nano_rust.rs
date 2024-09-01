@@ -1,7 +1,7 @@
 //! This is an entire parser and interpreter for a dynamically-typed Rust-like expression-oriented
 //! programming language. See `sample.nrs` for sample source code.
 //! Run it with the following command:
-//! cargo run --example nano_rust -- examples/sample.nrs
+//! cargo run --features="label" --example nano_rust -- examples/sample.nrs
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
