@@ -1385,7 +1385,7 @@ where
     ///
     /// let for_the_dwarves = ring
     ///     .repeated()
-    ///     .exactly(6)
+    ///     .exactly(7)
     ///     .collect::<Vec<_>>();
     ///
     /// let for_the_humans = ring
@@ -1403,12 +1403,12 @@ where
     ///     .then(for_the_humans)
     ///     .then(for_sauron);
     ///
-    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOO").has_errors()); // Too few rings!
-    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOO").has_errors()); // Too many rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOO").has_errors()); // Too few rings!
+    /// assert!(rings.parse("OOOOOOOOOOOOOOOOOOOOO").has_errors()); // Too many rings!
     /// // The perfect number of rings
     /// assert_eq!(
-    ///     rings.parse("OOOOOOOOOOOOOOOOOOO").into_result(),
-    ///     Ok(((((vec!['O'; 3]), vec!['O'; 6]), vec!['O'; 9]), vec!['O'; 1])),
+    ///     rings.parse("OOOOOOOOOOOOOOOOOOOO").into_result(),
+    ///     Ok(((((vec!['O'; 3]), vec!['O'; 7]), vec!['O'; 9]), vec!['O'; 1])),
     /// );
     /// ````
     pub fn exactly(self, exactly: usize) -> Self {
