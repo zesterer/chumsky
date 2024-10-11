@@ -38,13 +38,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let a_res = debugger.invoke(&self.0, stream);
         let a_state = stream.save();
 
-        // If the first parser succeeded and produced no secondary errors, don't bother trying the second parser
-        // TODO: Perhaps we should *alwaus* take this route, even if recoverable errors did occur? Seems like an
-        // inconsistent application of PEG rules...
-        if a_res.0.is_empty() {
-            if let (a_errors, Ok(a_out)) = a_res {
-                return (a_errors, Ok(a_out));
-            }
+        if let (a_errors, Ok(a_out)) = a_res {
+            return (a_errors, Ok(a_out));
         }
 
         stream.revert(pre_state);
@@ -53,10 +48,8 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
         let b_res = debugger.invoke(&self.1, stream);
         let b_state = stream.save();
 
-        if b_res.0.is_empty() {
-            if let (b_errors, Ok(b_out)) = b_res {
-                return (b_errors, Ok(b_out));
-            }
+        if let (b_errors, Ok(b_out)) = b_res {
+            return (b_errors, Ok(b_out));
         }
 
         #[inline]
@@ -79,30 +72,6 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
             }
 
             let is_a = match (&a_res, &b_res) {
-                ((a_errors, Ok(a_out)), (b_errors, Ok(b_out))) => {
-                    match a_errors.len().cmp(&b_errors.len()) {
-                        Ordering::Greater => false,
-                        Ordering::Less => true,
-                        Ordering::Equal => {
-                            match zip_with(a_errors.last(), b_errors.last(), |a, b| a.at.cmp(&b.at))
-                            {
-                                Some(Ordering::Greater) => true,
-                                Some(Ordering::Less) => false,
-                                _ => match zip_with(a_out.1.as_ref(), b_out.1.as_ref(), |a, b| {
-                                    a.at.cmp(&b.at)
-                                }) {
-                                    Some(Ordering::Greater) => true,
-                                    Some(Ordering::Less) => false,
-                                    _ => true,
-                                },
-                            }
-                        }
-                    }
-                }
-                // ((a_errors, Ok(_)), (b_errors, Err(_))) if !a_errors.is_empty() => panic!("a_errors = {:?}", a_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-                ((_a_errors, Ok(_)), (_b_errors, Err(_))) => true,
-                // ((a_errors, Err(_)), (b_errors, Ok(_))) if !b_errors.is_empty() => panic!("b_errors = {:?}", b_errors.iter().map(|e| e.debug()).collect::<Vec<_>>()),
-                ((_a_errors, Err(_)), (_b_errors, Ok(_))) => false,
                 ((a_errors, Err(a_err)), (b_errors, Err(b_err))) => match a_err.at.cmp(&b_err.at) {
                     Ordering::Greater => true,
                     Ordering::Less => false,
@@ -126,6 +95,7 @@ impl<I: Clone, O, A: Parser<I, O, Error = E>, B: Parser<I, O, Error = E>, E: Err
                         }
                     },
                 },
+                _ => unreachable!(),
             };
 
             if is_a {
