@@ -66,22 +66,133 @@ enum RecursiveInner<T: ?Sized> {
     Unowned(RefW<T>),
 }
 
+/// TODO
+pub struct Direct2<'a, 'b, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    go_emit: unsafe fn(*const (), inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>,
+    go_check: unsafe fn(*const (), inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>,
+    clone: unsafe fn(*const ()) -> *const (),
+    drop: unsafe fn(*const ()),
+    parser: *const (),
+    phantom: PhantomData<&'b ()>,
+}
+
+impl<'a, 'b, I, O, E> Clone for Direct2<'a, 'b, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            go_emit: self.go_emit,
+            go_check: self.go_check,
+            clone: self.clone,
+            drop: self.drop,
+            parser: unsafe { (self.clone)(self.parser) },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, 'b, I, O, E> Drop for Direct2<'a, 'b, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn drop(&mut self) {
+        // SAFETY: `RecursiveInner` cannot be cloned, ptr was created from valid rc
+        unsafe { (self.drop)(self.parser) }
+    }
+}
+
+impl<'a, 'b, I, O, E> Direct2<'a, 'b, I, O, E>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+{
+    fn owned<P>(parser: P) -> Self
+    where
+        P: Parser<'a, I, O, E>,
+    {
+        Self {
+            go_emit: |ptr, inp| unsafe { &*ptr.cast::<P>() }.go_emit(inp),
+            go_check: |ptr, inp| unsafe { &*ptr.cast::<P>() }.go_check(inp),
+            clone: |ptr| unsafe {
+                let r = RefC::<P>::from_raw(ptr.cast());
+                let r2 = r.clone();
+                core::mem::forget(r);
+                RefC::into_raw(r2).cast()
+            },
+            drop: |ptr| drop(unsafe { RefC::<P>::from_raw(ptr.cast()) }),
+            parser: RefC::into_raw(RefC::new(parser)).cast(),
+            phantom: PhantomData,
+        }
+    }
+
+    fn unowned<P>(parser: RefW<P>) -> Self
+    where
+        P: Parser<'a, I, O, E>,
+    {
+        Self {
+            go_emit: |ptr, inp| unsafe {
+                let r = RefW::<P>::from_raw(ptr.cast());
+                let res = r.upgrade().expect("parser used before being defined").go_emit(inp);
+                core::mem::forget(r);
+                res
+            },
+            go_check: |ptr, inp| unsafe {
+                let r = RefW::<P>::from_raw(ptr.cast());
+                let res = r.upgrade().expect("parser used before being defined").go_check(inp);
+                core::mem::forget(r);
+                res
+            },
+            clone: |ptr| unsafe {
+                let r = RefW::<P>::from_raw(ptr.cast());
+                let r2 = r.clone();
+                core::mem::forget(r);
+                RefW::into_raw(r2).cast()
+            },
+            drop: |ptr| drop(unsafe { RefW::<P>::from_raw(ptr.cast()) }),
+            parser: RefW::into_raw(parser).cast(),
+            phantom: PhantomData,
+        }
+    }
+
+    fn invoke<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        M::choose(
+            inp,
+            |inp| unsafe { (self.go_emit)(self.parser, inp) },
+            |inp| unsafe { (self.go_check)(self.parser, inp) },
+        )
+    }
+}
+
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
-pub type Direct<'a, 'b, I, O, Extra> = DynParser<'a, 'b, I, O, Extra>;
+pub type Direct<'a, 'b, I, O, Extra> = Direct2<'a, 'b, I, O, Extra>;//DynParser<'a, 'b, I, O, Extra>;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
 pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
-    inner: OnceCell<Box<DynParser<'a, 'b, I, O, Extra>>>,
+    inner: RefC<OnceCell<Direct<'a, 'b, I, O, Extra>>>,
+}
+
+impl<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> Clone for Indirect<'a, 'b, I, O, Extra> {
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.clone() }
+    }
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
-pub struct Recursive<P: ?Sized> {
-    inner: RecursiveInner<P>,
+#[derive(Clone)]
+pub struct Recursive<P> {
+    inner: P,//RecursiveInner<P>,
 }
 
 impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
@@ -125,9 +236,9 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     /// ```
     pub fn declare() -> Self {
         Recursive {
-            inner: RecursiveInner::Owned(RefC::new(Indirect {
-                inner: OnceCell::new(),
-            })),
+            inner: Indirect {
+                inner: RefC::new(OnceCell::new()),
+            },
         }
     }
 
@@ -136,35 +247,11 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     #[track_caller]
     pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(&mut self, parser: P) {
         let location = *Location::caller();
-        self.parser()
-            .inner
-            .set(Box::new(parser))
+        self.inner.inner
+            .set(Direct2::owned(parser))
             .unwrap_or_else(|_| {
                 panic!("recursive parsers can only be defined once, trying to redefine it at {location}")
             });
-    }
-}
-
-impl<P: ?Sized> Recursive<P> {
-    #[inline]
-    fn parser(&self) -> RefC<P> {
-        match &self.inner {
-            RecursiveInner::Owned(x) => x.clone(),
-            RecursiveInner::Unowned(x) => x
-                .upgrade()
-                .expect("Recursive parser used before being defined"),
-        }
-    }
-}
-
-impl<P: ?Sized> Clone for Recursive<P> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: match &self.inner {
-                RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
-                RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
-            },
-        }
     }
 }
 
@@ -187,14 +274,10 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         recurse(move || {
-            M::invoke(
-                self.parser()
-                    .inner
-                    .get()
-                    .expect("Recursive parser used before being defined")
-                    .as_ref(),
-                inp,
-            )
+            self.inner.inner
+                .get()
+                .expect("Recursive parser used before being defined")
+                .invoke::<M>(inp)
         })
     }
 
@@ -208,7 +291,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        recurse(move || M::invoke(&*self.parser(), inp))
+        recurse(move || self.inner.invoke::<M>(inp))
     }
 
     go_extra!(O);
@@ -272,15 +355,15 @@ where
     F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
 {
     let rc = RefC::new_cyclic(|rc| {
-        let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
+        let rc: RefW<A/*DynParser<'a, 'b, I, O, E>*/> = rc.clone() as _;
         let parser = Recursive {
-            inner: RecursiveInner::Unowned(rc.clone()),
+            inner: Direct2::unowned(rc.clone()),
         };
 
         f(parser)
     });
 
     Recursive {
-        inner: RecursiveInner::Owned(rc),
+        inner: Direct2::owned(rc)/*RecursiveInner::Owned(rc)*/,
     }
 }
