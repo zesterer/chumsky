@@ -186,7 +186,7 @@ pub struct Simple<'a, T, S = SimpleSpan<usize>> {
     found: Option<MaybeRef<'a, T>>,
 }
 
-impl<'a, T, S> Simple<'a, T, S> {
+impl<T, S> Simple<'_, T, S> {
     /// Get the span than that error related to.
     pub fn span(&self) -> &S {
         &self.span
@@ -225,7 +225,7 @@ impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I::Token, I::Span> {
     }
 }
 
-impl<'a, T, S> fmt::Debug for Simple<'a, T, S>
+impl<T, S> fmt::Debug for Simple<'_, T, S>
 where
     T: fmt::Debug,
     S: fmt::Debug,
@@ -238,7 +238,7 @@ where
     }
 }
 
-impl<'a, T, S> fmt::Display for Simple<'a, T, S>
+impl<T, S> fmt::Display for Simple<'_, T, S>
 where
     T: fmt::Debug,
     S: fmt::Debug,
@@ -306,7 +306,7 @@ impl<'a, T, L> RichPattern<'a, T, L> {
     }
 }
 
-impl<'a, T, L> fmt::Debug for RichPattern<'a, T, L>
+impl<T, L> fmt::Debug for RichPattern<'_, T, L>
 where
     T: fmt::Debug,
     L: fmt::Debug,
@@ -320,7 +320,7 @@ where
     }
 }
 
-impl<'a, T, L> fmt::Display for RichPattern<'a, T, L>
+impl<T, L> fmt::Display for RichPattern<'_, T, L>
 where
     T: fmt::Display,
     L: fmt::Display,
@@ -480,7 +480,7 @@ impl<'a, T, L> RichReason<'a, T, L> {
     }
 }
 
-impl<'a, T, L> RichReason<'a, T, L>
+impl<T, L> RichReason<'_, T, L>
 where
     T: PartialEq,
     L: PartialEq,
@@ -529,7 +529,7 @@ where
     }
 }
 
-impl<'a, T, L> fmt::Display for RichReason<'a, T, L>
+impl<T, L> fmt::Display for RichReason<'_, T, L>
 where
     T: fmt::Display,
     L: fmt::Display,
@@ -559,7 +559,7 @@ pub struct Rich<'a, T, S = SimpleSpan<usize>, L = &'static str> {
     context: Vec<(L, S)>,
 }
 
-impl<'a, T, S, L> Rich<'a, T, S, L> {
+impl<T, S, L> Rich<'_, T, S, L> {
     fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -821,7 +821,7 @@ where
     }
 }
 
-impl<'a, T, S, L> fmt::Debug for Rich<'a, T, S, L>
+impl<T, S, L> fmt::Debug for Rich<'_, T, S, L>
 where
     T: fmt::Debug,
     S: fmt::Debug,
@@ -832,7 +832,7 @@ where
     }
 }
 
-impl<'a, T, S, L> fmt::Display for Rich<'a, T, S, L>
+impl<T, S, L> fmt::Display for Rich<'_, T, S, L>
 where
     T: fmt::Display,
     S: fmt::Display,

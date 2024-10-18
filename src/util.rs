@@ -109,14 +109,14 @@ impl<T, R: DerefMut<Target = T>> DerefMut for Maybe<T, R> {
     }
 }
 
-impl<'a, T> From<T> for Maybe<T, &'a T> {
+impl<T> From<T> for Maybe<T, &T> {
     #[inline]
     fn from(x: T) -> Self {
         Self::Val(x)
     }
 }
 
-impl<'a, T> From<T> for Maybe<T, &'a mut T> {
+impl<T> From<T> for Maybe<T, &mut T> {
     #[inline]
     fn from(x: T) -> Self {
         Self::Val(x)

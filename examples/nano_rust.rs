@@ -25,7 +25,7 @@ enum Token<'src> {
     Else,
 }
 
-impl<'src> fmt::Display for Token<'src> {
+impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Token::Null => write!(f, "null"),
@@ -110,7 +110,7 @@ enum Value<'src> {
     Func(&'src str),
 }
 
-impl<'src> Value<'src> {
+impl Value<'_> {
     fn num(self, span: Span) -> Result<f64, Error> {
         if let Value::Num(x) = self {
             Ok(x)
@@ -123,7 +123,7 @@ impl<'src> Value<'src> {
     }
 }
 
-impl<'src> std::fmt::Display for Value<'src> {
+impl std::fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Null => write!(f, "null"),

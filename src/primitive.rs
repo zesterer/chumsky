@@ -926,7 +926,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, 'b, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&'b [A]>
+impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&[A]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,

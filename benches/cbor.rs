@@ -299,7 +299,7 @@ mod nom {
         Ok((i, CborZero::Tag(tag, Box::new(value))))
     }
 
-    fn float_simple<'a>(i: &'a [u8]) -> IResult<&[u8], CborZero<'a>> {
+    fn float_simple(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
         bits(preceded(
             tag(7, 3usize),
             alt((
@@ -311,13 +311,13 @@ mod nom {
                 // preceded(tag(25, 5usize), map(be_f16, |v| CborZero::HalfFloat(v))),
                 preceded(
                     tag(26, 5usize),
-                    map(bytes(be_f32::<_, nom::error::Error<&'a [u8]>>), |v| {
+                    map(bytes(be_f32::<_, nom::error::Error<&[u8]>>), |v| {
                         CborZero::SingleFloat(v)
                     }),
                 ),
                 preceded(
                     tag(27, 5usize),
-                    map(bytes(be_f64::<_, nom::error::Error<&'a [u8]>>), |v| {
+                    map(bytes(be_f64::<_, nom::error::Error<&[u8]>>), |v| {
                         CborZero::DoubleFloat(v)
                     }),
                 ),

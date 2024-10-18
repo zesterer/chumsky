@@ -190,7 +190,7 @@ pub trait BorrowInput<'a>: Input<'a> {
     unsafe fn next_ref(&self, offset: Self::Offset) -> (Self::Offset, Option<&'a Self::Token>);
 }
 
-impl<'a> Sealed for &'a str {}
+impl Sealed for &str {}
 impl<'a> Input<'a> for &'a str {
     type Offset = usize;
     type Token = char;
@@ -266,7 +266,7 @@ impl<'a> SliceInput<'a> for &'a str {
     }
 }
 
-impl<'a, T> Sealed for &'a [T] {}
+impl<T> Sealed for &[T] {}
 impl<'a, T> Input<'a> for &'a [T] {
     type Offset = usize;
     type Token = T;
@@ -910,8 +910,8 @@ impl<'a, 'parse, I: Input<'a>> Marker<'a, 'parse, I> {
     }
 }
 
-impl<'a, 'parse, I: Input<'a>> Copy for Marker<'a, 'parse, I> {}
-impl<'a, 'parse, I: Input<'a>> Clone for Marker<'a, 'parse, I> {
+impl<'a, I: Input<'a>> Copy for Marker<'a, '_, I> {}
+impl<'a, I: Input<'a>> Clone for Marker<'a, '_, I> {
     #[inline(always)]
     fn clone(&self) -> Self {
         *self
@@ -926,27 +926,28 @@ pub struct Offset<'a, 'parse, I: Input<'a>> {
     phantom: PhantomData<fn(&'parse ()) -> &'parse ()>, // Invariance
 }
 
-impl<'a, 'parse, I: Input<'a>> Copy for Offset<'a, 'parse, I> {}
-impl<'a, 'parse, I: Input<'a>> Clone for Offset<'a, 'parse, I> {
+impl<'a, I: Input<'a>> Copy for Offset<'a, '_, I> {}
+impl<'a, I: Input<'a>> Clone for Offset<'a, '_, I> {
     #[inline(always)]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<'a, 'parse, I: Input<'a>> Eq for Offset<'a, 'parse, I> {}
-impl<'a, 'parse, I: Input<'a>> PartialEq for Offset<'a, 'parse, I> {
+impl<'a, I: Input<'a>> Eq for Offset<'a, '_, I> {}
+impl<'a, I: Input<'a>> PartialEq for Offset<'a, '_, I> {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset
     }
 }
 
-impl<'a, 'parse, I: Input<'a>> PartialOrd for Offset<'a, 'parse, I> {
+impl<'a, I: Input<'a>> PartialOrd for Offset<'a, '_, I> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-impl<'a, 'parse, I: Input<'a>> Ord for Offset<'a, 'parse, I> {
+
+impl<'a, I: Input<'a>> Ord for Offset<'a, '_, I> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.offset.cmp(&other.offset)
     }

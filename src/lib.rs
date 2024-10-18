@@ -2253,8 +2253,7 @@ pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E:
 }
 
 #[cfg(test)]
-impl<'a, 'iter, P, I: Input<'a>, O, E: ParserExtra<'a, I>> Iterator
-    for ParserIter<'a, 'iter, P, I, O, E>
+impl<'a, P, I: Input<'a>, O, E: ParserExtra<'a, I>> Iterator for ParserIter<'a, '_, P, I, O, E>
 where
     P: IterParser<'a, I, O, E>,
 {
@@ -2593,7 +2592,7 @@ pub struct Boxed<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> {
     inner: RefC<DynParser<'a, 'b, I, O, E>>,
 }
 
-impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, 'b, I, O, E> {
+impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, '_, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -2601,7 +2600,7 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, 'b, I, 
     }
 }
 
-impl<'a, 'b, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, 'b, I, O, E>
+impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, '_, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

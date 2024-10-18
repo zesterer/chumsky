@@ -296,7 +296,7 @@ mod nom {
         )(i)
     }
 
-    fn array<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], Vec<JsonZero>, E> {
+    fn array<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], Vec<JsonZero<'a>>, E> {
         preceded(
             char('['),
             cut(terminated(
@@ -308,7 +308,7 @@ mod nom {
 
     fn member<'a, E: ParseError<&'a [u8]>>(
         i: &'a [u8],
-    ) -> IResult<&'a [u8], (&'a [u8], JsonZero), E> {
+    ) -> IResult<&'a [u8], (&'a [u8], JsonZero<'a>), E> {
         separated_pair(
             preceded(space, string),
             cut(preceded(space, char(':'))),
@@ -318,7 +318,7 @@ mod nom {
 
     fn object<'a, E: ParseError<&'a [u8]>>(
         i: &'a [u8],
-    ) -> IResult<&'a [u8], Vec<(&'a [u8], JsonZero)>, E> {
+    ) -> IResult<&'a [u8], Vec<(&'a [u8], JsonZero<'a>)>, E> {
         preceded(
             char('{'),
             cut(terminated(
@@ -328,7 +328,7 @@ mod nom {
         )(i)
     }
 
-    fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+    fn value<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero<'a>, E> {
         preceded(
             space,
             alt((
@@ -343,7 +343,7 @@ mod nom {
         )(i)
     }
 
-    fn root<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero, E> {
+    fn root<'a, E: ParseError<&'a [u8]>>(i: &'a [u8]) -> IResult<&'a [u8], JsonZero<'a>, E> {
         terminated(value, space)(i)
     }
 

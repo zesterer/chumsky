@@ -299,11 +299,13 @@ pub trait Seq<'p, T> {
 }
 
 impl<'p, T: Clone> Seq<'p, T> for T {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = core::iter::Once<&'a T>
+    type Iter<'a>
+        = core::iter::Once<&'a T>
     where
         Self: 'a;
 
@@ -330,11 +332,13 @@ impl<'p, T: Clone> Seq<'p, T> for T {
 }
 
 impl<'p, T> Seq<'p, T> for &'p T {
-    type Item<'a> = &'p T
+    type Item<'a>
+        = &'p T
     where
         Self: 'a;
 
-    type Iter<'a> = core::iter::Once<&'p T>
+    type Iter<'a>
+        = core::iter::Once<&'p T>
     where
         Self: 'a;
 
@@ -361,11 +365,13 @@ impl<'p, T> Seq<'p, T> for &'p T {
 }
 
 impl<'p, T> Seq<'p, T> for &'p [T] {
-    type Item<'a> = &'p T
+    type Item<'a>
+        = &'p T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'p, T>
+    type Iter<'a>
+        = core::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -392,11 +398,13 @@ impl<'p, T> Seq<'p, T> for &'p [T] {
 }
 
 impl<'p, T: Clone, const N: usize> Seq<'p, T> for [T; N] {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'a, T>
+    type Iter<'a>
+        = core::slice::Iter<'a, T>
     where
         Self: 'a;
 
@@ -423,11 +431,13 @@ impl<'p, T: Clone, const N: usize> Seq<'p, T> for [T; N] {
 }
 
 impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
-    type Item<'a> = &'p T
+    type Item<'a>
+        = &'p T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'p, T>
+    type Iter<'a>
+        = core::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -455,11 +465,13 @@ impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
 }
 
 impl<'p, T: Clone> Seq<'p, T> for Vec<T> {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = core::slice::Iter<'a, T>
+    type Iter<'a>
+        = core::slice::Iter<'a, T>
     where
         Self: 'a;
 
@@ -486,11 +498,13 @@ impl<'p, T: Clone> Seq<'p, T> for Vec<T> {
 }
 
 impl<'p, T: Clone> Seq<'p, T> for LinkedList<T> {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = alloc::collections::linked_list::Iter<'a, T>
+    type Iter<'a>
+        = alloc::collections::linked_list::Iter<'a, T>
     where
         Self: 'a;
 
@@ -517,11 +531,13 @@ impl<'p, T: Clone> Seq<'p, T> for LinkedList<T> {
 }
 
 impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for HashSet<T> {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = hashbrown::hash_set::Iter<'a, T>
+    type Iter<'a>
+        = hashbrown::hash_set::Iter<'a, T>
     where
         Self: 'a;
 
@@ -549,11 +565,13 @@ impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for HashSet<T> {
 
 #[cfg(feature = "std")]
 impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for std::collections::HashSet<T> {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = std::collections::hash_set::Iter<'a, T>
+    type Iter<'a>
+        = std::collections::hash_set::Iter<'a, T>
     where
         Self: 'a;
 
@@ -580,11 +598,13 @@ impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for std::collections::HashSet<T> {
 }
 
 impl<'p, T: Clone + Ord> Seq<'p, T> for alloc::collections::BTreeSet<T> {
-    type Item<'a> = &'a T
+    type Item<'a>
+        = &'a T
     where
         Self: 'a;
 
-    type Iter<'a> = alloc::collections::btree_set::Iter<'a, T>
+    type Iter<'a>
+        = alloc::collections::btree_set::Iter<'a, T>
     where
         Self: 'a;
 
@@ -615,11 +635,13 @@ where
     T: Clone + PartialOrd, // Explicit declaration of an implied truth - `Step` requires these
     Self: Iterator<Item = T>,
 {
-    type Item<'a> = T
+    type Item<'a>
+        = T
     where
         Self: 'a;
 
-    type Iter<'a> = Range<T>
+    type Iter<'a>
+        = Range<T>
     where
         Self: 'a;
 
@@ -647,11 +669,13 @@ where
     T: Clone + PartialOrd,
     Self: Iterator<Item = T>,
 {
-    type Item<'a> = T
+    type Item<'a>
+        = T
     where
         Self: 'a;
 
-    type Iter<'a> = core::ops::RangeInclusive<T>
+    type Iter<'a>
+        = core::ops::RangeInclusive<T>
     where
         Self: 'a;
 
@@ -679,11 +703,13 @@ where
     T: Clone + PartialOrd,
     Self: Iterator<Item = T>,
 {
-    type Item<'a> = T
+    type Item<'a>
+        = T
     where
         Self: 'a;
 
-    type Iter<'a> = RangeFrom<T>
+    type Iter<'a>
+        = RangeFrom<T>
     where
         Self: 'a;
 
@@ -707,11 +733,13 @@ where
 }
 
 impl<'p> Seq<'p, char> for str {
-    type Item<'a> = char
+    type Item<'a>
+        = char
     where
         Self: 'a;
 
-    type Iter<'a> = core::str::Chars<'a>
+    type Iter<'a>
+        = core::str::Chars<'a>
     where
         Self: 'a;
 
@@ -735,11 +763,13 @@ impl<'p> Seq<'p, char> for str {
 }
 
 impl<'p> Seq<'p, char> for &'p str {
-    type Item<'a> = char
+    type Item<'a>
+        = char
     where
         Self: 'a;
 
-    type Iter<'a> = core::str::Chars<'a>
+    type Iter<'a>
+        = core::str::Chars<'a>
     where
         Self: 'a;
 
@@ -763,11 +793,13 @@ impl<'p> Seq<'p, char> for &'p str {
 }
 
 impl<'p> Seq<'p, char> for String {
-    type Item<'a> = char
+    type Item<'a>
+        = char
     where
         Self: 'a;
 
-    type Iter<'a> = core::str::Chars<'a>
+    type Iter<'a>
+        = core::str::Chars<'a>
     where
         Self: 'a;
 
@@ -795,19 +827,19 @@ impl<'p> Seq<'p, char> for String {
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
 pub trait OrderedSeq<'p, T>: Seq<'p, T> {}
 
-impl<'p, T: Clone> OrderedSeq<'p, T> for T {}
+impl<T: Clone> OrderedSeq<'_, T> for T {}
 impl<'p, T> OrderedSeq<'p, T> for &'p T {}
 impl<'p, T> OrderedSeq<'p, T> for &'p [T] {}
-impl<'p, T: Clone, const N: usize> OrderedSeq<'p, T> for [T; N] {}
+impl<T: Clone, const N: usize> OrderedSeq<'_, T> for [T; N] {}
 impl<'p, T, const N: usize> OrderedSeq<'p, T> for &'p [T; N] {}
-impl<'p, T: Clone> OrderedSeq<'p, T> for Vec<T> {}
+impl<T: Clone> OrderedSeq<'_, T> for Vec<T> {}
 impl<'p, T> OrderedSeq<'p, T> for Range<T> where Self: Seq<'p, T> {}
 impl<'p, T> OrderedSeq<'p, T> for core::ops::RangeInclusive<T> where Self: Seq<'p, T> {}
 impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
-impl<'p> OrderedSeq<'p, char> for str {}
+impl OrderedSeq<'_, char> for str {}
 impl<'p> OrderedSeq<'p, char> for &'p str {}
-impl<'p> OrderedSeq<'p, char> for String {}
+impl OrderedSeq<'_, char> for String {}
 
 #[cfg(test)]
 mod test {

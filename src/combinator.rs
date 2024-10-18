@@ -85,7 +85,8 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    type IterState<M: Mode> = (A::IterState<M>, A::Config)
+    type IterState<M: Mode>
+        = (A::IterState<M>, A::Config)
     where
         I: 'a;
 
@@ -158,7 +159,8 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    type IterState<M: Mode> = (A::IterState<M>, A::Config)
+    type IterState<M: Mode>
+        = (A::IterState<M>, A::Config)
     where
         I: 'a;
 
@@ -304,7 +306,8 @@ where
     A: IterParser<'a, I, OA, E>,
     F: Fn(OA) -> O,
 {
-    type IterState<M: Mode> = A::IterState<M>
+    type IterState<M: Mode>
+        = A::IterState<M>
     where
         I: 'a;
 
@@ -375,7 +378,8 @@ where
     A: IterParser<'a, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'a, '_, I, E>) -> O,
 {
-    type IterState<M: Mode> = A::IterState<M>
+    type IterState<M: Mode>
+        = A::IterState<M>
     where
         I: 'a;
 
@@ -453,7 +457,8 @@ where
     F: Fn<OA, Output = O>,
     OA: Tuple,
 {
-    type IterState<M: Mode> = A::IterState<M>
+    type IterState<M: Mode>
+        = A::IterState<M>
     where
         I: 'a;
 
@@ -1040,7 +1045,8 @@ where
     B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'a,
 {
-    type IterState<M: Mode> = (OA, B::IterState<M>)
+    type IterState<M: Mode>
+        = (OA, B::IterState<M>)
     where
         I: 'a;
 
@@ -1113,7 +1119,8 @@ where
     B: IterParser<'a, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'a,
 {
-    type IterState<M: Mode> = (OA, B::IterState<M>)
+    type IterState<M: Mode>
+        = (OA, B::IterState<M>)
     where
         I: 'a;
 
@@ -1734,7 +1741,8 @@ where
     A: Parser<'a, I, OA, E>,
     B: Parser<'a, I, OB, E>,
 {
-    type IterState<M: Mode> = usize
+    type IterState<M: Mode>
+        = usize
     where
         I: 'a;
 
@@ -1863,7 +1871,8 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
-    type IterState<M: Mode> = (usize, A::IterState<M>)
+    type IterState<M: Mode>
+        = (usize, A::IterState<M>)
     where
         I: 'a;
 
