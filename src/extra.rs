@@ -1,6 +1,9 @@
 //! Generic error, state and context types for parsers
 //! Useful for custom allocation, error handling, context-specific parsers, and more.
 
+use inspector::Inspector;
+pub use inspector::SimpleState;
+
 use super::*;
 
 type DefaultErr = EmptyErr;
@@ -26,7 +29,7 @@ where
     /// the actual progress of the parser - for that, use [`Self::Context`].
     ///
     /// For examples of using this type, see [`Parser::map_with`] or [`Parser::foldl_with`].
-    type State: 'a;
+    type State: Inspector<'a, I> + 'a;
     /// Context used for parser configuration. This is used to provide context-sensitive parsing of *input*.
     /// Context-sensitive parsing in chumsky is always left-hand sensitive - context for the parse must originate
     /// from an earlier point in the stream than the parser relying on it. This can affect the output of a parser,
@@ -61,7 +64,7 @@ impl<'a, I, E, S, C> ParserExtra<'a, I> for Full<E, S, C>
 where
     I: Input<'a>,
     E: Error<'a, I> + 'a,
-    S: 'a,
+    S: Inspector<'a, I> + 'a,
     C: 'a,
 {
     type Error = E;

@@ -68,6 +68,7 @@ pub mod extra;
 #[cfg(docsrs)]
 pub mod guide;
 pub mod input;
+pub mod inspector;
 #[cfg(feature = "label")]
 pub mod label;
 #[cfg(feature = "lexical-numbers")]
@@ -537,7 +538,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Copy, Clone)]
     /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, Rodeo, ()>>()
+    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, extra::SimpleState<Rodeo>, ()>>()
     ///     .map_with(|ident, e| Ident(e.state().get_or_intern(ident)))
     ///     .padded()
     ///     .repeated()
@@ -546,7 +547,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// // Test out parser
     ///
-    /// let mut interner = Rodeo::new();
+    /// let mut interner = extra::SimpleState(Rodeo::new());
     ///
     /// match ident.parse_with_state("hello", &mut interner).into_result() {
     ///     Ok(idents) => {
@@ -1534,16 +1535,16 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ## General
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
+    /// # use chumsky::{prelude::*, error::Simple, extra::SimpleState};
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
     /// let sum = int
     ///     .clone()
-    ///     .foldl_with(just('+').ignore_then(int).repeated(), |a, b, e| (a + b) * *e.state());
+    ///     .foldl_with(just('+').ignore_then(int).repeated(), |a, b, e| (a + b) * **e.state());
     ///
-    /// let mut multiplier = 2i32;
+    /// let mut multiplier = SimpleState(2i32);
     /// assert_eq!(sum.parse_with_state("1+12+3+9", &mut multiplier).into_result(), Ok(134));
     /// assert_eq!(sum.parse_with_state("6", &mut multiplier).into_result(), Ok(6));
     /// ```
@@ -1571,7 +1572,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// type NodeArena = SlotMap<NodeId, Expr>;
     ///
     /// // Now, define our parser
-    /// let int = text::int::<&str, _, extra::Full<Simple<char>, NodeArena, ()>>(10)
+    /// let int = text::int::<&str, _, extra::Full<Simple<char>, extra::SimpleState<NodeArena>, ()>>(10)
     ///     .padded()
     ///     .map_with(|s, e|
     ///         // Return the ID of the new integer node
@@ -1587,7 +1588,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// );
     ///
     /// // Test our parser
-    /// let mut arena = NodeArena::default();
+    /// let mut arena = extra::SimpleState(NodeArena::default());
     /// let four_plus_eight = sum.parse_with_state("4 + 8", &mut arena).unwrap();
     /// if let Expr::Add(a, b) = arena[four_plus_eight] {
     ///     assert_eq!(arena[a], Expr::Int(4));
@@ -2445,8 +2446,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, i32, ()>>(10)
+    /// # use chumsky::{prelude::*, error::Simple, extra::SimpleState};
+    /// let int = text::int::<_, _, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -2454,12 +2455,12 @@ where
     ///     .or(just('-').to(-1))
     ///     .repeated()
     ///     .foldr_with(int, |a, b, e| {
-    ///         *e.state() += 1;
+    ///         **e.state() += 1;
     ///         a * b
     ///     });
     ///
     /// // Test our parser
-    /// let mut folds = 0i32;
+    /// let mut folds = SimpleState(0i32);
     /// assert_eq!(signed.parse_with_state("3", &mut folds).into_result(), Ok(3));
     /// assert_eq!(signed.parse_with_state("-17", &mut folds).into_result(), Ok(-17));
     /// assert_eq!(signed.parse_with_state("--+-+-5", &mut folds).into_result(), Ok(5));
@@ -3175,10 +3176,12 @@ mod tests {
         #[should_panic]
         #[cfg(debug_assertions)]
         fn debug_assert_foldl_with() {
-            let mut state = 100;
-            empty::<&str, extra::Full<EmptyErr, i32, ()>>()
+            use extra::SimpleState;
+
+            let state = 100;
+            empty::<&str, extra::Full<EmptyErr, SimpleState<i32>, ()>>()
                 .foldl_with(empty().to(()).repeated(), |_, _, _| ())
-                .parse_with_state("a+b+c", &mut state);
+                .parse_with_state("a+b+c", &mut state.into());
         }
 
         #[test]
