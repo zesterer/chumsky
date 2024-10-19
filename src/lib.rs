@@ -367,12 +367,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Emit>(&mut inp);
-        let alt = inp.errors.alt.take();
+        let alt = inp.take_alt();
         let mut errs = own.into_errs();
         let out = match res {
             Ok(out) => Some(out),
             Err(()) => {
-                errs.push(alt.expect("error but no alt?").err);
+                errs.push(alt.err);
                 None
             }
         };
@@ -412,12 +412,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Check>(&mut inp);
-        let alt = inp.errors.alt.take();
+        let alt = inp.take_alt();
         let mut errs = own.into_errs();
         let out = match res {
             Ok(()) => Some(()),
             Err(()) => {
-                errs.push(alt.expect("error but no alt?").err);
+                errs.push(alt.err);
                 None
             }
         };
@@ -2605,6 +2605,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
         M::invoke(&*self.inner, inp)
     }
@@ -2626,6 +2627,7 @@ where
     E: ParserExtra<'a, I>,
     T: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
@@ -2642,6 +2644,7 @@ where
     E: ParserExtra<'a, I>,
     T: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
@@ -2658,6 +2661,7 @@ where
     E: ParserExtra<'a, I>,
     T: Parser<'a, I, O, E>,
 {
+    #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,

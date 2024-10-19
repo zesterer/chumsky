@@ -39,7 +39,7 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         _parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.errors.alt.take().expect("error but no alt?");
+        let alt = inp.take_alt();
         let out = match self.0.go::<M>(inp) {
             Ok(out) => out,
             Err(()) => {
@@ -108,7 +108,7 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.errors.alt.take().expect("error but no alt?");
+        let alt = inp.take_alt();
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
@@ -168,7 +168,7 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         _parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.errors.alt.take().expect("error but no alt?");
+        let alt = inp.take_alt();
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {

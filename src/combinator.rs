@@ -823,10 +823,7 @@ where
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            inp.memos.insert(
-                key,
-                Some(inp.errors.alt.clone().expect("failure but no alt?!")),
-            );
+            inp.memos.insert(key, Some(inp.take_alt()));
         } else {
             inp.memos.remove(&key);
         }
@@ -2593,7 +2590,7 @@ where
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            let mut e = inp.errors.alt.take().expect("error but no alt?");
+            let mut e = inp.take_alt();
             e.err = (self.mapper)(e.err);
             inp.errors.alt = Some(e);
         }
@@ -2627,7 +2624,7 @@ where
 //         let res = self.parser.go::<M>(inp);
 
 //         if res.is_err() {
-//             let mut e = inp.errors.alt.take().expect("error but no alt?");
+//             let mut e = inp.take_alt();
 //             let span = inp.span_since(start);
 //             e.err = (self.mapper)(e.err, span);
 //             inp.errors.alt = Some(e);
@@ -2662,7 +2659,7 @@ where
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            let mut e = inp.errors.alt.take().expect("error but no alt?");
+            let mut e = inp.take_alt();
             let span = inp.span_since(start);
             e.err = (self.mapper)(e.err, span, inp.state());
             inp.errors.alt = Some(e);
@@ -2742,7 +2739,7 @@ where
 //         match self.parser.go::<M>(inp) {
 //             Ok(out) => Ok(out),
 //             Err(()) => {
-//                 let err = inp.errors.alt.take().expect("error but no alt?");
+//                 let err = inp.take_alt();
 //                 match (self.or_else)(err.err) {
 //                     Ok(out) => {
 //                         inp.rewind(before);
