@@ -823,7 +823,8 @@ where
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            inp.memos.insert(key, Some(inp.take_alt()));
+            let alt = inp.take_alt();
+            inp.memos.insert(key, Some(alt));
         } else {
             inp.memos.remove(&key);
         }
