@@ -82,6 +82,7 @@ pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
 pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
+    location: Location<'static>,
 }
 
 impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
@@ -123,11 +124,13 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     ///     Ok(Chain::Link('+', Box::new(Chain::Link('+', Box::new(Chain::End))))),
     /// );
     /// ```
+    #[track_caller]
     pub fn declare() -> Self {
         Recursive {
             inner: RecursiveInner::Owned(RefC::new(Indirect {
                 inner: OnceCell::new(),
             })),
+            location: *Location::caller(),
         }
     }
 
@@ -155,6 +158,36 @@ impl<P: ?Sized> Recursive<P> {
                 .expect("Recursive parser used before being defined"),
         }
     }
+
+    #[inline(always)]
+    fn with_left_recursive_check<'a, I, E, R>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        f: impl FnOnce(&mut InputRef<'a, '_, I, E>) -> R,
+    ) -> R
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+    {
+        // TODO: Don't use address, since this might not be constant?
+        #[cfg(debug_assertions)]
+        let key = (
+            inp.offset().offset,
+            RefC::as_ptr(&self.parser()) as *const () as usize,
+        );
+
+        #[cfg(debug_assertions)]
+        if inp.memos.insert(key, None).is_some() {
+            panic!("Recursive parser defined at {} is left-recursive. Consider using `.memoized()` or restructuring this parser to be right-recursive.", self.location);
+        }
+
+        let res = f(inp);
+
+        #[cfg(debug_assertions)]
+        inp.memos.remove(&key);
+
+        res
+    }
 }
 
 impl<P: ?Sized> Clone for Recursive<P> {
@@ -164,6 +197,7 @@ impl<P: ?Sized> Clone for Recursive<P> {
                 RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
                 RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
             },
+            location: self.location,
         }
     }
 }
@@ -186,15 +220,17 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        recurse(move || {
-            M::invoke(
-                self.parser()
-                    .inner
-                    .get()
-                    .expect("Recursive parser used before being defined")
-                    .as_ref(),
-                inp,
-            )
+        self.with_left_recursive_check(inp, |inp| {
+            recurse(move || {
+                M::invoke(
+                    self.parser()
+                        .inner
+                        .get()
+                        .expect("Recursive parser used before being defined")
+                        .as_ref(),
+                    inp,
+                )
+            })
         })
     }
 
@@ -208,7 +244,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        recurse(move || M::invoke(&*self.parser(), inp))
+        self.with_left_recursive_check(inp, |inp| recurse(move || M::invoke(&*self.parser(), inp)))
     }
 
     go_extra!(O);
@@ -264,6 +300,7 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
+#[track_caller]
 pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>>
 where
     I: Input<'a>,
@@ -271,10 +308,12 @@ where
     A: Parser<'a, I, O, E> + Clone + MaybeSync + 'b,
     F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
 {
+    let location = *Location::caller();
     let rc = RefC::new_cyclic(|rc| {
         let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
+            location,
         };
 
         f(parser)
@@ -282,5 +321,6 @@ where
 
     Recursive {
         inner: RecursiveInner::Owned(rc),
+        location,
     }
 }

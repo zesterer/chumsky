@@ -3098,28 +3098,56 @@ mod tests {
     mod debug_asserts {
         use crate::prelude::*;
 
-        // TODO panic when left recursive parser is detected
-        // #[test]
-        // #[should_panic]
-        // fn debug_assert_left_recursive() {
-        //     recursive(|expr| {
-        //         let atom = any::<&str, extra::Default>()
-        //             .filter(|c: &char| c.is_alphabetic())
-        //             .repeated()
-        //             .at_least(1)
-        //             .collect();
+        #[test]
+        #[should_panic]
+        fn debug_assert_double_left_recursive() {
+            recursive::<&str, char, extra::Default, _, _>(|a| recursive(move |_| a.or(just('a'))))
+                .parse("a");
+        }
 
-        //         let sum = expr
-        //             .clone()
-        //             .then_ignore(just('+'))
-        //             .then(expr)
-        //             .map(|(a, b)| format!("{}{}", a, b));
+        #[test]
+        #[should_panic]
+        fn debug_assert_left_recursive() {
+            recursive(|expr| {
+                let atom = any::<&str, extra::Default>()
+                    .filter(|c: &char| c.is_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .collect();
 
-        //         sum.or(atom)
-        //     })
-        //     .then_ignore(end())
-        //     .parse("a+b+c");
-        // }
+                let sum = expr
+                    .clone()
+                    .then_ignore(just('+'))
+                    .then(expr)
+                    .map(|(a, b)| format!("{}{}", a, b));
+
+                sum.or(atom)
+            })
+            .parse("a+b+c");
+        }
+
+        #[test]
+        #[should_panic]
+        fn debug_assert_left_recursive_delc() {
+            let mut expr = Recursive::declare();
+            expr.define({
+                let atom = any::<&str, extra::Default>()
+                    .filter(|c: &char| c.is_alphabetic())
+                    .repeated()
+                    .at_least(1)
+                    .collect();
+
+                let sum = expr
+                    .clone()
+                    .then_ignore(just('+'))
+                    .then(expr.clone())
+                    .map(|(a, b)| format!("{}{}", a, b));
+
+                sum.or(atom)
+            });
+
+            expr.parse("a+b+c");
+        }
 
         #[test]
         #[should_panic]
@@ -3212,8 +3240,6 @@ mod tests {
                 .repeated()
                 .parse("a+b+c");
         }
-
-        // TODO what about IterConfigure and TryIterConfigure?
     }
 
     #[test]
