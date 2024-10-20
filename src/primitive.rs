@@ -282,6 +282,85 @@ where
     go_extra!(I::Token);
 }
 
+/// See [`one_of_ref`].
+pub struct OneOfRef<T, I, E> {
+    seq: T,
+    #[allow(dead_code)]
+    phantom: EmptyPhantom<(E, I)>,
+}
+
+impl<T: Copy, I, E> Copy for OneOfRef<T, I, E> {}
+impl<T: Clone, I, E> Clone for OneOfRef<T, I, E> {
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+/// A parser that accepts one of a sequence of specific inputs.
+///
+/// The output type of this parser is `&'a I::Token`, the input that was found.
+///
+/// This function is the borrowing equivalent of [one_of]. Where possible, it's recommended to use [one_of] instead.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::{prelude::*, error::Simple};
+/// let digits = one_of_ref::<_, _, extra::Err<Simple<char>>>("0123456789")
+///     .map(|c| *c)
+///     .repeated()
+///     .at_least(1)
+///     .collect::<String>();
+///
+/// let v1 = "48791".chars().collect::<Vec<_>>();
+/// assert_eq!(digits.parse(v1.as_slice()).into_result(), Ok("48791".to_string()));
+/// let v2 = "421!53".chars().collect::<Vec<_>>();
+/// assert!(digits.parse(v2.as_slice()).has_errors());
+/// ```
+pub const fn one_of_ref<'a, T, I, E>(seq: T) -> OneOfRef<T, I, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: PartialEq,
+    T: Seq<'a, I::Token>,
+{
+    OneOfRef {
+        seq,
+        phantom: EmptyPhantom::new(),
+    }
+}
+
+impl<'a, I, E, T> ParserSealed<'a, I, &'a I::Token, E> for OneOfRef<T, I, E>
+where
+    I: BorrowInput<'a>,
+    E: ParserExtra<'a, I>,
+    I::Token: PartialEq,
+    T: Seq<'a, I::Token>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Token> {
+        let before = inp.offset();
+        match inp.next_ref_inner() {
+            (_, Some(tok)) if self.seq.contains(tok) => Ok(M::bind(|| tok)),
+            (at, found) => {
+                let err_span = inp.span_since(before);
+                inp.add_alt(
+                    at,
+                    self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
+                    found.map(|f| f.into()),
+                    err_span,
+                );
+                Err(())
+            }
+        }
+    }
+
+    go_extra!(&'a I::Token);
+}
+
 /// See [`none_of`].
 pub struct NoneOf<T, I, E> {
     seq: T,
