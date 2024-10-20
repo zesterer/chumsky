@@ -15,7 +15,7 @@
     clippy::type_complexity,
     clippy::result_unit_err
 )]
-#![recursion_limit = "256"]
+#![recursion_limit = "1024"]
 // TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
