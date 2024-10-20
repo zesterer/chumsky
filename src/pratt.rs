@@ -521,24 +521,6 @@ impl_pratt_for_tuple!(
     FA_ FB_ FC_ FD_ FE_ FF_ FG_ FH_ FI_ FJ_ FK_ FL_ FM_ FN_ FO_ FP_ FQ_ FR_ FS_ FT_ FU_ FV_ FW_ FX_ FY_ FZ_
     GA_ GB_ GC_ GD_ GE_ GF_ GG_ GH_ GI_ GJ_ GK_ GL_ GM_ GN_ GO_ GP_ GQ_ GR_ GS_ GT_ GU_ GV_ GW_ GX_ GY_ GZ_
     HA_ HB_ HC_ HD_ HE_ HF_ HG_ HH_ HI_ HJ_ HK_ HL_ HM_ HN_ HO_ HP_ HQ_ HR_ HS_ HT_ HU_ HV_ HW_ HX_ HY_ HZ_
-    IA_ IB_ IC_ ID_ IE_ IF_ IG_ IH_ II_ IJ_ IK_ IL_ IM_ IN_ IO_ IP_ IQ_ IR_ IS_ IT_ IU_ IV_ IW_ IX_ IY_ IZ_
-    JA_ JB_ JC_ JD_ JE_ JF_ JG_ JH_ JI_ JJ_ JK_ JL_ JM_ JN_ JO_ JP_ JQ_ JR_ JS_ JT_ JU_ JV_ JW_ JX_ JY_ JZ_
-    KA_ KB_ KC_ KD_ KE_ KF_ KG_ KH_ KI_ KJ_ KK_ KL_ KM_ KN_ KO_ KP_ KQ_ KR_ KS_ KT_ KU_ KV_ KW_ KX_ KY_ KZ_
-    LA_ LB_ LC_ LD_ LE_ LF_ LG_ LH_ LI_ LJ_ LK_ LL_ LM_ LN_ LO_ LP_ LQ_ LR_ LS_ LT_ LU_ LV_ LW_ LX_ LY_ LZ_
-    MA_ MB_ MC_ MD_ ME_ MF_ MG_ MH_ MI_ MJ_ MK_ ML_ MM_ MN_ MO_ MP_ MQ_ MR_ MS_ MT_ MU_ MV_ MW_ MX_ MY_ MZ_
-    NA_ NB_ NC_ ND_ NE_ NF_ NG_ NH_ NI_ NJ_ NK_ NL_ NM_ NN_ NO_ NP_ NQ_ NR_ NS_ NT_ NU_ NV_ NW_ NX_ NY_ NZ_
-    OA_ OB_ OC_ OD_ OE_ OF_ OG_ OH_ OI_ OJ_ OK_ OL_ OM_ ON_ OO_ OP_ OQ_ OR_ OS_ OT_ OU_ OV_ OW_ OX_ OY_ OZ_
-    PA_ PB_ PC_ PD_ PE_ PF_ PG_ PH_ PI_ PJ_ PK_ PL_ PM_ PN_ PO_ PP_ PQ_ PR_ PS_ PT_ PU_ PV_ PW_ PX_ PY_ PZ_
-    QA_ QB_ QC_ QD_ QE_ QF_ QG_ QH_ QI_ QJ_ QK_ QL_ QM_ QN_ QO_ QP_ QQ_ QR_ QS_ QT_ QU_ QV_ QW_ QX_ QY_ QZ_
-    RA_ RB_ RC_ RD_ RE_ RF_ RG_ RH_ RI_ RJ_ RK_ RL_ RM_ RN_ RO_ RP_ RQ_ RR_ RS_ RT_ RU_ RV_ RW_ RX_ RY_ RZ_
-    SA_ SB_ SC_ SD_ SE_ SF_ SG_ SH_ SI_ SJ_ SK_ SL_ SM_ SN_ SO_ SP_ SQ_ SR_ SS_ ST_ SU_ SV_ SW_ SX_ SY_ SZ_
-    TA_ TB_ TC_ TD_ TE_ TF_ TG_ TH_ TI_ TJ_ TK_ TL_ TM_ TN_ TO_ TP_ TQ_ TR_ TS_ TT_ TU_ TV_ TW_ TX_ TY_ TZ_
-    UA_ UB_ UC_ UD_ UE_ UF_ UG_ UH_ UI_ UJ_ UK_ UL_ UM_ UN_ UO_ UP_ UQ_ UR_ US_ UT_ UU_ UV_ UW_ UX_ UY_ UZ_
-    VA_ VB_ VC_ VD_ VE_ VF_ VG_ VH_ VI_ VJ_ VK_ VL_ VM_ VN_ VO_ VP_ VQ_ VR_ VS_ VT_ VU_ VV_ VW_ VX_ VY_ VZ_
-    WA_ WB_ WC_ WD_ WE_ WF_ WG_ WH_ WI_ WJ_ WK_ WL_ WM_ WN_ WO_ WP_ WQ_ WR_ WS_ WT_ WU_ WV_ WW_ WX_ WY_ WZ_
-    XA_ XB_ XC_ XD_ XE_ XF_ XG_ XH_ XI_ XJ_ XK_ XL_ XM_ XN_ XO_ XP_ XQ_ XR_ XS_ XT_ XU_ XV_ XW_ XX_ XY_ XZ_
-    YA_ YB_ YC_ YD_ YE_ YF_ YG_ YH_ YI_ YJ_ YK_ YL_ YM_ YN_ YO_ YP_ YQ_ YR_ YS_ YT_ YU_ YV_ YW_ YX_ YY_ YZ_
-    ZA_ ZB_ ZC_ ZD_ ZE_ ZF_ ZG_ ZH_ ZI_ ZJ_ ZK_ ZL_ ZM_ ZN_ ZO_ ZP_ ZQ_ ZR_ ZS_ ZT_ ZU_ ZV_ ZW_ ZX_ ZY_ ZZ_
 );
 
 #[cfg(test)]
