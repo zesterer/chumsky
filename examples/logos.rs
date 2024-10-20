@@ -4,7 +4,7 @@
 
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use chumsky::{
-    input::{Stream, ValueInput},
+    input::{SliceInput, Stream, ValueInput},
     prelude::*,
 };
 use logos::Logos;
@@ -31,6 +31,9 @@ enum Token<'a> {
     #[token(")")]
     RParen,
 
+    #[regex("[A-Za-z_]+")]
+    Ident,
+
     #[regex(r"[ \t\f\n]+", logos::skip)]
     Whitespace,
 }
@@ -38,7 +41,7 @@ enum Token<'a> {
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Float(s) => write!(f, "{}", s),
+            Self::Float(s) => write!(f, "{s}"),
             Self::Add => write!(f, "+"),
             Self::Sub => write!(f, "-"),
             Self::Mul => write!(f, "*"),
@@ -46,18 +49,20 @@ impl fmt::Display for Token<'_> {
             Self::LParen => write!(f, "("),
             Self::RParen => write!(f, ")"),
             Self::Whitespace => write!(f, "<whitespace>"),
+            Self::Ident => write!(f, "<ident>"),
             Self::Error => write!(f, "<error>"),
         }
     }
 }
 
 #[derive(Debug)]
-enum SExpr {
+enum SExpr<'a> {
     Float(f64),
     Add,
     Sub,
     Mul,
     Div,
+    Ident(&'a str),
     List(Vec<Self>),
 }
 
@@ -71,9 +76,9 @@ enum SExpr {
 //     - Has an input type of type `I`, the one we declared as a type parameter
 //     - Produces an `SExpr` as its output
 //     - Uses `Rich`, a built-in error type provided by chumsky, for error generation
-fn parser<'a, I>() -> impl Parser<'a, I, SExpr, extra::Err<Rich<'a, Token<'a>>>>
+fn parser<'a, I>() -> impl Parser<'a, I, SExpr<'a>, extra::Err<Rich<'a, Token<'a>>>>
 where
-    I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>,
+    I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan> + SliceInput<'a, Slice = &'a str>,
 {
     recursive(|sexpr| {
         let atom = select! {
@@ -84,17 +89,19 @@ where
             Token::Div => SExpr::Div,
         };
 
+        let ident = just(Token::Ident).slice().map(SExpr::Ident);
+
         let list = sexpr
             .repeated()
             .collect()
             .map(SExpr::List)
             .delimited_by(just(Token::LParen), just(Token::RParen));
 
-        atom.or(list)
+        atom.or(ident).or(list)
     })
 }
 
-impl SExpr {
+impl<'a> SExpr<'a> {
     // Recursively evaluate an s-expression
     fn eval(&self) -> Result<f64, &'static str> {
         match self {
@@ -103,6 +110,7 @@ impl SExpr {
             Self::Sub => Err("Cannot evaluate operator '-'"),
             Self::Mul => Err("Cannot evaluate operator '*'"),
             Self::Div => Err("Cannot evaluate operator '/'"),
+            Self::Ident(_) => Err("Identifiers not supported"),
             Self::List(list) => match &list[..] {
                 [Self::Add, tail @ ..] => tail.iter().map(SExpr::eval).sum(),
                 [Self::Mul, tail @ ..] => tail.iter().map(SExpr::eval).product(),
@@ -142,7 +150,8 @@ fn main() {
     let token_stream = Stream::from_iter(token_iter)
         // Tell chumsky to split the (Token, SimpleSpan) stream into its parts so that it can handle the spans for us
         // This involves giving chumsky an 'end of input' span: we just use a zero-width span at the end of the string
-        .spanned((SRC.len()..SRC.len()).into());
+        .spanned((SRC.len()..SRC.len()).into())
+        .with_slice(SRC);
 
     // Parse the token stream with our chumsky parser
     match parser().parse(token_stream).into_result() {
