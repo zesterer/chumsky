@@ -33,21 +33,23 @@ pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
 impl<'a, const F: u128, I, O, E> ParserSealed<'a, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
-    I: SliceInput<'a, Offset = usize>,
+    I: SliceInput<'a, Cursor = usize>,
     <I as SliceInput<'a>>::Slice: AsRef<[u8]>,
     E: ParserExtra<'a, I>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         match parse_partial(inp.slice_trailing_inner().as_ref()) {
             Ok((out, skip)) => {
-                inp.skip_bytes(skip);
+                // SAFETY: `skip` is no longer than the trailing input's byte length
+                unsafe { inp.skip_bytes(skip) };
                 Ok(M::bind(|| out))
             }
             Err(_err) => {
                 // TODO: Improve error
-                inp.add_alt(inp.offset().offset, None, None, inp.span_since(before));
+                let span = inp.span_since(&before);
+                inp.add_alt(None, None, span);
                 Err(())
             }
         }

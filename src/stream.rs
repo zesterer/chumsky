@@ -5,7 +5,8 @@ use super::*;
 /// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is
 /// required.
 pub struct Stream<I: Iterator> {
-    tokens: Cell<(Vec<I::Item>, Option<I>)>,
+    tokens: Vec<I::Item>,
+    iter: I,
 }
 
 impl<I: Iterator> Stream<I> {
@@ -23,7 +24,8 @@ impl<I: Iterator> Stream<I> {
     /// ```
     pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
         Self {
-            tokens: Cell::new((Vec::new(), Some(iter.into_iter()))),
+            tokens: Vec::new(),
+            iter: iter.into_iter(),
         }
     }
 
@@ -33,9 +35,9 @@ impl<I: Iterator> Stream<I> {
     where
         I: 'a,
     {
-        let (vec, iter) = self.tokens.into_inner();
         Stream {
-            tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
+            tokens: self.tokens,
+            iter: Box::new(self.iter),
         }
     }
 
@@ -44,9 +46,9 @@ impl<I: Iterator> Stream<I> {
     where
         I: ExactSizeIterator + 'a,
     {
-        let (vec, iter) = self.tokens.into_inner();
         Stream {
-            tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
+            tokens: self.tokens,
+            iter: Box::new(self.iter),
         }
     }
 }
@@ -62,30 +64,36 @@ impl<'a, I: Iterator + 'a> Input<'a> for Stream<I>
 where
     I::Item: Clone,
 {
-    type Offset = usize;
-    type Token = I::Item;
     type Span = SimpleSpan<usize>;
 
-    #[inline(always)]
-    fn start(&self) -> Self::Offset {
-        0
-    }
+    type Token = I::Item;
+    type MaybeToken = I::Item;
 
-    type TokenMaybe = I::Item;
+    type Cursor = usize;
 
-    #[inline(always)]
-    unsafe fn next_maybe(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::TokenMaybe>) {
-        self.next(offset)
-    }
+    type Cache = Self;
 
     #[inline(always)]
-    unsafe fn span(&self, range: Range<Self::Offset>) -> Self::Span {
-        range.into()
+    fn begin(self) -> (Self::Cursor, Self::Cache) {
+        (0, self)
     }
 
     #[inline]
-    fn prev(offs: Self::Offset) -> Self::Offset {
-        offs.saturating_sub(1)
+    fn cursor_location(cursor: &Self::Cursor) -> usize {
+        *cursor
+    }
+
+    #[inline(always)]
+    unsafe fn next_maybe(
+        this: &mut Self::Cache,
+        cursor: &mut Self::Cursor,
+    ) -> Option<Self::MaybeToken> {
+        Self::next(this, cursor)
+    }
+
+    #[inline(always)]
+    unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+        (*range.start..*range.end).into()
     }
 }
 
@@ -94,12 +102,8 @@ where
     I::Item: Clone,
 {
     #[inline(always)]
-    unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Self::Span {
-        let mut other = Cell::new((Vec::new(), None));
-        self.tokens.swap(&other);
-        let len = other.get_mut().1.as_ref().expect("no iterator?!").len();
-        self.tokens.swap(&other);
-        (range.start..len).into()
+    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+        (*range.start..this.tokens.len() + this.iter.len()).into()
     }
 }
 
@@ -108,23 +112,80 @@ where
     I::Item: Clone,
 {
     #[inline]
-    unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
-        let mut other = Cell::new((Vec::new(), None));
-        self.tokens.swap(&other);
-
-        let (vec, iter) = other.get_mut();
-
+    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
         // Pull new items into the vector if we need them
-        if vec.len() <= offset {
-            vec.extend(iter.as_mut().expect("no iterator?!").take(500));
+        if this.tokens.len() <= *cursor {
+            this.tokens.extend((&mut this.iter).take(512));
         }
 
-        // Get the token at the given offset
-        let tok = vec.get(offset).cloned();
+        // Get the token at the given cursor
+        this.tokens.get(*cursor).map(|tok| {
+            *cursor += 1;
+            tok.clone()
+        })
+    }
+}
 
-        self.tokens.swap(&other);
+/// An input type that uses an iterator to generate tokens.
+///
+/// This input type supports backtracking by duplicating the iterator. It is recommended that your iterator is very
+/// cheap to copy/clone.
+pub struct IterInput<I, S> {
+    iter: I,
+    eoi: S,
+}
 
-        (offset + tok.is_some() as usize, tok)
+impl<I, S> IterInput<I, S> {
+    /// Create a new [`IterInput`] with the given iterator, and end of input span.
+    pub fn new(iter: I, eoi: S) -> Self {
+        Self { iter, eoi }
+    }
+}
+
+impl<'src, I, T: 'src, S> Input<'src> for IterInput<I, S>
+where
+    I: Iterator<Item = (T, S)> + Clone + 'src,
+    S: Span + 'src,
+{
+    type Cursor = (I, usize, Option<S::Offset>);
+    type Span = S;
+
+    type Token = T;
+    type MaybeToken = T;
+
+    type Cache = S; // eoi
+
+    #[inline]
+    fn begin(self) -> (Self::Cursor, Self::Cache) {
+        ((self.iter, 0, None), self.eoi)
+    }
+
+    #[inline]
+    fn cursor_location(cursor: &Self::Cursor) -> usize {
+        cursor.1
+    }
+
+    unsafe fn next_maybe(
+        _eoi: &mut Self::Cache,
+        cursor: &mut Self::Cursor,
+    ) -> Option<Self::MaybeToken> {
+        cursor.0.next().map(|(tok, span)| {
+            cursor.1 += 1;
+            cursor.2 = Some(span.end());
+            tok
+        })
+    }
+
+    unsafe fn span(eoi: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+        let start = range
+            .start
+            .0
+            .clone()
+            .next()
+            .map(|(_, s)| s.start())
+            .unwrap_or_else(|| eoi.start());
+        let end = range.end.2.clone().unwrap_or_else(|| eoi.end());
+        S::new(eoi.context(), start..end)
     }
 }
 

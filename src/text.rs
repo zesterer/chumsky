@@ -281,7 +281,7 @@ where
 pub fn digits<'a, C, I, E>(radix: u32) -> Repeated<impl Parser<'a, I, C, E> + Copy, C, I, E>
 where
     C: Char,
-    I: ValueInput<'a> + Input<'a, Token = C>,
+    I: ValueInput<'a, Token = C>,
     E: ParserExtra<'a, I>,
 {
     any()
@@ -328,7 +328,7 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'a, I: ValueInput<'a> + StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
+pub fn int<'a, I: StrInput<'a, C>, C: Char, E: ParserExtra<'a, I>>(
     radix: u32,
 ) -> impl Parser<'a, I, &'a C::Str, E> + Copy {
     any()

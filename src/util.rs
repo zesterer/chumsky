@@ -173,3 +173,54 @@ impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<
         deserializer.deserialize_newtype_struct("Maybe", MaybeVisitor(PhantomData))
     }
 }
+
+mod ref_or_val_sealed {
+    pub trait Sealed<T> {}
+}
+
+/// An trait that allows abstracting over values of or references to a `T`.
+///
+/// Some [`Input`]s can only generate tokens by-reference (like `&[T]` -> `&T`), and some can only generate tokens
+/// by-value (like `&str` -> `char`). This trait allows chumsky to handle both kinds of input.
+///
+/// The trait is sealed: you cannot implement it yourself.
+pub trait IntoMaybe<'src, T: 'src>:
+    ref_or_val_sealed::Sealed<T> + Borrow<T> + Into<MaybeRef<'src, T>>
+{
+    /// Project the referential properties of this type on to another type.
+    ///
+    /// For example, `<&Foo>::Proj<Bar> = &Bar` but `<Foo>::Proj<Bar> = Bar`.
+    #[doc(hidden)]
+    type Proj<U: 'src>: IntoMaybe<'src, U>;
+
+    #[doc(hidden)]
+    fn map_maybe<R: 'src>(
+        self,
+        f: impl FnOnce(&'src T) -> &'src R,
+        g: impl FnOnce(T) -> R,
+    ) -> Self::Proj<R>;
+}
+
+impl<T> ref_or_val_sealed::Sealed<T> for &T {}
+impl<'src, T> IntoMaybe<'src, T> for &'src T {
+    type Proj<U: 'src> = &'src U;
+    fn map_maybe<R: 'src>(
+        self,
+        f: impl FnOnce(&'src T) -> &'src R,
+        _g: impl FnOnce(T) -> R,
+    ) -> Self::Proj<R> {
+        f(self)
+    }
+}
+
+impl<T> ref_or_val_sealed::Sealed<T> for T {}
+impl<'src, T: 'src> IntoMaybe<'src, T> for T {
+    type Proj<U: 'src> = U;
+    fn map_maybe<R: 'src>(
+        self,
+        _f: impl FnOnce(&'src T) -> &'src R,
+        g: impl FnOnce(T) -> R,
+    ) -> Self::Proj<R> {
+        g(self)
+    }
+}

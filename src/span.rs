@@ -30,7 +30,7 @@ pub trait Span {
     /// means that it's perfectly fine for tokens to have non-continuous spans that bear no relation to their actual
     /// location in the input stream. This is useful for languages with an AST-level macro system that need to
     /// correctly point to symbols in the macro input when producing errors.
-    type Offset;
+    type Offset: Clone;
 
     /// Create a new span given a context and an offset range.
     fn new(context: Self::Context, range: Range<Self::Offset>) -> Self;
