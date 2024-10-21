@@ -117,7 +117,7 @@ use core::marker::Tuple;
 use core::{
     borrow::Borrow,
     cell::{Cell, RefCell},
-    cmp::{Eq, Ordering},
+    cmp::{Eq, Ord, Ordering},
     fmt,
     hash::Hash,
     marker::PhantomData,
@@ -2246,7 +2246,6 @@ where
 pub struct ParserIter<'a, 'iter, P: IterParser<'a, I, O, E>, I: Input<'a>, O, E: ParserExtra<'a, I>>
 {
     parser: P,
-    offset: I::Offset,
     own: InputOwn<'a, 'iter, I, E>,
     iter_state: Option<P::IterState<Emit>>,
     #[allow(dead_code)]
@@ -2261,7 +2260,7 @@ where
     type Item = O;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut inp = self.own.as_ref_at(self.offset);
+        let mut inp = self.own.as_ref_start();
         let parser = &self.parser;
 
         let iter_state = match &mut self.iter_state {
@@ -2274,7 +2273,8 @@ where
         };
 
         let res = parser.next::<Emit>(&mut inp, iter_state);
-        self.offset = inp.offset;
+        // TODO: Avoid clone
+        self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)
     }
 }
@@ -2511,7 +2511,6 @@ where
         ParseResult::new(
             Some(ParserIter {
                 parser: self,
-                offset: input.start(),
                 own: InputOwn::new(input),
                 iter_state: None,
                 phantom: EmptyPhantom::new(),
@@ -2537,7 +2536,6 @@ where
         ParseResult::new(
             Some(ParserIter {
                 parser: self,
-                offset: input.start(),
                 own: InputOwn::new_state(input, state),
                 iter_state: None,
                 phantom: EmptyPhantom::new(),

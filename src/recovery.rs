@@ -47,7 +47,7 @@ where
                 return Err(());
             }
         };
-        inp.emit(inp.offset, alt.err);
+        inp.emit(alt.err);
         Ok(out)
     }
 }
@@ -67,11 +67,11 @@ where
     S: Strategy<'a, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.save();
+        let before = inp.save().clone();
         match self.parser.go::<M>(inp) {
             Ok(out) => Ok(out),
             Err(()) => {
-                inp.rewind(before);
+                inp.rewind(before.clone());
                 match self.strategy.recover::<M, _>(inp, &self.parser) {
                     Ok(out) => Ok(out),
                     Err(()) => {
@@ -130,7 +130,7 @@ where
                     .secondary_errors_since(before.err_count)
                     .is_empty()
             }) {
-                inp.emit(inp.offset, alt.err);
+                inp.emit(alt.err);
                 break Ok(out);
             } else {
                 inp.errors.alt.take();
@@ -172,7 +172,7 @@ where
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
-                inp.emit(inp.offset, alt.err);
+                inp.emit(alt.err);
                 break Ok(M::bind(|| (self.fallback)()));
             }
             inp.rewind(before);

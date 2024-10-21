@@ -35,24 +35,27 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
-        let before = inp.offset();
+        let before = inp.cursor();
 
         let re_in = ReInput::new(inp.full_slice())
             .anchored(Anchored::Yes)
-            .range(before.offset..);
+            .range(before.inner..);
 
         let res = self.regex.find(re_in).map(|m| m.len());
 
         match res {
             Some(len) => {
-                let before = inp.offset();
-                inp.skip_bytes(len);
-                let after = inp.offset();
-                Ok(M::bind(|| inp.slice_inner(before.offset..after.offset)))
+                let before = inp.cursor();
+                // SAFETY: `len` *must* be no greater than the byte length of the remaining string
+                unsafe {
+                    inp.skip_bytes(len);
+                }
+                let after = inp.cursor();
+                Ok(M::bind(|| inp.slice(&before..&after)))
             }
             None => {
                 // TODO: Improve error
-                inp.add_alt(inp.offset().offset, None, None, inp.span_since(before));
+                inp.add_alt(None, None, inp.span_since(&before));
                 Err(())
             }
         }

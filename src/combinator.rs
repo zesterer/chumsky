@@ -173,9 +173,10 @@ where
         let cfg = (self.cfg)(
             A::Config::default(),
             inp.ctx(),
-            inp.span_since(inp.offset()),
+            inp.span_since(&inp.cursor()),
         )
-        .map_err(|e| inp.add_alt_err(inp.offset, e))?;
+        // TODO: Don't clone
+        .map_err(|e| inp.add_alt_err(&inp.cursor().inner, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
@@ -217,10 +218,10 @@ where
     where
         Self: Sized,
     {
-        let before = inp.offset();
+        let before = inp.cursor();
         self.parser.go::<Check>(inp)?;
 
-        Ok(M::bind(|| inp.slice_since(before..)))
+        Ok(M::bind(|| inp.slice_since(&before..)))
     }
 
     go_extra!(I::Slice);
@@ -251,13 +252,13 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         self.parser.go::<Emit>(inp).and_then(|out| {
             if (self.filter)(&out) {
                 Ok(M::bind(|| out))
             } else {
-                let err_span = inp.span_since(before);
-                inp.add_alt(inp.offset().offset, None, None, err_span);
+                let err_span = inp.span_since(&before);
+                inp.add_alt(None, None, err_span);
                 Err(())
             }
         })
@@ -363,10 +364,10 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| {
-            (self.mapper)(out, &mut MapExtra::new(before, inp))
+            (self.mapper)(out, &mut MapExtra::new(&before, inp))
         }))
     }
 
@@ -399,10 +400,10 @@ where
         inp: &mut InputRef<'a, '_, I, E>,
         state: &mut Self::IterState<M>,
     ) -> IPResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         match self.parser.next::<M>(inp, state) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| {
-                (self.mapper)(o, &mut MapExtra::new(before, inp))
+                (self.mapper)(o, &mut MapExtra::new(&before, inp))
             }))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
@@ -511,9 +512,9 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Span> {
-        let before = inp.offset();
+        let before = inp.cursor();
         self.parser.go::<M>(inp)?;
-        Ok(M::bind(|| inp.span_since(before)))
+        Ok(M::bind(|| inp.span_since(&before)))
     }
 
     go_extra!(I::Span);
@@ -547,13 +548,13 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         let out = self.parser.go::<Emit>(inp)?;
-        let span = inp.span_since(before);
+        let span = inp.span_since(&before);
         match (self.mapper)(out, span) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(before.offset, err);
+                inp.add_alt_err(&before.inner, err);
                 Err(())
             }
         }
@@ -590,12 +591,13 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         let out = self.parser.go::<Emit>(inp)?;
-        match (self.mapper)(out, &mut MapExtra::new(before, inp)) {
+        match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(inp.offset().offset, err);
+                // TODO: Don't clone
+                inp.add_alt_err(&inp.cursor().inner, err);
                 Err(())
             }
         }
@@ -799,10 +801,10 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.offset();
+        let before = inp.cursor();
         // TODO: Don't use address, since this might not be constant?
         let key = (
-            before.offset,
+            I::cursor_location(&before.inner),
             &self.parser as *const _ as *const () as usize,
         );
 
@@ -810,10 +812,10 @@ where
             hashbrown::hash_map::Entry::Occupied(o) => {
                 if let Some(err) = o.get() {
                     let err = err.clone();
-                    inp.add_alt_err(err.pos, err.err);
+                    inp.add_alt_err(&before.inner /*&err.pos*/, err.err);
                 } else {
-                    let err_span = inp.span_since(before);
-                    inp.add_alt(key.0, None, None, err_span);
+                    let err_span = inp.span_since(&before);
+                    inp.add_alt(None, None, err_span);
                 }
                 return Err(());
             }
@@ -979,8 +981,10 @@ where
 
         #[cfg(feature = "memoization")]
         let mut memos = HashMap::default();
+        let (start, mut cache) = inp2.begin();
         let res = inp.with_input(
-            &inp2,
+            start,
+            &mut cache,
             |inp| (&self.parser_a).then_ignore(end()).go::<M>(inp),
             #[cfg(feature = "memoization")]
             &mut memos,
@@ -990,7 +994,8 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err(inp.offset().offset, new_alt.err);
+            // TODO: Don't clone
+            inp.add_alt_err(&inp.cursor().inner, new_alt.err);
         }
 
         res
@@ -1450,7 +1455,7 @@ where
                 }
                 #[cfg(debug_assertions)]
                 debug_assert!(
-                    before.offset() != inp.offset(),
+                    *before.cursor() != inp.cursor(),
                     "found Repeated combinator making no progress at {}",
                     self.location,
                 );
@@ -1459,7 +1464,7 @@ where
             let mut state = self.make_iter::<Check>(inp)?;
             loop {
                 #[cfg(debug_assertions)]
-                let before = inp.offset();
+                let before = inp.cursor();
                 match self.next::<Check>(inp, &mut state) {
                     Ok(Some(())) => {}
                     Ok(None) => break Ok(M::bind(|| ())),
@@ -1470,7 +1475,7 @@ where
                 }
                 #[cfg(debug_assertions)]
                 debug_assert!(
-                    before != inp.offset(),
+                    before != inp.cursor(),
                     "found Repeated combinator making no progress at {}",
                     self.location,
                 );
@@ -1767,7 +1772,7 @@ where
         let before_separator = inp.save();
         if *state == 0 && self.allow_leading {
             if self.separator.go::<Check>(inp).is_err() {
-                inp.rewind(before_separator);
+                inp.rewind(before_separator.clone());
             }
         } else if *state > 0 {
             match self.separator.go::<Check>(inp) {
@@ -1827,7 +1832,7 @@ where
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
             #[cfg(debug_assertions)]
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.next::<Check>(inp, &mut state) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
@@ -1838,7 +1843,7 @@ where
             }
             #[cfg(debug_assertions)]
             debug_assert!(
-                before != inp.offset(),
+                before != inp.cursor(),
                 "found SeparatedBy combinator making no progress at {}",
                 self.location,
             );
@@ -1935,7 +1940,7 @@ where
         let mut i = 0;
         loop {
             #[cfg(debug_assertions)]
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.parser.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut output, out, |output: &mut C, item| output.push(item));
@@ -1949,7 +1954,7 @@ where
             if !A::NONCONSUMPTION_IS_OK {
                 if i >= 1 {
                     debug_assert!(
-                        before != inp.offset(),
+                        before != inp.cursor(),
                         "found Collect combinator making no progress at {}",
                         self.location,
                     );
@@ -1988,7 +1993,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, C> {
-        let before = inp.offset();
+        let before = inp.cursor();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
         for idx in 0..C::LEN {
@@ -1997,7 +2002,7 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    inp.add_alt(inp.offset, None, None, inp.span_since(before));
+                    inp.add_alt(None, None, inp.span_since(&before));
                     // SAFETY: We're guaranteed to have initialized up to `idx` values
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
@@ -2118,15 +2123,15 @@ where
         let alt = inp.errors.alt.take();
 
         let result = self.parser.go::<Check>(inp);
-        let result_span = inp.span_since(before.offset());
+        let result_span = inp.span_since(before.cursor());
         inp.rewind(before);
 
         inp.errors.alt = alt;
 
         match result {
             Ok(()) => {
-                let (at, found) = inp.next_inner();
-                inp.add_alt(at, None, found.map(|f| f.into()), result_span);
+                let found = inp.next_inner();
+                inp.add_alt(None, found.map(|f| f.into()), result_span);
                 Err(())
             }
             Err(()) => Ok(M::bind(|| ())),
@@ -2240,7 +2245,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, OA> {
-        let before = inp.save();
+        let before = inp.save().clone();
         match self.parser_a.go::<M>(inp) {
             Ok(out) => {
                 // A succeeded -- go back to the beginning and try B
@@ -2255,7 +2260,6 @@ where
                     }
                     Err(()) => {
                         // B failed -- go back to the beginning and fail
-                        inp.rewind(before);
                         Err(())
                     }
                 }
@@ -2313,7 +2317,7 @@ where
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
             #[cfg(debug_assertions)]
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
@@ -2324,7 +2328,7 @@ where
             #[cfg(debug_assertions)]
             if !A::NONCONSUMPTION_IS_OK {
                 debug_assert!(
-                    before != inp.offset(),
+                    before != inp.cursor(),
                     "found Foldr combinator making no progress at {}",
                     self.location,
                 );
@@ -2382,10 +2386,12 @@ where
         let mut a_out = M::bind(Vec::new);
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.parser_a.next::<M>(inp, &mut iter_state) {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut a_out, out, |a_out, item| a_out.push((item, before)));
+                    M::combine_mut(&mut a_out, out, |a_out, item| {
+                        a_out.push((item, before.clone()))
+                    });
                 }
                 Ok(None) => break,
                 Err(()) => return Err(()),
@@ -2393,7 +2399,7 @@ where
             #[cfg(debug_assertions)]
             if !A::NONCONSUMPTION_IS_OK {
                 debug_assert!(
-                    before != inp.offset(),
+                    before != inp.cursor(),
                     "found FoldrWithState combinator making no progress at {}",
                     self.location,
                 );
@@ -2404,7 +2410,7 @@ where
 
         Ok(M::combine(a_out, b_out, |a_out, b_out| {
             a_out.into_iter().rfold(b_out, |b, (a, before)| {
-                (self.folder)(a, b, &mut MapExtra::new(before, inp))
+                (self.folder)(a, b, &mut MapExtra::new(&before, inp))
             })
         }))
     }
@@ -2454,7 +2460,7 @@ where
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
             #[cfg(debug_assertions)]
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out));
@@ -2465,7 +2471,7 @@ where
             #[cfg(debug_assertions)]
             if !B::NONCONSUMPTION_IS_OK {
                 debug_assert!(
-                    before != inp.offset(),
+                    before != inp.cursor(),
                     "found Foldl combinator making no progress at {}",
                     self.location,
                 );
@@ -2514,16 +2520,16 @@ where
     where
         Self: Sized,
     {
-        let before_all = inp.offset();
+        let before_all = inp.cursor();
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
             #[cfg(debug_assertions)]
-            let before = inp.offset();
+            let before = inp.cursor();
             match self.parser_b.next::<M>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| {
-                        (self.folder)(out, b_out, &mut MapExtra::new(before_all, inp))
+                        (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp))
                     })
                 }
                 Ok(None) => break Ok(out),
@@ -2532,7 +2538,7 @@ where
             #[cfg(debug_assertions)]
             if !B::NONCONSUMPTION_IS_OK {
                 debug_assert!(
-                    before != inp.offset(),
+                    before != inp.cursor(),
                     "found FoldlWithState combinator making no progress at {}",
                     self.location,
                 );
@@ -2558,7 +2564,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.save();
+        let before = inp.save().clone();
         match self.parser.go::<M>(inp) {
             Ok(out) => {
                 inp.rewind(before);
@@ -2623,7 +2629,7 @@ where
 //     where
 //         Self: Sized,
 //     {
-//         let start = inp.offset();
+//         let start = inp.cursor();
 //         let res = self.parser.go::<M>(inp);
 
 //         if res.is_err() {
@@ -2658,12 +2664,12 @@ where
     where
         Self: Sized,
     {
-        let start = inp.offset();
+        let start = inp.cursor();
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
             let mut e = inp.take_alt();
-            let span = inp.span_since(start);
+            let span = inp.span_since(&start);
             e.err = (self.mapper)(e.err, span, inp.state());
             inp.errors.alt = Some(e);
         }
@@ -2705,13 +2711,13 @@ where
     where
         Self: Sized,
     {
-        let before = inp.offset();
+        let before = inp.cursor();
         let out = self.parser.go::<Emit>(inp)?;
 
         let mut emitter = Emitter::new();
-        let out = (self.validator)(out, &mut MapExtra::new(before, inp), &mut emitter);
+        let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
         for err in emitter.errors() {
-            inp.emit(inp.offset, err);
+            inp.emit(err);
         }
         Ok(M::bind(|| out))
     }
@@ -2738,7 +2744,7 @@ where
 //     where
 //         Self: Sized,
 //     {
-//         let before = inp.save();
+//         let before = inp.save().clone();
 //         match self.parser.go::<M>(inp) {
 //             Ok(out) => Ok(out),
 //             Err(()) => {
