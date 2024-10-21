@@ -149,7 +149,7 @@ use self::{
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
-    util::{MaybeMut, MaybeRef},
+    util::{IntoMaybe, MaybeMut, MaybeRef},
 };
 #[cfg(all(feature = "extension", doc))]
 use self::{extension::v1::*, primitive::custom, stream::Stream};

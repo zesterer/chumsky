@@ -13,46 +13,6 @@ use super::*;
 #[cfg(feature = "std")]
 use std::io::{BufReader, Read, Seek};
 
-mod sealed {
-    pub trait Sealed<T> {}
-}
-#[doc(hidden)]
-pub trait MaybeOwned<'src, T: 'src>:
-    sealed::Sealed<T> + Borrow<T> + Into<MaybeRef<'src, T>>
-{
-    type Proj<U: 'src>: MaybeOwned<'src, U>;
-    #[doc(hidden)]
-    fn choose<R: 'src>(
-        self,
-        f: impl FnOnce(&'src T) -> &'src R,
-        g: impl FnOnce(T) -> R,
-    ) -> Self::Proj<R>;
-}
-
-impl<T> sealed::Sealed<T> for &T {}
-impl<'src, T> MaybeOwned<'src, T> for &'src T {
-    type Proj<U: 'src> = &'src U;
-    fn choose<R: 'src>(
-        self,
-        f: impl FnOnce(&'src T) -> &'src R,
-        _g: impl FnOnce(T) -> R,
-    ) -> Self::Proj<R> {
-        f(self)
-    }
-}
-
-impl<T> sealed::Sealed<T> for T {}
-impl<'src, T: 'src> MaybeOwned<'src, T> for T {
-    type Proj<U: 'src> = U;
-    fn choose<R: 'src>(
-        self,
-        _f: impl FnOnce(&'src T) -> &'src R,
-        g: impl FnOnce(T) -> R,
-    ) -> Self::Proj<R> {
-        g(self)
-    }
-}
-
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 ///
@@ -73,7 +33,7 @@ pub trait Input<'src>: 'src {
     type Token: 'src;
 
     /// The token type returned by [`Input::next_maybe`], allows abstracting over by-value and by-reference inputs.
-    type TokenMaybe: MaybeOwned<'src, Self::Token>; // Must be `&'src Self::Token` or `Self::Token`
+    type MaybeToken: IntoMaybe<'src, Self::Token>; // Must be `&'src Self::Token` or `Self::Token`
 
     /// The type used to keep track of the current location in the stream.
     ///
@@ -101,7 +61,7 @@ pub trait Input<'src>: 'src {
     unsafe fn next_maybe(
         cache: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe>;
+    ) -> Option<Self::MaybeToken>;
 
     /// Create a span going from the start cursor to the end cursor (exclusive).
     ///
@@ -247,7 +207,7 @@ impl<'src> Input<'src> for &'src str {
     type Span = SimpleSpan<usize>;
 
     type Token = char;
-    type TokenMaybe = char;
+    type MaybeToken = char;
 
     type Cache = Self;
 
@@ -265,7 +225,7 @@ impl<'src> Input<'src> for &'src str {
     unsafe fn next_maybe(
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         if *cursor < this.len() {
             // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
             //         We only ever return cursors that are at a character boundary
@@ -328,7 +288,7 @@ impl<'src, T> Input<'src> for &'src [T] {
     type Span = SimpleSpan<usize>;
 
     type Token = T;
-    type TokenMaybe = &'src T;
+    type MaybeToken = &'src T;
 
     type Cache = Self;
 
@@ -346,7 +306,7 @@ impl<'src, T> Input<'src> for &'src [T] {
     unsafe fn next_maybe(
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         if let Some(tok) = this.get(*cursor) {
             *cursor += 1;
             Some(tok)
@@ -412,7 +372,7 @@ impl<'src, T: 'src, const N: usize> Input<'src> for &'src [T; N] {
     type Span = SimpleSpan<usize>;
 
     type Token = T;
-    type TokenMaybe = &'src T;
+    type MaybeToken = &'src T;
 
     type Cache = Self;
 
@@ -430,7 +390,7 @@ impl<'src, T: 'src, const N: usize> Input<'src> for &'src [T; N] {
     unsafe fn next_maybe(
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         if let Some(tok) = this.get(*cursor) {
             *cursor += 1;
             Some(tok)
@@ -509,7 +469,7 @@ where
     type Span = S;
 
     type Token = T;
-    type TokenMaybe = <I::TokenMaybe as MaybeOwned<'src, I::Token>>::Proj<Self::Token>;
+    type MaybeToken = <I::MaybeToken as IntoMaybe<'src, I::Token>>::Proj<Self::Token>;
 
     type Cache = (I::Cache, S);
 
@@ -528,10 +488,10 @@ where
     unsafe fn next_maybe(
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         I::next_maybe(cache, &mut cursor.0).map(|tok| {
             cursor.1 = Some(tok.borrow().1.end());
-            tok.choose(|(tok, _)| tok, |(tok, _)| tok)
+            tok.map_maybe(|(tok, _)| tok, |(tok, _)| tok)
         })
     }
 
@@ -644,7 +604,7 @@ where
     type Span = S;
 
     type Token = I::Token;
-    type TokenMaybe = I::TokenMaybe;
+    type MaybeToken = I::MaybeToken;
 
     type Cache = (I::Cache, S::Context);
 
@@ -663,7 +623,7 @@ where
     unsafe fn next_maybe(
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         I::next_maybe(cache, cursor)
     }
 
@@ -789,7 +749,7 @@ where
     type Span = S;
 
     type Token = I::Token;
-    type TokenMaybe = I::TokenMaybe;
+    type MaybeToken = I::MaybeToken;
 
     type Cache = (I::Cache, F);
 
@@ -808,7 +768,7 @@ where
     unsafe fn next_maybe(
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         I::next_maybe(cache, cursor)
     }
 
@@ -941,7 +901,7 @@ impl<'src, R: Read + Seek + 'src> Input<'src> for IoInput<R> {
     type Span = SimpleSpan;
 
     type Token = u8;
-    type TokenMaybe = u8;
+    type MaybeToken = u8;
 
     type Cache = Self;
 
@@ -958,7 +918,7 @@ impl<'src, R: Read + Seek + 'src> Input<'src> for IoInput<R> {
     unsafe fn next_maybe(
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         Self::next(this, cursor)
     }
 
@@ -1347,7 +1307,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline(always)]
-    pub(crate) fn next_maybe_inner(&mut self) -> Option<I::TokenMaybe> {
+    pub(crate) fn next_maybe_inner(&mut self) -> Option<I::MaybeToken> {
         // SAFETY: cursor was generated by previous call to `Input::next`
         let token = unsafe { I::next_maybe(self.cache, &mut self.cursor) };
         if let Some(t) = &token {

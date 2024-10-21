@@ -67,7 +67,7 @@ where
     type Span = SimpleSpan<usize>;
 
     type Token = I::Item;
-    type TokenMaybe = I::Item;
+    type MaybeToken = I::Item;
 
     type Cursor = usize;
 
@@ -87,7 +87,7 @@ where
     unsafe fn next_maybe(
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         Self::next(this, cursor)
     }
 
@@ -151,7 +151,7 @@ where
     type Span = S;
 
     type Token = T;
-    type TokenMaybe = T;
+    type MaybeToken = T;
 
     type Cache = S; // eoi
 
@@ -168,7 +168,7 @@ where
     unsafe fn next_maybe(
         _eoi: &mut Self::Cache,
         cursor: &mut Self::Cursor,
-    ) -> Option<Self::TokenMaybe> {
+    ) -> Option<Self::MaybeToken> {
         cursor.0.next().map(|(tok, span)| {
             cursor.1 += 1;
             cursor.2 = Some(span.end());
