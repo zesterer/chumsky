@@ -1271,7 +1271,9 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     ///
     /// You can rewind back to this state later with [`InputRef::rewind`].
     #[inline(always)]
-    pub fn save(&self) -> Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint> {
+    pub fn save(
+        &self,
+    ) -> Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint> {
         let cursor = self.cursor();
         let inspector = self.state.on_save(&cursor);
         Checkpoint {
@@ -1286,7 +1288,10 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     ///
     /// You can create a checkpoint with which to perform rewinding using [`InputRef::save`].
     #[inline(always)]
-    pub fn rewind(&mut self, checkpoint: Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>) {
+    pub fn rewind(
+        &mut self,
+        checkpoint: Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+    ) {
         self.errors.secondary.truncate(checkpoint.err_count);
         self.state.on_rewind(&checkpoint);
         self.cursor = checkpoint.cursor.inner;
