@@ -175,7 +175,6 @@ where
             inp.ctx(),
             inp.span_since(&inp.cursor()),
         )
-        // TODO: Don't clone
         .map_err(|e| inp.add_alt_err(&inp.cursor().inner, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
@@ -596,7 +595,6 @@ where
         match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
-                // TODO: Don't clone
                 inp.add_alt_err(&inp.cursor().inner, err);
                 Err(())
             }
@@ -994,7 +992,6 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            // TODO: Don't clone
             inp.add_alt_err(&inp.cursor().inner, new_alt.err);
         }
 
