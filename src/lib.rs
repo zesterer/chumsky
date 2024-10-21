@@ -3502,11 +3502,11 @@ mod tests {
 
         let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
             Some(Some('h'.into())),
-            Some('g'.into()),
+            Some('b'.into()),
             (0..1).into(),
         );
         <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
-        assert_eq!(parser().parse("goodbye").into_errors(), vec![err]);
+        assert_eq!(parser().parse("bye").into_errors(), vec![err]);
 
         let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
             Some(Some('l'.into())),

@@ -182,25 +182,24 @@ where
         cfg: Self::Config,
     ) -> PResult<M, T> {
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
-
-        if let Some(()) = seq.seq_iter().find_map(|next| {
-            let before = inp.cursor().clone();
+        for next in seq.seq_iter() {
+            let before = inp.save();
             match inp.next_maybe_inner() {
-                Some(tok) if next.borrow() == tok.borrow() => None,
+                Some(tok) if next.borrow() == tok.borrow() => {}
                 found => {
+                    let span = inp.span_since(before.cursor());
+                    inp.rewind(before);
                     inp.add_alt(
                         Some(Some(T::to_maybe_ref(next))),
                         found.map(|f| f.into()),
-                        inp.span_since(&before),
+                        span,
                     );
-                    Some(())
+                    return Err(());
                 }
             }
-        }) {
-            Err(())
-        } else {
-            Ok(M::bind(|| seq.clone()))
         }
+
+        Ok(M::bind(|| seq.clone()))
     }
 
     go_cfg_extra!(T);
