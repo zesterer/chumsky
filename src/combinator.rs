@@ -5,6 +5,8 @@
 //! Although it's *sometimes* useful to be able to name their type, most of these parsers are much easier to work with
 //! when accessed through their respective methods on [`Parser`].
 
+use inspector::Inspector;
+
 use super::*;
 
 /// The type of a lazy parser.
@@ -1196,7 +1198,7 @@ where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     A: Parser<'a, I, O, extra::Full<E::Error, State, E::Context>>,
-    State: 'a + Clone,
+    State: 'a + Clone + Inspector<'a, I>,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
