@@ -63,19 +63,6 @@ criterion_group!(
 
 criterion_main!(benches);
 
-fn i64_from_bytes(bytes: &[u8]) -> i64 {
-    let mut b = [0; 8];
-    bytes
-        .iter()
-        .rev()
-        .zip(b.iter_mut().rev())
-        .for_each(|(byte, b)| {
-            *b = *byte;
-        });
-
-    i64::from_be_bytes(b)
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum CborZero<'a> {
     Bool(bool),
@@ -95,88 +82,66 @@ pub enum CborZero<'a> {
 
 mod chumsky_zero_copy {
     use super::CborZero;
-    use crate::i64_from_bytes;
     use chumsky::prelude::*;
 
     type Error<'a> = EmptyErr;
 
-    fn int_out(slice: &[u8]) -> i64 {
-        if slice.len() == 1 {
-            (slice[0] & 0b1_1111) as i64
-        } else {
-            i64_from_bytes(&slice[1..])
-        }
-    }
-
     pub fn cbor<'a>() -> impl Parser<'a, &'a [u8], CborZero<'a>, extra::Err<Error<'a>>> {
         recursive(|data| {
-            let read_int = any()
-                .try_map(|ctx, _| {
-                    if ctx & 0b1_1111 < 28 {
-                        Ok(ctx)
-                    } else {
-                        Err(Error::default())
-                    }
-                })
-                .ignore_with_ctx(any().repeated().configure(|cfg, ctx| {
-                    let info = *ctx & 0b1_1111;
-                    let num = if info < 24 {
-                        0
-                    } else {
-                        2usize.pow(info as u32 - 24)
-                    };
-                    cfg.exactly(num)
-                }))
-                .to_slice()
-                .map(int_out);
+            let take = |n: u8| any().map(move |x| x % (1 << n));
+            let int = |bytes| {
+                empty()
+                    .to(0u64)
+                    .foldl(any().repeated().exactly(bytes), |a, x| (a << 8) | x as u64)
+            };
+            let read_uint = choice((
+                take(5).filter(|x| *x <= 23).map(|x| x as u64),
+                take(5).filter(|x| *x == 24).ignore_then(int(1)),
+                take(5).filter(|x| *x == 25).ignore_then(int(2)),
+                take(5).filter(|x| *x == 26).ignore_then(int(4)),
+                take(5).filter(|x| *x == 27).ignore_then(int(8)),
+            ));
 
-            let uint = read_int.map(CborZero::Int);
-            let nint = read_int.map(|i| CborZero::Int(-1 - i));
-            // TODO: Handle indefinite lengths
-            let bstr = read_int.ignore_with_ctx(
+            let uint = read_uint.map(|x| CborZero::Int(x.try_into().unwrap()));
+            let nint = read_uint.map(|x| CborZero::Int(-1 - i64::try_from(x).unwrap()));
+
+            let length = read_uint.map(|x| usize::try_from(x).unwrap());
+            let bstr = length.ignore_with_ctx(
                 any()
                     .repeated()
-                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .configure(|cfg, ctx| cfg.exactly(*ctx))
                     .to_slice()
                     .map(CborZero::Bytes),
             );
 
-            let str = read_int.ignore_with_ctx(
+            let str = length.ignore_with_ctx(
                 any()
                     .repeated()
-                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .configure(|cfg, ctx| cfg.exactly(*ctx))
                     .to_slice()
                     .map(|slice| CborZero::String(std::str::from_utf8(slice).unwrap())),
             );
 
-            let array = read_int.ignore_with_ctx(
+            let array = length.ignore_with_ctx(
                 data.clone()
                     .with_ctx(())
                     .repeated()
-                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .configure(|cfg, ctx| cfg.exactly(*ctx))
                     .collect::<Vec<_>>()
                     .map(CborZero::Array),
             );
 
-            let map = read_int.ignore_with_ctx(
+            let map = length.ignore_with_ctx(
                 data.clone()
                     .then(data.clone())
                     .with_ctx(())
                     .repeated()
-                    .configure(|cfg, ctx| cfg.exactly(*ctx as usize))
+                    .configure(|cfg, ctx| cfg.exactly(*ctx))
                     .collect::<Vec<_>>()
                     .map(CborZero::Map),
             );
 
-            let simple = |num: u8| {
-                any().try_map(move |n, _| {
-                    if n & 0b1_1111 == num {
-                        Ok(())
-                    } else {
-                        Err(Error::default())
-                    }
-                })
-            };
+            let simple = |num: u8| any().filter(move |n| n % (1 << 5) == num);
 
             let float_simple = choice((
                 simple(20).to(CborZero::Bool(false)),
@@ -199,28 +164,26 @@ mod chumsky_zero_copy {
                 ),
             ));
 
-            let major = |num: u8| {
-                any()
-                    .try_map(move |n, _| {
-                        if (n >> 5) == num {
-                            Ok(())
-                        } else {
-                            Err(Error::default())
-                        }
-                    })
-                    .rewind()
-            };
+            recursive(|value| {
+                let major =
+                    |num: u8, bits: u8| any().rewind().filter(move |n| n >> (8 - bits) == num);
 
-            choice((
-                major(0).ignore_then(uint),
-                major(1).ignore_then(nint),
-                major(2).ignore_then(bstr),
-                major(3).ignore_then(str),
-                major(4).ignore_then(array),
-                major(5).ignore_then(map),
-                major(6).ignore_then(todo()),
-                major(7).ignore_then(float_simple),
-            ))
+                let tag = major(6, 3)
+                    .ignore_then(read_uint)
+                    .then(value)
+                    .map(|(tag, value)| CborZero::Tag(tag, Box::new(value)));
+
+                choice((
+                    major(0, 3).ignore_then(uint),
+                    major(1, 3).ignore_then(nint),
+                    major(2, 3).ignore_then(bstr),
+                    major(3, 3).ignore_then(str),
+                    major(4, 3).ignore_then(array),
+                    major(5, 3).ignore_then(map),
+                    major(6, 3).ignore_then(tag),
+                    major(7, 3).ignore_then(float_simple),
+                ))
+            })
         })
     }
 }
