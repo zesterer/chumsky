@@ -41,7 +41,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match inp.next_maybe_inner() {
             None => Ok(M::bind(|| ())),
             Some(tok) => {
@@ -261,7 +261,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match inp.next_inner() {
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
@@ -335,7 +335,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match inp.next_inner() {
             // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
@@ -401,7 +401,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match (self.f)(inp) {
             Ok(out) => Ok(M::bind(|| out)),
             Err(err) => {
@@ -454,7 +454,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         let next = inp.next_inner();
         let err_span = inp.span_since(&before);
         let found = match next {
@@ -511,7 +511,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         let next = inp.next_ref_inner();
         let found = match next {
             Some(tok) => match (self.filter)(tok, &mut MapExtra::new(&before, inp)) {
@@ -548,7 +548,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match inp.next_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
@@ -603,7 +603,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Token> {
-        let before = inp.cursor().clone();
+        let before = inp.cursor();
         match inp.next_ref_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
@@ -883,7 +883,7 @@ macro_rules! impl_choice_for_tuple {
         {
             #[inline]
             fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-                let before = inp.save().clone();
+                let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 

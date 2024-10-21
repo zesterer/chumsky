@@ -67,7 +67,7 @@ where
     S: Strategy<'a, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.save().clone();
+        let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(out) => Ok(out),
             Err(()) => {

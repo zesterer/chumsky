@@ -2559,7 +2559,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        let before = inp.save().clone();
+        let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(out) => {
                 inp.rewind(before);
@@ -2739,7 +2739,7 @@ where
 //     where
 //         Self: Sized,
 //     {
-//         let before = inp.save().clone();
+//         let before = inp.save();
 //         match self.parser.go::<M>(inp) {
 //             Ok(out) => Ok(out),
 //             Err(()) => {
