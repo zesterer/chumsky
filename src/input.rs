@@ -912,7 +912,7 @@ impl<'a, 'parse, I: Input<'a>, C> Marker<'a, 'parse, I, C> {
         }
     }
 
-    /// Get the [`SaveMarker`][Recorder::SaveMarker] that this marker corresponds to.
+    /// Get the [`SaveMarker`][Inspector::SaveMarker] that this marker corresponds to.
     pub fn ext_checkpoint(self) -> C {
         self.user_checkpoint
     }

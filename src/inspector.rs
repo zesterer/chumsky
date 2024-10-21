@@ -14,7 +14,7 @@ use crate::Parser;
 ///
 /// If you don't need to receive event hooks, use [`SimpleState`].
 pub trait Inspector<'a, I: Input<'a>> {
-    /// A type the Recorder can use to revert to a previous state.
+    /// A type the Inspector can use to revert to a previous state.
     ///
     /// For implementation reasons, this is required to be `Copy + Clone`.
     type SaveMarker: Copy + Clone;
@@ -26,7 +26,7 @@ pub trait Inspector<'a, I: Input<'a>> {
     fn on_save(&self, offset: I::Offset) -> Self::SaveMarker;
     /// This function is called when a combinator rewinds to an earlier state of the parser.
     ///
-    /// You can use [`Marker::ext_marker`] to get back the [`SaveMarker`][Self::SaveMarker]
+    /// You can use [`Marker::ext_checkpoint`] to get back the [`SaveMarker`][Self::SaveMarker]
     /// you originally created in [`on_save`][Self::on_save].
     fn on_rewind<'parse>(&mut self, marker: Marker<'a, 'parse, I, Self::SaveMarker>);
 }
@@ -40,7 +40,7 @@ impl<'a, I: Input<'a>> Inspector<'a, I> for () {
 
 /// A state type that should be accessible directly from `parser.state()` and has no special behavior.
 ///
-/// This wrapper implements the [`Recorder`] trait for you so you don't have to.
+/// This wrapper implements the [`Inspector`] trait for you so you don't have to.
 pub struct SimpleState<T>(pub T);
 impl<'a, T, I: Input<'a>> Inspector<'a, I> for SimpleState<T> {
     type SaveMarker = ();
