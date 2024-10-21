@@ -1037,7 +1037,7 @@ pub struct Cursor<'src, 'parse, I: Input<'src>> {
     phantom: PhantomData<fn(&'parse ()) -> &'parse ()>, // Invariance
 }
 
-impl<'src, 'parse, I: Input<'src>> Cursor<'src, 'parse, I> {
+impl<'src, I: Input<'src>> Cursor<'src, '_, I> {
     /// Get the input's internal cursor.
     pub fn inner(&self) -> &I::Cursor {
         &self.inner
