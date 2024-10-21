@@ -1257,7 +1257,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
 
     /// Get the internal cursor of the input at this moment in time.
     ///
-    /// Can be used for generating spans or slices. See [`InputRef::span`] and [`InputRef::slice`].
+    /// Can be used for generating spans or slices. See [`InputRef::span_from`] and [`InputRef::slice`].
     #[inline(always)]
     pub fn cursor(&self) -> Cursor<'src, 'parse, I> {
         Cursor {
@@ -1530,7 +1530,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     // }
 
     /// Get a span over the input that goes from the given cursor to the end of the input.
-    // TODO: Unofy with `InputRef::span`
+    // TODO: Unify with `InputRef::span`
     #[inline(always)]
     pub fn span_from(&mut self, range: RangeFrom<&Cursor<'src, 'parse, I>>) -> I::Span
     where
