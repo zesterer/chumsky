@@ -18,6 +18,7 @@ pub enum Token<'src> {
     // Keywords
     Let,
     In,
+    Fn,
 }
 
 pub type Spanned<T> = (T, SimpleSpan);
@@ -28,6 +29,7 @@ fn lexer<'src>(
         let keyword = text::ident().map(|s| match s {
             "let" => Token::Let,
             "in" => Token::In,
+            "fn" => Token::Fn,
             s => Token::Ident(s),
         });
 
@@ -63,10 +65,11 @@ fn lexer<'src>(
 pub enum Expr<'src> {
     Local(&'src str),
     Num(f64),
-    Let(&'src str, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Let(Spanned<&'src str>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Add(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Mul(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Call(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Func(Vec<Spanned<&'src str>>, Box<Spanned<Self>>),
 }
 
 type ParserInput<'src> = SpannedInput<Token<'src>, SimpleSpan, &'src [Spanned<Token<'src>>]>;
@@ -81,12 +84,18 @@ fn parser<'src>(
             ident.map(Expr::Local),
             // let x = y in z
             just(Token::Let)
-                .ignore_then(ident)
+                .ignore_then(ident.map_with(|x, e| (x, e.span())))
                 .then_ignore(just(Token::Eq))
                 .then(expr.clone())
                 .then_ignore(just(Token::In))
                 .then(expr.clone())
                 .map(|((lhs, rhs), then)| Expr::Let(lhs, Box::new(rhs), Box::new(then))),
+            // fn x y = z
+            just(Token::Fn)
+                .ignore_then(ident.map_with(|x, e| (x, e.span())).repeated().collect())
+                .then_ignore(just(Token::Eq))
+                .then(expr.clone())
+                .map(|(args, body)| Expr::Func(args, Box::new(body))),
         ));
 
         atom.map_with(|expr, e| (expr, e.span()))
@@ -125,7 +134,9 @@ fn parser<'src>(
 
 fn main() {
     let text = "
-        let x = (5 + 42) * 2 in
+        let add = fn x y = x + y in
+        let mul = fn x y = x * y in
+        let x = mul (add 5 42) 2 in
         add x 3.5
     ";
 
