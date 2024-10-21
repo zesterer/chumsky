@@ -45,7 +45,8 @@ where
         match inp.next_maybe_inner() {
             None => Ok(M::bind(|| ())),
             Some(tok) => {
-                inp.add_alt(Some(None), Some(tok.into()), inp.span_since(&before));
+                let span = inp.span_since(&before);
+                inp.add_alt(Some(None), Some(tok.into()), span);
                 Err(())
             }
         }

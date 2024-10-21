@@ -5,7 +5,8 @@ use super::*;
 /// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is
 /// required.
 pub struct Stream<I: Iterator> {
-    tokens: Cell<(Vec<I::Item>, Option<I>)>,
+    tokens: Vec<I::Item>,
+    iter: I,
 }
 
 impl<I: Iterator> Stream<I> {
@@ -23,7 +24,8 @@ impl<I: Iterator> Stream<I> {
     /// ```
     pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
         Self {
-            tokens: Cell::new((Vec::new(), Some(iter.into_iter()))),
+            tokens: Vec::new(),
+            iter: iter.into_iter(),
         }
     }
 
@@ -33,9 +35,9 @@ impl<I: Iterator> Stream<I> {
     where
         I: 'a,
     {
-        let (vec, iter) = self.tokens.into_inner();
         Stream {
-            tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
+            tokens: self.tokens,
+            iter: Box::new(self.iter),
         }
     }
 
@@ -44,9 +46,9 @@ impl<I: Iterator> Stream<I> {
     where
         I: ExactSizeIterator + 'a,
     {
-        let (vec, iter) = self.tokens.into_inner();
         Stream {
-            tokens: Cell::new((vec, Some(Box::new(iter.expect("no iterator?!"))))),
+            tokens: self.tokens,
+            iter: Box::new(self.iter),
         }
     }
 }
@@ -83,14 +85,14 @@ where
 
     #[inline(always)]
     unsafe fn next_maybe(
-        cache: &Self::Cache,
+        this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::TokenMaybe> {
-        Self::next(cache, cursor)
+        Self::next(this, cursor)
     }
 
     #[inline(always)]
-    unsafe fn span(_cache: &Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+    unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
         (*range.start..*range.end).into()
     }
 }
@@ -100,12 +102,8 @@ where
     I::Item: Clone,
 {
     #[inline(always)]
-    unsafe fn span_from(cache: &Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
-        let mut other = Cell::new((Vec::new(), None));
-        cache.tokens.swap(&other);
-        let len = other.get_mut().1.as_ref().expect("no iterator?!").len();
-        cache.tokens.swap(&other);
-        (*range.start..len).into()
+    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+        (*range.start..this.tokens.len() + this.iter.len()).into()
     }
 }
 
@@ -114,25 +112,17 @@ where
     I::Item: Clone,
 {
     #[inline]
-    unsafe fn next(cache: &Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        let mut other = Cell::new((Vec::new(), None));
-        cache.tokens.swap(&other);
-
-        let (vec, iter) = other.get_mut();
-
+    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
         // Pull new items into the vector if we need them
-        if vec.len() <= *cursor {
-            vec.extend(iter.as_mut().expect("no iterator?!").take(500));
+        if this.tokens.len() <= *cursor {
+            this.tokens.extend((&mut this.iter).take(512));
         }
 
         // Get the token at the given cursor
-        let tok = vec.get(*cursor).cloned();
-
-        cache.tokens.swap(&other);
-
-        *cursor += tok.is_some() as usize;
-
-        tok
+        this.tokens.get(*cursor).map(|tok| {
+            *cursor += 1;
+            tok.clone()
+        })
     }
 }
 
@@ -176,7 +166,7 @@ where
     }
 
     unsafe fn next_maybe(
-        _eoi: &Self::Cache,
+        _eoi: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::TokenMaybe> {
         cursor.0.next().map(|(tok, span)| {
@@ -186,7 +176,7 @@ where
         })
     }
 
-    unsafe fn span(eoi: &Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+    unsafe fn span(eoi: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
         let start = range
             .start
             .0

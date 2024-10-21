@@ -170,12 +170,9 @@ where
         &self,
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<M>> {
-        let cfg = (self.cfg)(
-            A::Config::default(),
-            inp.ctx(),
-            inp.span_since(&inp.cursor()),
-        )
-        .map_err(|e| inp.add_alt_err(&inp.cursor().inner, e))?;
+        let span = inp.span_since(&inp.cursor());
+        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), span)
+            .map_err(|e| inp.add_alt_err(&inp.cursor().inner, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
@@ -1999,7 +1996,8 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    inp.add_alt(None, None, inp.span_since(&before));
+                    let span = inp.span_since(&before);
+                    inp.add_alt(None, None, span);
                     // SAFETY: We're guaranteed to have initialized up to `idx` values
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)

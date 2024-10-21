@@ -48,7 +48,8 @@ where
             }
             Err(_err) => {
                 // TODO: Improve error
-                inp.add_alt(None, None, inp.span_since(&before));
+                let span = inp.span_since(&before);
+                inp.add_alt(None, None, span);
                 Err(())
             }
         }
