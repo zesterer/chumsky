@@ -27,7 +27,7 @@
 //!     E: extra::ParserExtra<'a, I>,
 //! {
 //!     fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
-//!         let before = inp.offset();
+//!         let before = inp.cursor();
 //!         match inp.next_maybe().as_deref() {
 //!             // The next token was a null byte, meaning that parsing was successful
 //!             Some(b'\0') => Ok(()),
@@ -38,7 +38,7 @@
 //!                 // Found whatever the token was instead
 //!                 found.copied().map(Into::into),
 //!                 // The span of the error is the span of the token that was found instead
-//!                 inp.span_since(before),
+//!                 inp.span_since(&before),
 //!             )),
 //!         }
 //!     }
@@ -153,11 +153,11 @@ mod current {
     {
         #[inline(always)]
         fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-            let before = inp.offset();
+            let before = inp.cursor();
             match M::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
                 Ok(out) => Ok(out),
                 Err(err) => {
-                    inp.add_alt_err(before.offset, err);
+                    inp.add_alt_err(&before.inner, err);
                     Err(())
                 }
             }
