@@ -430,12 +430,12 @@ macro_rules! impl_pratt_for_tuple {
                                 Ok(op) => {
                                     match recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, $X.associativity().left_power())) {
                                         Ok(rhs) => break 'choice M::combine(op, rhs, |op, rhs| {
-                                            $X.fold_prefix(op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
+                                            $X.fold_prefix(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                                         }),
-                                        Err(()) => inp.rewind(pre_expr),
+                                        Err(()) => inp.rewind(pre_expr.clone()),
                                     }
                                 },
-                                Err(()) => inp.rewind(pre_expr),
+                                Err(()) => inp.rewind(pre_expr.clone()),
                             }
                         }
                     )*
@@ -455,11 +455,11 @@ macro_rules! impl_pratt_for_tuple {
                             match $X.op_parser().go::<M>(inp) {
                                 Ok(op) => {
                                     lhs = M::combine(lhs, op, |lhs, op| {
-                                        $X.fold_postfix(lhs, op, &mut MapExtra::new(pre_expr.offset(), inp))
+                                        $X.fold_postfix(lhs, op, &mut MapExtra::new(pre_expr.cursor(), inp))
                                     });
                                     continue
                                 },
-                                Err(()) => inp.rewind(pre_op),
+                                Err(()) => inp.rewind(pre_op.clone()),
                             }
                         }
                     )*
@@ -475,14 +475,14 @@ macro_rules! impl_pratt_for_tuple {
                                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                                             op,
                                             |(lhs, rhs), op| {
-                                                $X.fold_infix(lhs, op, rhs, &mut MapExtra::new(pre_expr.offset(), inp))
+                                                $X.fold_infix(lhs, op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                                             },
                                         );
                                         continue
                                     },
-                                    Err(()) => inp.rewind(pre_op),
+                                    Err(()) => inp.rewind(pre_op.clone()),
                                 },
-                                Err(()) => inp.rewind(pre_op),
+                                Err(()) => inp.rewind(pre_op.clone()),
                             }
                         }
                     )*
