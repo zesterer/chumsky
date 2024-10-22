@@ -1033,7 +1033,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     }
 
     /// Parse one thing and then another thing, creating the second parser from the result of
-    /// the first. If you don't need the context in the output, use [`Parser::then_with_ctx`].
+    /// the first. If you do need the context in the output, use [`Parser::then_with_ctx`].
     ///
     /// The output of this parser is `U`, the result of the second parser
     ///
