@@ -23,10 +23,6 @@
 //! combines its operands together into a syntax tree. These functions are given as the last arguments of [`infix`],
 //! [`prefix`], and [`postfix`].
 //!
-//! Fold functions have several overloads, allowing you to make use of only the operands, the operands and the
-//! operators, and even additionally [`MapExtra`], providing access to the span, slice, and parser state. See the
-//! documentation for each function to see which fold signatures can be used.
-//!
 //! # Examples
 //!
 //! ```
@@ -68,18 +64,18 @@
 //!
 //! let expr = atom.pratt((
 //!     // We want factorial to happen before any negation, so we need its precedence to be higher than `Expr::Neg`.
-//!     postfix(4, op('!'), |lhs| Expr::Factorial(Box::new(lhs))),
+//!     postfix(4, op('!'), |lhs, _, _| Expr::Factorial(Box::new(lhs))),
 //!     // Just like in math, we want that if we write -x^2, our parser parses that as -(x^2), so we need it to have
 //!     // exponents bind tighter than our prefix operators.
-//!     infix(right(3), op('^'), |l, r| Expr::Pow(Box::new(l), Box::new(r))),
+//!     infix(right(3), op('^'), |l, _, r, _| Expr::Pow(Box::new(l), Box::new(r))),
 //!     // Notice the conflict with our `Expr::Sub`. This will still parse correctly. We want negation to happen before
 //!     // `+` and `-`, so we set its precedence higher.
-//!     prefix(2, op('-'), |rhs| Expr::Neg(Box::new(rhs))),
-//!     prefix(2, op('*'), |rhs| Expr::Deref(Box::new(rhs))),
+//!     prefix(2, op('-'), |_, rhs, _| Expr::Neg(Box::new(rhs))),
+//!     prefix(2, op('*'), |_, rhs, _| Expr::Deref(Box::new(rhs))),
 //!     // Our `-` and `+` bind the weakest, meaning that even if they occur first in an expression, they will be the
 //!     // last executed.
-//!     infix(left(1), op('+'), |l, r| Expr::Add(Box::new(l), Box::new(r))),
-//!     infix(left(1), op('-'), |l, r| Expr::Sub(Box::new(l), Box::new(r))),
+//!     infix(left(1), op('+'), |l, _, r, _| Expr::Add(Box::new(l), Box::new(r))),
+//!     infix(left(1), op('-'), |l, _, r, _| Expr::Sub(Box::new(l), Box::new(r))),
 //! ))
 //!     .map(|x| x.to_string());
 //!
@@ -166,16 +162,16 @@ impl Associativity {
 }
 
 /// See [`infix`].
-pub struct Infix<A, F, Op, Args> {
+pub struct Infix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
     associativity: Associativity,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Op, Args)>,
+    phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<A: Copy, F: Copy, Op, Args> Copy for Infix<A, F, Op, Args> {}
-impl<A: Clone, F: Clone, Op, Args> Clone for Infix<A, F, Op, Args> {
+impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Infix<'src, A, F, Atom, Op, I, E> {}
+impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Infix<'src, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
@@ -194,21 +190,20 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Infix<A, F, Op, Args> {
 ///
 /// See [`left`] and [`right`] for information about associativity.
 ///
-/// The fold function (the last argument) must have one of the following signatures:
+/// The fold function (the last argument) tells the parser how to combine the operator and operands into a new
+/// expression. It must have the following signature:
 ///
 /// ```ignore
-/// // Combine the left and right operands
-/// impl Fn(O, O) -> O
-/// // Combine the left operand, the operator itself, and the right operand
-/// impl Fn(O, Op, O) -> O
-/// // Combine the left operand, the operator itself, the right operand, and a [`MapExtra`] covering the whole operation
-/// impl Fn(O, Op, O, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Atom, Op, Atom, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
-pub const fn infix<A, F, Op, Args>(
+pub const fn infix<'src, A, F, Atom, Op, I, E>(
     associativity: Associativity,
     op_parser: A,
     fold: F,
-) -> Infix<A, F, Op, Args> {
+) -> Infix<'src, A, F, Atom, Op, I, E>
+where
+    F: Fn(Atom, Op, Atom, &mut MapExtra<'src, '_, I, E>) -> Atom,
+{
     Infix {
         op_parser,
         fold,
@@ -217,45 +212,41 @@ pub const fn infix<A, F, Op, Args>(
     }
 }
 
-macro_rules! infix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $rhs:ident, $extra:ident| $invoke:expr) => {
-        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Infix<A, F, Op, ($($Arg,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            A: Parser<'a, I, Op, E>,
-            F: Fn($($Arg),*) -> O,
-        {
-            type Op = Op;
-            type OpParser = A;
-            const IS_INFIX: bool = true;
-            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            #[inline(always)] fn associativity(&self) -> Associativity { self.associativity }
-            #[inline(always)] fn fold_infix(&self, $lhs: O, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
-        }
-    };
+impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Infix<'src, A, F, O, Op, I, E>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, Op, E>,
+    F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const IS_INFIX: bool = true;
+    #[inline(always)]
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    #[inline(always)]
+    fn associativity(&self) -> Associativity {
+        self.associativity
+    }
+    #[inline(always)]
+    fn fold_infix(&self, lhs: O, op: Self::Op, rhs: O, extra: &mut MapExtra<'src, '_, I, E>) -> O {
+        (self.fold)(lhs, op, rhs, extra)
+    }
 }
 
-// Allow `|lhs, rhs| <expr>` to be used as a fold closure for infix operators
-infix_op!(|f: Fn(O, O) -> O, lhs, _op, rhs, _extra| f(lhs, rhs));
-// Allow `|lhs, op, rhs| <expr>` to be used as a fold closure for infix operators
-infix_op!(|f: Fn(O, Op, O) -> O, lhs, op, rhs, _extra| f(lhs, op, rhs));
-// Allow `|lhs, op, rhs, extra| <expr>` to be used as a fold closure for infix operators
-infix_op!(
-    |f: Fn(O, Op, O, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, rhs, extra| f(lhs, op, rhs, extra)
-);
-
 /// See [`prefix`].
-pub struct Prefix<A, F, Op, Args> {
+pub struct Prefix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
     binding_power: u16,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Op, Args)>,
+    phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<A: Copy, F: Copy, Op, Args> Copy for Prefix<A, F, Op, Args> {}
-impl<A: Clone, F: Clone, Op, Args> Clone for Prefix<A, F, Op, Args> {
+impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Prefix<'src, A, F, Atom, Op, I, E> {}
+impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'src, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
@@ -271,21 +262,20 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Prefix<A, F, Op, Args> {
 ///
 /// Operators like negation, not, dereferencing, etc. are prefix unary operators in most languages.
 ///
-/// The fold function (the last argument) must have one of the following signatures:
+/// The fold function (the last argument) tells the parser how to combine the operator and operand into a new
+/// expression. It must have the following signature:
 ///
 /// ```ignore
-/// // Transform the operand
-/// impl Fn(O) -> O
-/// // Combine the operator itself and the operand
-/// impl Fn(Op, O) -> O
-/// // Combine the operator itself, the operand, and a [`MapExtra`] covering the whole operation
-/// impl Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Atom, Op, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
-pub const fn prefix<A, F, Op, Args>(
+pub const fn prefix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
     op_parser: A,
     fold: F,
-) -> Prefix<A, F, Op, Args> {
+) -> Prefix<'src, A, F, Atom, Op, I, E>
+where
+    F: Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> Atom,
+{
     Prefix {
         op_parser,
         fold,
@@ -294,43 +284,41 @@ pub const fn prefix<A, F, Op, Args>(
     }
 }
 
-macro_rules! prefix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $op:ident, $rhs:ident, $extra:ident| $invoke:expr) => {
-        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Prefix<A, F, Op, ($($Arg,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            A: Parser<'a, I, Op, E>,
-            F: Fn($($Arg),*) -> O,
-        {
-            type Op = Op;
-            type OpParser = A;
-            const IS_PREFIX: bool = true;
-            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_prefix(&self, $op: Self::Op, $rhs: O, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
-        }
-    };
+impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Prefix<'src, A, F, O, Op, I, E>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, Op, E>,
+    F: Fn(Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const IS_PREFIX: bool = true;
+    #[inline(always)]
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    #[inline(always)]
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    #[inline(always)]
+    fn fold_prefix(&self, op: Self::Op, rhs: O, extra: &mut MapExtra<'src, '_, I, E>) -> O {
+        (self.fold)(op, rhs, extra)
+    }
 }
 
-// Allow `|rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(O) -> O, _op, rhs, _extra| f(rhs));
-// Allow `|op, rhs| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O) -> O, op, rhs, _extra| f(op, rhs));
-// Allow `|op, rhs, span| <expr>` to be used as a fold closure for prefix operators
-prefix_op!(|f: Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O, op, rhs, extra| f(op, rhs, extra));
-
 /// See [`postfix`].
-pub struct Postfix<A, F, Op, Args> {
+pub struct Postfix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
     binding_power: u16,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Op, Args)>,
+    phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<A: Copy, F: Copy, Op, Args> Copy for Postfix<A, F, Op, Args> {}
-impl<A: Clone, F: Clone, Op, Args> Clone for Postfix<A, F, Op, Args> {
+impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Postfix<'src, A, F, Atom, Op, I, E> {}
+impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'src, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
@@ -344,23 +332,22 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Postfix<A, F, Op, Args> {
 /// Specify a unary postfix operator for a pratt parser with the given binding power and
 /// [fold function](crate::pratt#fold-functions).
 ///
-/// Operators like factorial, field access, function composition, etc. are postfix unary operators in most languages.
+/// Operators like factorial, field access, etc. are postfix unary operators in most languages.
 ///
-/// The fold function (the last argument) must have one of the following signatures:
+/// The fold function (the last argument) tells the parser how to combine the operator and operand into a new
+/// expression. It must have the following signature:
 ///
 /// ```ignore
-/// // Transform the operand
-/// impl Fn(O) -> O
-/// // Combine the operand and the operator itself
-/// impl Fn(O, Op) -> O
-/// // Combine the operand, the operator itself, and a [`MapExtra`] covering the whole operation
-/// impl Fn(O, Op, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Op, Atom, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
-pub const fn postfix<A, F, Op, Args>(
+pub const fn postfix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
     op_parser: A,
     fold: F,
-) -> Postfix<A, F, Op, Args> {
+) -> Postfix<'src, A, F, Atom, Op, I, E>
+where
+    F: Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> Atom,
+{
     Postfix {
         op_parser,
         fold,
@@ -369,31 +356,29 @@ pub const fn postfix<A, F, Op, Args>(
     }
 }
 
-macro_rules! postfix_op {
-    (|$f:ident : Fn($($Arg:ty),*) -> O, $lhs:ident, $op:ident, $extra:ident| $invoke:expr) => {
-        impl<'a, I, O, E, A, F, Op> Operator<'a, I, O, E> for Postfix<A, F, Op, ($($Arg,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            A: Parser<'a, I, Op, E>,
-            F: Fn($($Arg),*) -> O,
-        {
-            type Op = Op;
-            type OpParser = A;
-            const IS_POSTFIX: bool = true;
-            #[inline(always)] fn op_parser(&self) -> &Self::OpParser { &self.op_parser }
-            #[inline(always)] fn associativity(&self) -> Associativity { Associativity::Left(self.binding_power) }
-            #[inline(always)] fn fold_postfix(&self, $lhs: O, $op: Self::Op, $extra: &mut MapExtra<'a, '_, I, E>) -> O { let $f = &self.fold; $invoke }
-        }
-    };
+impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Postfix<'src, A, F, O, Op, I, E>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, Op, E>,
+    F: Fn(O, Op, &mut MapExtra<'src, '_, I, E>) -> O,
+{
+    type Op = Op;
+    type OpParser = A;
+    const IS_POSTFIX: bool = true;
+    #[inline(always)]
+    fn op_parser(&self) -> &Self::OpParser {
+        &self.op_parser
+    }
+    #[inline(always)]
+    fn associativity(&self) -> Associativity {
+        Associativity::Left(self.binding_power)
+    }
+    #[inline(always)]
+    fn fold_postfix(&self, lhs: O, op: Self::Op, extra: &mut MapExtra<'src, '_, I, E>) -> O {
+        (self.fold)(lhs, op, extra)
+    }
 }
-
-// Allow `|lhs| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O) -> O, lhs, _op, _extra| f(lhs));
-// Allow `|lhs, op| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op) -> O, lhs, op, _extra| f(lhs, op));
-// Allow `|lhs, op, span| <expr>` to be used as a fold closure for postfix operators
-postfix_op!(|f: Fn(O, Op, &mut MapExtra<'a, '_, I, E>) -> O, lhs, op, extra| f(lhs, op, extra));
 
 /// See [`Parser::pratt`].
 #[derive(Copy, Clone)]
@@ -531,12 +516,12 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt((
-            prefix(2, just('-'), |x: i64| -x),
-            postfix(2, just('!'), factorial),
-            infix(left(0), just('+'), |l, r| l + r),
-            infix(left(0), just('-'), |l, r| l - r),
-            infix(left(1), just('*'), |l, r| l * r),
-            infix(left(1), just('/'), |l, _, r| l / r),
+            prefix(2, just('-'), |_, x: i64, _| -x),
+            postfix(2, just('!'), |x, _, _| factorial(x)),
+            infix(left(0), just('+'), |l, _, r, _| l + r),
+            infix(left(0), just('-'), |l, _, r, _| l - r),
+            infix(left(1), just('*'), |l, _, r, _| l * r),
+            infix(left(1), just('/'), |l, _, r, _| l / r),
         ))
     }
 
@@ -609,10 +594,10 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((
-            infix(left(0), just('+'), |l, r| i(Expr::Add, l, r)),
-            infix(left(0), just('-'), |l, r| i(Expr::Sub, l, r)),
-            infix(right(1), just('*'), |l, r| i(Expr::Mul, l, r)),
-            infix(right(1), just('/'), |l, r| i(Expr::Div, l, r)),
+            infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+            infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+            infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
         ))
         .map(|x| x.to_string())
     }
@@ -696,15 +681,15 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                prefix(2, just('-'), |r| u(Expr::Negate, r)),
-                prefix(2, just('~'), |r| u(Expr::Not, r)),
+                prefix(2, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(2, just('~'), |_, r, _| u(Expr::Not, r)),
                 // This is what happens when not
-                prefix(1, just('§'), |r| u(Expr::Confusion, r)),
+                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Infix
-                infix(left(0), just('+'), |l, r| i(Expr::Add, l, r)),
-                infix(left(0), just('-'), |l, r| i(Expr::Sub, l, r)),
-                infix(right(1), just('*'), |l, r| i(Expr::Mul, l, r)),
-                infix(right(1), just('/'), |l, r| i(Expr::Div, l, r)),
+                infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -727,14 +712,14 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                postfix(2, just('!'), |l| u(Expr::Factorial, l)),
+                postfix(2, just('!'), |l, _, _| u(Expr::Factorial, l)),
                 // This is what happens when not
-                postfix(0, just('$'), |l| u(Expr::Value, l)),
+                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, r| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, r| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, r| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, r| i(Expr::Div, l, r)),
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -754,17 +739,17 @@ mod tests {
         let parser = atom
             .pratt((
                 // -- Prefix
-                prefix(4, just('-'), |r| u(Expr::Negate, r)),
-                prefix(4, just('~'), |r| u(Expr::Not, r)),
-                prefix(1, just('§'), |r| u(Expr::Confusion, r)),
+                prefix(4, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(4, just('~'), |_, r, _| u(Expr::Not, r)),
+                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Postfix
-                postfix(5, just('!'), |l| u(Expr::Factorial, l)),
-                postfix(0, just('$'), |l| u(Expr::Value, l)),
+                postfix(5, just('!'), |l, _, _| u(Expr::Factorial, l)),
+                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, r| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, r| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, r| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, r| i(Expr::Div, l, r)),
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
         assert_eq!(

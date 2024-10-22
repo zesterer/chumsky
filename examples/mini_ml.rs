@@ -105,29 +105,17 @@ fn parser<'src>(
             ))
             .pratt((
                 // Multiply
-                infix(
-                    left(10),
-                    just(Token::Asterisk),
-                    |x, _, y, e: &mut MapExtra<'src, '_, _, _>| {
-                        (Expr::Mul(Box::new(x), Box::new(y)), e.span())
-                    },
-                ),
+                infix(left(10), just(Token::Asterisk), |x, _, y, e| {
+                    (Expr::Mul(Box::new(x), Box::new(y)), e.span())
+                }),
                 // Add
-                infix(
-                    left(9),
-                    just(Token::Plus),
-                    |x, _, y, e: &mut MapExtra<'src, '_, _, _>| {
-                        (Expr::Add(Box::new(x), Box::new(y)), e.span())
-                    },
-                ),
+                infix(left(9), just(Token::Plus), |x, _, y, e| {
+                    (Expr::Add(Box::new(x), Box::new(y)), e.span())
+                }),
                 // Calls
-                infix(
-                    left(1),
-                    empty(),
-                    |x, _, y, e: &mut MapExtra<'src, '_, _, _>| {
-                        (Expr::Call(Box::new(x), Box::new(y)), e.span())
-                    },
-                ),
+                infix(left(1), empty(), |x, _, y, e| {
+                    (Expr::Call(Box::new(x), Box::new(y)), e.span())
+                }),
             ))
     })
 }

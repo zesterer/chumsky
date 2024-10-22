@@ -2130,7 +2130,6 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// ```
     /// # use chumsky::prelude::*;
     /// use chumsky::pratt::*;
-    /// use std::ops::{Neg, Mul, Div, Add, Sub};
     ///
     /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
     ///     .from_str()
@@ -2140,11 +2139,11 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// let op = |c| just(c).padded();
     ///
     /// let expr = int.pratt((
-    ///     prefix(2, op('-'), i64::neg),
-    ///     infix(left(1), op('*'), i64::mul),
-    ///     infix(left(1), op('/'), i64::div),
-    ///     infix(left(0), op('+'), i64::add),
-    ///     infix(left(0), op('-'), i64::sub),
+    ///     prefix(2, op('-'), |_, x: i64, _| -x),
+    ///     infix(left(1), op('*'), |x, _, y, _| x * y),
+    ///     infix(left(1), op('/'), |x, _, y, _| x / y),
+    ///     infix(left(0), op('+'), |x, _, y, _| x + y),
+    ///     infix(left(0), op('-'), |x, _, y, _| x - y),
     /// ));
     ///
     /// // Pratt parsing can handle unary operators...
