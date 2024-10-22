@@ -512,7 +512,132 @@ macro_rules! impl_pratt_for_tuple {
     };
 }
 
-impl_pratt_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_pratt_for_tuple!(
+    O1 O2 O3 O4 O5 O6 O7 O8
+    O9 O10 O11 O12 O13 O14 O15 O16
+    O17 O18 O19 O20 O21 O22 O23 O24
+    O25 O26
+);
+
+#[allow(unused_variables, non_snake_case)]
+impl<'a, Atom, T, const N: usize> Pratt<Atom, [T; N]> {
+    #[inline]
+    fn pratt_go<M: Mode, I, O, E>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_power: u32,
+    ) -> PResult<M, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Atom: Parser<'a, I, O, E>,
+        T: Operator<'a, I, O, E>,
+    {
+        let pre_expr = inp.save();
+        let mut lhs = 'choice: {
+            // Prefix unary operators
+            for prefix_op in &self.ops {
+                if T::IS_PREFIX {
+                    match prefix_op.op_parser().go::<M>(inp) {
+                        Ok(op) => {
+                            match recursive::recurse(|| {
+                                self.pratt_go::<M, _, _, _>(inp, prefix_op.associativity().left_power())
+                            }) {
+                                Ok(rhs) => {
+                                    break 'choice M::combine(op, rhs, |op, rhs| {
+                                        prefix_op.fold_prefix(
+                                            op,
+                                            rhs,
+                                            &mut MapExtra::new(pre_expr.offset(), inp),
+                                        )
+                                    })
+                                }
+                                Err(()) => inp.rewind(pre_expr),
+                            }
+                        }
+                        Err(()) => inp.rewind(pre_expr),
+                    }
+                }
+            }
+
+            self.atom.go::<M>(inp)?
+        };
+
+        loop {
+            let pre_op = inp.save();
+
+            // Postfix unary operators
+            for postfix_op in &self.ops {
+                let assoc = postfix_op.associativity();
+                if T::IS_POSTFIX && assoc.right_power() >= min_power {
+                    match postfix_op.op_parser().go::<M>(inp) {
+                        Ok(op) => {
+                            lhs = M::combine(lhs, op, |lhs, op| {
+                                postfix_op.fold_postfix(
+                                    lhs,
+                                    op,
+                                    &mut MapExtra::new(pre_expr.offset(), inp),
+                                )
+                            });
+                            continue;
+                        }
+                        Err(()) => inp.rewind(pre_op),
+                    }
+                }
+            }
+
+            // Infix binary operators
+            for infix_op in &self.ops {
+                let assoc = infix_op.associativity();
+                if T::IS_INFIX && assoc.left_power() >= min_power {
+                    match infix_op.op_parser().go::<M>(inp) {
+                        Ok(op) => match recursive::recurse(|| {
+                            self.pratt_go::<M, _, _, _>(inp, assoc.right_power())
+                        }) {
+                            Ok(rhs) => {
+                                lhs = M::combine(
+                                    M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                                    op,
+                                    |(lhs, rhs), op| {
+                                        infix_op.fold_infix(
+                                            lhs,
+                                            op,
+                                            rhs,
+                                            &mut MapExtra::new(pre_expr.offset(), inp),
+                                        )
+                                    },
+                                );
+                                continue;
+                            }
+                            Err(()) => inp.rewind(pre_op),
+                        },
+                        Err(()) => inp.rewind(pre_op),
+                    }
+                }
+            }
+
+            inp.rewind(pre_op);
+            break;
+        }
+
+        Ok(lhs)
+    }
+}
+
+#[allow(unused_variables, non_snake_case)]
+impl<'a, I, O, E, Atom, T, const N: usize> ParserSealed<'a, I, O, E> for Pratt<Atom, [T; N]>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    Atom: Parser<'a, I, O, E>,
+    T: Operator<'a, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        self.pratt_go::<M, _, _, _>(inp, 0)
+    }
+
+    go_extra!(O);
+}
 
 #[cfg(test)]
 mod tests {
@@ -770,6 +895,75 @@ mod tests {
         assert_eq!(
             parser.parse("§1+-~2!$*3").into_result(),
             Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_lots_of_ops() {
+        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt([
+                infix(left(0), just("AA"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AB"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AC"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AD"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AE"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AF"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AG"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AH"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AI"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AJ"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AK"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AL"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AM"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AN"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AO"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AP"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AQ"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AR"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AS"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AT"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AU"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AV"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AW"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AX"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AY"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("AZ"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BA"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BB"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BC"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BD"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BE"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BF"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BG"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BH"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BI"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BJ"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BK"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BL"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BM"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BN"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BO"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BP"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BQ"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BR"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BS"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BT"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BU"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BV"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BW"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BX"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BY"), |l, r| i(Expr::Add, l, r)),
+                infix(left(0), just("BZ"), |l, r| i(Expr::Add, l, r)),
+            ])
+            .map(|x| x.to_string());
+        assert_eq!(
+            parser.parse("1AA2BB3").into_result(),
+            Ok("1 + 2 + 3".to_string()),
         )
     }
 }
