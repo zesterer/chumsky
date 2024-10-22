@@ -1,8 +1,4 @@
-use chumsky::{
-    input::{MapExtra, SpannedInput},
-    pratt::*,
-    prelude::*,
-};
+use chumsky::{input::SpannedInput, pratt::*, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'src> {
