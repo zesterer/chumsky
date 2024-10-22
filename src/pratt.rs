@@ -170,8 +170,8 @@ pub struct Infix<'src, A, F, Atom, Op, I, E> {
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Infix<'src, A, F, Atom, Op, I, E> {}
-impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Infix<'src, A, F, Atom, Op, I, E> {
+impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Infix<'_, A, F, Atom, Op, I, E> {}
+impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Infix<'_, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
@@ -245,8 +245,8 @@ pub struct Prefix<'src, A, F, Atom, Op, I, E> {
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Prefix<'src, A, F, Atom, Op, I, E> {}
-impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'src, A, F, Atom, Op, I, E> {
+impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Prefix<'_, A, F, Atom, Op, I, E> {}
+impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
@@ -317,8 +317,8 @@ pub struct Postfix<'src, A, F, Atom, Op, I, E> {
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
 
-impl<'src, A: Copy, F: Copy, Atom, Op, I, E> Copy for Postfix<'src, A, F, Atom, Op, I, E> {}
-impl<'src, A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'src, A, F, Atom, Op, I, E> {
+impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Postfix<'_, A, F, Atom, Op, I, E> {}
+impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I, E> {
     fn clone(&self) -> Self {
         Self {
             op_parser: self.op_parser.clone(),
