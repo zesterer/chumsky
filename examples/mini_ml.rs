@@ -33,7 +33,7 @@ impl fmt::Display for Token<'_> {
             Token::Plus => write!(f, "+"),
             Token::Asterisk => write!(f, "*"),
             Token::Let => write!(f, "let"),
-            Token::In => write!(f, "'in"),
+            Token::In => write!(f, "in"),
             Token::Fn => write!(f, "fn"),
             Token::True => write!(f, "true"),
             Token::False => write!(f, "false"),
@@ -244,7 +244,7 @@ impl Solver<'_> {
             }
             (a_info, b_info) => failure(
                 format!("Type mismatch between {a_info} and {b_info}"),
-                (format!("mismatch occurred here"), span),
+                ("mismatch occurred here".to_string(), span),
                 vec![
                     (format!("{a_info}"), self.vars[a.0].1),
                     (format!("{b_info}"), self.vars[b.0].1),
@@ -312,7 +312,7 @@ impl Solver<'_> {
     pub fn solve(&self, var: TyVar) -> Ty {
         match self.vars[var.0].0 {
             TyInfo::Unknown => failure(
-                format!("Cannot infer type"),
+                "Cannot infer type".to_string(),
                 ("has unknown type".to_string(), self.vars[var.0].1),
                 None,
                 self.src,

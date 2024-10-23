@@ -185,6 +185,9 @@ mod sync {
     pub(crate) type RefC<T> = alloc::sync::Arc<T>;
     pub(crate) type RefW<T> = alloc::sync::Weak<T>;
     pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + Send + Sync + 'b;
+    #[cfg(feature = "pratt")]
+    pub(crate) type DynOperator<'a, 'b, I, O, E> =
+        dyn pratt::Operator<'a, I, O, E> + Send + Sync + 'b;
 
     /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
     /// enabled. Used to constrain API usage succinctly and easily.
@@ -199,6 +202,8 @@ mod sync {
     pub(crate) type RefC<T> = alloc::rc::Rc<T>;
     pub(crate) type RefW<T> = alloc::rc::Weak<T>;
     pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + 'b;
+    #[cfg(feature = "pratt")]
+    pub(crate) type DynOperator<'a, 'b, I, O, E> = dyn pratt::Operator<'a, I, O, E> + 'b;
 
     /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
     /// enabled. Used to constrain API usage succinctly and easily.
