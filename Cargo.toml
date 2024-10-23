@@ -144,4 +144,4 @@ required-features = ["std"]
 
 [[example]]
 name = "mini_ml"
-required-features = ["pratt"]
+required-features = ["pratt", "label"]

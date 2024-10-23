@@ -1,4 +1,8 @@
+use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::{input::SpannedInput, pratt::*, prelude::*};
+use core::fmt;
+
+// Tokens and lexer
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'src> {
@@ -19,39 +23,54 @@ pub enum Token<'src> {
     False,
 }
 
+impl fmt::Display for Token<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Token::Ident(x) => write!(f, "{x}"),
+            Token::Num(x) => write!(f, "{x}"),
+            Token::Parens(_) => write!(f, "(...)"),
+            Token::Eq => write!(f, "="),
+            Token::Plus => write!(f, "+"),
+            Token::Asterisk => write!(f, "*"),
+            Token::Let => write!(f, "let"),
+            Token::In => write!(f, "'in"),
+            Token::Fn => write!(f, "fn"),
+            Token::True => write!(f, "true"),
+            Token::False => write!(f, "false"),
+        }
+    }
+}
+
 pub type Spanned<T> = (T, SimpleSpan);
 
 fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
     recursive(|token| {
-        let keyword = text::ident().map(|s| match s {
-            "let" => Token::Let,
-            "in" => Token::In,
-            "fn" => Token::Fn,
-            "true" => Token::True,
-            "false" => Token::False,
-            s => Token::Ident(s),
-        });
-
-        let num = text::int(10)
-            .then(just('.').then(text::digits(10)).or_not())
-            .to_slice()
-            .map(|s: &str| Token::Num(s.parse().unwrap()));
-
-        let op = choice((
+        choice((
+            // Keywords
+            text::ident().map(|s| match s {
+                "let" => Token::Let,
+                "in" => Token::In,
+                "fn" => Token::Fn,
+                "true" => Token::True,
+                "false" => Token::False,
+                s => Token::Ident(s),
+            }),
+            // Operators
             just("=").to(Token::Eq),
             just("+").to(Token::Plus),
             just("*").to(Token::Asterisk),
-        ));
-
-        choice((
-            keyword,
-            op,
-            num,
+            // Numbers
+            text::int(10)
+                .then(just('.').then(text::digits(10)).or_not())
+                .to_slice()
+                .map(|s: &str| Token::Num(s.parse().unwrap())),
             token
                 .repeated()
                 .collect()
-                .delimited_by(just('(').padded(), just(')').padded())
+                .delimited_by(just('('), just(')'))
+                .labelled("token tree")
+                .as_context()
                 .map(Token::Parens),
         ))
         .map_with(|t, e| (t, e.span()))
@@ -60,6 +79,8 @@ fn lexer<'src>(
     .repeated()
     .collect()
 }
+
+// AST and parser
 
 #[derive(Clone, Debug)]
 pub enum Expr<'src> {
@@ -151,8 +172,12 @@ fn parser<'src>(
                 )
             }),
         ))
+        .labelled("expression")
+        .as_context()
     })
 }
+
+// Type checker/solver
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct TyVar(usize);
@@ -166,6 +191,18 @@ enum TyInfo {
     Func(TyVar, TyVar),
 }
 
+impl fmt::Display for TyInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TyInfo::Unknown => write!(f, "?"),
+            TyInfo::Ref(_) => write!(f, "<ref>"),
+            TyInfo::Num => write!(f, "Num"),
+            TyInfo::Bool => write!(f, "Bool"),
+            TyInfo::Func(_, _) => write!(f, "(_ -> _)"),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Ty {
     Num,
@@ -173,84 +210,113 @@ enum Ty {
     Func(Box<Self>, Box<Self>),
 }
 
-#[derive(Default)]
-struct Solver {
-    vars: Vec<TyInfo>,
+impl fmt::Display for Ty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Ty::Num => write!(f, "Num"),
+            Ty::Bool => write!(f, "Bool"),
+            Ty::Func(x, y) => write!(f, "{x} -> {y}"),
+        }
+    }
 }
 
-impl Solver {
-    fn create_ty(&mut self, info: TyInfo) -> TyVar {
-        self.vars.push(info);
+struct Solver<'src> {
+    src: &'src str,
+    vars: Vec<(TyInfo, SimpleSpan)>,
+}
+
+impl Solver<'_> {
+    fn create_ty(&mut self, info: TyInfo, span: SimpleSpan) -> TyVar {
+        self.vars.push((info, span));
         TyVar(self.vars.len() - 1)
     }
 
-    fn unify(&mut self, a: TyVar, b: TyVar) {
-        match (self.vars[a.0], self.vars[b.0]) {
-            (TyInfo::Unknown, _) => self.vars[a.0] = TyInfo::Ref(b),
-            (_, TyInfo::Unknown) => self.vars[b.0] = TyInfo::Ref(a),
-            (TyInfo::Ref(a), _) => self.unify(a, b),
-            (_, TyInfo::Ref(b)) => self.unify(a, b),
+    fn unify(&mut self, a: TyVar, b: TyVar, span: SimpleSpan) {
+        match (self.vars[a.0].0, self.vars[b.0].0) {
+            (TyInfo::Unknown, _) => self.vars[a.0].0 = TyInfo::Ref(b),
+            (_, TyInfo::Unknown) => self.vars[b.0].0 = TyInfo::Ref(a),
+            (TyInfo::Ref(a), _) => self.unify(a, b, span),
+            (_, TyInfo::Ref(b)) => self.unify(a, b, span),
             (TyInfo::Num, TyInfo::Num) | (TyInfo::Bool, TyInfo::Bool) => {}
             (TyInfo::Func(a_i, a_o), TyInfo::Func(b_i, b_o)) => {
-                self.unify(a_i, b_i);
-                self.unify(a_o, b_o);
+                self.unify(b_i, a_i, span); // Order swapped: function args are contravariant
+                self.unify(a_o, b_o, span);
             }
-            (a, b) => panic!("Type mismatch between {a:?} and {b:?}"),
+            (a_info, b_info) => failure(
+                format!("Type mismatch between {a_info} and {b_info}"),
+                (format!("mismatch occurred here"), span),
+                vec![
+                    (format!("{a_info}"), self.vars[a.0].1),
+                    (format!("{b_info}"), self.vars[b.0].1),
+                ],
+                self.src,
+            ),
         }
     }
 
-    fn check<'ast>(&mut self, expr: &Expr<'ast>, env: &mut Vec<(&'ast str, TyVar)>) -> TyVar {
-        match expr {
-            // Literal expressions are easy, their type doesn't need inferring.
-            Expr::Num(_) => self.create_ty(TyInfo::Num),
-            Expr::Bool(_) => self.create_ty(TyInfo::Bool),
-            // We search the environment backward until we find a binding matching the variable name.
+    fn check<'src>(
+        &mut self,
+        expr: &Spanned<Expr<'src>>,
+        env: &mut Vec<(&'src str, TyVar)>,
+    ) -> TyVar {
+        match &expr.0 {
+            Expr::Num(_) => self.create_ty(TyInfo::Num, expr.1),
+            Expr::Bool(_) => self.create_ty(TyInfo::Bool, expr.1),
             Expr::Var(name) => {
-                env.iter_mut()
+                env.iter()
                     .rev()
                     .find(|(n, _)| n == name)
-                    .expect("No such variable in scope")
+                    .unwrap_or_else(|| {
+                        failure(
+                            format!("No such local '{name}'"),
+                            ("not found in scope".to_string(), expr.1),
+                            None,
+                            self.src,
+                        )
+                    })
                     .1
             }
-            // In a let expression, `rhs` gets bound with name `lhs` in the environment used to type-check `then`.
             Expr::Let { lhs, rhs, then } => {
-                let rhs = self.check(&rhs.0, env);
-                env.push((lhs.0, rhs));
-                let out = self.check(&then.0, env);
+                let rhs_ty = self.check(rhs, env);
+                env.push((lhs.0, rhs_ty));
+                let out_ty = self.check(then, env);
                 env.pop();
-                out
+                out_ty
             }
-            // In a function, the argument becomes an unknown type in the environment used to type-check `body`.
             Expr::Func { arg, body } => {
-                let arg_ty = self.create_ty(TyInfo::Unknown);
+                let arg_ty = self.create_ty(TyInfo::Unknown, arg.1);
                 env.push((arg.0, arg_ty));
-                let body = self.check(&body.0, env);
+                let body_ty = self.check(body, env);
                 env.pop();
-                self.create_ty(TyInfo::Func(arg_ty, body))
+                self.create_ty(TyInfo::Func(arg_ty, body_ty), expr.1)
             }
-            // During function application, both argument and function are type-checked and then we force the latter to be a function of the former.
             Expr::Apply { func, arg } => {
-                let func = self.check(&func.0, env);
-                let arg = self.check(&arg.0, env);
-                let out = self.create_ty(TyInfo::Unknown);
-                let func_ty = self.create_ty(TyInfo::Func(arg, out));
-                self.unify(func_ty, func);
-                out
+                let func_ty = self.check(func, env);
+                let arg_ty = self.check(arg, env);
+                let out_ty = self.create_ty(TyInfo::Unknown, expr.1);
+                let func_req_ty = self.create_ty(TyInfo::Func(arg_ty, out_ty), func.1);
+                self.unify(func_req_ty, func_ty, expr.1);
+                out_ty
             }
             Expr::Add(l, r) | Expr::Mul(l, r) => {
-                let out = self.create_ty(TyInfo::Num);
-                let l = self.check(&l.0, env);
-                self.unify(out, l);
-                let r = self.check(&r.0, env);
-                self.unify(out, r);
-                out
+                let out_ty = self.create_ty(TyInfo::Num, expr.1);
+                let l_ty = self.check(l, env);
+                self.unify(out_ty, l_ty, expr.1);
+                let r_ty = self.check(r, env);
+                self.unify(out_ty, r_ty, expr.1);
+                out_ty
             }
         }
     }
 
     pub fn solve(&self, var: TyVar) -> Ty {
-        match self.vars[var.0] {
-            TyInfo::Unknown => panic!("Cannot infer type"),
+        match self.vars[var.0].0 {
+            TyInfo::Unknown => failure(
+                format!("Cannot infer type"),
+                ("has unknown type".to_string(), self.vars[var.0].1),
+                None,
+                self.src,
+            ),
             TyInfo::Ref(var) => self.solve(var),
             TyInfo::Num => Ty::Num,
             TyInfo::Bool => Ty::Bool,
@@ -259,30 +325,140 @@ impl Solver {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Value<'src> {
+    Num(f64),
+    Bool(bool),
+    Func {
+        arg: Spanned<&'src str>,
+        env: Scope<'src>,
+        body: &'src Spanned<Expr<'src>>,
+    },
+}
+
+impl Value<'_> {
+    pub fn num(self) -> f64 {
+        let Value::Num(x) = self else { panic!() };
+        x
+    }
+}
+
+type Scope<'src> = Vec<(Spanned<&'src str>, Value<'src>)>;
+
+#[derive(Default)]
+pub struct Vm<'src> {
+    stack: Scope<'src>,
+}
+
+impl<'src> Vm<'src> {
+    pub fn eval(&mut self, expr: &'src Spanned<Expr<'src>>) -> Value<'src> {
+        match &expr.0 {
+            Expr::Num(x) => Value::Num(*x),
+            Expr::Bool(x) => Value::Bool(*x),
+            Expr::Var(var) => self
+                .stack
+                .iter()
+                .rev()
+                .find(|(v, _)| v.0 == *var)
+                .unwrap()
+                .1
+                .clone(),
+            Expr::Let { lhs, rhs, then } => {
+                let rhs = self.eval(rhs);
+                self.stack.push((*lhs, rhs));
+                let then = self.eval(then);
+                self.stack.pop();
+                then
+            }
+            Expr::Func { arg, body } => Value::Func {
+                arg: **arg,
+                env: self.stack.clone(), // TODO: Only save what's actually needed by the function body
+                body,
+            },
+            Expr::Apply { func, arg } => {
+                let func = self.eval(func);
+                let arg_val = self.eval(arg);
+                let Value::Func { arg, body, mut env } = func else {
+                    panic!()
+                };
+                let old_len = self.stack.len();
+                self.stack.append(&mut env);
+                self.stack.push((arg, arg_val));
+                let out = self.eval(body);
+                self.stack.truncate(old_len);
+                out
+            }
+            Expr::Add(x, y) => Value::Num(self.eval(x).num() + self.eval(y).num()),
+            Expr::Mul(x, y) => Value::Num(self.eval(x).num() * self.eval(y).num()),
+        }
+    }
+}
+
+fn failure(
+    msg: String,
+    label: (String, SimpleSpan),
+    extra_labels: impl IntoIterator<Item = (String, SimpleSpan)>,
+    src: &str,
+) -> ! {
+    let fname = "example";
+    Report::build(ReportKind::Error, fname, label.1.start)
+        .with_message(&msg)
+        .with_label(
+            Label::new((fname, label.1.into_range()))
+                .with_message(label.0)
+                .with_color(Color::Red),
+        )
+        .with_labels(extra_labels.into_iter().map(|label2| {
+            Label::new((fname, label2.1.into_range()))
+                .with_message(label2.0)
+                .with_color(Color::Yellow)
+        }))
+        .finish()
+        .print(sources([(fname, src)]))
+        .unwrap();
+    std::process::exit(1)
+}
+
+fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
+    failure(
+        err.reason().to_string(),
+        (
+            err.found()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "end of input".to_string()),
+            *err.span(),
+        ),
+        err.contexts()
+            .map(|(l, s)| (format!("while parsing this {l}"), *s)),
+        src,
+    )
+}
+
 fn main() {
-    let text = "
+    let src = "
         let add = fn x y = x + y in
         let mul = fn x y = x * y in
         let x = mul (add 5 42) 2 in
         add x 3.5
     ";
 
-    let tokens = lexer().parse(text).unwrap();
-
-    dbg!(&tokens);
+    let tokens = lexer()
+        .parse(src)
+        .into_result()
+        .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
     let expr = parser()
-        .parse(tokens.spanned((0..text.len()).into()))
-        .unwrap();
+        .parse(tokens.spanned((0..src.len()).into()))
+        .into_result()
+        .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
-    dbg!(&expr);
+    let mut solver = Solver {
+        src,
+        vars: Vec::new(),
+    };
+    let program_ty = solver.check(&expr, &mut Vec::new());
+    println!("Result type: {:?}", solver.solve(program_ty));
 
-    let mut solver = Solver::default();
-
-    let program_ty = solver.check(&expr.0, &mut Vec::new());
-
-    println!(
-        "The expression outputs type `{:?}`",
-        solver.solve(program_ty)
-    );
+    let mut vm = Vm::default();
+    println!("Result: {:?}", vm.eval(&expr));
 }
