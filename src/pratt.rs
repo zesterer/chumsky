@@ -354,7 +354,7 @@ impl<A: Clone, F: Clone, Op, Args> Clone for Postfix<A, F, Op, Args> {
 /// // Combine the operand and the operator itself
 /// impl Fn(O, Op) -> O
 /// // Combine the operand, the operator itself, and a [`MapExtra`] covering the whole operation
-/// impl Fn(Op, O, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(O, Op, &mut MapExtra<'a, '_, I, E>) -> O
 /// ```
 pub const fn postfix<A, F, Op, Args>(
     binding_power: u16,
