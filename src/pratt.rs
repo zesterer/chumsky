@@ -184,9 +184,9 @@ where
     #[doc(hidden)]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
-        inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        _inp: &mut InputRef<'src, 'parse, I, E>,
+        _pre_expr: &input::Cursor<'src, 'parse, I>,
+        _f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> PResult<M, O>
     where
         Self: Sized,
@@ -197,9 +197,9 @@ where
     #[doc(hidden)]
     fn do_parse_postfix<'parse, M: Mode>(
         &self,
-        inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        lhs: M::Output<O>,
+        _inp: &mut InputRef<'src, 'parse, I, E>,
+        _pre_expr: &input::Cursor<'src, 'parse, I>,
+        _lhs: M::Output<O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
@@ -210,10 +210,10 @@ where
     #[doc(hidden)]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
-        inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        lhs: M::Output<O>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        _inp: &mut InputRef<'src, 'parse, I, E>,
+        _pre_expr: &input::Cursor<'src, 'parse, I>,
+        _lhs: M::Output<O>,
+        _f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
@@ -224,9 +224,9 @@ where
     #[doc(hidden)]
     fn do_parse_prefix_check<'parse>(
         &self,
-        inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
+        _inp: &mut InputRef<'src, 'parse, I, E>,
+        _pre_expr: &input::Cursor<'src, 'parse, I>,
+        _f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> PResult<Check, O>;
     #[doc(hidden)]
     fn do_parse_prefix_emit<'parse>(
@@ -270,13 +270,13 @@ where
 /// A boxed pratt parser operator. See [`Operator`].
 pub struct Boxed<'src, 'a, I, O, E>(RefC<sync::DynOperator<'src, 'a, I, O, E>>);
 
-impl<'src, 'a, I, O, E> Clone for Boxed<'src, 'a, I, O, E> {
+impl<I, O, E> Clone for Boxed<'_, '_, I, O, E> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<'src, 'a, I, O, E> Operator<'src, I, O, E> for Boxed<'src, 'a, I, O, E>
+impl<'src, I, O, E> Operator<'src, I, O, E> for Boxed<'src, '_, I, O, E>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
