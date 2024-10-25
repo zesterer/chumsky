@@ -1,6 +1,11 @@
+//! This is an entire lexer, parser, type-checker, and interpreter for a statically-typed ML-like functional
+//! programming language. See `sample.mini_ml` for sample source code.
+//! Run it with the following command:
+//! cargo run --features=pratt,label --example mini_ml -- examples/sample.mini_ml
+
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::{input::SpannedInput, pratt::*, prelude::*};
-use core::fmt;
+use std::{env, fmt, fs};
 
 // Tokens and lexer
 
@@ -438,12 +443,8 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
 }
 
 fn main() {
-    let src = "
-        let add = fn x y = x + y in
-        let mul = fn x y = x * y in
-        let x = mul (add 5 42) 2 in
-        add x 3.5
-    ";
+    let filename = env::args().nth(1).expect("Expected file argument");
+    let src = &fs::read_to_string(&filename).expect("Failed to read file");
 
     let tokens = lexer()
         .parse(src)
