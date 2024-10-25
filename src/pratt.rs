@@ -89,61 +89,99 @@ use super::*;
 
 macro_rules! op_check_and_emit {
     () => {
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_prefix_check<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
-            pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_expr: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
         ) -> PResult<Check, O> {
-            self.do_parse_prefix::<Check>(inp, pre_expr, f)
+            self.do_parse_prefix::<Check>(inp, pre_expr, &f)
         }
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_prefix_emit<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
-            pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_expr: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
         ) -> PResult<Emit, O> {
-            self.do_parse_prefix::<Emit>(inp, pre_expr, f)
+            self.do_parse_prefix::<Emit>(inp, pre_expr, &f)
         }
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_postfix_check<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
             pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_op: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             lhs: (),
+            min_power: u32,
         ) -> Result<(), ()> {
-            self.do_parse_postfix::<Check>(inp, pre_expr, lhs)
+            self.do_parse_postfix::<Check>(inp, pre_expr, pre_op, lhs, min_power)
         }
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_postfix_emit<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
             pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_op: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             lhs: O,
+            min_power: u32,
         ) -> Result<O, O> {
-            self.do_parse_postfix::<Emit>(inp, pre_expr, lhs)
+            self.do_parse_postfix::<Emit>(inp, pre_expr, pre_op, lhs, min_power)
         }
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_infix_check<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
             pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_op: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             lhs: (),
+            min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
         ) -> Result<(), ()> {
-            self.do_parse_infix::<Check>(inp, pre_expr, lhs, &f)
+            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
-        #[doc(hidden)]
+        #[inline(always)]
         fn do_parse_infix_emit<'parse>(
             &self,
             inp: &mut InputRef<'src, 'parse, I, E>,
             pre_expr: &input::Cursor<'src, 'parse, I>,
+            pre_op: &input::Checkpoint<
+                'src,
+                'parse,
+                I,
+                <E::State as Inspector<'src, I>>::Checkpoint,
+            >,
             lhs: O,
+            min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
         ) -> Result<O, O> {
-            self.do_parse_infix::<Emit>(inp, pre_expr, lhs, &f)
+            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
     };
 }
@@ -162,77 +200,70 @@ where
         Boxed(RefC::new(self))
     }
 
+    #[doc(hidden)]
     #[inline(always)]
-    #[doc(hidden)]
-    fn is_infix(&self) -> bool {
-        false
-    }
-    #[inline(always)]
-    #[doc(hidden)]
-    fn is_prefix(&self) -> bool {
-        false
-    }
-    #[inline(always)]
-    #[doc(hidden)]
-    fn is_postfix(&self) -> bool {
-        false
-    }
-
-    #[doc(hidden)]
-    fn associativity(&self) -> Associativity;
-
-    #[doc(hidden)]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
-        _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        _pre_expr: &input::Checkpoint<
+            'src,
+            'parse,
+            I,
+            <E::State as Inspector<'src, I>>::Checkpoint,
+        >,
+        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> PResult<M, O>
     where
         Self: Sized,
     {
-        unimplemented!()
+        Err(())
     }
 
     #[doc(hidden)]
+    #[inline(always)]
     fn do_parse_postfix<'parse, M: Mode>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _lhs: M::Output<O>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        lhs: M::Output<O>,
+        _min_power: u32,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        unimplemented!()
+        Err(lhs)
     }
 
     #[doc(hidden)]
+    #[inline(always)]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _lhs: M::Output<O>,
-        _f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        lhs: M::Output<O>,
+        _min_power: u32,
+        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        unimplemented!()
+        Err(lhs)
     }
 
     #[doc(hidden)]
     fn do_parse_prefix_check<'parse>(
         &self,
-        _inp: &mut InputRef<'src, 'parse, I, E>,
-        _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
+        inp: &mut InputRef<'src, 'parse, I, E>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> PResult<Check, O>;
     #[doc(hidden)]
     fn do_parse_prefix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> PResult<Emit, O>;
     #[doc(hidden)]
@@ -240,21 +271,27 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
+        min_power: u32,
     ) -> Result<(), ()>;
     #[doc(hidden)]
     fn do_parse_postfix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
+        min_power: u32,
     ) -> Result<O, O>;
     #[doc(hidden)]
     fn do_parse_infix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
+        min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()>;
     #[doc(hidden)]
@@ -262,7 +299,9 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
+        min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O>;
 }
@@ -282,29 +321,11 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
-    fn is_infix(&self) -> bool {
-        self.0.is_infix()
-    }
-    #[inline(always)]
-    fn is_prefix(&self) -> bool {
-        self.0.is_prefix()
-    }
-    #[inline(always)]
-    fn is_postfix(&self) -> bool {
-        self.0.is_postfix()
-    }
-
-    #[inline(always)]
-    fn associativity(&self) -> Associativity {
-        self.0.associativity()
-    }
-
-    #[inline(always)]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> PResult<M, O>
     where
         Self: Sized,
@@ -317,12 +338,14 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
+        min_power: u32,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_postfix(self, inp, pre_expr, lhs)
+        M::invoke_pratt_op_postfix(self, inp, pre_expr, pre_op, lhs, min_power)
     }
 
     #[inline(always)]
@@ -330,64 +353,84 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        min_power: u32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_infix(self, inp, pre_expr, lhs, f)
+        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
     }
 
+    #[inline(always)]
     fn do_parse_prefix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> PResult<Check, O> {
         self.0.do_parse_prefix_check(inp, pre_expr, f)
     }
+    #[inline(always)]
     fn do_parse_prefix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> PResult<Emit, O> {
         self.0.do_parse_prefix_emit(inp, pre_expr, f)
     }
+    #[inline(always)]
     fn do_parse_postfix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
+        min_power: u32,
     ) -> Result<(), ()> {
-        self.0.do_parse_postfix_check(inp, pre_expr, lhs)
+        self.0
+            .do_parse_postfix_check(inp, pre_expr, pre_op, lhs, min_power)
     }
+    #[inline(always)]
     fn do_parse_postfix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
+        min_power: u32,
     ) -> Result<O, O> {
-        self.0.do_parse_postfix_emit(inp, pre_expr, lhs)
+        self.0
+            .do_parse_postfix_emit(inp, pre_expr, pre_op, lhs, min_power)
     }
+    #[inline(always)]
     fn do_parse_infix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
+        min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()> {
-        self.0.do_parse_infix_check(inp, pre_expr, lhs, &f)
+        self.0
+            .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
+    #[inline(always)]
     fn do_parse_infix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
+        min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O> {
-        self.0.do_parse_infix_emit(inp, pre_expr, lhs, &f)
+        self.0
+            .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
 }
 
@@ -493,37 +536,41 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline(always)]
-    fn is_infix(&self) -> bool {
-        true
-    }
-
-    #[inline(always)]
-    fn associativity(&self) -> Associativity {
-        self.associativity
-    }
-
     #[inline]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        min_power: u32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        match self.op_parser.go::<M>(inp) {
-            Ok(op) => match f(inp, self.associativity().right_power()) {
-                Ok(rhs) => Ok(M::combine(
-                    M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                    op,
-                    |(lhs, rhs), op| (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp)),
-                )),
-                Err(()) => Err(lhs),
-            },
-            Err(()) => Err(lhs),
+        if self.associativity.left_power() >= min_power {
+            match self.op_parser.go::<M>(inp) {
+                Ok(op) => match f(inp, self.associativity.right_power()) {
+                    Ok(rhs) => Ok(M::combine(
+                        M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                        op,
+                        |(lhs, rhs), op| {
+                            (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
+                        },
+                    )),
+                    Err(()) => {
+                        inp.rewind(pre_op.clone());
+                        Err(lhs)
+                    }
+                },
+                Err(()) => {
+                    inp.rewind(pre_op.clone());
+                    Err(lhs)
+                }
+            }
+        } else {
+            Err(lhs)
         }
     }
 
@@ -585,34 +632,30 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline(always)]
-    fn is_prefix(&self) -> bool {
-        true
-    }
-
-    #[inline(always)]
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-
     #[inline]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Cursor<'src, 'parse, I>,
-        f: impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> PResult<M, O>
     where
         Self: Sized,
     {
         match self.op_parser.go::<M>(inp) {
-            Ok(op) => match f(inp, self.associativity().left_power()) {
+            Ok(op) => match f(inp, Associativity::Left(self.binding_power).left_power()) {
                 Ok(rhs) => Ok(M::combine(op, rhs, |op, rhs| {
-                    (self.fold)(op, rhs, &mut MapExtra::new(pre_expr, inp))
+                    (self.fold)(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                 })),
-                Err(()) => Err(()),
+                Err(()) => {
+                    inp.rewind(pre_expr.clone());
+                    Err(())
+                }
             },
-            Err(()) => Err(()),
+            Err(()) => {
+                inp.rewind(pre_expr.clone());
+                Err(())
+            }
         }
     }
 
@@ -674,31 +717,30 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline(always)]
-    fn is_postfix(&self) -> bool {
-        true
-    }
-
-    #[inline(always)]
-    fn associativity(&self) -> Associativity {
-        Associativity::Left(self.binding_power)
-    }
-
     #[inline]
     fn do_parse_postfix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
+        min_power: u32,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        match self.op_parser.go::<M>(inp) {
-            Ok(op) => Ok(M::combine(lhs, op, |lhs, op| {
-                (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
-            })),
-            Err(()) => Err(lhs),
+        if Associativity::Left(self.binding_power).right_power() >= min_power {
+            match self.op_parser.go::<M>(inp) {
+                Ok(op) => Ok(M::combine(lhs, op, |lhs, op| {
+                    (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
+                })),
+                Err(()) => {
+                    inp.rewind(pre_op.clone());
+                    Err(lhs)
+                }
+            }
+        } else {
+            Err(lhs)
         }
     }
 
@@ -712,195 +754,239 @@ pub struct Pratt<Atom, Ops> {
     pub(crate) ops: Ops,
 }
 
-macro_rules! impl_pratt_for_tuple {
+macro_rules! impl_operator_for_tuple {
     () => {};
     ($head:ident $($X:ident)*) => {
-        impl_pratt_for_tuple!($($X)*);
-        impl_pratt_for_tuple!(~ $head $($X)*);
+        impl_operator_for_tuple!($($X)*);
+        impl_operator_for_tuple!(~ $head $($X)*);
     };
     (~ $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, Atom, $($X),*> Pratt<Atom, ($($X,)*)> {
-            #[inline]
-            fn pratt_go<M: Mode, I, O, E>(&self, inp: &mut InputRef<'a, '_, I, E>, min_power: u32) -> PResult<M, O>
+        impl<'src, I, O, E, $($X),*> Operator<'src, I, O, E> for ($($X,)*)
             where
-                I: Input<'a>,
-                E: ParserExtra<'a, I>,
-                Atom: Parser<'a, I, O, E>,
-                $($X: Operator<'a, I, O, E>),*
-            {
-                let pre_expr = inp.save();
-                let mut lhs = 'choice: {
-                    let ($($X,)*) = &self.ops;
-
-                    // Prefix unary operators
-                    $(
-                        if $X.is_prefix() {
-                            match $X.do_parse_prefix::<M>(inp, pre_expr.cursor(), |inp, min_power| recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))) {
-                                Ok(out) => break 'choice out,
-                                Err(()) => inp.rewind(pre_expr.clone()),
-                            }
-                        }
-                    )*
-
-                    self.atom.go::<M>(inp)?
-                };
-
-                loop {
-                    let ($($X,)*) = &self.ops;
-
-                    let pre_op = inp.save();
-
-                    // Postfix unary operators
-                    $(
-                        let assoc = $X.associativity();
-                        if $X.is_postfix() && assoc.right_power() >= min_power {
-                            match $X.do_parse_postfix::<M>(inp, pre_expr.cursor(), lhs) {
-                                Ok(out) => {
-                                    lhs = out;
-                                    continue
-                                },
-                                Err(out) => {
-                                    lhs = out;
-                                    inp.rewind(pre_op.clone())
-                                },
-                            }
-                        }
-                    )*
-
-                    // Infix binary operators
-                    $(
-                        let assoc = $X.associativity();
-                        if $X.is_infix() && assoc.left_power() >= min_power {
-                            match $X.do_parse_infix::<M>(inp, pre_expr.cursor(), lhs, |inp, min_power| recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))) {
-                                Ok(out) => {
-                                    lhs = out;
-                                    continue
-                                },
-                                Err(out) => {
-                                    lhs = out;
-                                    inp.rewind(pre_op.clone())
-                                },
-                            }
-                        }
-                    )*
-
-                    inp.rewind(pre_op);
-                    break;
-                }
-
-                Ok(lhs)
-            }
-        }
-
-        #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, O, E, Atom, $($X),*> ParserSealed<'a, I, O, E> for Pratt<Atom, ($($X,)*)>
-        where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            Atom: Parser<'a, I, O, E>,
-            $($X: Operator<'a, I, O, E>),*
+                I: Input<'src>,
+                E: ParserExtra<'src, I>,
+                $($X: Operator<'src, I, O, E>),*
         {
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-                self.pratt_go::<M, _, _, _>(inp, 0)
+            #[inline]
+            fn do_parse_prefix<'parse, M: Mode>(
+                &self,
+                inp: &mut InputRef<'src, 'parse, I, E>,
+                pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+            ) -> PResult<M, O>
+            where
+                Self: Sized,
+            {
+                let ($($X,)*) = self;
+                $(
+                    match $X.do_parse_prefix::<M>(inp, pre_expr, f) {
+                        Ok(out) => return Ok(out),
+                        Err(()) => {},
+                    }
+                )*
+                Err(())
             }
 
-            go_extra!(O);
+            #[inline]
+            fn do_parse_postfix<'parse, M: Mode>(
+                &self,
+                inp: &mut InputRef<'src, 'parse, I, E>,
+                pre_expr: &input::Cursor<'src, 'parse, I>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                mut lhs: M::Output<O>,
+                min_power: u32,
+            ) -> Result<M::Output<O>, M::Output<O>>
+            where
+                Self: Sized,
+            {
+                let ($($X,)*) = self;
+                $(
+                    match $X.do_parse_postfix::<M>(inp, pre_expr, pre_op, lhs, min_power) {
+                        Ok(out) => return Ok(out),
+                        Err(out) => lhs = out,
+                    }
+                )*
+                Err(lhs)
+            }
+
+            #[inline]
+            fn do_parse_infix<'parse, M: Mode>(
+                &self,
+                inp: &mut InputRef<'src, 'parse, I, E>,
+                pre_expr: &input::Cursor<'src, 'parse, I>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                mut lhs: M::Output<O>,
+                min_power: u32,
+                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+            ) -> Result<M::Output<O>, M::Output<O>>
+            where
+                Self: Sized,
+            {
+                let ($($X,)*) = self;
+                $(
+                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+                        Ok(out) => return Ok(out),
+                        Err(out) => lhs = out,
+                    }
+                )*
+                Err(lhs)
+            }
+
+            op_check_and_emit!();
         }
     };
 }
 
-impl_pratt_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
+impl_operator_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-#[inline]
-fn pratt_go_slice<'a, M: Mode, I, O, E, Atom, Op>(
-    atom: &Atom,
-    ops: &[Op],
-    inp: &mut InputRef<'a, '_, I, E>,
-    min_power: u32,
-) -> PResult<M, O>
+#[allow(unused_variables, non_snake_case)]
+impl<'src, I, O, E, Op> Operator<'src, I, O, E> for Vec<Op>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Op: Operator<'a, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    Op: Operator<'src, I, O, E>,
 {
-    let pre_expr = inp.save();
-    let mut lhs = 'choice: {
-        // Prefix unary operators
-        for op in ops {
-            if op.is_prefix() {
-                match op.do_parse_prefix::<M>(inp, pre_expr.cursor(), |inp, min_power| {
-                    recursive::recurse(|| {
-                        pratt_go_slice::<M, _, _, _, _, _>(atom, ops, inp, min_power)
-                    })
-                }) {
-                    Ok(out) => break 'choice out,
-                    Err(()) => inp.rewind(pre_expr.clone()),
-                }
+    #[inline]
+    fn do_parse_prefix<'parse, M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, 'parse, I, E>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+    ) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        for op in self {
+            if let Ok(out) = op.do_parse_prefix::<M>(inp, pre_expr, f) {
+                return Ok(out);
             }
         }
-
-        atom.go::<M>(inp)?
-    };
-
-    'luup: loop {
-        let pre_op = inp.save();
-
-        // Postfix unary operators
-        for op in ops {
-            let assoc = op.associativity();
-            if op.is_postfix() && assoc.right_power() >= min_power {
-                match op.do_parse_postfix::<M>(inp, pre_expr.cursor(), lhs) {
-                    Ok(out) => {
-                        lhs = out;
-                        continue;
-                    }
-                    Err(out) => {
-                        lhs = out;
-                        inp.rewind(pre_op.clone())
-                    }
-                }
-            }
-        }
-
-        // Infix binary operators
-        for op in ops {
-            let assoc = op.associativity();
-            if op.is_infix() && assoc.left_power() >= min_power {
-                match op.do_parse_infix::<M>(inp, pre_expr.cursor(), lhs, |inp, min_power| {
-                    recursive::recurse(|| {
-                        pratt_go_slice::<M, _, _, _, _, _>(atom, ops, inp, min_power)
-                    })
-                }) {
-                    Ok(out) => {
-                        lhs = out;
-                        continue 'luup;
-                    }
-                    Err(out) => {
-                        lhs = out;
-                        inp.rewind(pre_op.clone())
-                    }
-                }
-            }
-        }
-
-        inp.rewind(pre_op);
-        break;
+        Err(())
     }
 
-    Ok(lhs)
+    #[inline]
+    fn do_parse_postfix<'parse, M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, 'parse, I, E>,
+        pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        mut lhs: M::Output<O>,
+        min_power: u32,
+    ) -> Result<M::Output<O>, M::Output<O>>
+    where
+        Self: Sized,
+    {
+        for op in self {
+            match op.do_parse_postfix::<M>(inp, pre_expr, pre_op, lhs, min_power) {
+                Ok(out) => return Ok(out),
+                Err(out) => lhs = out,
+            }
+        }
+        Err(lhs)
+    }
+
+    #[inline]
+    fn do_parse_infix<'parse, M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, 'parse, I, E>,
+        pre_expr: &input::Cursor<'src, 'parse, I>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        mut lhs: M::Output<O>,
+        min_power: u32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
+    ) -> Result<M::Output<O>, M::Output<O>>
+    where
+        Self: Sized,
+    {
+        for op in self {
+            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+                Ok(out) => return Ok(out),
+                Err(out) => lhs = out,
+            }
+        }
+        Err(lhs)
+    }
+
+    op_check_and_emit!();
 }
 
-impl<'a, I, O, E, Atom, Op> ParserSealed<'a, I, O, E> for Pratt<Atom, Vec<Op>>
+#[allow(unused_variables, non_snake_case)]
+impl<'a, Atom, Ops> Pratt<Atom, Ops> {
+    #[inline]
+    fn pratt_go<M: Mode, I, O, E>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        min_power: u32,
+    ) -> PResult<M, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Atom: Parser<'a, I, O, E>,
+        Ops: Operator<'a, I, O, E>,
+    {
+        let pre_expr = inp.save();
+        // Prefix unary operators
+        let mut lhs = match self
+            .ops
+            .do_parse_prefix::<M>(inp, &pre_expr, &|inp, min_power| {
+                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+            }) {
+            Ok(out) => out,
+            Err(()) => self.atom.go::<M>(inp)?,
+        };
+
+        loop {
+            let pre_op = inp.save();
+
+            // Postfix unary operators
+            match self
+                .ops
+                .do_parse_postfix::<M>(inp, pre_expr.cursor(), &pre_op, lhs, min_power)
+            {
+                Ok(out) => {
+                    lhs = out;
+                    continue;
+                }
+                Err(out) => lhs = out,
+            }
+
+            // Infix binary operators
+            match self.ops.do_parse_infix::<M>(
+                inp,
+                pre_expr.cursor(),
+                &pre_op,
+                lhs,
+                min_power,
+                &|inp, min_power| {
+                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                },
+            ) {
+                Ok(out) => {
+                    lhs = out;
+                    continue;
+                }
+                Err(out) => lhs = out,
+            }
+
+            inp.rewind(pre_op);
+            break;
+        }
+
+        Ok(lhs)
+    }
+}
+
+#[allow(unused_variables, non_snake_case)]
+impl<'a, I, O, E, Atom, Ops> ParserSealed<'a, I, O, E> for Pratt<Atom, Ops>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
     Atom: Parser<'a, I, O, E>,
-    Op: Operator<'a, I, O, E>,
+    Ops: Operator<'a, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
-        pratt_go_slice::<M, _, _, _, _, _>(&self.atom, &self.ops, inp, 0)
+        self.pratt_go::<M, _, _, _>(inp, 0)
     }
 
     go_extra!(O);

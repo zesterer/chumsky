@@ -140,6 +140,7 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
+    inspector::Inspector,
     prelude::*,
     primitive::Any,
     private::{
