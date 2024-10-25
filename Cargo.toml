@@ -141,3 +141,7 @@ required-features = ["std"]
 [[example]]
 name = "foo"
 required-features = ["std"]
+
+[[example]]
+name = "mini_ml"
+required-features = ["pratt", "label"]
