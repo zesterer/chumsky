@@ -12,6 +12,7 @@ pub use crate::stream::{BoxedExactSizeStream, BoxedStream, IterInput, Stream};
 use super::*;
 #[cfg(feature = "std")]
 use std::io::{BufReader, Read, Seek};
+use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
@@ -280,6 +281,84 @@ impl<'src> SliceInput<'src> for &'src str {
     #[inline(always)]
     unsafe fn slice_from(this: &mut Self::Cache, from: RangeFrom<&Self::Cursor>) -> Self::Slice {
         &this[*from.start..]
+    }
+}
+
+impl<'src> Input<'src> for Graphemes<'src> {
+    type Cursor = usize;
+    type Span = SimpleSpan<usize>;
+
+    type Token = &'src str;
+    type MaybeToken = &'src str;
+
+    type Cache = &'src str;
+
+    #[inline]
+    fn begin(self) -> (Self::Cursor, Self::Cache) {
+        (0, self.as_str())
+    }
+
+    #[inline]
+    fn cursor_location(cursor: &Self::Cursor) -> usize {
+        *cursor
+    }
+
+    #[inline(always)]
+    unsafe fn next_maybe(
+        this: &mut Self::Cache,
+        cursor: &mut Self::Cursor,
+    ) -> Option<Self::MaybeToken> {
+        if *cursor < this.len() {
+            // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
+            //         We only ever return cursors that are at a character boundary
+            let c = this
+                .get_unchecked(*cursor..)
+                .graphemes(true)
+                .next()
+                .unwrap_unchecked();
+            *cursor += c.len();
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+        (*range.start..*range.end).into()
+    }
+}
+
+impl<'src> ExactSizeInput<'src> for Graphemes<'src> {
+    #[inline(always)]
+    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+        (*range.start..this.len()).into()
+    }
+}
+
+impl<'src> ValueInput<'src> for Graphemes<'src> {
+    #[inline(always)]
+    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+        Self::next_maybe(this, cursor)
+    }
+}
+
+impl<'src> SliceInput<'src> for Graphemes<'src> {
+    type Slice = Graphemes<'src>;
+
+    #[inline(always)]
+    fn full_slice(this: &mut Self::Cache) -> Self::Slice {
+        this.graphemes(true)
+    }
+
+    #[inline(always)]
+    unsafe fn slice(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
+        this[*range.start..*range.end].graphemes(true)
+    }
+
+    #[inline(always)]
+    unsafe fn slice_from(this: &mut Self::Cache, from: RangeFrom<&Self::Cursor>) -> Self::Slice {
+        this[*from.start..].graphemes(true)
     }
 }
 
