@@ -310,7 +310,12 @@ impl<'src> Input<'src> for Graphemes<'src> {
     ) -> Option<Self::MaybeToken> {
         if *cursor < this.len() {
             // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
-            //         We only ever return cursors that are at a character boundary
+            //         We only ever return cursors that are at a code point boundary.
+            //         The `next()` implementation returns `None`, only in the 
+            //         situation of zero length of the remaining part of the string. 
+            //         And the Unicode standard guarantees that any sequence of code 
+            //         points is a valid sequence of grapheme clusters, so the 
+            //         behaviour of the `next()` function should not change.
             let c = this
                 .get_unchecked(*cursor..)
                 .graphemes(true)
