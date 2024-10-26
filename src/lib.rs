@@ -24,11 +24,11 @@ macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
         fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, $O> {
-            ParserSealed::<I, $O, E>::go::<Emit>(self, inp)
+            Parser::<I, $O, E>::go::<Emit>(self, inp)
         }
         #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, $O> {
-            ParserSealed::<I, $O, E>::go::<Check>(self, inp)
+            Parser::<I, $O, E>::go::<Check>(self, inp)
         }
     };
 }
@@ -41,7 +41,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Emit, $O> {
-            ConfigParserSealed::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
+            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
         }
         #[inline(always)]
         fn go_check_cfg(
@@ -49,7 +49,7 @@ macro_rules! go_cfg_extra {
             inp: &mut InputRef<'a, '_, I, E>,
             cfg: Self::Config,
         ) -> PResult<Check, $O> {
-            ConfigParserSealed::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
+            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
         }
     };
 }
@@ -143,10 +143,7 @@ use self::{
     inspector::Inspector,
     prelude::*,
     primitive::Any,
-    private::{
-        Check, ConfigIterParserSealed, ConfigParserSealed, Emit, IPResult, IterParserSealed,
-        Located, MaybeUninitExt, Mode, PResult, ParserSealed, Sealed,
-    },
+    private::{Check, Emit, IPResult, Located, MaybeUninitExt, Mode, PResult, Sealed},
     recovery::{RecoverWith, Strategy},
     span::Span,
     text::*,
@@ -320,8 +317,9 @@ impl<T, E> ParseResult<T, E> {
 /// and returned values or parser state may take advantage of this to borrow tokens or slices of the
 /// input and hold on to them, if the input supports this.
 ///
-/// You cannot directly implement this trait yourself. If you feel like the built-in parsers are not enough for you,
-/// there are several options in increasing order of complexity:
+/// This trait is not intended to be implemented by downstream users of `chumsky`. While you can technically implement
+/// it, doing so is considered to be outside the stability guarantees of the crate. Your code may break with a future,
+/// semver-compatible release! Instead of implementing this trait, you should consider other options:
 ///
 /// 1) Try using combinators like [`Parser::try_map`] and [`Parser::validate`] to implement custom error generation
 ///
@@ -330,7 +328,7 @@ impl<T, E> ParseResult<T, E> {
 /// 3) Use chumsky's [`extension`] API to write an extension parser that feels like it's native to chumsky
 ///
 /// 4) If you believe you've found a common use-case that's missing from chumsky, you could open a pull request to
-///    implement it in chumsky itself.
+///    implement it in chumsky itself rather than implementing `Parser` yourself.
 #[cfg_attr(
     feature = "nightly",
     diagnostic::on_unimplemented(
@@ -339,9 +337,17 @@ impl<T, E> ParseResult<T, E> {
         note = "You should check that the output types of your parsers are consistent with the combinators you're using",
     )
 )]
-pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
-    ParserSealed<'a, I, O, E>
-{
+pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default> {
+    #[doc(hidden)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized;
+
+    #[doc(hidden)]
+    fn go_emit(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Emit, O>;
+    #[doc(hidden)]
+    fn go_check(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Check, O>;
+
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
     /// If `None` is returned (i.e: parsing failed) then there will *always* be at least one item in the error `Vec`.
@@ -2123,7 +2129,9 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     where
         Self: MaybeSync + Sized + 'a + 'b,
     {
-        ParserSealed::boxed(self)
+        Boxed {
+            inner: RefC::new(self),
+        }
     }
 
     /// Use [Pratt parsing](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) to ergonomically
@@ -2171,7 +2179,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
 }
 
 #[cfg(feature = "nightly")]
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for !
+impl<'a, I, O, E> Parser<'a, I, O, E> for !
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2199,11 +2207,28 @@ where
 ///
 /// Not all parsers currently support configuration. If you feel like you need a parser to be configurable
 /// and it isn't currently, please open an issue on the issue tracker of the main repository.
-pub trait ConfigParser<'a, I, O, E>: ConfigParserSealed<'a, I, O, E>
+pub trait ConfigParser<'a, I, O, E>: Parser<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    /// A type describing the configurable aspects of the parser.
+    type Config: Default;
+
+    #[doc(hidden)]
+    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
+    where
+        Self: Sized;
+
+    #[doc(hidden)]
+    fn go_emit_cfg(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<Emit, O>;
+    #[doc(hidden)]
+    fn go_check_cfg(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Check, O>;
+
     /// A combinator that allows configuration of the parser from the current context. Context
     /// is most often derived from [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] or [`map_ctx`],
     /// and is how chumsky supports parsing things such as indentation-sensitive grammars.
@@ -2287,11 +2312,32 @@ where
 }
 
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
-pub trait IterParser<'a, I, O, E = extra::Default>: IterParserSealed<'a, I, O, E>
+pub trait IterParser<'a, I, O, E = extra::Default>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    #[doc(hidden)]
+    type IterState<M: Mode>
+    where
+        I: 'a;
+
+    // Determines whether this iter parser is expected to not consume input on each iteration
+    #[doc(hidden)]
+    const NONCONSUMPTION_IS_OK: bool = false;
+
+    #[doc(hidden)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>>;
+    #[doc(hidden)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O>;
+
     /// Collect this iterable parser into a [`Container`].
     ///
     /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
@@ -2554,12 +2600,22 @@ where
 
 /// An iterable equivalent of [`ConfigParser`], i.e: a parser that generates a sequence of outputs and
 /// can be configured at runtime.
-pub trait ConfigIterParser<'a, I, O, E = extra::Default>:
-    ConfigIterParserSealed<'a, I, O, E>
+pub trait ConfigIterParser<'a, I, O, E = extra::Default>: IterParser<'a, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
 {
+    /// A trait describing the configurable aspects of the iterable parser.
+    type Config: Default;
+
+    #[doc(hidden)]
+    fn next_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'a, '_, I, E>,
+        state: &mut Self::IterState<M>,
+        cfg: &Self::Config,
+    ) -> IPResult<M, O>;
+
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
     where
@@ -2606,7 +2662,7 @@ impl<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> Clone for Boxed<'a, '_, I, O, E
     }
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Boxed<'a, '_, I, O, E>
+impl<'a, I, O, E> Parser<'a, I, O, E> for Boxed<'a, '_, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2627,7 +2683,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::boxed::Box<T>
+impl<'a, I, O, E, T> Parser<'a, I, O, E> for ::alloc::boxed::Box<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2644,7 +2700,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::rc::Rc<T>
+impl<'a, I, O, E, T> Parser<'a, I, O, E> for ::alloc::rc::Rc<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -2661,7 +2717,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E, T> ParserSealed<'a, I, O, E> for ::alloc::sync::Arc<T>
+impl<'a, I, O, E, T> Parser<'a, I, O, E> for ::alloc::sync::Arc<T>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

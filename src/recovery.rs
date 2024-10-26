@@ -59,7 +59,7 @@ pub struct RecoverWith<A, S> {
     pub(crate) strategy: S,
 }
 
-impl<'a, I, O, E, A, S> ParserSealed<'a, I, O, E> for RecoverWith<A, S>
+impl<'a, I, O, E, A, S> Parser<'a, I, O, E> for RecoverWith<A, S>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

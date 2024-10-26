@@ -978,7 +978,7 @@ impl<'a, Atom, Ops> Pratt<Atom, Ops> {
 }
 
 #[allow(unused_variables, non_snake_case)]
-impl<'a, I, O, E, Atom, Ops> ParserSealed<'a, I, O, E> for Pratt<Atom, Ops>
+impl<'a, I, O, E, Atom, Ops> Parser<'a, I, O, E> for Pratt<Atom, Ops>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

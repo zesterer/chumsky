@@ -145,7 +145,7 @@ mod current {
     #[repr(transparent)]
     pub struct Ext<T: ?Sized>(pub T);
 
-    impl<'a, I, O, E, P> ParserSealed<'a, I, O, E> for Ext<P>
+    impl<'a, I, O, E, P> Parser<'a, I, O, E> for Ext<P>
     where
         I: Input<'a>,
         E: ParserExtra<'a, I>,

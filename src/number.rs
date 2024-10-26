@@ -1,11 +1,7 @@
 //! TODO: Add documentation when approved
 
+use super::*;
 pub use lexical::format;
-
-use crate::extra::ParserExtra;
-use crate::input::{InputRef, SliceInput};
-use crate::private::{Check, Emit, Mode, PResult, ParserSealed};
-use crate::EmptyPhantom;
 
 use lexical::parse_partial;
 use lexical::FromLexical;
@@ -30,7 +26,7 @@ pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
     }
 }
 
-impl<'a, const F: u128, I, O, E> ParserSealed<'a, I, O, E> for Number<F, I, O, E>
+impl<'a, const F: u128, I, O, E> Parser<'a, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
     I: SliceInput<'a, Cursor = usize>,

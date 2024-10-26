@@ -34,7 +34,7 @@ impl<I, E> Clone for End<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, (), E> for End<I, E>
+impl<'a, I, E> Parser<'a, I, (), E> for End<I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -72,7 +72,7 @@ impl<I, E> Clone for Empty<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, (), E> for Empty<I, E>
+impl<'a, I, E> Parser<'a, I, (), E> for Empty<I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -152,7 +152,7 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, T, E> for Just<T, I, E>
+impl<'a, I, E, T> Parser<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -167,7 +167,7 @@ where
     go_extra!(T);
 }
 
-impl<'a, I, E, T> ConfigParserSealed<'a, I, T, E> for Just<T, I, E>
+impl<'a, I, E, T> ConfigParser<'a, I, T, E> for Just<T, I, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -252,7 +252,7 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for OneOf<T, I, E>
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for OneOf<T, I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -326,7 +326,7 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for NoneOf<T, I, E>
+impl<'a, I, E, T> Parser<'a, I, I::Token, E> for NoneOf<T, I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -393,7 +393,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Custom<F, I, O, E>
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Custom<F, I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -445,7 +445,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Select<F, I, O, E>
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for Select<F, I, O, E>
 where
     I: ValueInput<'a>,
     I::Token: Clone + 'a,
@@ -502,7 +502,7 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for SelectRef<F, I, O, E>
+impl<'a, I, O, E, F> Parser<'a, I, O, E> for SelectRef<F, I, O, E>
 where
     I: BorrowInput<'a>,
     I::Token: 'a,
@@ -541,7 +541,7 @@ impl<I, E> Clone for Any<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, I::Token, E> for Any<I, E>
+impl<'a, I, E> Parser<'a, I, I::Token, E> for Any<I, E>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
@@ -596,7 +596,7 @@ impl<I, E> Clone for AnyRef<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, &'a I::Token, E> for AnyRef<I, E>
+impl<'a, I, E> Parser<'a, I, &'a I::Token, E> for AnyRef<I, E>
 where
     I: BorrowInput<'a>,
     E: ParserExtra<'a, I>,
@@ -660,7 +660,7 @@ impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
     }
 }
 
-impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F, E>
+impl<'a, I, O, E, EI, A, F> Parser<'a, I, O, E> for MapCtx<A, EI, F, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -794,7 +794,7 @@ pub fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
     }
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Todo<I, O, E>
+impl<'a, I, O, E> Parser<'a, I, O, E> for Todo<I, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -874,7 +874,7 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $Head:ident $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $Head, $($X),*, O> ParserSealed<'a, I, O, E> for Choice<($Head, $($X,)*)>
+        impl<'a, I, E, $Head, $($X),*, O> Parser<'a, I, O, E> for Choice<($Head, $($X,)*)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -906,7 +906,7 @@ macro_rules! impl_choice_for_tuple {
         }
     };
     (~ $Head:ident) => {
-        impl<'a, I, E, $Head, O> ParserSealed<'a, I, O, E> for Choice<($Head,)>
+        impl<'a, I, E, $Head, O> Parser<'a, I, O, E> for Choice<($Head,)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,
@@ -924,7 +924,7 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&[A]>
+impl<'a, A, I, O, E> Parser<'a, I, O, E> for Choice<&[A]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -952,7 +952,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<Vec<A>>
+impl<'a, A, I, O, E> Parser<'a, I, O, E> for Choice<Vec<A>>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -965,7 +965,7 @@ where
     go_extra!(O);
 }
 
-impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
+impl<'a, A, I, O, E, const N: usize> Parser<'a, I, O, E> for Choice<[A; N]>
 where
     A: Parser<'a, I, O, E>,
     I: Input<'a>,
@@ -992,7 +992,7 @@ pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }
 
-impl<'a, I, O, E, P, const N: usize> ParserSealed<'a, I, [O; N], E> for Group<[P; N]>
+impl<'a, I, O, E, P, const N: usize> Parser<'a, I, [O; N], E> for Group<[P; N]>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
@@ -1053,7 +1053,7 @@ macro_rules! impl_group_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $($X),*, $($O),*> ParserSealed<'a, I, ($($O,)*), E> for Group<($($X,)*)>
+        impl<'a, I, E, $($X),*, $($O),*> Parser<'a, I, ($($O,)*), E> for Group<($($X,)*)>
         where
             I: Input<'a>,
             E: ParserExtra<'a, I>,

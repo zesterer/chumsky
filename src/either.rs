@@ -1,14 +1,10 @@
 //! A small module that implements the [`Parser`] trait for the
 //! [`either::Either`](https://docs.rs/either/latest/either/enum.Either.html) type.
 
-use either::Either;
+use super::*;
+use ::either::Either;
 
-use crate::{
-    extra::ParserExtra, prelude::Input, private::ParserSealed, Check, Emit, InputRef, PResult,
-    Parser,
-};
-
-impl<'a, L, R, I, O, E> ParserSealed<'a, I, O, E> for Either<L, R>
+impl<'a, L, R, I, O, E> Parser<'a, I, O, E> for Either<L, R>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,

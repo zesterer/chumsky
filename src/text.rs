@@ -131,7 +131,7 @@ pub struct Padded<A> {
     pub(crate) parser: A,
 }
 
-impl<'a, I, O, E, A> ParserSealed<'a, I, O, E> for Padded<A>
+impl<'a, I, O, E, A> Parser<'a, I, O, E> for Padded<A>
 where
     I: ValueInput<'a>,
     E: ParserExtra<'a, I>,
