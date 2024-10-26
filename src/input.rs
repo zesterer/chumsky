@@ -1190,29 +1190,43 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
-    pub(crate) fn with_input<'sub_parse, O>(
+    pub(crate) fn with_input<'sub_parse, J, F, O>(
         &'sub_parse mut self,
-        start: I::Cursor,
-        cache: &'sub_parse mut I::Cache,
-        f: impl FnOnce(&mut InputRef<'src, 'sub_parse, I, E>) -> O,
+        start: J::Cursor,
+        cache: &'sub_parse mut J::Cache,
+        new_errors: &'sub_parse mut Errors<J::Cursor, F::Error>,
+        f: impl FnOnce(&mut InputRef<'src, 'sub_parse, J, F>) -> O,
         #[cfg(feature = "memoization")] memos: &'sub_parse mut HashMap<
             (usize, usize),
-            Option<Located<I::Cursor, E::Error>>,
+            Option<Located<J::Cursor, E::Error>>,
         >,
     ) -> O
     where
         'parse: 'sub_parse,
+        J: Input<'src>,
+        F: ParserExtra<'src, J, State = E::State, Context = E::Context, Error = E::Error>,
     {
         let mut new_inp = InputRef {
             cursor: start,
             cache,
             state: self.state,
             ctx: self.ctx,
-            errors: self.errors,
+            errors: new_errors,
             #[cfg(feature = "memoization")]
             memos,
         };
-        f(&mut new_inp)
+        let out = f(&mut new_inp);
+        self.errors.secondary.extend(
+            new_inp
+                .errors
+                .secondary
+                .drain(..)
+                .map(|err| Located::at(self.cursor.clone(), err.err)),
+        );
+        if let Some(alt) = new_inp.errors.alt.take() {
+            self.errors.alt = Some(Located::at(self.cursor.clone(), alt.err));
+        }
+        out
     }
 
     /// Get the internal cursor of the input at this moment in time.

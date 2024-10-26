@@ -943,15 +943,15 @@ where
 }
 
 /// See [`Parser::nested_in`].
-pub struct NestedIn<A, B, O, E> {
+pub struct NestedIn<A, B, J, F, O, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<(O, E)>,
+    pub(crate) phantom: EmptyPhantom<(J, F, O, E)>,
 }
 
-impl<A: Copy, B: Copy, O, E> Copy for NestedIn<A, B, O, E> {}
-impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
+impl<A: Copy, B: Copy, J, F, O, E> Copy for NestedIn<A, B, J, F, O, E> {}
+impl<A: Clone, B: Clone, J, F, O, E> Clone for NestedIn<A, B, J, F, O, E> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -961,12 +961,14 @@ impl<A: Clone, B: Clone, O, E> Clone for NestedIn<A, B, O, E> {
     }
 }
 
-impl<'a, I, E, A, B, O> ParserSealed<'a, I, O, E> for NestedIn<A, B, O, E>
+impl<'a, I, J, E, F, A, B, O> ParserSealed<'a, I, O, E> for NestedIn<A, B, J, F, O, E>
 where
     I: Input<'a>,
     E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
-    B: Parser<'a, I, I, E>,
+    B: Parser<'a, I, J, E>,
+    J: Input<'a>,
+    F: ParserExtra<'a, J, State = E::State, Context = E::Context, Error = E::Error>,
+    A: Parser<'a, J, O, F>,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
@@ -980,6 +982,7 @@ where
         let res = inp.with_input(
             start,
             &mut cache,
+            &mut Default::default(),
             |inp| (&self.parser_a).then_ignore(end()).go::<M>(inp),
             #[cfg(feature = "memoization")]
             &mut memos,

@@ -1026,10 +1026,12 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// assert_eq!(tl.parse(&tokens).into_result(), Ok(vec![("foo", vec!["a", "b"])]));
     /// ```
-    fn nested_in<B: Parser<'a, I, I, E>>(self, other: B) -> NestedIn<Self, B, O, E>
+    fn nested_in<B: Parser<'a, J, I, F>, J, F>(self, other: B) -> NestedIn<Self, B, J, F, O, E>
     where
         Self: Sized,
         I: 'a,
+        J: Input<'a>,
+        F: ParserExtra<'a, J>,
     {
         NestedIn {
             parser_a: self,
