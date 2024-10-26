@@ -3,7 +3,7 @@
 use super::*;
 
 /// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
-pub trait LabelError<'a, I: Input<'a>, L>: Error<'a, I> {
+pub trait LabelError<'src, I: Input<'src>, L>: Error<'src, I> {
     /// Annotate the expected patterns within this parser with the given label.
     ///
     /// In practice, this usually removes all other labels and expected tokens in favor of a single label that
@@ -38,16 +38,16 @@ impl<A, L> Labelled<A, L> {
     }
 }
 
-impl<'a, I, O, E, A, L> Parser<'a, I, O, E> for Labelled<A, L>
+impl<'src, I, O, E, A, L> Parser<'src, I, O, E> for Labelled<A, L>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
     L: Clone,
-    E::Error: LabelError<'a, I, L>,
+    E::Error: LabelError<'src, I, L>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let old_alt = inp.errors.alt.take();
         let before = inp.save();
         let res = self.parser.go::<M>(inp);

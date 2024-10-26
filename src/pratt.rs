@@ -511,7 +511,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Infix<'_, A, F, Atom, Op, I, 
 /// expression. It must have the following signature:
 ///
 /// ```ignore
-/// impl Fn(Atom, Op, Atom, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Atom, Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn infix<'src, A, F, Atom, Op, I, E>(
     associativity: Associativity,
@@ -607,7 +607,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I,
 /// expression. It must have the following signature:
 ///
 /// ```ignore
-/// impl Fn(Atom, Op, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn prefix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
@@ -692,7 +692,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I
 /// expression. It must have the following signature:
 ///
 /// ```ignore
-/// impl Fn(Op, Atom, &mut MapExtra<'a, '_, I, E>) -> O
+/// impl Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn postfix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
@@ -912,18 +912,18 @@ where
 }
 
 #[allow(unused_variables, non_snake_case)]
-impl<'a, Atom, Ops> Pratt<Atom, Ops> {
+impl<'src, Atom, Ops> Pratt<Atom, Ops> {
     #[inline]
     fn pratt_go<M: Mode, I, O, E>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         min_power: u32,
     ) -> PResult<M, O>
     where
-        I: Input<'a>,
-        E: ParserExtra<'a, I>,
-        Atom: Parser<'a, I, O, E>,
-        Ops: Operator<'a, I, O, E>,
+        I: Input<'src>,
+        E: ParserExtra<'src, I>,
+        Atom: Parser<'src, I, O, E>,
+        Ops: Operator<'src, I, O, E>,
     {
         let pre_expr = inp.save();
         // Prefix unary operators
@@ -978,14 +978,14 @@ impl<'a, Atom, Ops> Pratt<Atom, Ops> {
 }
 
 #[allow(unused_variables, non_snake_case)]
-impl<'a, I, O, E, Atom, Ops> Parser<'a, I, O, E> for Pratt<Atom, Ops>
+impl<'src, I, O, E, Atom, Ops> Parser<'src, I, O, E> for Pratt<Atom, Ops>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    Atom: Parser<'a, I, O, E>,
-    Ops: Operator<'a, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    Atom: Parser<'src, I, O, E>,
+    Ops: Operator<'src, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         self.pratt_go::<M, _, _, _>(inp, 0)
     }
 
@@ -1005,7 +1005,7 @@ mod tests {
         }
     }
 
-    fn parser<'a>() -> impl Parser<'a, &'a str, i64> {
+    fn parser<'src>() -> impl Parser<'src, &'src str, i64> {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt((
@@ -1032,19 +1032,19 @@ mod tests {
         assert_eq!(parser().parse("-2 + 2").into_result(), Ok(0));
     }
 
-    // TODO: Make this work
-    // fn parser_dynamic<'a>() -> impl Parser<'a, &'a str, i64> {
-    //     let atom = text::int(10).padded().from_str::<i64>().unwrapped();
+    #[allow(dead_code)]
+    fn parser_dynamic<'src>() -> impl Parser<'src, &'src str, i64> {
+        let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
-    //     atom.pratt(vec![
-    //         prefix(2, just('-'), |x: i64| -x).into(),
-    //         postfix(2, just('!'), factorial).into(),
-    //         infix(left(0), just('+'), |l, r| l + r).into(),
-    //         infix(left(0), just('-'), |l, r| l - r).into(),
-    //         infix(left(1), just('*'), |l, r| l * r).into(),
-    //         infix(left(1), just('/'), |l, _, r| l / r).into(),
-    //     ])
-    // }
+        atom.pratt(vec![
+            prefix(2, just('-'), |_, x: i64, _| -x).boxed(),
+            postfix(2, just('!'), |x, _, _| factorial(x)).boxed(),
+            infix(left(0), just('+'), |l, _, r, _| l + r).boxed(),
+            infix(left(0), just('-'), |l, _, r, _| l - r).boxed(),
+            infix(left(1), just('*'), |l, _, r, _| l * r).boxed(),
+            infix(left(1), just('/'), |l, _, r, _| l / r).boxed(),
+        ])
+    }
 
     enum Expr {
         Literal(i64),
@@ -1083,7 +1083,7 @@ mod tests {
         e(Box::new(l), Box::new(r))
     }
 
-    fn expr_parser<'a>() -> impl Parser<'a, &'a str, String, Err<Simple<'a, char>>> {
+    fn expr_parser<'src>() -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((
@@ -1095,7 +1095,7 @@ mod tests {
         .map(|x| x.to_string())
     }
 
-    fn complete_parser<'a>() -> impl Parser<'a, &'a str, String, Err<Simple<'a, char>>> {
+    fn complete_parser<'src>() -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
         expr_parser().then_ignore(end())
     }
 
@@ -1107,10 +1107,10 @@ mod tests {
         expr_parser().lazy().parse(input)
     }
 
-    fn unexpected<'a, C: Into<Option<MaybeRef<'a, char>>>, S: Into<SimpleSpan>>(
+    fn unexpected<'src, C: Into<Option<MaybeRef<'src, char>>>, S: Into<SimpleSpan>>(
         c: C,
         span: S,
-    ) -> Simple<'a, char> {
+    ) -> Simple<'src, char> {
         <Simple<_> as Error<'_, &'_ str>>::expected_found(None, c.into(), span.into())
     }
 

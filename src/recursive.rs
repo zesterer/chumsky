@@ -68,12 +68,12 @@ enum RecursiveInner<T: ?Sized> {
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
 /// need no internal indirection
-pub type Direct<'a, 'b, I, O, Extra> = DynParser<'a, 'b, I, O, Extra>;
+pub type Direct<'src, 'b, I, O, Extra> = DynParser<'src, 'b, I, O, Extra>;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'a, 'b, I: Input<'a>, O, Extra: ParserExtra<'a, I>> {
-    inner: OnceCell<Box<DynParser<'a, 'b, I, O, Extra>>>,
+pub struct Indirect<'src, 'b, I: Input<'src>, O, Extra: ParserExtra<'src, I>> {
+    inner: OnceCell<Box<DynParser<'src, 'b, I, O, Extra>>>,
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -84,7 +84,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, I, O, E>> {
+impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'src, 'b, I, O, E>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -134,7 +134,7 @@ impl<'a, 'b, I: Input<'a>, O, E: ParserExtra<'a, I>> Recursive<Indirect<'a, 'b, 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
-    pub fn define<P: Parser<'a, I, O, E> + Clone + MaybeSync + 'a + 'b>(&mut self, parser: P) {
+    pub fn define<P: Parser<'src, I, O, E> + Clone + MaybeSync + 'src + 'b>(&mut self, parser: P) {
         let location = *Location::caller();
         self.parser()
             .inner
@@ -179,13 +179,13 @@ pub(crate) fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Indirect<'a, '_, I, O, E>>
+impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Indirect<'src, '_, I, O, E>>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         recurse(move || {
             M::invoke(
                 self.parser()
@@ -201,13 +201,13 @@ where
     go_extra!(O);
 }
 
-impl<'a, I, O, E> Parser<'a, I, O, E> for Recursive<Direct<'a, '_, I, O, E>>
+impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Direct<'src, '_, I, O, E>>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         recurse(move || M::invoke(&*self.parser(), inp))
     }
 
@@ -227,9 +227,9 @@ where
 /// ```
 /// # use chumsky::prelude::*;
 /// #[derive(Debug, PartialEq)]
-/// enum Tree<'a> {
-///     Leaf(&'a str),
-///     Branch(Vec<Tree<'a>>),
+/// enum Tree<'src> {
+///     Leaf(&'src str),
+///     Branch(Vec<Tree<'src>>),
 /// }
 ///
 /// // Parser that recursively parses nested lists
@@ -264,15 +264,15 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
-pub fn recursive<'a, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'a, 'b, I, O, E>>
+pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I, O, E>>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    A: Parser<'a, I, O, E> + Clone + MaybeSync + 'b,
-    F: FnOnce(Recursive<Direct<'a, 'b, I, O, E>>) -> A,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E> + Clone + MaybeSync + 'b,
+    F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
 {
     let rc = RefC::new_cyclic(|rc| {
-        let rc: RefW<DynParser<'a, 'b, I, O, E>> = rc.clone() as _;
+        let rc: RefW<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };

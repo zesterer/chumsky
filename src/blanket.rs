@@ -1,12 +1,12 @@
 use super::*;
 
-impl<'a, T, I, O, E> Parser<'a, I, O, E> for &T
+impl<'src, T, I, O, E> Parser<'src, I, O, E> for &T
 where
-    T: ?Sized + Parser<'a, I, O, E>,
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    T: ?Sized + Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O>
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,
     {
@@ -16,15 +16,19 @@ where
     go_extra!(O);
 }
 
-impl<'a, T, I, O, E> ConfigParser<'a, I, O, E> for &T
+impl<'src, T, I, O, E> ConfigParser<'src, I, O, E> for &T
 where
-    T: ?Sized + ConfigParser<'a, I, O, E>,
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    T: ?Sized + ConfigParser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     type Config = T::Config;
 
-    fn go_cfg<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>, cfg: Self::Config) -> PResult<M, O>
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, O>
     where
         Self: Sized,
     {
