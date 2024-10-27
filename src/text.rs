@@ -440,6 +440,229 @@ pub use unicode::*;
 pub mod unicode {
     use super::*;
 
+    use std::str::{Bytes, Chars};
+    use unicode_segmentation::UnicodeSegmentation;
+
+    /// A type containing one extended Unicode grapheme cluster.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Grapheme<'src> {
+        inner: &'src str,
+    }
+
+    impl<'src> Grapheme<'src> {
+        fn new(inner: &'src str) -> Self {
+            Self { inner }
+        }
+
+        /// Gets an iterator over code points.
+        pub fn code_points(self) -> Chars<'src> {
+            self.inner.chars()
+        }
+
+        /// Gets an iterator over bytes.
+        pub fn bytes(self) -> Bytes<'src> {
+            self.inner.bytes()
+        }
+
+        /// Gets the slice of code points that are contained in the grapheme cluster.
+        pub fn as_str(self) -> &'src str {
+            self.inner
+        }
+
+        /// Gets the slice of bytes that are contained in the grapheme cluster.
+        pub fn as_bytes(self) -> &'src [u8] {
+            self.inner.as_bytes()
+        }
+    }
+
+    /// A type containing any number of extended Unicode grapheme clusters.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Graphemes<'src> {
+        inner: &'src str,
+    }
+
+    impl<'src> Graphemes<'src> {
+        /// Create a new graphemes.
+        pub fn new(inner: &'src str) -> Self {
+            Self { inner }
+        }
+
+        /// Gets an iterator over graphemes.
+        pub fn iter(self) -> GraphemesIter<'src> {
+            self.into_iter()
+        }
+
+        /// Gets an iterator over code points.
+        pub fn code_points(self) -> Chars<'src> {
+            self.inner.chars()
+        }
+
+        /// Gets an iterator over bytes.
+        pub fn bytes(self) -> Bytes<'src> {
+            self.inner.bytes()
+        }
+
+        /// Gets the slice of code points that are contained in the string.
+        pub fn as_str(self) -> &'src str {
+            self.inner
+        }
+
+        /// Gets the slice of bytes that are contained in the string.
+        pub fn as_bytes(self) -> &'src [u8] {
+            self.inner.as_bytes()
+        }
+    }
+
+    impl<'src> AsRef<str> for Graphemes<'src> {
+        fn as_ref(&self) -> &str {
+            self.as_str()
+        }
+    }
+
+    impl<'src> AsRef<[u8]> for Graphemes<'src> {
+        fn as_ref(&self) -> &[u8] {
+            self.as_bytes()
+        }
+    }
+
+    impl<'src> IntoIterator for Graphemes<'src> {
+        type Item = Grapheme<'src>;
+
+        type IntoIter = GraphemesIter<'src>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            GraphemesIter::new(self)
+        }
+    }
+
+    impl<'src> Input<'src> for Graphemes<'src> {
+        type Cursor = usize;
+        type Span = SimpleSpan<usize>;
+
+        type Token = Grapheme<'src>;
+        type MaybeToken = Grapheme<'src>;
+
+        type Cache = Self;
+
+        #[inline]
+        fn begin(self) -> (Self::Cursor, Self::Cache) {
+            (0, self)
+        }
+
+        #[inline]
+        fn cursor_location(cursor: &Self::Cursor) -> usize {
+            *cursor
+        }
+
+        #[inline(always)]
+        unsafe fn next_maybe(
+            this: &mut Self::Cache,
+            cursor: &mut Self::Cursor,
+        ) -> Option<Self::MaybeToken> {
+            if *cursor < this.as_str().len() {
+                // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
+                //         We only ever return cursors that are at a code point boundary.
+                //         The `next()` implementation returns `None`, only in the
+                //         situation of zero length of the remaining part of the string.
+                //         And the Unicode standard guarantees that any sequence of code
+                //         points is a valid sequence of grapheme clusters, so the
+                //         behaviour of the `next()` function should not change.
+                let c = this
+                    .as_str()
+                    .get_unchecked(*cursor..)
+                    .graphemes(true)
+                    .next()
+                    .unwrap_unchecked();
+                *cursor += c.len();
+                Some(Grapheme::new(c))
+            } else {
+                None
+            }
+        }
+
+        #[inline(always)]
+        unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+            (*range.start..*range.end).into()
+        }
+    }
+
+    impl<'src> ExactSizeInput<'src> for Graphemes<'src> {
+        #[inline(always)]
+        unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+            (*range.start..this.as_str().len()).into()
+        }
+    }
+
+    impl<'src> ValueInput<'src> for Graphemes<'src> {
+        #[inline(always)]
+        unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+            Self::next_maybe(this, cursor)
+        }
+    }
+
+    impl<'src> SliceInput<'src> for Graphemes<'src> {
+        type Slice = Self;
+
+        #[inline(always)]
+        fn full_slice(this: &mut Self::Cache) -> Self::Slice {
+            *this
+        }
+
+        #[inline(always)]
+        unsafe fn slice(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
+            Graphemes::new(&this.as_str()[*range.start..*range.end])
+        }
+
+        #[inline(always)]
+        unsafe fn slice_from(
+            this: &mut Self::Cache,
+            from: RangeFrom<&Self::Cursor>,
+        ) -> Self::Slice {
+            Graphemes::new(&this.as_str()[*from.start..])
+        }
+    }
+
+    /// Grapheme iterator type.
+    #[derive(Debug, Clone)]
+    pub struct GraphemesIter<'src> {
+        iter: unicode_segmentation::Graphemes<'src>,
+    }
+
+    impl<'src> GraphemesIter<'src> {
+        /// Create a new grapheme iterator.
+        pub fn new(graphemes: Graphemes<'src>) -> Self {
+            Self {
+                iter: graphemes.as_str().graphemes(true),
+            }
+        }
+
+        /// Gets the slice of code points that are contained in the grapheme cluster.
+        pub fn as_str(self) -> &'src str {
+            self.iter.as_str()
+        }
+    }
+
+    impl<'src> Iterator for GraphemesIter<'src> {
+        type Item = Grapheme<'src>;
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.iter.size_hint()
+        }
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            self.iter.next().map(Grapheme::new)
+        }
+    }
+
+    impl<'src> DoubleEndedIterator for GraphemesIter<'src> {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.iter.next_back().map(Grapheme::new)
+        }
+    }
+
     /// A parser that accepts an identifier.
     ///
     /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is

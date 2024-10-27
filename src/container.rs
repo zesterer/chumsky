@@ -822,6 +822,66 @@ impl<'p> Seq<'p, char> for String {
     }
 }
 
+impl<'p> Seq<'p, Grapheme<'p>> for &'p str {
+    type Item<'a>
+        = Grapheme<'p>
+    where
+        Self: 'a;
+
+    type Iter<'a>
+        = GraphemesIter<'p>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        Graphemes::new(self).iter()
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &Grapheme) -> bool {
+        Graphemes::new(self).contains(val)
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, Grapheme<'p>>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
+}
+
+impl<'p> Seq<'p, Grapheme<'p>> for Graphemes<'p> {
+    type Item<'a>
+        = Grapheme<'p>
+    where
+        Self: 'a;
+
+    type Iter<'a>
+        = GraphemesIter<'p>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        self.iter()
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &Grapheme) -> bool {
+        self.iter().find(|i| i == val).is_some()
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, Grapheme<'p>>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
+}
+
 /// A utility trait to abstract over *linear* container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
@@ -840,6 +900,8 @@ impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 impl OrderedSeq<'_, char> for str {}
 impl<'p> OrderedSeq<'p, char> for &'p str {}
 impl OrderedSeq<'_, char> for String {}
+impl<'p> OrderedSeq<'p, Grapheme<'p>> for &'p str {}
+impl<'p> OrderedSeq<'p, Grapheme<'p>> for Graphemes<'p> {}
 
 #[cfg(test)]
 mod test {
