@@ -7,7 +7,9 @@ use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::{input::ValueInput, prelude::*};
 use std::{collections::HashMap, env, fmt, fs};
 
-pub type Span = SimpleSpan<usize>;
+// A few type definitions to be used by our parsers below
+pub type Span = SimpleSpan;
+pub type Spanned<T> = (T, Span);
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token<'src> {
@@ -45,7 +47,7 @@ impl fmt::Display for Token<'_> {
 }
 
 fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
+) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
     // A parser for numbers
     let num = text::int(10)
         .then(just('.').then(text::digits(10)).or_not())
@@ -153,8 +155,6 @@ enum BinaryOp {
     NotEq,
 }
 
-pub type Spanned<T> = (T, Span);
-
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[derive(Debug)]
 enum Expr<'src> {
@@ -178,18 +178,6 @@ struct Func<'src> {
     body: Spanned<Expr<'src>>,
 }
 
-// This looks complex, but don't be scared!
-//
-// There are two lifetimes here:
-//     - 'src: the lifetime of the underlying source code (the string we read from disk)
-//     - 'tokens: the lifetime of the token buffer emitted by the lexer
-// Our source code lives longer than the token buffer, hence `'src: 'tokens`
-//
-// From this function, we return a parser that parses an input of type `ParserInput` (see above for an explanation of
-// that) and produces a `Spanned<Expr>` (an expression with a span attached to it, so we can point to the right thing
-// for runtime errors).
-//
-// We also specify an error type used by the parser. In this case, it's `Rich`, one of chumsky's default error types.
 fn expr_parser<'src, I>(
 ) -> impl Parser<'src, I, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>, Span>>> + Clone
 where

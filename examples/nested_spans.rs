@@ -10,16 +10,16 @@ enum Token {
 }
 
 #[allow(clippy::let_and_return)]
-fn parser<'src, I, N>(nested: N) -> impl Parser<'src, I, i64>
+fn parser<'src, I, M>(make_input: M) -> impl Parser<'src, I, i64>
 where
     I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    N: Fn(SimpleSpan, &'src [(Token, SimpleSpan)]) -> I + Clone + Send + Sync + 'src,
+    M: Fn(SimpleSpan, &'src [(Token, SimpleSpan)]) -> I + Clone + Send + Sync + 'src,
 {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };
         let parens = expr
-            // Here we specify how the parser should come up with the nested tokens
-            .nested_in(select_ref! { Token::Parens(xs) = e => nested(e.span(), xs) });
+            // Here we specify that `expr` should appear *inside* the parenthesised token tree
+            .nested_in(select_ref! { Token::Parens(xs) = e => make_input(e.span(), xs) });
 
         let atom = num.or(parens);
 
@@ -35,6 +35,13 @@ where
 
         sum
     })
+}
+
+fn make_input(
+    eoi: SimpleSpan,
+    toks: &[(Token, SimpleSpan)],
+) -> impl BorrowInput<'_, Token = Token, Span = SimpleSpan> {
+    toks.map(eoi, |(t, s)| (t, s))
 }
 
 fn main() {
@@ -54,14 +61,10 @@ fn main() {
 
     let eoi = SimpleSpan::new(11, 11); // Example EoI
 
-    fn nested(
-        eoi: SimpleSpan,
-        toks: &[(Token, SimpleSpan)],
-    ) -> impl BorrowInput<'_, Token = Token, Span = SimpleSpan> {
-        toks.map(eoi, |(t, s)| (t, s))
-    }
     assert_eq!(
-        parser(nested).parse(nested(eoi, &tokens)).into_result(),
+        parser(make_input)
+            .parse(make_input(eoi, &tokens))
+            .into_result(),
         Ok(20)
     );
 }
