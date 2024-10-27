@@ -331,14 +331,14 @@ impl<T, E> ParseResult<T, E> {
 ///
 /// 4) If you believe you've found a common use-case that's missing from chumsky, you could open a pull request to
 ///    implement it in chumsky itself rather than implementing `Parser` yourself.
-#[cfg_attr(
-    feature = "nightly",
-    diagnostic::on_unimplemented(
-        message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
-        label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
-        note = "You should check that the output types of your parsers are consistent with the combinators you're using",
-    )
-)]
+// #[cfg_attr(
+//     feature = "nightly",
+//     diagnostic::on_unimplemented(
+//         message = "The following is not a parser from `{I}` to `{O}`: `{Self}`",
+//         label = "This parser is not compatible because it does not implement `Parser<{I}, {O}, E>`",
+//         note = "You should check that the output types of your parsers are consistent with the combinators you're using",
+//     )
+// )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
     #[doc(hidden)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
@@ -2945,8 +2945,10 @@ mod tests {
 
     #[test]
     fn zero_copy_map_span() {
-        use crate::input::MappedSpan;
-        use crate::prelude::*;
+        use crate::{
+            input::{SliceInput, ValueInput},
+            prelude::*,
+        };
 
         #[derive(PartialEq, Debug)]
         enum Token<'src> {
@@ -2957,8 +2959,10 @@ mod tests {
         type FileId<'src> = &'src str;
         type Span<'src> = SimpleSpan<usize, FileId<'src>>;
 
-        fn parser<'src, F: Fn(SimpleSpan) -> Span<'src> + 'src>(
-        ) -> impl Parser<'src, MappedSpan<Span<'src>, &'src str, F>, [(Span<'src>, Token<'src>); 6]>
+        fn parser<'src, I>() -> impl Parser<'src, I, [(Span<'src>, Token<'src>); 6]>
+        where
+            I: ValueInput<'src, Token = char, Span = Span<'src>>
+                + SliceInput<'src, Slice = &'src str>,
         {
             let ident = any()
                 .filter(|c: &char| c.is_alphanumeric())
