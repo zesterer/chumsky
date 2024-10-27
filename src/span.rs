@@ -47,9 +47,6 @@ pub trait Span {
     /// Turn this span into a zero-width span that starts and ends at the end of the original.
     ///
     /// For example, an original span like `3..7` will result in a new span of `7..7`.
-    ///
-    /// This may be convenient in various circumstances, such as when specifying the 'end of input' span in
-    /// [`Input::spanned`].
     fn to_end(&self) -> Self
     where
         Self: Sized,
