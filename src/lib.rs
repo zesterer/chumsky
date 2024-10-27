@@ -2638,10 +2638,10 @@ where
 
 /// See [`Parser::boxed`].
 ///
-/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`](std::rc::Rc) to facilitate
-/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`](std::rc::Rc) has no size guarantees: although
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
-// TODO: Don't use an Rc
+// TODO: Don't use an Rc (why?)
 pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> {
     inner: Rc<DynParser<'src, 'b, I, O, E>>,
 }
