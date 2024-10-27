@@ -101,8 +101,6 @@ Chumsky contains several optional features that extend the crate's functionality
 
 - `either`: implements `Parser` for `either::Either`, allowing dynamic configuration of parsers at runtime
 
-- `sync`: enables thread-safe features
-
 - `extension`: enables the extension API, allowing you to write your own first-class combinators that integrate with and extend chumsky
 
 - `memoization`: enables [memoization](https://en.wikipedia.org/wiki/Memoization#Parsers) features

@@ -111,7 +111,13 @@ pub mod prelude {
 }
 
 use crate::input::InputOwn;
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{
+    boxed::Box,
+    rc::{self, Rc},
+    string::String,
+    vec,
+    vec::Vec,
+};
 #[cfg(feature = "nightly")]
 use core::marker::Tuple;
 use core::{
@@ -176,40 +182,9 @@ impl<T> Unpin for EmptyPhantom<T> {}
 impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
 impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
 
-#[cfg(feature = "sync")]
-mod sync {
-    use super::*;
-
-    pub(crate) type RefC<T> = alloc::sync::Arc<T>;
-    pub(crate) type RefW<T> = alloc::sync::Weak<T>;
-    pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + Send + Sync + 'b;
-    #[cfg(feature = "pratt")]
-    pub(crate) type DynOperator<'src, 'b, I, O, E> =
-        dyn pratt::Operator<'src, I, O, E> + Send + Sync + 'b;
-
-    /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
-    /// enabled. Used to constrain API usage succinctly and easily.
-    pub trait MaybeSync: Send + Sync {}
-    impl<T: Send + Sync> MaybeSync for T {}
-}
-
-#[cfg(not(feature = "sync"))]
-mod sync {
-    use super::*;
-
-    pub(crate) type RefC<T> = alloc::rc::Rc<T>;
-    pub(crate) type RefW<T> = alloc::rc::Weak<T>;
-    pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + 'b;
-    #[cfg(feature = "pratt")]
-    pub(crate) type DynOperator<'src, 'b, I, O, E> = dyn pratt::Operator<'src, I, O, E> + 'b;
-
-    /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
-    /// enabled. Used to constrain API usage succinctly and easily.
-    pub trait MaybeSync {}
-    impl<T> MaybeSync for T {}
-}
-
-use sync::{DynParser, MaybeSync, RefC, RefW};
+pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + 'b;
+#[cfg(feature = "pratt")]
+pub(crate) type DynOperator<'src, 'b, I, O, E> = dyn pratt::Operator<'src, I, O, E> + 'b;
 
 /// The result of performing a parse on an input with [`Parser`].
 ///
@@ -2129,10 +2104,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     fn boxed<'b>(self) -> Boxed<'src, 'b, I, O, E>
     where
-        Self: MaybeSync + Sized + 'src + 'b,
+        Self: Sized + 'src + 'b,
     {
         Boxed {
-            inner: RefC::new(self),
+            inner: Rc::new(self),
         }
     }
 
@@ -2663,12 +2638,12 @@ where
 
 /// See [`Parser::boxed`].
 ///
-/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`](std::rc::Rc) to facilitate
-/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`](std::rc::Rc) has no size guarantees: although
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
-// TODO: Don't use an Rc
+// TODO: Don't use an Rc (why?)
 pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> {
-    inner: RefC<DynParser<'src, 'b, I, O, E>>,
+    inner: Rc<DynParser<'src, 'b, I, O, E>>,
 }
 
 impl<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> Clone for Boxed<'src, '_, I, O, E> {
@@ -2691,7 +2666,7 @@ where
 
     fn boxed<'c>(self) -> Boxed<'src, 'c, I, O, E>
     where
-        Self: MaybeSync + Sized + 'src + 'c,
+        Self: Sized + 'src + 'c,
     {
         // Never double-box parsers
         self
@@ -3331,41 +3306,6 @@ mod tests {
     fn todo_err() {
         let expr = todo::<&str, String, extra::Default>();
         expr.then_ignore(end()).parse("a+b+c");
-    }
-
-    #[test]
-    fn arc_impl() {
-        use alloc::sync::Arc;
-
-        fn parser<'src>() -> impl Parser<'src, &'src str, Vec<u64>> {
-            Arc::new(
-                any()
-                    .filter(|c: &char| c.is_ascii_digit())
-                    .repeated()
-                    .at_least(1)
-                    .at_most(3)
-                    .to_slice()
-                    .map(|b: &str| b.parse::<u64>().unwrap())
-                    .padded()
-                    .separated_by(just(',').padded())
-                    .allow_trailing()
-                    .collect()
-                    .delimited_by(just('['), just(']')),
-            )
-        }
-
-        assert_eq!(
-            parser().parse("[122 , 23,43,    4, ]").into_result(),
-            Ok(vec![122, 23, 43, 4]),
-        );
-        assert_eq!(
-            parser().parse("[0, 3, 6, 900,120]").into_result(),
-            Ok(vec![0, 3, 6, 900, 120]),
-        );
-        assert_eq!(
-            parser().parse("[200,400,50  ,0,0, ]").into_result(),
-            Ok(vec![200, 400, 50, 0, 0]),
-        );
     }
 
     #[test]
