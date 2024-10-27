@@ -4,7 +4,7 @@
 //! cargo run --features=pratt,label --example mini_ml -- examples/sample.mini_ml
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
-use chumsky::{input::SpannedInput, pratt::*, prelude::*};
+use chumsky::{input::BorrowInput, pratt::*, prelude::*};
 use std::{env, fmt, fs};
 
 // Tokens and lexer
@@ -109,10 +109,12 @@ pub enum Expr<'src> {
     },
 }
 
-type ParserInput<'src> = SpannedInput<Token<'src>, SimpleSpan, &'src [Spanned<Token<'src>>]>;
-
-fn parser<'src>(
-) -> impl Parser<'src, ParserInput<'src>, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>>>>
+fn parser<'src, I, N>(
+    nested: N,
+) -> impl Parser<'src, I, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>>>>
+where
+    I: BorrowInput<'src, Token = Token<'src>, Span = SimpleSpan>,
+    N: Fn(SimpleSpan, &'src [Spanned<Token<'src>>]) -> I + Clone + Send + Sync + 'src,
 {
     recursive(|expr| {
         let ident = select_ref! { Token::Ident(x) => *x };
@@ -153,9 +155,7 @@ fn parser<'src>(
                 ),
             ),
             // ( x )
-            expr.nested_in(
-                select_ref! { Token::Parens(ts) = e => ts.as_slice().spanned(e.span()) },
-            ),
+            expr.nested_in(select_ref! { Token::Parens(ts) = e => nested(e.span(), ts) }),
         ))
         .pratt(vec![
             // Multiply
@@ -451,8 +451,14 @@ fn main() {
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
-    let expr = parser()
-        .parse(tokens.spanned((0..src.len()).into()))
+    fn nested<'src>(
+        eoi: SimpleSpan,
+        toks: &'src [Spanned<Token<'src>>],
+    ) -> impl BorrowInput<'src, Token = Token<'src>, Span = SimpleSpan> {
+        toks.map(eoi, |(t, s)| (t, s))
+    }
+    let expr = parser(nested)
+        .parse(nested((0..src.len()).into(), &tokens))
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 

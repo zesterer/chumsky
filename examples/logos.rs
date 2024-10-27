@@ -142,7 +142,7 @@ fn main() {
     let token_stream = Stream::from_iter(token_iter)
         // Tell chumsky to split the (Token, SimpleSpan) stream into its parts so that it can handle the spans for us
         // This involves giving chumsky an 'end of input' span: we just use a zero-width span at the end of the string
-        .spanned((SRC.len()..SRC.len()).into());
+        .map((0..SRC.len()).into(), |(t, s): (_, _)| (t, s));
 
     // Parse the token stream with our chumsky parser
     match parser().parse(token_stream).into_result() {
