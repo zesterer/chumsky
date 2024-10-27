@@ -10,9 +10,7 @@
 
 use super::*;
 
-#[cfg(not(feature = "sync"))]
 struct OnceCell<T>(core::cell::Cell<Option<T>>);
-#[cfg(not(feature = "sync"))]
 impl<T> OnceCell<T> {
     pub fn new() -> Self {
         Self(core::cell::Cell::new(None))
@@ -37,33 +35,10 @@ impl<T> OnceCell<T> {
     }
 }
 
-#[cfg(feature = "sync")]
-struct OnceCell<T>(spin::once::Once<T>);
-#[cfg(feature = "sync")]
-impl<T> OnceCell<T> {
-    pub fn new() -> Self {
-        Self(spin::once::Once::new())
-    }
-    pub fn set(&self, x: T) -> Result<(), ()> {
-        // TODO: Race condition here, possibility of `Err(())` not being returned even through once is already occupied
-        // We don't care enough about this right now to do anything though, it's not a safety violation
-        if !self.0.is_completed() {
-            self.0.call_once(move || x);
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-    #[inline]
-    pub fn get(&self) -> Option<&T> {
-        self.0.get()
-    }
-}
-
 // TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
-    Owned(RefC<T>),
-    Unowned(RefW<T>),
+    Owned(Rc<T>),
+    Unowned(rc::Weak<T>),
 }
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
@@ -125,7 +100,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// ```
     pub fn declare() -> Self {
         Recursive {
-            inner: RecursiveInner::Owned(RefC::new(Indirect {
+            inner: RecursiveInner::Owned(Rc::new(Indirect {
                 inner: OnceCell::new(),
             })),
         }
@@ -134,7 +109,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
-    pub fn define<P: Parser<'src, I, O, E> + Clone + MaybeSync + 'src + 'b>(&mut self, parser: P) {
+    pub fn define<P: Parser<'src, I, O, E> + Clone + 'src + 'b>(&mut self, parser: P) {
         let location = *Location::caller();
         self.parser()
             .inner
@@ -147,7 +122,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
 
 impl<P: ?Sized> Recursive<P> {
     #[inline]
-    fn parser(&self) -> RefC<P> {
+    fn parser(&self) -> Rc<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -268,11 +243,11 @@ pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I,
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E> + Clone + MaybeSync + 'b,
+    A: Parser<'src, I, O, E> + Clone + 'b,
     F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
 {
-    let rc = RefC::new_cyclic(|rc| {
-        let rc: RefW<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
+    let rc = Rc::new_cyclic(|rc| {
+        let rc: rc::Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };
