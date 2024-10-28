@@ -2115,6 +2115,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// The only reason for using this function is to make Rust's compiler errors easier to debug: it does not change
     /// the behaviour of the parser at all, and is in fact just a simple identity function.
+    #[cfg(feature = "nightly")]
     fn simplify(self) -> impl Parser<'src, I, O, E>
     where
         Self: Sized + 'src,
