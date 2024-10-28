@@ -124,7 +124,7 @@ Let's write some tests for the parser we wrote in the last section.
 fn test_parser() {
     // Our parser expects empty strings, so this should parse successfully
     assert_eq!(parser().parse("").into_result(), Ok(()));
-    
+
     // Anything other than an empty string should produce an error
     assert!(parser().parse("123").has_errors());
 }
@@ -158,7 +158,8 @@ error you're struggling to understand, you should:
 
 2. Reduce the size of types. Thankfully Rust has recently taken steps to avoid printing extremely long type signatures
    out to the terminal. Even so, parser types can still be rather large. You can reduce this problem by commenting out
-   unnecessary parts of your parser, or using `.boxed()` on parsers above the error to simplify their types.
+   unnecessary parts of your parser, or using `.simplify()` on parsers that contribute to the error to simplify their
+   types.
 
 3. Complaints about types 'not implementing [`Parser`]' are more often than not a failure to fulfil the obligations that
    come with implementing the trait. For example, [`recursive()`] requires that the inner parser implements `Clone`: a

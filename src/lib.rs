@@ -2111,6 +2111,17 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
+    /// Simplify the type of the parser using Rust's `impl Trait` syntax.
+    ///
+    /// The only reason for using this function is to make Rust's compiler errors easier to debug: it does not change
+    /// the behaviour of the parser at all, and is in fact just a simple identity function.
+    fn simplify(self) -> impl Parser<'src, I, O, E>
+    where
+        Self: Sized + 'src,
+    {
+        self
+    }
+
     /// Use [Pratt parsing](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) to ergonomically
     /// parse this pattern separated by prefix, postfix, and infix operators of various associativites and precedence.
     ///
