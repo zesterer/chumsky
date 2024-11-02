@@ -227,7 +227,8 @@ where
 /// ```
 pub fn whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I: StrInput<'src, Token: 'src>,
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
 {
     select! { c if (c as I::Token).is_whitespace() => () }
@@ -256,7 +257,8 @@ where
 /// ```
 pub fn inline_whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I: StrInput<'src, Token: 'src>,
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
 {
     select! { c if (c as I::Token).is_inline_whitespace() => () }
@@ -297,7 +299,8 @@ where
 #[must_use]
 pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy
 where
-    I: ValueInput<'src, Token: Char + 'src>,
+    I: ValueInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
 {
@@ -332,7 +335,8 @@ pub fn digits<'src, I, E>(
     radix: u32,
 ) -> Repeated<impl Parser<'src, I, I::Token, E> + Copy, I::Token, I, E>
 where
-    I: ValueInput<'src, Token: Char + 'src>,
+    I: ValueInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
 {
     any()
@@ -381,7 +385,8 @@ where
 #[must_use]
 pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, I::Slice, E> + Copy
 where
-    I: StrInput<'src, Token: 'src>,
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
 {
     any()
@@ -414,7 +419,8 @@ pub mod ascii {
     #[must_use]
     pub fn ident<'src, I, E>() -> impl Parser<'src, I, I::Slice, E> + Copy
     where
-        I: StrInput<'src, Token: 'src>,
+        I: StrInput<'src>,
+        I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
     {
         any()
@@ -457,7 +463,7 @@ pub mod ascii {
     where
         I: StrInput<'src>,
         I::Slice: PartialEq,
-        I::Token: fmt::Debug + 'src,
+        I::Token: Char + fmt::Debug + 'src,
         S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
     {
@@ -765,7 +771,8 @@ pub mod unicode {
     #[must_use]
     pub fn ident<'src, I, E>() -> impl Parser<'src, I, I::Slice, E> + Copy
     where
-        I: StrInput<'src, Token: 'src>,
+        I: StrInput<'src>,
+        I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
     {
         any()
@@ -852,7 +859,7 @@ mod tests {
     where
         I: crate::StrInput<'src>,
         I::Slice: PartialEq + Clone,
-        I::Token: fmt::Debug + 'src,
+        I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::ascii::keyword(s).ignored()
     }
@@ -861,7 +868,7 @@ mod tests {
     where
         I: crate::StrInput<'src>,
         I::Slice: PartialEq + Clone,
-        I::Token: fmt::Debug + 'src,
+        I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::unicode::keyword(s).ignored()
     }

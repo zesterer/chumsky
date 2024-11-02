@@ -210,7 +210,9 @@ pub trait SliceInput<'src>: ExactSizeInput<'src> {
 // now because `StrInput` places additional requirements on its cursor semantics.
 /// A trait for types that represent string-like streams of input tokens.
 pub trait StrInput<'src>:
-    Sealed + ValueInput<'src, Cursor = usize, Token: Char> + SliceInput<'src>
+    Sealed + ValueInput<'src, Cursor = usize> + SliceInput<'src>
+where
+    Self::Token: Char
 {
 }
 
@@ -800,6 +802,7 @@ where
 impl<'src, S, I, F: 'src> StrInput<'src> for MappedSpan<S, I, F>
 where
     I: StrInput<'src>,
+    I::Token: Char,
     S: Span + Clone + 'src,
     S::Context: Clone + 'src,
     S::Offset: From<<I::Span as Span>::Offset>,
@@ -945,6 +948,7 @@ where
 impl<'src, S, I> StrInput<'src> for WithContext<S, I>
 where
     I: StrInput<'src>,
+    I::Token: Char,
     S: Span + Clone + 'src,
     S::Context: Clone + 'src,
     S::Offset: From<<I::Span as Span>::Offset>,

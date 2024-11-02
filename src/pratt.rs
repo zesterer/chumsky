@@ -54,7 +54,7 @@
 //!     }
 //! }
 //!
-//! let atom = text::int::<_, _, extra::Err<Simple<char>>>(10)
+//! let atom = text::int::<_, extra::Err<Simple<char>>>(10)
 //!     .from_str()
 //!     .unwrapped()
 //!     .map(Expr::Literal)

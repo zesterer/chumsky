@@ -30,6 +30,7 @@ pub fn regex<I, E>(pattern: &str) -> Regex<I, E> {
 impl<'src, S, I, E> Parser<'src, I, &'src S, E> for Regex<I, E>
 where
     I: StrInput<'src, Slice = &'src S>,
+    I::Token: Char,
     S: ?Sized + AsRef<[u8]> + 'src,
     E: ParserExtra<'src, I>,
 {
@@ -78,6 +79,7 @@ mod tests {
         where
             S: ?Sized + AsRef<[u8]> + 'src,
             I: StrInput<'src, Slice = &'src S>,
+            I::Token: Char,
         {
             regex("[a-zA-Z_][a-zA-Z0-9_]*")
                 .padded()

@@ -2136,7 +2136,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// # use chumsky::prelude::*;
     /// use chumsky::pratt::*;
     ///
-    /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let int = text::int::<_, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .padded();
