@@ -524,7 +524,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Debug, PartialEq)]
     /// pub struct Spanned<T>(T, SimpleSpan<usize>);
     ///
-    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, extra::Err<Simple<char>>>()
     ///     .map_with(|ident, e| Spanned(ident, e.span())) // Equivalent to `.map_with_span(|ident, span| Spanned(ident, span))`
     ///     .padded();
     ///
@@ -544,7 +544,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// #[derive(Copy, Clone)]
     /// pub struct Ident(Spur);
     ///
-    /// let ident = text::ascii::ident::<_, _, extra::Full<Simple<char>, extra::SimpleState<Rodeo>, ()>>()
+    /// let ident = text::ascii::ident::<_, extra::Full<Simple<char>, extra::SimpleState<Rodeo>, ()>>()
     ///     .map_with(|ident, e| Ident(e.state().get_or_intern(ident)))
     ///     .padded()
     ///     .repeated()
@@ -677,7 +677,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///     Add(Box<Expr<'a>>, SimpleSpan, Box<Expr<'a>>),
     /// }
     ///
-    /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    /// let int = text::int::<_, extra::Err<Simple<char>>>(10)
     ///     .to_slice()
     ///     .map_with(|int, e| Expr::Int(int, e.span()))
     ///     .padded();
@@ -720,7 +720,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let byte = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let byte = text::int::<_, extra::Err<Rich<char>>>(10)
     ///     .try_map(|s: &str, span| s
     ///         .parse::<u8>()
     ///         .map_err(|e| Rich::custom(span, e)));
@@ -1255,7 +1255,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let ident = text::ascii::ident::<_, extra::Err<Simple<char>>>()
     ///     .padded_by(just('!'));
     ///
     /// assert_eq!(ident.parse("!hello!").into_result(), Ok("hello"));
@@ -1463,7 +1463,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let shopping = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let shopping = text::ascii::ident::<_, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .separated_by(just(','))
     ///     .collect::<Vec<_>>();
@@ -1502,7 +1502,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    /// let int = text::int::<_, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1542,7 +1542,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple, extra::SimpleState};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
+    /// let int = text::int::<_, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -1578,7 +1578,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// type NodeArena = SlotMap<NodeId, Expr>;
     ///
     /// // Now, define our parser
-    /// let int = text::int::<&str, _, extra::Full<Simple<char>, extra::SimpleState<NodeArena>, ()>>(10)
+    /// let int = text::int::<&str, extra::Full<Simple<char>, extra::SimpleState<NodeArena>, ()>>(10)
     ///     .padded()
     ///     .map_with(|s, e|
     ///         // Return the ID of the new integer node
@@ -1633,7 +1633,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let just_numbers = text::digits::<_, _, extra::Err<Simple<char>>>(10)
+    /// let just_numbers = text::digits::<_, extra::Err<Simple<char>>>(10)
     ///     .to_slice()
     ///     .padded()
     ///     .then_ignore(none_of("+-*/").rewind())
@@ -1681,7 +1681,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let ident = text::ascii::ident::<_, _, extra::Err<Simple<char>>>().padded();
+    /// let ident = text::ascii::ident::<_, extra::Err<Simple<char>>>().padded();
     ///
     /// // A pattern with no whitespace surrounding it is accepted
     /// assert_eq!(ident.parse("hello").into_result(), Ok("hello"));
@@ -1846,7 +1846,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let large_int = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let large_int = text::int::<_, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped()
     ///     .validate(|x: u32, e, emitter| {
@@ -1865,7 +1865,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     /// # use chumsky::util::MaybeRef;
     /// # use chumsky::error::Error;
     /// // start with the same large_int validator
-    /// let large_int_val = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let large_int_val = text::int::<_, extra::Err<Rich<char>>>(10)
     ///         .from_str()
     ///         .unwrapped()
     ///         .validate(|x: u32, e, emitter| {
@@ -1874,7 +1874,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///         });
     ///
     /// // A try_map version of the same parser
-    /// let large_int_tm = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let large_int_tm = text::int::<_, extra::Err<Rich<char>>>(10)
     ///         .from_str()
     ///         .unwrapped()
     ///         .try_map(|x: u32, span| {
@@ -1959,7 +1959,7 @@ pub trait Parser<'a, I: Input<'a>, O, E: ParserExtra<'a, I> = extra::Default>:
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let uint64 = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    /// let uint64 = text::int::<_, extra::Err<Simple<char>>>(10)
     ///     .from_str::<u64>()
     ///     .unwrapped();
     ///
@@ -2211,7 +2211,7 @@ where
     /// ```
     /// # use chumsky::prelude::*;
     ///
-    /// let int = text::int::<_, _, extra::Err<Rich<char>>>(10)
+    /// let int = text::int::<_, extra::Err<Rich<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -2382,7 +2382,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let word = text::ascii::ident::<_, _, extra::Err<Simple<char>>>()
+    /// let word = text::ascii::ident::<_, extra::Err<Simple<char>>>()
     ///     .padded()
     ///     .repeated() // This parser is iterable (i.e: implements `IterParser`)
     ///     .enumerate()
@@ -2411,7 +2411,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple};
-    /// let int = text::int::<_, _, extra::Err<Simple<char>>>(10)
+    /// let int = text::int::<_, extra::Err<Simple<char>>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///
@@ -2452,7 +2452,7 @@ where
     ///
     /// ```
     /// # use chumsky::{prelude::*, error::Simple, extra::SimpleState};
-    /// let int = text::int::<_, _, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
+    /// let int = text::int::<_, extra::Full<Simple<char>, SimpleState<i32>, ()>>(10)
     ///     .from_str()
     ///     .unwrapped();
     ///

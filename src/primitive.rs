@@ -845,7 +845,7 @@ pub struct Choice<T> {
 /// }
 ///
 /// let tokens = choice((
-///     text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
+///     text::ascii::keyword::<_, _, extra::Err<Simple<char>>>("if").to(Token::If),
 ///     text::ascii::keyword("for").to(Token::For),
 ///     text::ascii::keyword("while").to(Token::While),
 ///     text::ascii::keyword("fn").to(Token::Fn),

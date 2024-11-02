@@ -174,8 +174,8 @@ pub trait SliceInput<'src>: ExactSizeInput<'src> {
 // Implemented by inputs that reference a string slice and use byte indices as their cursor. This trait is sealed right
 // now because `StrInput` places additional requirements on its cursor semantics.
 /// A trait for types that represent string-like streams of input tokens.
-pub trait StrInput<'src, C: Char>:
-    Sealed + ValueInput<'src, Cursor = usize, Token = C> + SliceInput<'src, Slice = &'src C::Str>
+pub trait StrInput<'src>:
+    Sealed + ValueInput<'src, Cursor = usize, Token: Char> + SliceInput<'src>
 {
 }
 
@@ -262,7 +262,7 @@ impl<'src> ValueInput<'src> for &'src str {
 }
 
 impl Sealed for &str {}
-impl<'src> StrInput<'src, char> for &'src str {}
+impl<'src> StrInput<'src> for &'src str {}
 
 impl<'src> SliceInput<'src> for &'src str {
     type Slice = &'src str;
@@ -329,7 +329,7 @@ impl<'src, T> ExactSizeInput<'src> for &'src [T] {
 }
 
 impl Sealed for &[u8] {}
-impl<'src> StrInput<'src, u8> for &'src [u8] {}
+impl<'src> StrInput<'src> for &'src [u8] {}
 
 impl<'src, T> SliceInput<'src> for &'src [T] {
     type Slice = &'src [T];
@@ -413,7 +413,7 @@ impl<'src, T: 'src, const N: usize> ExactSizeInput<'src> for &'src [T; N] {
 }
 
 impl<const N: usize> Sealed for &[u8; N] {}
-impl<'src, const N: usize> StrInput<'src, u8> for &'src [u8; N] {}
+impl<'src, const N: usize> StrInput<'src> for &'src [u8; N] {}
 
 impl<'src, T: 'src, const N: usize> SliceInput<'src> for &'src [T; N] {
     type Slice = &'src [T];
@@ -719,13 +719,12 @@ where
     S::Offset: From<<I::Span as Span>::Offset>,
 {
 }
-impl<'src, C, S, I> StrInput<'src, C> for WithContext<S, I>
+impl<'src, S, I> StrInput<'src> for WithContext<S, I>
 where
-    I: StrInput<'src, C>,
+    I: StrInput<'src>,
     S: Span + Clone + 'src,
     S::Context: Clone + 'src,
     S::Offset: From<<I::Span as Span>::Offset>,
-    C: Char,
 {
 }
 
@@ -863,14 +862,13 @@ where
     F: Fn(I::Span) -> S,
 {
 }
-impl<'src, C, S, I, F: 'src> StrInput<'src, C> for MappedSpan<S, I, F>
+impl<'src, S, I, F: 'src> StrInput<'src> for MappedSpan<S, I, F>
 where
-    I: StrInput<'src, C>,
+    I: StrInput<'src>,
     S: Span + Clone + 'src,
     S::Context: Clone + 'src,
     S::Offset: From<<I::Span as Span>::Offset>,
     F: Fn(I::Span) -> S,
-    C: Char,
 {
 }
 
