@@ -190,17 +190,13 @@ where
 }
 
 #[test]
-fn spanned() {
-    fn parser<'a>() -> impl Parser<
-        'a,
-        input::SpannedInput<char, Range<usize>, BoxedStream<'static, (char, Range<usize>)>>,
-        char,
-    > {
+fn map_tuple() {
+    fn parser<'src, I: Input<'src, Token = char>>() -> impl Parser<'src, I, char> {
         just('h')
     }
 
     let stream = Stream::from_iter(core::iter::once(('h', 0..1))).boxed();
-    let stream = stream.spanned(0..10);
+    let stream = stream.map(0..10, |(t, s)| (t, s));
 
     assert_eq!(parser().parse(stream).into_result(), Ok('h'));
 }

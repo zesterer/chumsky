@@ -27,14 +27,14 @@ pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
     }
 }
 
-impl<'a, C, I, E> ParserSealed<'a, I, &'a C::Str, E> for Regex<C, I, E>
+impl<'src, C, I, E> Parser<'src, I, &'src C::Str, E> for Regex<C, I, E>
 where
     C: Char,
-    I: StrInput<'a, C>,
-    E: ParserExtra<'a, I>,
+    I: StrInput<'src, C>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a C::Str> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src C::Str> {
         let before = inp.cursor();
 
         let re_in = ReInput::new(inp.full_slice())
@@ -62,7 +62,7 @@ where
         }
     }
 
-    go_extra!(&'a C::Str);
+    go_extra!(&'src C::Str);
 }
 
 #[cfg(test)]
@@ -74,7 +74,8 @@ mod tests {
         use self::prelude::*;
         use self::regex::*;
 
-        fn parser<'a, C: Char, I: StrInput<'a, C>>() -> impl Parser<'a, I, Vec<&'a C::Str>> {
+        fn parser<'src, C: Char, I: StrInput<'src, C>>() -> impl Parser<'src, I, Vec<&'src C::Str>>
+        {
             regex("[a-zA-Z_][a-zA-Z0-9_]*")
                 .padded()
                 .repeated()

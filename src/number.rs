@@ -1,11 +1,7 @@
 //! TODO: Add documentation when approved
 
+use super::*;
 pub use lexical::format;
-
-use crate::extra::ParserExtra;
-use crate::input::{InputRef, SliceInput};
-use crate::private::{Check, Emit, Mode, PResult, ParserSealed};
-use crate::EmptyPhantom;
 
 use lexical::parse_partial;
 use lexical::FromLexical;
@@ -30,15 +26,15 @@ pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
     }
 }
 
-impl<'a, const F: u128, I, O, E> ParserSealed<'a, I, O, E> for Number<F, I, O, E>
+impl<'src, const F: u128, I, O, E> Parser<'src, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
-    I: SliceInput<'a, Cursor = usize>,
-    <I as SliceInput<'a>>::Slice: AsRef<[u8]>,
-    E: ParserExtra<'a, I>,
+    I: SliceInput<'src, Cursor = usize>,
+    <I as SliceInput<'src>>::Slice: AsRef<[u8]>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
         match parse_partial(inp.slice_trailing_inner().as_ref()) {
             Ok((out, skip)) => {

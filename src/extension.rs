@@ -21,12 +21,12 @@
 //! pub struct Null_;
 //!
 //! // We implement `ExtParser` for our null byte parser, plugging us into the chumsky ecosystem
-//! impl<'a, I, E> ExtParser<'a, I, (), E> for Null_
+//! impl<'src, I, E> ExtParser<'src, I, (), E> for Null_
 //! where
-//!     I: Input<'a, Token = u8>,
-//!     E: extra::ParserExtra<'a, I>,
+//!     I: Input<'src, Token = u8>,
+//!     E: extra::ParserExtra<'src, I>,
 //! {
-//!     fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
+//!     fn parse(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), E::Error> {
 //!         let before = inp.cursor();
 //!         match inp.next_maybe().as_deref() {
 //!             // The next token was a null byte, meaning that parsing was successful
@@ -53,7 +53,7 @@
 //! }
 //!
 //! // Let's give our parser a test!
-//! fn make_parser<'a>() -> impl Parser<'a, &'a [u8], ()> {
+//! fn make_parser<'src>() -> impl Parser<'src, &'src [u8], ()> {
 //!     null()
 //! }
 //!
@@ -92,15 +92,15 @@ mod current {
     ///
     /// pub struct FrobnicatedWith<A, B> { a: A, b: B }
     ///
-    /// pub trait ParserExt<'a, I, O, E>
+    /// pub trait ParserExt<'src, I, O, E>
     /// where
-    ///     I: Input<'a>,
-    ///     E: extra::ParserExtra<'a, I>
+    ///     I: Input<'src>,
+    ///     E: extra::ParserExtra<'src, I>
     /// {
     ///     fn frobnicated_with<B>(self, other: B) -> FrobnicatedWith<Self, B>
     ///     where
     ///         Self: Sized,
-    ///         B: Parser<'a, I, O, E>,
+    ///         B: Parser<'src, I, O, E>,
     ///     {
     ///         FrobnicatedWith { a: self, b: other }
     ///     }
@@ -108,11 +108,11 @@ mod current {
     /// ```
     ///
     /// Now, users can import your trait and do `a.frobnicate_with(b)` as if your parser were native to chumsky!
-    pub trait ExtParser<'a, I: Input<'a>, O, E: ParserExtra<'a, I>> {
+    pub trait ExtParser<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> {
         /// Attempt parsing on the given input.
         ///
         /// See [`InputRef`] for more information about how you can work with parser inputs.
-        fn parse(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>;
+        fn parse(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>;
 
         /// Attempt to check the given input.
         ///
@@ -123,7 +123,7 @@ mod current {
         ///
         /// By default, this method just uses `ExtParser::parse`, dropping the output. You may want to override the
         /// implementation so that this output is never even generated, thereby improving performance.
-        fn check(&self, inp: &mut InputRef<'a, '_, I, E>) -> Result<(), E::Error> {
+        fn check(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), E::Error> {
             self.parse(inp).map(|_| ())
         }
     }
@@ -145,14 +145,14 @@ mod current {
     #[repr(transparent)]
     pub struct Ext<T: ?Sized>(pub T);
 
-    impl<'a, I, O, E, P> ParserSealed<'a, I, O, E> for Ext<P>
+    impl<'src, I, O, E, P> Parser<'src, I, O, E> for Ext<P>
     where
-        I: Input<'a>,
-        E: ParserExtra<'a, I>,
-        P: ExtParser<'a, I, O, E>,
+        I: Input<'src>,
+        E: ParserExtra<'src, I>,
+        P: ExtParser<'src, I, O, E>,
     {
         #[inline(always)]
-        fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+        fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
             let before = inp.cursor();
             match M::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
                 Ok(out) => Ok(out),

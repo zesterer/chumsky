@@ -23,7 +23,7 @@ pub struct End<I, E>(EmptyPhantom<(E, I)>);
 /// A parser that accepts only the end of input.
 ///
 /// The output type of this parser is `()`.
-pub const fn end<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> End<I, E> {
+pub const fn end<'src, I: Input<'src>, E: ParserExtra<'src, I>>() -> End<I, E> {
     End(EmptyPhantom::new())
 }
 
@@ -34,13 +34,13 @@ impl<I, E> Clone for End<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, (), E> for End<I, E>
+impl<'src, I, E> Parser<'src, I, (), E> for End<I, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let before = inp.cursor();
         match inp.next_maybe_inner() {
             None => Ok(M::bind(|| ())),
@@ -72,13 +72,13 @@ impl<I, E> Clone for Empty<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, (), E> for Empty<I, E>
+impl<'src, I, E> Parser<'src, I, (), E> for Empty<I, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _: &mut InputRef<'a, '_, I, E>) -> PResult<M, ()> {
+    fn go<M: Mode>(&self, _: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         Ok(M::bind(|| ()))
     }
 
@@ -139,12 +139,12 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 /// // This fails because the parser expects an end to the input after the '?'
 /// assert!(question.parse("?!").has_errors());
 /// ```
-pub const fn just<'a, T, I, E>(seq: T) -> Just<T, I, E>
+pub const fn just<'src, T, I, E>(seq: T) -> Just<T, I, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: OrderedSeq<'a, I::Token> + Clone,
+    T: OrderedSeq<'src, I::Token> + Clone,
 {
     Just {
         seq,
@@ -152,34 +152,34 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, T, E> for Just<T, I, E>
+impl<'src, I, E, T> Parser<'src, I, T, E> for Just<T, I, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: OrderedSeq<'a, I::Token> + Clone,
+    T: OrderedSeq<'src, I::Token> + Clone,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, T> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, T> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
     }
 
     go_extra!(T);
 }
 
-impl<'a, I, E, T> ConfigParserSealed<'a, I, T, E> for Just<T, I, E>
+impl<'src, I, E, T> ConfigParser<'src, I, T, E> for Just<T, I, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: OrderedSeq<'a, I::Token> + Clone,
+    T: OrderedSeq<'src, I::Token> + Clone,
 {
     type Config = JustCfg<T>;
 
     #[inline]
     fn go_cfg<M: Mode>(
         &self,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<M, T> {
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
@@ -239,12 +239,12 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 /// assert_eq!(digits.parse("48791").into_result(), Ok("48791".to_string()));
 /// assert!(digits.parse("421!53").has_errors());
 /// ```
-pub const fn one_of<'a, T, I, E>(seq: T) -> OneOf<T, I, E>
+pub const fn one_of<'src, T, I, E>(seq: T) -> OneOf<T, I, E>
 where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: Seq<'a, I::Token>,
+    T: Seq<'src, I::Token>,
 {
     OneOf {
         seq,
@@ -252,15 +252,15 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for OneOf<T, I, E>
+impl<'src, I, E, T> Parser<'src, I, I::Token, E> for OneOf<T, I, E>
 where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: Seq<'a, I::Token>,
+    T: Seq<'src, I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.cursor();
         match inp.next_inner() {
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
@@ -313,12 +313,12 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 /// assert_eq!(string.parse("\"world\"").into_result(), Ok("world".to_string()));
 /// assert!(string.parse("\"421!53").has_errors());
 /// ```
-pub const fn none_of<'a, T, I, E>(seq: T) -> NoneOf<T, I, E>
+pub const fn none_of<'src, T, I, E>(seq: T) -> NoneOf<T, I, E>
 where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: Seq<'a, I::Token>,
+    T: Seq<'src, I::Token>,
 {
     NoneOf {
         seq,
@@ -326,15 +326,15 @@ where
     }
 }
 
-impl<'a, I, E, T> ParserSealed<'a, I, I::Token, E> for NoneOf<T, I, E>
+impl<'src, I, E, T> Parser<'src, I, I::Token, E> for NoneOf<T, I, E>
 where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
     I::Token: PartialEq,
-    T: Seq<'a, I::Token>,
+    T: Seq<'src, I::Token>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.cursor();
         match inp.next_inner() {
             // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
@@ -381,11 +381,11 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 ///
 /// assert_eq!(x.parse("!").into_result(), Ok(()));
 /// ```
-pub const fn custom<'a, F, I, O, E>(f: F) -> Custom<F, I, O, E>
+pub const fn custom<'src, F, I, O, E>(f: F) -> Custom<F, I, O, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    F: Fn(&mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>,
 {
     Custom {
         f,
@@ -393,14 +393,14 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Custom<F, I, O, E>
+impl<'src, I, O, E, F> Parser<'src, I, O, E> for Custom<F, I, O, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    F: Fn(&mut InputRef<'a, '_, I, E>) -> Result<O, E::Error>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    F: Fn(&mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
         match (self.f)(inp) {
             Ok(out) => Ok(M::bind(|| out)),
@@ -432,12 +432,12 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
 }
 
 /// See [`select!`].
-pub const fn select<'a, F, I, O, E>(filter: F) -> Select<F, I, O, E>
+pub const fn select<'src, F, I, O, E>(filter: F) -> Select<F, I, O, E>
 where
-    I: Input<'a>,
-    I::Token: Clone + 'a,
-    E: ParserExtra<'a, I>,
-    F: Fn(I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
+    I: Input<'src>,
+    I::Token: Clone + 'src,
+    E: ParserExtra<'src, I>,
+    F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     Select {
         filter,
@@ -445,15 +445,15 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for Select<F, I, O, E>
+impl<'src, I, O, E, F> Parser<'src, I, O, E> for Select<F, I, O, E>
 where
-    I: ValueInput<'a>,
-    I::Token: Clone + 'a,
-    E: ParserExtra<'a, I>,
-    F: Fn(I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
+    I: ValueInput<'src>,
+    I::Token: Clone + 'src,
+    E: ParserExtra<'src, I>,
+    F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
         let next = inp.next_inner();
         let err_span = inp.span_since(&before);
@@ -489,12 +489,12 @@ impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
 }
 
 /// See [`select_ref!`].
-pub const fn select_ref<'a, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
+pub const fn select_ref<'src, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
 where
-    I: BorrowInput<'a>,
-    I::Token: 'a,
-    E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
+    I: BorrowInput<'src>,
+    I::Token: 'src,
+    E: ParserExtra<'src, I>,
+    F: Fn(&'src I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     SelectRef {
         filter,
@@ -502,15 +502,15 @@ where
     }
 }
 
-impl<'a, I, O, E, F> ParserSealed<'a, I, O, E> for SelectRef<F, I, O, E>
+impl<'src, I, O, E, F> Parser<'src, I, O, E> for SelectRef<F, I, O, E>
 where
-    I: BorrowInput<'a>,
-    I::Token: 'a,
-    E: ParserExtra<'a, I>,
-    F: Fn(&'a I::Token, &mut MapExtra<'a, '_, I, E>) -> Option<O>,
+    I: BorrowInput<'src>,
+    I::Token: 'src,
+    E: ParserExtra<'src, I>,
+    F: Fn(&'src I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
         let next = inp.next_ref_inner();
         let found = match next {
@@ -541,13 +541,13 @@ impl<I, E> Clone for Any<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, I::Token, E> for Any<I, E>
+impl<'src, I, E> Parser<'src, I, I::Token, E> for Any<I, E>
 where
-    I: ValueInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.cursor();
         match inp.next_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
@@ -577,7 +577,7 @@ where
 /// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
-pub const fn any<'a, I: Input<'a>, E: ParserExtra<'a, I>>() -> Any<I, E> {
+pub const fn any<'src, I: Input<'src>, E: ParserExtra<'src, I>>() -> Any<I, E> {
     Any {
         phantom: EmptyPhantom::new(),
     }
@@ -596,13 +596,13 @@ impl<I, E> Clone for AnyRef<I, E> {
     }
 }
 
-impl<'a, I, E> ParserSealed<'a, I, &'a I::Token, E> for AnyRef<I, E>
+impl<'src, I, E> Parser<'src, I, &'src I::Token, E> for AnyRef<I, E>
 where
-    I: BorrowInput<'a>,
-    E: ParserExtra<'a, I>,
+    I: BorrowInput<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, &'a I::Token> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src I::Token> {
         let before = inp.cursor();
         match inp.next_ref_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
@@ -614,12 +614,12 @@ where
         }
     }
 
-    go_extra!(&'a I::Token);
+    go_extra!(&'src I::Token);
 }
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `&'a I::Token`, the input that was found.
+/// The output type of this parser is `&'src I::Token`, the input that was found.
 ///
 /// This function is the borrowing equivalent of [any]. Where possible, it's recommended to use [any] instead.
 ///
@@ -635,7 +635,7 @@ where
 /// assert_eq!(any_ref_1.parse(&['\t'; 1]).into_result(), Ok(&'\t'));
 /// assert!(any_ref_0.parse(&[]).has_errors());
 /// ```
-pub const fn any_ref<'a, I: BorrowInput<'a>, E: ParserExtra<'a, I>>() -> AnyRef<I, E> {
+pub const fn any_ref<'src, I: BorrowInput<'src>, E: ParserExtra<'src, I>>() -> AnyRef<I, E> {
     AnyRef {
         phantom: EmptyPhantom::new(),
     }
@@ -660,17 +660,17 @@ impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
     }
 }
 
-impl<'a, I, O, E, EI, A, F> ParserSealed<'a, I, O, E> for MapCtx<A, EI, F, E>
+impl<'src, I, O, E, EI, A, F> Parser<'src, I, O, E> for MapCtx<A, EI, F, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    EI: ParserExtra<'a, I, Error = E::Error, State = E::State>,
-    A: Parser<'a, I, O, EI>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    EI: ParserExtra<'src, I, Error = E::Error, State = E::State>,
+    A: Parser<'src, I, O, EI>,
     F: Fn(&E::Context) -> EI::Context,
-    EI::Context: 'a,
+    EI::Context: 'src,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         inp.with_ctx(&(self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
     }
 
@@ -713,32 +713,32 @@ where
 ///         ConfigParser, Parser,
 /// };
 ///
-/// fn string_ctx<'a>() -> impl Parser<'a, &'a str, (), extra::Context<String>> {
+/// fn string_ctx<'src>() -> impl Parser<'src, &'src str, (), extra::Context<String>> {
 ///     just("".to_owned())
 ///         .configure(|cfg, s: &String| cfg.seq(s.clone()))
 ///         .ignored()
 /// }
 ///
-/// fn usize_ctx<'a>() -> impl Parser<'a, &'a str, (), extra::Context<usize>> {
+/// fn usize_ctx<'src>() -> impl Parser<'src, &'src str, (), extra::Context<usize>> {
 ///     map_ctx::<_, _, _, extra::Context<usize>, extra::Context<String>, _>(
 ///        |num: &usize| num.to_string(),
 ///        string_ctx(),
 ///     )
 /// }
 ///
-/// fn specific_usize<'a>(num: usize) -> impl Parser<'a, &'a str, ()> {
+/// fn specific_usize<'src>(num: usize) -> impl Parser<'src, &'src str, ()> {
 ///     usize_ctx().with_ctx(num)
 /// }
 /// assert!(!specific_usize(10).parse("10").has_errors());
 /// ```
-pub const fn map_ctx<'a, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
+pub const fn map_ctx<'src, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
 where
     F: Fn(&E::Context) -> EP::Context,
-    I: Input<'a>,
-    P: Parser<'a, I, OP, EP>,
-    E: ParserExtra<'a, I>,
-    EP: ParserExtra<'a, I>,
-    EP::Context: 'a,
+    I: Input<'src>,
+    P: Parser<'src, I, OP, EP>,
+    E: ParserExtra<'src, I>,
+    EP: ParserExtra<'src, I>,
+    EP::Context: 'src,
 {
     MapCtx {
         parser,
@@ -787,20 +787,20 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// int.parse("0xd4");
 /// ```
 #[track_caller]
-pub fn todo<'a, I: Input<'a>, O, E: ParserExtra<'a, I>>() -> Todo<I, O, E> {
+pub fn todo<'src, I: Input<'src>, O, E: ParserExtra<'src, I>>() -> Todo<I, O, E> {
     Todo {
         location: *Location::caller(),
         phantom: EmptyPhantom::new(),
     }
 }
 
-impl<'a, I, O, E> ParserSealed<'a, I, O, E> for Todo<I, O, E>
+impl<'src, I, O, E> Parser<'src, I, O, E> for Todo<I, O, E>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         todo!(
             "Attempted to use an unimplemented parser at {}",
             self.location
@@ -835,13 +835,13 @@ pub struct Choice<T> {
 /// ```
 /// # use chumsky::prelude::*;
 /// #[derive(Clone, Debug, PartialEq)]
-/// enum Token<'a> {
+/// enum Token<'src> {
 ///     If,
 ///     For,
 ///     While,
 ///     Fn,
 ///     Int(u64),
-///     Ident(&'a str),
+///     Ident(&'src str),
 /// }
 ///
 /// let tokens = choice((
@@ -874,15 +874,15 @@ macro_rules! impl_choice_for_tuple {
     };
     (~ $Head:ident $($X:ident)+) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $Head, $($X),*, O> ParserSealed<'a, I, O, E> for Choice<($Head, $($X,)*)>
+        impl<'src, I, E, $Head, $($X),*, O> Parser<'src, I, O, E> for Choice<($Head, $($X,)*)>
         where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $Head: Parser<'a, I, O, E>,
-            $($X: Parser<'a, I, O, E>),*
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $Head: Parser<'src, I, O, E>,
+            $($X: Parser<'src, I, O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
@@ -906,14 +906,14 @@ macro_rules! impl_choice_for_tuple {
         }
     };
     (~ $Head:ident) => {
-        impl<'a, I, E, $Head, O> ParserSealed<'a, I, O, E> for Choice<($Head,)>
+        impl<'src, I, E, $Head, O> Parser<'src, I, O, E> for Choice<($Head,)>
         where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $Head:  Parser<'a, I, O, E>,
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $Head:  Parser<'src, I, O, E>,
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
                 self.parsers.0.go::<M>(inp)
             }
 
@@ -924,14 +924,14 @@ macro_rules! impl_choice_for_tuple {
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
 
-impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<&[A]>
+impl<'src, A, I, O, E> Parser<'src, I, O, E> for Choice<&[A]>
 where
-    A: Parser<'a, I, O, E>,
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    A: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         if self.parsers.is_empty() {
             let offs = inp.cursor();
             let err_span = inp.span_since(&offs);
@@ -952,27 +952,27 @@ where
     go_extra!(O);
 }
 
-impl<'a, A, I, O, E> ParserSealed<'a, I, O, E> for Choice<Vec<A>>
+impl<'src, A, I, O, E> Parser<'src, I, O, E> for Choice<Vec<A>>
 where
-    A: Parser<'a, I, O, E>,
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    A: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         choice(&self.parsers[..]).go::<M>(inp)
     }
     go_extra!(O);
 }
 
-impl<'a, A, I, O, E, const N: usize> ParserSealed<'a, I, O, E> for Choice<[A; N]>
+impl<'src, A, I, O, E, const N: usize> Parser<'src, I, O, E> for Choice<[A; N]>
 where
-    A: Parser<'a, I, O, E>,
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
+    A: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, O> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         choice(&self.parsers[..]).go::<M>(inp)
     }
     go_extra!(O);
@@ -992,14 +992,14 @@ pub const fn group<T>(parsers: T) -> Group<T> {
     Group { parsers }
 }
 
-impl<'a, I, O, E, P, const N: usize> ParserSealed<'a, I, [O; N], E> for Group<[P; N]>
+impl<'src, I, O, E, P, const N: usize> Parser<'src, I, [O; N], E> for Group<[P; N]>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    P: Parser<'a, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    P: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, [O; N]> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, [O; N]> {
         let mut arr: [MaybeUninit<_>; N] = MaybeUninitExt::uninit_array();
         self.parsers
             .iter()
@@ -1053,14 +1053,14 @@ macro_rules! impl_group_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<'a, I, E, $($X),*, $($O),*> ParserSealed<'a, I, ($($O,)*), E> for Group<($($X,)*)>
+        impl<'src, I, E, $($X),*, $($O),*> Parser<'src, I, ($($O,)*), E> for Group<($($X,)*)>
         where
-            I: Input<'a>,
-            E: ParserExtra<'a, I>,
-            $($X: Parser<'a, I, $O, E>),*
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $($X: Parser<'src, I, $O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'a, '_, I, E>) -> PResult<M, ($($O,)*)> {
+            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ($($O,)*)> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(

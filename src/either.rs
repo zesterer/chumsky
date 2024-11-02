@@ -1,23 +1,19 @@
 //! A small module that implements the [`Parser`] trait for the
 //! [`either::Either`](https://docs.rs/either/latest/either/enum.Either.html) type.
 
-use either::Either;
+use super::*;
+use ::either::Either;
 
-use crate::{
-    extra::ParserExtra, prelude::Input, private::ParserSealed, Check, Emit, InputRef, PResult,
-    Parser,
-};
-
-impl<'a, L, R, I, O, E> ParserSealed<'a, I, O, E> for Either<L, R>
+impl<'src, L, R, I, O, E> Parser<'src, I, O, E> for Either<L, R>
 where
-    I: Input<'a>,
-    E: ParserExtra<'a, I>,
-    L: Parser<'a, I, O, E>,
-    R: Parser<'a, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    L: Parser<'src, I, O, E>,
+    R: Parser<'src, I, O, E>,
 {
     fn go<M: crate::private::Mode>(
         &self,
-        inp: &mut crate::input::InputRef<'a, '_, I, E>,
+        inp: &mut crate::input::InputRef<'src, '_, I, E>,
     ) -> crate::private::PResult<M, O>
     where
         Self: Sized,
@@ -39,7 +35,7 @@ mod tests {
     };
     use either::Either;
 
-    fn parser<'a>() -> impl Parser<'a, &'a str, Vec<u64>> {
+    fn parser<'src>() -> impl Parser<'src, &'src str, Vec<u64>> {
         any()
             .filter(|c: &char| c.is_ascii_digit())
             .repeated()
