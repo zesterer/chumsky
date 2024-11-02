@@ -40,14 +40,74 @@ pub trait Char: Copy + PartialEq + Sealed {
     fn to_ascii(&self) -> Option<u8>;
 }
 
+impl<'src> Sealed for Grapheme<'src> {}
+impl<'src> Char for Grapheme<'src> {
+    fn is_inline_whitespace(&self) -> bool {
+        self.as_str() == " " || self.as_str() == "\t"
+    }
+
+    fn is_whitespace(&self) -> bool {
+        let mut iter = self.as_str().chars();
+        iter.all(char::is_whitespace)
+    }
+
+    fn is_newline(&self) -> bool {
+        [
+            "\r\n",     // CR LF
+            "\n",       // Newline
+            "\r",       // Carriage return
+            "\x0B",     // Vertical tab
+            "\x0C",     // Form feed
+            "\u{0085}", // Next line
+            "\u{2028}", // Line separator
+            "\u{2029}", // Paragraph separator
+        ]
+        .as_slice()
+        .contains(&self.as_str())
+    }
+
+    fn digit_zero() -> Self {
+        Grapheme::digit_zero()
+    }
+
+    fn is_digit(&self, radix: u32) -> bool {
+        let mut iter = self.as_str().chars();
+        match (iter.next(), iter.next()) {
+            (Some(i), None) => i.is_digit(radix),
+            _ => false,
+        }
+    }
+
+    fn to_ascii(&self) -> Option<u8> {
+        let mut iter = self.as_bytes().iter();
+        match (iter.next(), iter.next()) {
+            (Some(i), None) if i.is_ascii() => Some(*i),
+            _ => None,
+        }
+    }
+
+    fn is_ident_start(&self) -> bool {
+        let (first, rest) = self.split();
+        let is_start = unicode_ident::is_xid_start(first) || first == '_';
+        is_start && rest.chars().all(|i| unicode_ident::is_xid_continue(i))
+    }
+
+    fn is_ident_continue(&self) -> bool {
+        let mut iter = self.as_str().chars();
+        iter.all(|i| unicode_ident::is_xid_continue(i))
+    }
+}
+
 impl Sealed for char {}
 impl Char for char {
     fn is_inline_whitespace(&self) -> bool {
         *self == ' ' || *self == '\t'
     }
+
     fn is_whitespace(&self) -> bool {
         char::is_whitespace(*self)
     }
+
     fn is_newline(&self) -> bool {
         [
             '\n',       // Newline
@@ -58,14 +118,18 @@ impl Char for char {
             '\u{2028}', // Line separator
             '\u{2029}', // Paragraph separator
         ]
+        .as_slice()
         .contains(self)
     }
+
     fn digit_zero() -> Self {
         '0'
     }
+
     fn is_digit(&self, radix: u32) -> bool {
         char::is_digit(*self, radix)
     }
+
     fn to_ascii(&self) -> Option<u8> {
         self.is_ascii().then_some(*self as u8)
     }
@@ -84,9 +148,11 @@ impl Char for u8 {
     fn is_inline_whitespace(&self) -> bool {
         *self == b' ' || *self == b'\t'
     }
+
     fn is_whitespace(&self) -> bool {
         self.is_ascii_whitespace()
     }
+
     fn is_newline(&self) -> bool {
         [
             b'\n',   // Newline
@@ -94,14 +160,18 @@ impl Char for u8 {
             b'\x0B', // Vertical tab
             b'\x0C', // Form feed
         ]
+        .as_slice()
         .contains(self)
     }
+
     fn digit_zero() -> Self {
         b'0'
     }
+
     fn is_digit(&self, radix: u32) -> bool {
         (*self as char).is_digit(radix)
     }
+
     fn to_ascii(&self) -> Option<u8> {
         Some(*self)
     }
@@ -440,6 +510,11 @@ pub mod unicode {
             Self { inner }
         }
 
+        /// Creates a new grapheme with the character `'0'` inside it.
+        pub fn digit_zero() -> Self {
+            Self::new("0")
+        }
+
         /// Gets an iterator over code points.
         pub fn code_points(self) -> Chars<'src> {
             self.inner.chars()
@@ -458,6 +533,14 @@ pub mod unicode {
         /// Gets the slice of bytes that are contained in the grapheme cluster.
         pub fn as_bytes(self) -> &'src [u8] {
             self.inner.as_bytes()
+        }
+
+        /// Splits the grapheme into the first code point and the remaining code points.
+        pub fn split(self) -> (char, &'src str) {
+            let mut iter = self.inner.chars();
+            // The operation never falls because the grapheme always contains at least one code point.
+            let first = iter.next().unwrap();
+            (first, iter.as_str())
         }
     }
 

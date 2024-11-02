@@ -762,7 +762,7 @@ impl<'p> Seq<'p, char> for str {
     }
 }
 
-impl<'p> Seq<'p, char> for &'p str {
+impl<'p> Seq<'p, char> for String {
     type Item<'a>
         = char
     where
@@ -792,7 +792,7 @@ impl<'p> Seq<'p, char> for &'p str {
     }
 }
 
-impl<'p> Seq<'p, char> for String {
+impl<'p> Seq<'p, char> for &'p str {
     type Item<'a>
         = char
     where
@@ -898,8 +898,8 @@ impl<'p, T> OrderedSeq<'p, T> for core::ops::RangeInclusive<T> where Self: Seq<'
 impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
 impl OrderedSeq<'_, char> for str {}
-impl<'p> OrderedSeq<'p, char> for &'p str {}
 impl OrderedSeq<'_, char> for String {}
+impl<'p> OrderedSeq<'p, char> for &'p str {}
 impl<'p> OrderedSeq<'p, Grapheme<'p>> for &'p str {}
 impl<'p> OrderedSeq<'p, Grapheme<'p>> for Graphemes<'p> {}
 
