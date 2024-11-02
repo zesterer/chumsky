@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn with_prefix_ops() {
-        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+        let atom = text::int::<_, Err<Simple<char>>>(10)
             .from_str()
             .unwrapped()
             .map(Expr::Literal);
@@ -1194,7 +1194,7 @@ mod tests {
 
     #[test]
     fn with_postfix_ops() {
-        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+        let atom = text::int::<_, Err<Simple<char>>>(10)
             .from_str()
             .unwrapped()
             .map(Expr::Literal);
@@ -1224,7 +1224,7 @@ mod tests {
 
     #[test]
     fn with_pre_and_postfix_ops() {
-        let atom = text::int::<_, _, Err<Simple<char>>>(10)
+        let atom = text::int::<_, Err<Simple<char>>>(10)
             .from_str()
             .unwrapped()
             .map(Expr::Literal);
