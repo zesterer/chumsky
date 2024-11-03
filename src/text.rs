@@ -89,12 +89,12 @@ impl<'src> Char for Grapheme<'src> {
     fn is_ident_start(&self) -> bool {
         let (first, rest) = self.split();
         let is_start = unicode_ident::is_xid_start(first) || first == '_';
-        is_start && rest.chars().all(|i| unicode_ident::is_xid_continue(i))
+        is_start && rest.chars().all(unicode_ident::is_xid_continue)
     }
 
     fn is_ident_continue(&self) -> bool {
         let mut iter = self.as_str().chars();
-        iter.all(|i| unicode_ident::is_xid_continue(i))
+        iter.all(unicode_ident::is_xid_continue)
     }
 }
 
@@ -333,7 +333,7 @@ where
 #[must_use]
 pub fn digits<'src, I, E>(
     radix: u32,
-) -> Repeated<impl Parser<'src, I, I::Token, E> + Copy, I::Token, I, E>
+) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy, I::Token, I, E>
 where
     I: ValueInput<'src>,
     I::Token: Char + 'src,
@@ -383,7 +383,7 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, I::Slice, E> + Copy
+pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
 where
     I: StrInput<'src>,
     I::Token: Char + 'src,
@@ -411,13 +411,13 @@ pub mod ascii {
 
     /// A parser that accepts a C-style identifier.
     ///
-    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-    /// [`u8`]).
+    /// The output type of this parser is [`SliceInput::Slice`] (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`] when `I` is
+    /// [`&[u8]`]).
     ///
     /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, I::Slice, E> + Copy
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
     where
         I: StrInput<'src>,
         I::Token: Char + 'src,
@@ -459,7 +459,9 @@ pub mod ascii {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<'src, I, S, E>(keyword: S) -> impl Parser<'src, I, I::Slice, E> + Clone + 'src
+    pub fn keyword<'src, I, S, E>(
+        keyword: S,
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
     where
         I: StrInput<'src>,
         I::Slice: PartialEq,
@@ -502,7 +504,7 @@ pub use unicode::*;
 pub mod unicode {
     use super::*;
 
-    use std::str::{Bytes, Chars};
+    use core::str::{Bytes, Chars};
     use unicode_segmentation::UnicodeSegmentation;
 
     /// A type containing one extended Unicode grapheme cluster.
@@ -764,12 +766,12 @@ pub mod unicode {
 
     /// A parser that accepts an identifier.
     ///
-    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-    /// [`u8`]).
+    /// The output type of this parser is [`SliceInput::Slice`] (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`] when `I` is
+    /// [`&[u8]`]).
     ///
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, I::Slice, E> + Copy
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
     where
         I: StrInput<'src>,
         I::Token: Char + 'src,
@@ -808,7 +810,9 @@ pub mod unicode {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<'src, I, S, E>(keyword: S) -> impl Parser<'src, I, I::Slice, E> + Clone + 'src
+    pub fn keyword<'src, I, S, E>(
+        keyword: S,
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
     where
         I: StrInput<'src>,
         I::Slice: PartialEq,

@@ -870,7 +870,7 @@ impl<'p> Seq<'p, Grapheme<'p>> for Graphemes<'p> {
 
     #[inline(always)]
     fn contains(&self, val: &Grapheme) -> bool {
-        self.iter().find(|i| i == val).is_some()
+        self.iter().any(|i| i == *val)
     }
 
     #[inline]

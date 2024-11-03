@@ -209,10 +209,9 @@ pub trait SliceInput<'src>: ExactSizeInput<'src> {
 // Implemented by inputs that reference a string slice and use byte indices as their cursor. This trait is sealed right
 // now because `StrInput` places additional requirements on its cursor semantics.
 /// A trait for types that represent string-like streams of input tokens.
-pub trait StrInput<'src>:
-    Sealed + ValueInput<'src, Cursor = usize> + SliceInput<'src>
+pub trait StrInput<'src>: Sealed + ValueInput<'src, Cursor = usize> + SliceInput<'src>
 where
-    Self::Token: Char
+    Self::Token: Char,
 {
 }
 
