@@ -40,8 +40,8 @@ pub trait Char: Copy + PartialEq + Sealed {
     fn to_ascii(&self) -> Option<u8>;
 }
 
-impl<'src> Sealed for Grapheme<'src> {}
-impl<'src> Char for Grapheme<'src> {
+impl Sealed for Grapheme<'_> {}
+impl Char for Grapheme<'_> {
     fn is_inline_whitespace(&self) -> bool {
         self.as_str() == " " || self.as_str() == "\t"
     }
@@ -590,13 +590,13 @@ pub mod unicode {
         }
     }
 
-    impl<'src> AsRef<str> for Graphemes<'src> {
+    impl AsRef<str> for Graphemes<'_> {
         fn as_ref(&self) -> &str {
             self.as_str()
         }
     }
 
-    impl<'src> AsRef<[u8]> for Graphemes<'src> {
+    impl AsRef<[u8]> for Graphemes<'_> {
         fn as_ref(&self) -> &[u8] {
             self.as_bytes()
         }
@@ -608,13 +608,13 @@ pub mod unicode {
         }
     }
 
-    impl<'src> Borrow<str> for Graphemes<'src> {
+    impl Borrow<str> for Graphemes<'_> {
         fn borrow(&self) -> &str {
             self.as_str()
         }
     }
 
-    impl<'src> Borrow<[u8]> for Graphemes<'src> {
+    impl Borrow<[u8]> for Graphemes<'_> {
         fn borrow(&self) -> &[u8] {
             self.as_bytes()
         }
@@ -757,7 +757,7 @@ pub mod unicode {
         }
     }
 
-    impl<'src> DoubleEndedIterator for GraphemesIter<'src> {
+    impl DoubleEndedIterator for GraphemesIter<'_> {
         #[inline]
         fn next_back(&mut self) -> Option<Self::Item> {
             self.iter.next_back().map(Grapheme::new)
