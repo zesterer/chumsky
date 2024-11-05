@@ -7,7 +7,7 @@ pub(crate) struct Located<T, E> {
 }
 
 impl<T, E> Located<T, E> {
-    #[inline]
+    #[inline(always)]
     pub fn at(pos: T, err: E) -> Self {
         Self { pos, err }
     }

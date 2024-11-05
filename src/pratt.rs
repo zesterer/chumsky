@@ -536,7 +536,7 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline]
+    #[inline(always)]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -632,7 +632,7 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline]
+    #[inline(always)]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -717,7 +717,7 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline]
+    #[inline(always)]
     fn do_parse_postfix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -768,7 +768,7 @@ macro_rules! impl_operator_for_tuple {
                 E: ParserExtra<'src, I>,
                 $($X: Operator<'src, I, O, E>),*
         {
-            #[inline]
+            #[inline(always)]
             fn do_parse_prefix<'parse, M: Mode>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
@@ -788,7 +788,7 @@ macro_rules! impl_operator_for_tuple {
                 Err(())
             }
 
-            #[inline]
+            #[inline(always)]
             fn do_parse_postfix<'parse, M: Mode>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
@@ -810,7 +810,7 @@ macro_rules! impl_operator_for_tuple {
                 Err(lhs)
             }
 
-            #[inline]
+            #[inline(always)]
             fn do_parse_infix<'parse, M: Mode>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
@@ -847,7 +847,7 @@ where
     E: ParserExtra<'src, I>,
     Op: Operator<'src, I, O, E>,
 {
-    #[inline]
+    #[inline(always)]
     fn do_parse_prefix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -865,7 +865,7 @@ where
         Err(())
     }
 
-    #[inline]
+    #[inline(always)]
     fn do_parse_postfix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -886,7 +886,7 @@ where
         Err(lhs)
     }
 
-    #[inline]
+    #[inline(always)]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -913,7 +913,7 @@ where
 
 #[allow(unused_variables, non_snake_case)]
 impl<'src, Atom, Ops> Pratt<Atom, Ops> {
-    #[inline]
+    #[inline(always)]
     fn pratt_go<M: Mode, I, O, E>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
