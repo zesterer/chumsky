@@ -40,8 +40,8 @@ pub trait Char: Copy + PartialEq + Sealed {
     fn to_ascii(&self) -> Option<u8>;
 }
 
-impl Sealed for Grapheme<'_> {}
-impl Char for Grapheme<'_> {
+impl Sealed for &Grapheme {}
+impl Char for &Grapheme {
     fn is_inline_whitespace(&self) -> bool {
         self.as_str() == " " || self.as_str() == "\t"
     }
@@ -508,43 +508,45 @@ pub mod unicode {
     use unicode_segmentation::UnicodeSegmentation;
 
     /// A type containing one extended Unicode grapheme cluster.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Grapheme<'src> {
-        inner: &'src str,
+    #[derive(Debug, PartialEq, Eq)]
+    #[repr(transparent)]
+    pub struct Grapheme {
+        inner: str,
     }
 
-    impl<'src> Grapheme<'src> {
-        fn new(inner: &'src str) -> Self {
-            Self { inner }
+    impl Grapheme {
+        fn new(inner: &str) -> &Self {
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { &*(inner as *const str as *const Self) }
         }
 
         /// Creates a new grapheme with the character `'0'` inside it.
-        pub fn digit_zero() -> Self {
+        pub fn digit_zero() -> &'static Self {
             Self::new("0")
         }
 
         /// Gets an iterator over code points.
-        pub fn code_points(self) -> Chars<'src> {
+        pub fn code_points(&self) -> Chars {
             self.inner.chars()
         }
 
         /// Gets an iterator over bytes.
-        pub fn bytes(self) -> Bytes<'src> {
+        pub fn bytes(&self) -> Bytes {
             self.inner.bytes()
         }
 
         /// Gets the slice of code points that are contained in the grapheme cluster.
-        pub fn as_str(self) -> &'src str {
-            self.inner
+        pub fn as_str(&self) -> &str {
+            &self.inner
         }
 
         /// Gets the slice of bytes that are contained in the grapheme cluster.
-        pub fn as_bytes(self) -> &'src [u8] {
+        pub fn as_bytes(&self) -> &[u8] {
             self.inner.as_bytes()
         }
 
         /// Splits the grapheme into the first code point and the remaining code points.
-        pub fn split(self) -> (char, &'src str) {
+        pub fn split(&self) -> (char, &str) {
             let mut iter = self.inner.chars();
             // The operation never falls because the grapheme always contains at least one code point.
             let first = iter.next().unwrap();
@@ -553,81 +555,89 @@ pub mod unicode {
     }
 
     /// A type containing any number of extended Unicode grapheme clusters.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Graphemes<'src> {
-        inner: &'src str,
+    #[derive(Debug, PartialEq, Eq)]
+    #[repr(transparent)]
+    pub struct Graphemes {
+        inner: str,
     }
 
-    impl<'src> Graphemes<'src> {
+    impl Graphemes {
         /// Create a new graphemes.
-        pub fn new(inner: &'src str) -> Self {
-            Self { inner }
+        pub fn new(inner: &str) -> &Self {
+            // SAFETY: This is ok because Graphemes is #[repr(transparent)]
+            unsafe { &*(inner as *const str as *const Self) }
         }
 
         /// Gets an iterator over graphemes.
-        pub fn iter(self) -> GraphemesIter<'src> {
+        pub fn iter(&self) -> GraphemesIter {
             self.into_iter()
         }
 
         /// Gets an iterator over code points.
-        pub fn code_points(self) -> Chars<'src> {
+        pub fn code_points(&self) -> Chars {
             self.inner.chars()
         }
 
         /// Gets an iterator over bytes.
-        pub fn bytes(self) -> Bytes<'src> {
+        pub fn bytes(&self) -> Bytes {
             self.inner.bytes()
         }
 
         /// Gets the slice of code points that are contained in the string.
-        pub fn as_str(self) -> &'src str {
-            self.inner
+        pub fn as_str(&self) -> &str {
+            &self.inner
         }
 
         /// Gets the slice of bytes that are contained in the string.
-        pub fn as_bytes(self) -> &'src [u8] {
+        pub fn as_bytes(&self) -> &[u8] {
             self.inner.as_bytes()
         }
     }
 
-    impl AsRef<str> for Graphemes<'_> {
+    impl AsRef<str> for Graphemes {
         fn as_ref(&self) -> &str {
             self.as_str()
         }
     }
 
-    impl AsRef<[u8]> for Graphemes<'_> {
+    impl AsRef<[u8]> for Graphemes {
         fn as_ref(&self) -> &[u8] {
             self.as_bytes()
         }
     }
 
-    impl<'src> AsRef<Graphemes<'src>> for Graphemes<'src> {
-        fn as_ref(&self) -> &Graphemes<'src> {
+    impl<'src> AsRef<Graphemes> for Graphemes {
+        fn as_ref(&self) -> &Graphemes {
             self
         }
     }
 
-    impl Borrow<str> for Graphemes<'_> {
+    impl Borrow<str> for Graphemes {
         fn borrow(&self) -> &str {
             self.as_str()
         }
     }
 
-    impl Borrow<[u8]> for Graphemes<'_> {
+    impl Borrow<[u8]> for Graphemes {
         fn borrow(&self) -> &[u8] {
             self.as_bytes()
         }
     }
 
-    impl<'src> From<&'src str> for Graphemes<'src> {
+    impl<'src> From<&'src str> for &'src Graphemes {
         fn from(value: &'src str) -> Self {
             Graphemes::new(value)
         }
     }
 
-    impl<'src> IntoIterator for Graphemes<'src> {
-        type Item = Grapheme<'src>;
+    impl<'src> From<&'src Graphemes> for &'src str {
+        fn from(value: &'src Graphemes) -> Self {
+            value.as_str()
+        }
+    }
+
+    impl<'src> IntoIterator for &'src Graphemes {
+        type Item = &'src Grapheme;
 
         type IntoIter = GraphemesIter<'src>;
 
@@ -636,12 +646,12 @@ pub mod unicode {
         }
     }
 
-    impl<'src> Input<'src> for Graphemes<'src> {
+    impl<'src> Input<'src> for &'src Graphemes {
         type Cursor = usize;
         type Span = SimpleSpan<usize>;
 
-        type Token = Grapheme<'src>;
-        type MaybeToken = Grapheme<'src>;
+        type Token = &'src Grapheme;
+        type MaybeToken = &'src Grapheme;
 
         type Cache = Self;
 
@@ -687,21 +697,21 @@ pub mod unicode {
         }
     }
 
-    impl<'src> ExactSizeInput<'src> for Graphemes<'src> {
+    impl<'src> ExactSizeInput<'src> for &'src Graphemes {
         #[inline(always)]
         unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
             (*range.start..this.as_str().len()).into()
         }
     }
 
-    impl<'src> ValueInput<'src> for Graphemes<'src> {
+    impl<'src> ValueInput<'src> for &'src Graphemes {
         #[inline(always)]
         unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
             Self::next_maybe(this, cursor)
         }
     }
 
-    impl<'src> SliceInput<'src> for Graphemes<'src> {
+    impl<'src> SliceInput<'src> for &'src Graphemes {
         type Slice = Self;
 
         #[inline(always)]
@@ -731,7 +741,7 @@ pub mod unicode {
 
     impl<'src> GraphemesIter<'src> {
         /// Create a new grapheme iterator.
-        pub fn new(graphemes: Graphemes<'src>) -> Self {
+        pub fn new(graphemes: &'src Graphemes) -> Self {
             Self {
                 iter: graphemes.as_str().graphemes(true),
             }
@@ -744,7 +754,7 @@ pub mod unicode {
     }
 
     impl<'src> Iterator for GraphemesIter<'src> {
-        type Item = Grapheme<'src>;
+        type Item = &'src Grapheme;
 
         #[inline]
         fn size_hint(&self) -> (usize, Option<usize>) {

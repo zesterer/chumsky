@@ -822,9 +822,9 @@ impl<'p> Seq<'p, char> for &'p str {
     }
 }
 
-impl<'p> Seq<'p, Grapheme<'p>> for &'p str {
+impl<'p> Seq<'p, &'p Grapheme> for &'p str {
     type Item<'a>
-        = Grapheme<'p>
+        = &'p Grapheme
     where
         Self: 'a;
 
@@ -839,12 +839,12 @@ impl<'p> Seq<'p, Grapheme<'p>> for &'p str {
     }
 
     #[inline(always)]
-    fn contains(&self, val: &Grapheme) -> bool {
+    fn contains(&self, val: &&'p Grapheme) -> bool {
         Graphemes::new(self).contains(val)
     }
 
     #[inline]
-    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, Grapheme<'p>>
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, &'p Grapheme>
     where
         'p: 'b,
     {
@@ -852,9 +852,9 @@ impl<'p> Seq<'p, Grapheme<'p>> for &'p str {
     }
 }
 
-impl<'p> Seq<'p, Grapheme<'p>> for Graphemes<'p> {
+impl<'p> Seq<'p, &'p Grapheme> for &'p Graphemes {
     type Item<'a>
-        = Grapheme<'p>
+        = &'p Grapheme
     where
         Self: 'a;
 
@@ -869,12 +869,12 @@ impl<'p> Seq<'p, Grapheme<'p>> for Graphemes<'p> {
     }
 
     #[inline(always)]
-    fn contains(&self, val: &Grapheme) -> bool {
+    fn contains(&self, val: &&'p Grapheme) -> bool {
         self.iter().any(|i| i == *val)
     }
 
     #[inline]
-    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, Grapheme<'p>>
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, &'p Grapheme>
     where
         'p: 'b,
     {
@@ -900,8 +900,8 @@ impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 impl OrderedSeq<'_, char> for str {}
 impl OrderedSeq<'_, char> for String {}
 impl<'p> OrderedSeq<'p, char> for &'p str {}
-impl<'p> OrderedSeq<'p, Grapheme<'p>> for &'p str {}
-impl<'p> OrderedSeq<'p, Grapheme<'p>> for Graphemes<'p> {}
+impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p str {}
+impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p Graphemes {}
 
 #[cfg(test)]
 mod test {
