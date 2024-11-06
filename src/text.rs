@@ -606,7 +606,7 @@ pub mod unicode {
         }
     }
 
-    impl<'src> AsRef<Graphemes> for Graphemes {
+    impl AsRef<Graphemes> for Graphemes {
         fn as_ref(&self) -> &Graphemes {
             self
         }
