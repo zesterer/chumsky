@@ -72,7 +72,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-hashbrown = "0.14"
+hashbrown = "0.15"
 stacker = { version = "0.1", optional = true }
 regex-automata = { version = "0.3", default-features = false, optional = true, features = ["alloc", "meta", "perf", "unicode", "nfa", "dfa", "hybrid"] }
 spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
