@@ -41,11 +41,12 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        let before = inp.cursor();
+        let before = inp.save();
         match inp.next_maybe_inner() {
             None => Ok(M::bind(|| ())),
             Some(tok) => {
-                let span = inp.span_since(&before);
+                let span = inp.span_since(&before.cursor());
+                inp.rewind(before);
                 inp.add_alt(Some(None), Some(tok.into()), span);
                 Err(())
             }
@@ -261,12 +262,13 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor();
+        let before = inp.save();
         match inp.next_inner() {
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before);
+                let err_span = inp.span_since(&before.cursor());
+                inp.rewind(before);
                 inp.add_alt(
                     self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
                     found.map(|f| f.into()),
@@ -335,12 +337,13 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor();
+        let before = inp.save();
         match inp.next_inner() {
             // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before);
+                let err_span = inp.span_since(&before.cursor());
+                inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -454,16 +457,19 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let before = inp.cursor();
+        let before = inp.save();
         let next = inp.next_inner();
-        let err_span = inp.span_since(&before);
         let found = match next {
-            Some(tok) => match (self.filter)(tok.clone(), &mut MapExtra::new(&before, inp)) {
-                Some(out) => return Ok(M::bind(|| out)),
-                None => Some(tok.into()),
-            },
+            Some(tok) => {
+                match (self.filter)(tok.clone(), &mut MapExtra::new(&before.cursor(), inp)) {
+                    Some(out) => return Ok(M::bind(|| out)),
+                    None => Some(tok.into()),
+                }
+            }
             found => found.map(|f| f.into()),
         };
+        let err_span = inp.span_since(before.cursor());
+        inp.rewind(before);
         inp.add_alt(None, found, err_span);
         Err(())
     }
@@ -511,16 +517,17 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let before = inp.cursor();
+        let before = inp.save();
         let next = inp.next_ref_inner();
         let found = match next {
-            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(&before, inp)) {
+            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(&before.cursor(), inp)) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => Some(tok.into()),
             },
             found => found.map(|f| f.into()),
         };
-        let err_span = inp.span_since(&before);
+        let err_span = inp.span_since(before.cursor());
+        inp.rewind(before);
         inp.add_alt(None, found, err_span);
         Err(())
     }
@@ -548,11 +555,12 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
-        let before = inp.cursor();
+        let before = inp.save();
         match inp.next_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before);
+                let err_span = inp.span_since(&before.cursor());
+                inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
             }
@@ -603,11 +611,12 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src I::Token> {
-        let before = inp.cursor();
+        let before = inp.save();
         match inp.next_ref_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before);
+                let err_span = inp.span_since(&before.cursor());
+                inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
             }
