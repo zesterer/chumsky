@@ -646,6 +646,9 @@ pub mod unicode {
         }
     }
 
+    impl Sealed for &'_ Graphemes {}
+    impl<'src> StrInput<'src> for &'src Graphemes {}
+
     impl<'src> Input<'src> for &'src Graphemes {
         type Cursor = usize;
         type Span = SimpleSpan<usize>;
