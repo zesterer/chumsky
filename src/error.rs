@@ -348,10 +348,6 @@ pub enum RichReason<'a, T, L = &'static str> {
     },
     /// An error with a custom message
     Custom(String),
-    /// Multiple unrelated reasons were merged
-    // TODO: Should we really do this? Possibly better to just unify the unrelated reasons. It's not like consumers
-    // probably care about reporting 5 different errors for the same location anyway!
-    Many(Vec<Self>),
 }
 
 impl<'a, T, L> RichReason<'a, T, L> {
@@ -360,7 +356,6 @@ impl<'a, T, L> RichReason<'a, T, L> {
         match self {
             Self::ExpectedFound { found, .. } => found.as_deref(),
             Self::Custom(_) => None,
-            Self::Many(many) => many.iter().find_map(|r| r.found()),
         }
     }
 
@@ -375,9 +370,6 @@ impl<'a, T, L> RichReason<'a, T, L> {
                 found: found.map(MaybeRef::into_owned),
             },
             Self::Custom(msg) => RichReason::Custom(msg),
-            Self::Many(many) => {
-                RichReason::Many(many.into_iter().map(RichReason::into_owned).collect())
-            }
         }
     }
 
@@ -386,11 +378,10 @@ impl<'a, T, L> RichReason<'a, T, L> {
         match self {
             RichReason::ExpectedFound { found, .. } => found.take(),
             RichReason::Custom(_) => None,
-            RichReason::Many(many) => many.iter_mut().find_map(|r| r.take_found()),
         }
     }
 
-    /// Transform this error's tokens using the given function.
+    /// Transform this `RichReason`'s tokens using the given function.
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
     /// the token type for each pass is different (`char` vs `MyToken`, say).
@@ -398,26 +389,16 @@ impl<'a, T, L> RichReason<'a, T, L> {
     where
         T: Clone,
     {
-        fn map_token_inner<'a, T: Clone, U, F: FnMut(T) -> U, L>(
-            reason: RichReason<'a, T, L>,
-            mut f: &mut F,
-        ) -> RichReason<'a, U, L> {
-            match reason {
-                RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
-                    expected: expected
-                        .into_iter()
-                        .map(|pat| pat.map_token(&mut f))
-                        .collect(),
-                    found: found.map(|found| f(found.into_inner()).into()),
-                },
-                RichReason::Custom(msg) => RichReason::Custom(msg),
-                RichReason::Many(reasons) => {
-                    RichReason::Many(reasons.into_iter().map(|r| map_token_inner(r, f)).collect())
-                }
-            }
+        match self {
+            RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
+                expected: expected
+                    .into_iter()
+                    .map(|pat| pat.map_token(&mut f))
+                    .collect(),
+                found: found.map(|found| f(found.into_inner()).into()),
+            },
+            RichReason::Custom(msg) => RichReason::Custom(msg),
         }
-
-        map_token_inner(self, &mut f)
     }
 
     fn inner_fmt<S>(
@@ -461,13 +442,6 @@ impl<'a, T, L> RichReason<'a, T, L> {
                     fmt_span(span, f)?;
                 }
             }
-            RichReason::Many(_) => {
-                write!(f, "multiple errors")?;
-                if let Some(span) = span {
-                    write!(f, " found at ")?;
-                    fmt_span(span, f)?;
-                }
-            }
         }
         #[cfg(feature = "label")]
         for (l, s) in context {
@@ -488,6 +462,9 @@ where
     #[inline]
     fn flat_merge(self, other: Self) -> Self {
         match (self, other) {
+            // Prefer first error, if ambiguous
+            (a @ RichReason::Custom(_), _) => a,
+            (_, b @ RichReason::Custom(_)) => b,
             (
                 RichReason::ExpectedFound {
                     expected: mut this_expected,
@@ -512,19 +489,6 @@ where
                     found,
                 }
             }
-            (RichReason::Many(mut m1), RichReason::Many(m2)) => {
-                m1.extend(m2);
-                RichReason::Many(m1)
-            }
-            (RichReason::Many(mut m), other) => {
-                m.push(other);
-                RichReason::Many(m)
-            }
-            (this, RichReason::Many(mut m)) => {
-                m.push(this);
-                RichReason::Many(m)
-            }
-            (this, other) => RichReason::Many(vec![this, other]),
         }
     }
 }
@@ -634,19 +598,10 @@ impl<'a, T, S, L> Rich<'a, T, S, L> {
 
     /// Get an iterator over the expected items associated with this error
     pub fn expected(&self) -> impl ExactSizeIterator<Item = &RichPattern<'a, T, L>> {
-        fn push_expected<'a, 'b, T, L>(
-            reason: &'b RichReason<'a, T, L>,
-            v: &mut Vec<&'b RichPattern<'a, T, L>>,
-        ) {
-            match reason {
-                RichReason::ExpectedFound { expected, .. } => v.extend(expected.iter()),
-                RichReason::Custom(_) => {}
-                RichReason::Many(many) => many.iter().for_each(|r| push_expected(r, v)),
-            }
+        match &*self.reason {
+            RichReason::ExpectedFound { expected, .. } => expected.iter(),
+            RichReason::Custom(_) => [].iter(),
         }
-        let mut v = Vec::new();
-        push_expected(&self.reason, &mut v);
-        v.into_iter()
     }
 
     /// Transform this error's tokens using the given function.
@@ -709,11 +664,11 @@ where
     fn merge_expected_found<E: IntoIterator<Item = Option<MaybeRef<'a, I::Token>>>>(
         mut self,
         new_expected: E,
-        found: Option<MaybeRef<'a, I::Token>>,
+        new_found: Option<MaybeRef<'a, I::Token>>,
         _span: I::Span,
     ) -> Self {
         match &mut *self.reason {
-            RichReason::ExpectedFound { expected, found: _ } => {
+            RichReason::ExpectedFound { expected, found } => {
                 for new_expected in new_expected {
                     let new_expected = new_expected
                         .map(RichPattern::Token)
@@ -722,33 +677,9 @@ where
                         expected.push(new_expected);
                     }
                 }
+                *found = found.take().or(new_found); //land
             }
-            RichReason::Many(m) => m.push(RichReason::ExpectedFound {
-                expected: new_expected
-                    .into_iter()
-                    .map(|tok| {
-                        tok.map(RichPattern::Token)
-                            .unwrap_or(RichPattern::EndOfInput)
-                    })
-                    .collect(),
-                found,
-            }),
-            RichReason::Custom(_) => {
-                let old = core::mem::replace(&mut *self.reason, RichReason::Many(Vec::new()));
-                self.reason = Box::new(RichReason::Many(vec![
-                    old,
-                    RichReason::ExpectedFound {
-                        expected: new_expected
-                            .into_iter()
-                            .map(|tok| {
-                                tok.map(RichPattern::Token)
-                                    .unwrap_or(RichPattern::EndOfInput)
-                            })
-                            .collect(),
-                        found,
-                    },
-                ]));
-            }
+            RichReason::Custom(_) => {}
         }
         // TOOD: Merge contexts
         self
