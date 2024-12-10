@@ -45,7 +45,7 @@ where
         match inp.next_maybe_inner() {
             None => Ok(M::bind(|| ())),
             Some(tok) => {
-                let span = inp.span_since(&before.cursor());
+                let span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(Some(None), Some(tok.into()), span);
                 Err(())
@@ -267,7 +267,7 @@ where
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before.cursor());
+                let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(
                     self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
@@ -342,7 +342,7 @@ where
             // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before.cursor());
+                let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
@@ -461,7 +461,7 @@ where
         let next = inp.next_inner();
         let found = match next {
             Some(tok) => {
-                match (self.filter)(tok.clone(), &mut MapExtra::new(&before.cursor(), inp)) {
+                match (self.filter)(tok.clone(), &mut MapExtra::new(before.cursor(), inp)) {
                     Some(out) => return Ok(M::bind(|| out)),
                     None => Some(tok.into()),
                 }
@@ -520,7 +520,7 @@ where
         let before = inp.save();
         let next = inp.next_ref_inner();
         let found = match next {
-            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(&before.cursor(), inp)) {
+            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(before.cursor(), inp)) {
                 Some(out) => return Ok(M::bind(|| out)),
                 None => Some(tok.into()),
             },
@@ -559,7 +559,7 @@ where
         match inp.next_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before.cursor());
+                let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
@@ -615,7 +615,7 @@ where
         match inp.next_ref_inner() {
             Some(tok) => Ok(M::bind(|| tok)),
             found => {
-                let err_span = inp.span_since(&before.cursor());
+                let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(None, found.map(|f| f.into()), err_span);
                 Err(())
