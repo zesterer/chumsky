@@ -547,8 +547,12 @@ where
         let before = inp.cursor();
         let out = self.parser.go::<Emit>(inp)?;
         let span = inp.span_since(&before);
+        let old_alt = inp.errors.alt.take();
         match (self.mapper)(out, span) {
-            Ok(out) => Ok(M::bind(|| out)),
+            Ok(out) => {
+                inp.errors.alt = old_alt;
+                Ok(M::bind(|| out))
+            }
             Err(err) => {
                 inp.add_alt_err(&before.inner, err);
                 Err(())
@@ -1444,8 +1448,6 @@ where
                 match self.parser.go::<Check>(inp) {
                     Ok(()) => {}
                     Err(()) => {
-                        // TODO: Helper for this? Rewind does this? (seconds one may be bad for other cases)
-                        inp.errors.alt = None;
                         inp.rewind(before);
                         break Ok(M::bind(|| ()));
                     }
@@ -2715,7 +2717,7 @@ where
         let mut emitter = Emitter::new();
         let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
         for err in emitter.errors() {
-            inp.emit(err);
+            inp.emit(before.clone(), err);
         }
         Ok(M::bind(|| out))
     }

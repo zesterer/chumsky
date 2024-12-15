@@ -1702,10 +1702,16 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
-    pub(crate) fn emit(&mut self, error: E::Error) {
-        self.errors
-            .secondary
-            .push(Located::at(self.cursor.clone(), error));
+    pub(crate) fn emit(
+        &mut self,
+        cursor: impl Into<Option<Cursor<'src, 'parse, I>>>,
+        error: E::Error,
+    ) {
+        let cursor = cursor
+            .into()
+            .map(|c| c.inner)
+            .unwrap_or_else(|| self.cursor.clone());
+        self.errors.secondary.push(Located::at(cursor, error));
     }
 
     #[inline]

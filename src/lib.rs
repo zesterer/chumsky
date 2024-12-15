@@ -3569,4 +3569,32 @@ mod tests {
         <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
         assert_eq!(parser2().parse("goodbye").into_errors(), vec![err]);
     }
+
+    #[test]
+    #[allow(dead_code)]
+    fn invalid_escape() {
+        use crate::error::Error;
+
+        fn string<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<Rich<'src, char>>> {
+            let quote = just("\"");
+            let escaped = just("\\").then(just("n"));
+            let unescaped = none_of("\\\"");
+
+            unescaped
+                .ignored()
+                .or(escaped.ignored())
+                .repeated()
+                .to_slice()
+                .delimited_by(quote, quote)
+        }
+
+        assert_eq!(
+            string().parse(r#""Hello\m""#).into_result(),
+            Err(vec![<Rich<char> as Error::<&str>>::expected_found(
+                Some(Some('n'.into())),
+                Some('m'.into()),
+                (7..8).into(),
+            )]),
+        );
+    }
 }
