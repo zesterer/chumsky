@@ -3597,4 +3597,32 @@ mod tests {
             )]),
         );
     }
+
+    #[test]
+    #[allow(dead_code)]
+    fn map_err_missed_info() {
+        use crate::error::Error;
+
+        fn zero<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
+            just("-")
+                .or_not()
+                .then(just("0").map_err(move |e: Rich<_>| {
+                    Error::<&str>::expected_found(
+                        vec![Some('n'.into())],
+                        e.found().map(|i| From::from(*i)),
+                        e.span().clone(),
+                    )
+                }))
+                .ignored()
+        }
+
+        assert_eq!(
+            zero().parse("_0").into_result(),
+            Err(vec![<Rich<char> as Error::<&str>>::expected_found(
+                vec![Some('-'.into()), Some('n'.into())],
+                Some('_'.into()),
+                (0..1).into(),
+            )]),
+        );
+    }
 }

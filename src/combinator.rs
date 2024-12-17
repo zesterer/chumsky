@@ -2596,12 +2596,15 @@ where
     where
         Self: Sized,
     {
+        let old_alt = inp.take_alt();
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            let mut e = inp.take_alt();
-            e.err = (self.mapper)(e.err);
-            inp.errors.alt = Some(e);
+            let mut new_alt = inp.take_alt();
+            new_alt.err = (self.mapper)(new_alt.err);
+
+            inp.errors.alt = Some(old_alt);
+            inp.add_alt_err(&new_alt.pos, new_alt.err);
         }
 
         res

@@ -1729,7 +1729,14 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
 
         // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
         self.errors.alt = Some(match self.errors.alt.take() {
-            Some(alt) => match I::cursor_location(&alt.pos).cmp(&I::cursor_location(at)) {
+            Some(alt) => match {
+                println!(
+                    "Add alt alt = {}, at = {}",
+                    I::cursor_location(&alt.pos),
+                    I::cursor_location(at)
+                );
+                I::cursor_location(&alt.pos).cmp(&I::cursor_location(at))
+            } {
                 Ordering::Equal => {
                     Located::at(alt.pos, alt.err.merge_expected_found(expected, found, span))
                 }
