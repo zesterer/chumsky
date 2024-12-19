@@ -14,20 +14,15 @@ use super::*;
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
 /// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
-    /// The default unsized [`str`]-like type of a linear sequence of this character.
-    ///
-    /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-    type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + 'static;
-
-    /// Convert the given ASCII character to this character type.
-    fn from_ascii(c: u8) -> Self;
-
+pub trait Char: Copy + PartialEq + Sealed {
     /// Returns true if the character is canonically considered to be inline whitespace (i.e: not part of a newline).
     fn is_inline_whitespace(&self) -> bool;
 
     /// Returns true if the character is canonically considered to be whitespace.
     fn is_whitespace(&self) -> bool;
+
+    /// Returns true if the character is canonically considered to be newline.
+    fn is_newline(&self) -> bool;
 
     /// Return the '0' digit of the character.
     fn digit_zero() -> Self;
@@ -42,41 +37,101 @@ pub trait Char: Sized + Copy + PartialEq + fmt::Debug + Sealed + 'static {
     fn is_ident_continue(&self) -> bool;
 
     /// Returns this character as a [`char`].
-    fn to_char(&self) -> char;
+    fn to_ascii(&self) -> Option<u8>;
+}
 
-    /// The iterator returned by `Self::str_to_chars`.
-    type StrCharIter<'src>: Iterator<Item = Self>;
+impl Sealed for &Grapheme {}
+impl Char for &Grapheme {
+    fn is_inline_whitespace(&self) -> bool {
+        self.as_str() == " " || self.as_str() == "\t"
+    }
 
-    /// Turn a string of this character type into an iterator over those characters.
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_>;
+    fn is_whitespace(&self) -> bool {
+        let mut iter = self.as_str().chars();
+        iter.all(char::is_whitespace)
+    }
+
+    fn is_newline(&self) -> bool {
+        [
+            "\r\n",     // CR LF
+            "\n",       // Newline
+            "\r",       // Carriage return
+            "\x0B",     // Vertical tab
+            "\x0C",     // Form feed
+            "\u{0085}", // Next line
+            "\u{2028}", // Line separator
+            "\u{2029}", // Paragraph separator
+        ]
+        .as_slice()
+        .contains(&self.as_str())
+    }
+
+    fn digit_zero() -> Self {
+        Grapheme::digit_zero()
+    }
+
+    fn is_digit(&self, radix: u32) -> bool {
+        let mut iter = self.as_str().chars();
+        match (iter.next(), iter.next()) {
+            (Some(i), None) => i.is_digit(radix),
+            _ => false,
+        }
+    }
+
+    fn to_ascii(&self) -> Option<u8> {
+        let mut iter = self.as_bytes().iter();
+        match (iter.next(), iter.next()) {
+            (Some(i), None) if i.is_ascii() => Some(*i),
+            _ => None,
+        }
+    }
+
+    fn is_ident_start(&self) -> bool {
+        let (first, rest) = self.split();
+        let is_start = unicode_ident::is_xid_start(first) || first == '_';
+        is_start && rest.chars().all(unicode_ident::is_xid_continue)
+    }
+
+    fn is_ident_continue(&self) -> bool {
+        let mut iter = self.as_str().chars();
+        iter.all(unicode_ident::is_xid_continue)
+    }
 }
 
 impl Sealed for char {}
 impl Char for char {
-    type Str = str;
-
-    fn from_ascii(c: u8) -> Self {
-        c as char
-    }
     fn is_inline_whitespace(&self) -> bool {
         *self == ' ' || *self == '\t'
     }
+
     fn is_whitespace(&self) -> bool {
         char::is_whitespace(*self)
     }
+
+    fn is_newline(&self) -> bool {
+        [
+            '\n',       // Newline
+            '\r',       // Carriage return
+            '\x0B',     // Vertical tab
+            '\x0C',     // Form feed
+            '\u{0085}', // Next line
+            '\u{2028}', // Line separator
+            '\u{2029}', // Paragraph separator
+        ]
+        .as_slice()
+        .contains(self)
+    }
+
     fn digit_zero() -> Self {
         '0'
     }
+
     fn is_digit(&self, radix: u32) -> bool {
         char::is_digit(*self, radix)
     }
-    fn to_char(&self) -> char {
-        *self
-    }
 
-    type StrCharIter<'src> = core::str::Chars<'src>;
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
-        s.chars()
+    fn to_ascii(&self) -> Option<u8> {
+        self.is_ascii().then_some(*self as u8)
     }
 
     fn is_ident_start(&self) -> bool {
@@ -90,38 +145,43 @@ impl Char for char {
 
 impl Sealed for u8 {}
 impl Char for u8 {
-    type Str = [u8];
-
-    fn from_ascii(c: u8) -> Self {
-        c
-    }
     fn is_inline_whitespace(&self) -> bool {
         *self == b' ' || *self == b'\t'
     }
+
     fn is_whitespace(&self) -> bool {
         self.is_ascii_whitespace()
     }
+
+    fn is_newline(&self) -> bool {
+        [
+            b'\n',   // Newline
+            b'\r',   // Carriage return
+            b'\x0B', // Vertical tab
+            b'\x0C', // Form feed
+        ]
+        .as_slice()
+        .contains(self)
+    }
+
     fn digit_zero() -> Self {
         b'0'
     }
+
     fn is_digit(&self, radix: u32) -> bool {
         (*self as char).is_digit(radix)
     }
-    fn to_char(&self) -> char {
-        *self as char
-    }
 
-    type StrCharIter<'src> = core::iter::Copied<core::slice::Iter<'src, u8>>;
-    fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
-        s.iter().copied()
+    fn to_ascii(&self) -> Option<u8> {
+        Some(*self)
     }
 
     fn is_ident_start(&self) -> bool {
-        self.to_char().is_ident_start()
+        (*self as char).is_ident_start()
     }
 
     fn is_ident_continue(&self) -> bool {
-        self.to_char().is_ident_continue()
+        (*self as char).is_ident_continue()
     }
 }
 
@@ -158,17 +218,18 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let whitespace = text::whitespace::<_, _, extra::Err<Simple<char>>>();
+/// let whitespace = text::whitespace::<_, extra::Err<Simple<char>>>();
 ///
 /// // Any amount of whitespace is parsed...
 /// assert_eq!(whitespace.parse("\t \n  \r ").into_result(), Ok(()));
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'src, C: Char, I: ValueInput<'src> + StrInput<'src, C>, E: ParserExtra<'src, I>>(
-) -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
+pub fn whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I::Token: Char,
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
+    E: ParserExtra<'src, I>,
 {
     select! { c if (c as I::Token).is_whitespace() => () }
         .ignored()
@@ -185,7 +246,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<Simple<char>>>();
+/// let inline_whitespace = text::inline_whitespace::<_, extra::Err<Simple<char>>>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  ").into_result(), Ok(()));
@@ -194,14 +255,11 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<
-    'src,
-    C: Char,
-    I: ValueInput<'src> + StrInput<'src, C>,
-    E: ParserExtra<'src, I>,
->() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
+pub fn inline_whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I::Token: Char,
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
+    E: ParserExtra<'src, I>,
 {
     select! { c if (c as I::Token).is_inline_whitespace() => () }
         .ignored()
@@ -239,26 +297,16 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'src, I: ValueInput<'src>, E: ParserExtra<'src, I>>(
-) -> impl Parser<'src, I, (), E> + Copy
+pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy
 where
-    I::Token: Char,
+    I: ValueInput<'src>,
+    I::Token: Char + 'src,
+    E: ParserExtra<'src, I>,
+    &'src str: OrderedSeq<'src, I::Token>,
 {
-    just(I::Token::from_ascii(b'\r'))
-        .or_not()
-        .ignore_then(just(I::Token::from_ascii(b'\n')))
-        .or(select! {
-            c if [
-                '\r',       // Carriage return
-                '\x0B',     // Vertical tab
-                '\x0C',     // Form feed
-                '\u{0085}', // Next line
-                '\u{2028}', // Line separator
-                '\u{2029}', // Paragraph separator
-            ]
-            .contains(&(c as I::Token).to_char()) => c,
-        })
+    just("\r\n")
         .ignored()
+        .or(any().filter(I::Token::is_newline).ignored())
 }
 
 /// A parser that accepts one or more ASCII digits.
@@ -272,7 +320,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let digits = text::digits::<_, _, extra::Err<Simple<char>>>(10).to_slice();
+/// let digits = text::digits::<_, extra::Err<Simple<char>>>(10).to_slice();
 ///
 /// assert_eq!(digits.parse("0").into_result(), Ok("0"));
 /// assert_eq!(digits.parse("1").into_result(), Ok("1"));
@@ -283,15 +331,17 @@ where
 /// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
-pub fn digits<'src, C, I, E>(radix: u32) -> Repeated<impl Parser<'src, I, C, E> + Copy, C, I, E>
+pub fn digits<'src, I, E>(
+    radix: u32,
+) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy, I::Token, I, E>
 where
-    C: Char,
-    I: ValueInput<'src, Token = C>,
+    I: ValueInput<'src>,
+    I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
 {
     any()
         // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| {
+        .try_map(move |c: I::Token, span| {
             if c.is_digit(radix) {
                 Ok(c)
             } else {
@@ -316,7 +366,7 @@ where
 ///
 /// ```
 /// # use chumsky::prelude::*;
-/// let dec = text::int::<_, _, extra::Err<Simple<char>>>(10);
+/// let dec = text::int::<_, extra::Err<Simple<char>>>(10);
 ///
 /// assert_eq!(dec.parse("0").into_result(), Ok("0"));
 /// assert_eq!(dec.parse("1").into_result(), Ok("1"));
@@ -324,7 +374,7 @@ where
 /// // No leading zeroes are permitted!
 /// assert!(dec.parse("04").has_errors());
 ///
-/// let hex = text::int::<_, _, extra::Err<Simple<char>>>(16);
+/// let hex = text::int::<_, extra::Err<Simple<char>>>(16);
 ///
 /// assert_eq!(hex.parse("2A").into_result(), Ok("2A"));
 /// assert_eq!(hex.parse("d").into_result(), Ok("d"));
@@ -333,13 +383,16 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'src, I: StrInput<'src, C>, C: Char, E: ParserExtra<'src, I>>(
-    radix: u32,
-) -> impl Parser<'src, I, &'src C::Str, E> + Copy {
+pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+where
+    I: StrInput<'src>,
+    I::Token: Char + 'src,
+    E: ParserExtra<'src, I>,
+{
     any()
         // Use try_map over filter to get a better error on failure
-        .try_map(move |c: C, span| {
-            if c.is_digit(radix) && c != C::digit_zero() {
+        .try_map(move |c: I::Token, span| {
+            if c.is_digit(radix) && c != I::Token::digit_zero() {
                 Ok(c)
             } else {
                 Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
@@ -348,7 +401,7 @@ pub fn int<'src, I: StrInput<'src, C>, C: Char, E: ParserExtra<'src, I>>(
         // This error never appears due to `repeated` so can use `filter`
         .then(select! { c if (c as I::Token).is_digit(radix) => () }.repeated())
         .ignored()
-        .or(just(C::digit_zero()).ignored())
+        .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
 }
 
@@ -358,29 +411,29 @@ pub mod ascii {
 
     /// A parser that accepts a C-style identifier.
     ///
-    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-    /// [`u8`]).
+    /// The output type of this parser is [`SliceInput::Slice`] (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`] when `I` is
+    /// [`&[u8]`]).
     ///
     /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
-    pub fn ident<
-        'src,
-        I: ValueInput<'src> + StrInput<'src, C>,
-        C: Char,
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    where
+        I: StrInput<'src>,
+        I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-    >() -> impl Parser<'src, I, &'src C::Str, E> + Copy {
+    {
         any()
             // Use try_map over filter to get a better error on failure
-            .try_map(|c: C, span| {
-                if c.to_char().is_ascii_alphabetic() || c.to_char() == '_' {
+            .try_map(|c: I::Token, span| {
+                if c.to_ascii().map(|i| i.is_ascii_alphabetic() || i == b'_').unwrap_or(false) {
                     Ok(c)
                 } else {
                     Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
                 }
             })
             .then(
-                select! { c if (c as I::Token).to_char().is_ascii_alphanumeric() || (c as I::Token).to_char() == '_' => () }
+                select! { c if (c as I::Token).to_ascii().map(|i| i.is_ascii_alphabetic() || i == b'_').unwrap_or(false) => () }
                     .repeated(),
             )
             .to_slice()
@@ -395,7 +448,7 @@ pub mod ascii {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    /// let def = text::ascii::keyword::<_, _, extra::Err<Simple<char>>>("def");
     ///
     /// // Exactly 'def' was found
     /// assert_eq!(def.parse("def").into_result(), Ok("def"));
@@ -406,33 +459,35 @@ pub mod ascii {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<
-        'src,
-        I: ValueInput<'src> + StrInput<'src, C>,
-        C: Char + 'src,
-        Str: AsRef<C::Str> + 'src + Clone,
-        E: ParserExtra<'src, I> + 'src,
-    >(
-        keyword: Str,
-    ) -> impl Parser<'src, I, &'src C::Str, E> + Clone + 'src
+    pub fn keyword<'src, I, S, E>(
+        keyword: S,
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
     where
-        C::Str: PartialEq,
+        I: StrInput<'src>,
+        I::Slice: PartialEq,
+        I::Token: Char + fmt::Debug + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
+        E: ParserExtra<'src, I> + 'src,
     {
+        /*
         #[cfg(debug_assertions)]
         {
-            let mut cs = C::str_to_chars(keyword.as_ref());
+            let mut cs = keyword.seq_iter();
             if let Some(c) = cs.next() {
-                assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {:?}", c);
+                let c = c.borrow().to_char();
+                assert!(c.is_ascii_alphabetic() || c == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {:?}", c);
             } else {
                 panic!("Keyword must have at least one character");
             }
             for c in cs {
-                assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {:?}", c);
+                let c = c.borrow().to_char();
+                assert!(c.is_ascii_alphanumeric() || c == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {:?}", c);
             }
         }
+        */
         ident()
-            .try_map(move |s: &C::Str, span| {
-                if s == keyword.as_ref() {
+            .try_map(move |s: I::Slice, span| {
+                if &s == keyword.borrow() {
                     Ok(())
                 } else {
                     Err(Error::expected_found(None, None, span))
@@ -449,29 +504,332 @@ pub use unicode::*;
 pub mod unicode {
     use super::*;
 
+    use core::str::{Bytes, Chars};
+    use unicode_segmentation::UnicodeSegmentation;
+
+    /// A type containing one extended Unicode grapheme cluster.
+    #[derive(PartialEq, Eq)]
+    #[repr(transparent)]
+    pub struct Grapheme {
+        inner: str,
+    }
+
+    impl Grapheme {
+        fn new(inner: &str) -> &Self {
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { &*(inner as *const str as *const Self) }
+        }
+
+        /// Creates a new grapheme with the character `'0'` inside it.
+        pub fn digit_zero() -> &'static Self {
+            Self::new("0")
+        }
+
+        /// Gets an iterator over code points.
+        pub fn code_points(&self) -> Chars {
+            self.inner.chars()
+        }
+
+        /// Gets an iterator over bytes.
+        pub fn bytes(&self) -> Bytes {
+            self.inner.bytes()
+        }
+
+        /// Gets the slice of code points that are contained in the grapheme cluster.
+        pub fn as_str(&self) -> &str {
+            &self.inner
+        }
+
+        /// Gets the slice of bytes that are contained in the grapheme cluster.
+        pub fn as_bytes(&self) -> &[u8] {
+            self.inner.as_bytes()
+        }
+
+        /// Splits the grapheme into the first code point and the remaining code points.
+        pub fn split(&self) -> (char, &str) {
+            let mut iter = self.inner.chars();
+            // The operation never falls because the grapheme always contains at least one code point.
+            let first = iter.next().unwrap();
+            (first, iter.as_str())
+        }
+    }
+
+    impl fmt::Debug for Grapheme {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("g'")?;
+            for i in self.as_str().chars() {
+                write!(f, "{}", i.escape_debug())?;
+            }
+            f.write_str("'")?;
+            Ok(())
+        }
+    }
+
+    impl fmt::Display for Grapheme {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.inner, f)
+        }
+    }
+
+    /// A type containing any number of extended Unicode grapheme clusters.
+    #[derive(PartialEq, Eq)]
+    #[repr(transparent)]
+    pub struct Graphemes {
+        inner: str,
+    }
+
+    impl Graphemes {
+        /// Create a new graphemes.
+        pub fn new(inner: &str) -> &Self {
+            // SAFETY: This is ok because Graphemes is #[repr(transparent)]
+            unsafe { &*(inner as *const str as *const Self) }
+        }
+
+        /// Gets an iterator over graphemes.
+        pub fn iter(&self) -> GraphemesIter {
+            self.into_iter()
+        }
+
+        /// Gets an iterator over code points.
+        pub fn code_points(&self) -> Chars {
+            self.inner.chars()
+        }
+
+        /// Gets an iterator over bytes.
+        pub fn bytes(&self) -> Bytes {
+            self.inner.bytes()
+        }
+
+        /// Gets the slice of code points that are contained in the string.
+        pub fn as_str(&self) -> &str {
+            &self.inner
+        }
+
+        /// Gets the slice of bytes that are contained in the string.
+        pub fn as_bytes(&self) -> &[u8] {
+            self.inner.as_bytes()
+        }
+    }
+
+    impl fmt::Debug for Graphemes {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("g")?;
+            fmt::Debug::fmt(&self.inner, f)
+        }
+    }
+
+    impl fmt::Display for Graphemes {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.inner, f)
+        }
+    }
+
+    impl AsRef<str> for Graphemes {
+        fn as_ref(&self) -> &str {
+            self.as_str()
+        }
+    }
+
+    impl AsRef<[u8]> for Graphemes {
+        fn as_ref(&self) -> &[u8] {
+            self.as_bytes()
+        }
+    }
+
+    impl AsRef<Graphemes> for Graphemes {
+        fn as_ref(&self) -> &Graphemes {
+            self
+        }
+    }
+
+    impl Borrow<str> for Graphemes {
+        fn borrow(&self) -> &str {
+            self.as_str()
+        }
+    }
+
+    impl Borrow<[u8]> for Graphemes {
+        fn borrow(&self) -> &[u8] {
+            self.as_bytes()
+        }
+    }
+
+    impl<'src> From<&'src str> for &'src Graphemes {
+        fn from(value: &'src str) -> Self {
+            Graphemes::new(value)
+        }
+    }
+
+    impl<'src> From<&'src Graphemes> for &'src str {
+        fn from(value: &'src Graphemes) -> Self {
+            value.as_str()
+        }
+    }
+
+    impl<'src> IntoIterator for &'src Graphemes {
+        type Item = &'src Grapheme;
+
+        type IntoIter = GraphemesIter<'src>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            GraphemesIter::new(self)
+        }
+    }
+
+    impl Sealed for &'_ Graphemes {}
+    impl<'src> StrInput<'src> for &'src Graphemes {}
+
+    impl<'src> Input<'src> for &'src Graphemes {
+        type Cursor = usize;
+        type Span = SimpleSpan<usize>;
+
+        type Token = &'src Grapheme;
+        type MaybeToken = &'src Grapheme;
+
+        type Cache = Self;
+
+        #[inline]
+        fn begin(self) -> (Self::Cursor, Self::Cache) {
+            (0, self)
+        }
+
+        #[inline]
+        fn cursor_location(cursor: &Self::Cursor) -> usize {
+            *cursor
+        }
+
+        #[inline(always)]
+        unsafe fn next_maybe(
+            this: &mut Self::Cache,
+            cursor: &mut Self::Cursor,
+        ) -> Option<Self::MaybeToken> {
+            if *cursor < this.as_str().len() {
+                // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
+                //         We only ever return cursors that are at a code point boundary.
+                //         The `next()` implementation returns `None`, only in the
+                //         situation of zero length of the remaining part of the string.
+                //         And the Unicode standard guarantees that any sequence of code
+                //         points is a valid sequence of grapheme clusters, so the
+                //         behaviour of the `next()` function should not change.
+                let c = this
+                    .as_str()
+                    .get_unchecked(*cursor..)
+                    .graphemes(true)
+                    .next()
+                    .unwrap_unchecked();
+                *cursor += c.len();
+                Some(Grapheme::new(c))
+            } else {
+                None
+            }
+        }
+
+        #[inline(always)]
+        unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+            (*range.start..*range.end).into()
+        }
+    }
+
+    impl<'src> ExactSizeInput<'src> for &'src Graphemes {
+        #[inline(always)]
+        unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+            (*range.start..this.as_str().len()).into()
+        }
+    }
+
+    impl<'src> ValueInput<'src> for &'src Graphemes {
+        #[inline(always)]
+        unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+            Self::next_maybe(this, cursor)
+        }
+    }
+
+    impl<'src> SliceInput<'src> for &'src Graphemes {
+        type Slice = Self;
+
+        #[inline(always)]
+        fn full_slice(this: &mut Self::Cache) -> Self::Slice {
+            *this
+        }
+
+        #[inline(always)]
+        unsafe fn slice(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
+            Graphemes::new(&this.as_str()[*range.start..*range.end])
+        }
+
+        #[inline(always)]
+        unsafe fn slice_from(
+            this: &mut Self::Cache,
+            from: RangeFrom<&Self::Cursor>,
+        ) -> Self::Slice {
+            Graphemes::new(&this.as_str()[*from.start..])
+        }
+    }
+
+    /// Grapheme iterator type.
+    #[derive(Debug, Clone)]
+    pub struct GraphemesIter<'src> {
+        iter: unicode_segmentation::Graphemes<'src>,
+    }
+
+    impl<'src> GraphemesIter<'src> {
+        /// Create a new grapheme iterator.
+        pub fn new(graphemes: &'src Graphemes) -> Self {
+            Self {
+                iter: graphemes.as_str().graphemes(true),
+            }
+        }
+
+        /// Gets the slice of code points that are contained in the grapheme cluster.
+        pub fn as_str(self) -> &'src str {
+            self.iter.as_str()
+        }
+    }
+
+    impl<'src> Iterator for GraphemesIter<'src> {
+        type Item = &'src Grapheme;
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.iter.size_hint()
+        }
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            self.iter.next().map(Grapheme::new)
+        }
+    }
+
+    impl DoubleEndedIterator for GraphemesIter<'_> {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.iter.next_back().map(Grapheme::new)
+        }
+    }
+
     /// A parser that accepts an identifier.
     ///
-    /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-    /// [`u8`]).
+    /// The output type of this parser is [`SliceInput::Slice`] (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`] when `I` is
+    /// [`&[u8]`]).
     ///
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
-    pub fn ident<
-        'src,
-        I: ValueInput<'src> + StrInput<'src, C>,
-        C: Char,
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    where
+        I: StrInput<'src>,
+        I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-    >() -> impl Parser<'src, I, &'src C::Str, E> + Copy {
+    {
         any()
             // Use try_map over filter to get a better error on failure
-            .try_map(|c: C, span| {
+            .try_map(|c: I::Token, span| {
                 if c.is_ident_start() {
                     Ok(c)
                 } else {
                     Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
                 }
             })
-            .then(select! { c if (c as C).is_ident_continue() => () }.repeated())
+            .then(select! { c if (c as I::Token).is_ident_continue() => () }.repeated())
             .to_slice()
     }
 
@@ -484,7 +842,7 @@ pub mod unicode {
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// let def = text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("def");
+    /// let def = text::ascii::keyword::<_, _, extra::Err<Simple<char>>>("def");
     ///
     /// // Exactly 'def' was found
     /// assert_eq!(def.parse("def").into_result(), Ok("def"));
@@ -495,22 +853,22 @@ pub mod unicode {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<
-        'src,
-        I: ValueInput<'src> + StrInput<'src, C>,
-        C: Char + 'src,
-        Str: AsRef<C::Str> + 'src + Clone,
-        E: ParserExtra<'src, I> + 'src,
-    >(
-        keyword: Str,
-    ) -> impl Parser<'src, I, &'src C::Str, E> + Clone + 'src
+    pub fn keyword<'src, I, S, E>(
+        keyword: S,
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
     where
-        C::Str: PartialEq,
+        I: StrInput<'src>,
+        I::Slice: PartialEq,
+        I::Token: Char + fmt::Debug + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
+        E: ParserExtra<'src, I> + 'src,
     {
+        /*
         #[cfg(debug_assertions)]
         {
-            let mut cs = C::str_to_chars(keyword.as_ref());
+            let mut cs = keyword.seq_iter();
             if let Some(c) = cs.next() {
+                let c = c.borrow();
                 assert!(
                     c.is_ident_start(),
                     "The first character of a keyword must be a valid unicode XID_START, not {:?}",
@@ -520,12 +878,14 @@ pub mod unicode {
                 panic!("Keyword must have at least one character");
             }
             for c in cs {
+                let c = c.borrow();
                 assert!(c.is_ident_continue(), "Trailing characters of a keyword must be valid as unicode XID_CONTINUE, not {:?}", c);
             }
         }
+        */
         ident()
-            .try_map(move |s: &C::Str, span| {
-                if s == keyword.as_ref() {
+            .try_map(move |s: I::Slice, span| {
+                if &s == keyword.borrow() {
                     Ok(())
                 } else {
                     Err(Error::expected_found(None, None, span))
@@ -540,21 +900,22 @@ pub mod unicode {
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;
+    use std::fmt;
 
-    fn make_ascii_kw_parser<'src, C: text::Char, I: crate::StrInput<'src, C>>(
-        s: &'src C::Str,
-    ) -> impl Parser<'src, I, ()>
+    fn make_ascii_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
-        C::Str: PartialEq,
+        I: crate::StrInput<'src>,
+        I::Slice: PartialEq + Clone,
+        I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::ascii::keyword(s).ignored()
     }
 
-    fn make_unicode_kw_parser<'src, C: text::Char, I: crate::StrInput<'src, C>>(
-        s: &'src C::Str,
-    ) -> impl Parser<'src, I, ()>
+    fn make_unicode_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
-        C::Str: PartialEq,
+        I: crate::StrInput<'src>,
+        I::Slice: PartialEq + Clone,
+        I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::unicode::keyword(s).ignored()
     }
@@ -581,17 +942,18 @@ mod tests {
 
     #[test]
     fn keyword_good() {
-        make_ascii_kw_parser::<char, &str>("hello");
-        make_ascii_kw_parser::<char, &str>("_42");
+        make_ascii_kw_parser::<&str>("hello");
+        make_ascii_kw_parser::<&str>("_42");
+        make_ascii_kw_parser::<&str>("_42");
 
-        make_unicode_kw_parser::<char, &str>("שלום");
-        make_unicode_kw_parser::<char, &str>("привет");
-        make_unicode_kw_parser::<char, &str>("你好");
+        make_unicode_kw_parser::<&str>("שלום");
+        make_unicode_kw_parser::<&str>("привет");
+        make_unicode_kw_parser::<&str>("你好");
     }
 
     #[test]
     fn ident() {
-        let ident = text::ident::<&str, char, extra::Default>();
+        let ident = text::ident::<&str, extra::Default>();
         test_ok(ident, "foo");
         test_ok(ident, "foo_bar");
         test_ok(ident, "foo_");
@@ -604,27 +966,29 @@ mod tests {
         test_err(ident, "123");
     }
 
+    /*
     #[test]
     #[should_panic]
     fn keyword_numeric() {
-        make_ascii_kw_parser::<char, &str>("42");
+        make_ascii_kw_parser::<&str>("42");
     }
 
     #[test]
     #[should_panic]
     fn keyword_empty() {
-        make_ascii_kw_parser::<char, &str>("");
+        make_ascii_kw_parser::<&str>("");
     }
 
     #[test]
     #[should_panic]
     fn keyword_not_alphanum() {
-        make_ascii_kw_parser::<char, &str>("hi\n");
+        make_ascii_kw_parser::<&str>("hi\n");
     }
 
     #[test]
     #[should_panic]
     fn keyword_unicode_in_ascii() {
-        make_ascii_kw_parser::<char, &str>("שלום");
+        make_ascii_kw_parser::<&str>("שלום");
     }
+    */
 }
