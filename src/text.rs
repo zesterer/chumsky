@@ -508,7 +508,7 @@ pub mod unicode {
     use unicode_segmentation::UnicodeSegmentation;
 
     /// A type containing one extended Unicode grapheme cluster.
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(PartialEq, Eq)]
     #[repr(transparent)]
     pub struct Grapheme {
         inner: str,
@@ -554,8 +554,25 @@ pub mod unicode {
         }
     }
 
+    impl fmt::Debug for Grapheme {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("g'")?;
+            for i in self.as_str().chars() {
+                write!(f, "{}", i.escape_debug())?;
+            }
+            f.write_str("'")?;
+            Ok(())
+        }
+    }
+
+    impl fmt::Display for Grapheme {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.inner, f)
+        }
+    }
+
     /// A type containing any number of extended Unicode grapheme clusters.
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(PartialEq, Eq)]
     #[repr(transparent)]
     pub struct Graphemes {
         inner: str,
@@ -591,6 +608,19 @@ pub mod unicode {
         /// Gets the slice of bytes that are contained in the string.
         pub fn as_bytes(&self) -> &[u8] {
             self.inner.as_bytes()
+        }
+    }
+
+    impl fmt::Debug for Graphemes {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("g")?;
+            fmt::Debug::fmt(&self.inner, f)
+        }
+    }
+
+    impl fmt::Display for Graphemes {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.inner, f)
         }
     }
 
