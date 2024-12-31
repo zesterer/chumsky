@@ -827,7 +827,7 @@ where
 
         if res.is_err() {
             let alt = inp.take_alt();
-            inp.memos.insert(key, Some(alt));
+            inp.memos.insert(key, alt);
         } else {
             inp.memos.remove(&key);
         }
@@ -2596,18 +2596,9 @@ where
     where
         Self: Sized,
     {
-        let old_alt = inp.take_alt();
-        let res = self.parser.go::<M>(inp);
-
-        if res.is_err() {
-            let mut new_alt = inp.take_alt();
-            new_alt.err = (self.mapper)(new_alt.err);
-
-            inp.errors.alt = Some(old_alt);
-            inp.add_alt_err(&new_alt.pos, new_alt.err);
-        }
-
-        res
+        (&self.parser)
+            .map_err_with_state(|e, _, _| (self.mapper)(e))
+            .go::<M>(inp)
     }
 
     go_extra!(O);
@@ -2648,6 +2639,7 @@ where
 //     go_extra!(O);
 // }
 
+// TODO: Remove combinator, replace with map_err_with
 /// See [`Parser::map_err_with_state`].
 #[derive(Copy, Clone)]
 pub struct MapErrWithState<A, F> {
@@ -2668,13 +2660,17 @@ where
         Self: Sized,
     {
         let start = inp.cursor();
+        let old_alt = inp.take_alt();
         let res = self.parser.go::<M>(inp);
 
         if res.is_err() {
-            let mut e = inp.take_alt();
+            // Can't fail!
+            let mut new_alt = inp.take_alt().unwrap();
             let span = inp.span_since(&start);
-            e.err = (self.mapper)(e.err, span, inp.state());
-            inp.errors.alt = Some(e);
+            new_alt.err = (self.mapper)(new_alt.err, span, inp.state());
+
+            inp.errors.alt = old_alt;
+            inp.add_alt_err(&new_alt.pos, new_alt.err);
         }
 
         res

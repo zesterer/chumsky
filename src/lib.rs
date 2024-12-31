@@ -357,12 +357,15 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Emit>(&mut inp);
-        let alt = inp.take_alt();
+        let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
+            let fake_span = inp.span_since(&inp.cursor());
+            E::Error::expected_found([], None, fake_span)
+        });
         let mut errs = own.into_errs();
         let out = match res {
             Ok(out) => Some(out),
             Err(()) => {
-                errs.push(alt.err);
+                errs.push(alt);
                 None
             }
         };
@@ -402,12 +405,15 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
         let res = self.then_ignore(end()).go::<Check>(&mut inp);
-        let alt = inp.take_alt();
+        let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
+            let fake_span = inp.span_since(&inp.cursor());
+            E::Error::expected_found([], None, fake_span)
+        });
         let mut errs = own.into_errs();
         let out = match res {
             Ok(()) => Some(()),
             Err(()) => {
-                errs.push(alt.err);
+                errs.push(alt);
                 None
             }
         };
@@ -3623,6 +3629,27 @@ mod tests {
                 Some('_'.into()),
                 (0..1).into(),
             )]),
+        );
+    }
+
+    #[test]
+    fn map_err() {
+        use crate::{error::Error, util::Maybe::Val};
+
+        let parser = just::<char, &str, extra::Err<_>>('"').map_err(move |e: Rich<char>| {
+            println!("Found = {:?}", e.found());
+            println!("Expected = {:?}", e.expected().collect::<Vec<_>>());
+            println!("Span = {:?}", e.span());
+            Error::<&str>::expected_found([Some(Val('"'))], e.found().copied().map(Val), *e.span())
+        });
+
+        assert_eq!(
+            parser.parse(r#"H"#).into_result(),
+            Err(vec![Error::<&str>::expected_found(
+                [Some(Val('"'))],
+                Some(Val('H')),
+                (0..1).into()
+            )])
         );
     }
 }

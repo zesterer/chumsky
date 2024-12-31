@@ -41,7 +41,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.take_alt();
+        let alt = inp.take_alt().unwrap(); // Can't fail!
         let out = match self.0.go::<M>(inp) {
             Ok(out) => out,
             Err(()) => {
@@ -110,7 +110,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.take_alt();
+        let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
@@ -170,7 +170,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
     ) -> PResult<M, O> {
-        let alt = inp.take_alt();
+        let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
