@@ -762,36 +762,6 @@ impl<'p> Seq<'p, char> for str {
     }
 }
 
-impl<'p> Seq<'p, char> for &'p str {
-    type Item<'a>
-        = char
-    where
-        Self: 'a;
-
-    type Iter<'a>
-        = core::str::Chars<'a>
-    where
-        Self: 'a;
-
-    #[inline(always)]
-    fn seq_iter(&self) -> Self::Iter<'_> {
-        self.chars()
-    }
-
-    #[inline(always)]
-    fn contains(&self, val: &char) -> bool {
-        str::contains(self, *val)
-    }
-
-    #[inline]
-    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
-    where
-        'p: 'b,
-    {
-        MaybeRef::Val(item)
-    }
-}
-
 impl<'p> Seq<'p, char> for String {
     type Item<'a>
         = char
@@ -822,6 +792,96 @@ impl<'p> Seq<'p, char> for String {
     }
 }
 
+impl<'p> Seq<'p, char> for &'p str {
+    type Item<'a>
+        = char
+    where
+        Self: 'a;
+
+    type Iter<'a>
+        = core::str::Chars<'a>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        self.chars()
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &char) -> bool {
+        str::contains(self, *val)
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
+}
+
+impl<'p> Seq<'p, &'p Grapheme> for &'p str {
+    type Item<'a>
+        = &'p Grapheme
+    where
+        Self: 'a;
+
+    type Iter<'a>
+        = GraphemesIter<'p>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        Graphemes::new(self).iter()
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &&'p Grapheme) -> bool {
+        Graphemes::new(self).contains(val)
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, &'p Grapheme>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
+}
+
+impl<'p> Seq<'p, &'p Grapheme> for &'p Graphemes {
+    type Item<'a>
+        = &'p Grapheme
+    where
+        Self: 'a;
+
+    type Iter<'a>
+        = GraphemesIter<'p>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn seq_iter(&self) -> Self::Iter<'_> {
+        self.iter()
+    }
+
+    #[inline(always)]
+    fn contains(&self, val: &&'p Grapheme) -> bool {
+        self.iter().any(|i| i == *val)
+    }
+
+    #[inline]
+    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, &'p Grapheme>
+    where
+        'p: 'b,
+    {
+        MaybeRef::Val(item)
+    }
+}
+
 /// A utility trait to abstract over *linear* container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
@@ -838,8 +898,10 @@ impl<'p, T> OrderedSeq<'p, T> for core::ops::RangeInclusive<T> where Self: Seq<'
 impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
 impl OrderedSeq<'_, char> for str {}
-impl<'p> OrderedSeq<'p, char> for &'p str {}
 impl OrderedSeq<'_, char> for String {}
+impl<'p> OrderedSeq<'p, char> for &'p str {}
+impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p str {}
+impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p Graphemes {}
 
 #[cfg(test)]
 mod test {

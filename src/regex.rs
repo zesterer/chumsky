@@ -4,13 +4,13 @@ use super::*;
 use regex_automata::{meta, Anchored, Input as ReInput};
 
 /// See [`regex()`].
-pub struct Regex<C: Char, I, E> {
+pub struct Regex<I, E> {
     regex: meta::Regex,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(C, E, I)>,
+    phantom: EmptyPhantom<(E, I)>,
 }
 
-impl<C: Char, I, E> Clone for Regex<C, I, E> {
+impl<I, E> Clone for Regex<I, E> {
     fn clone(&self) -> Self {
         Self {
             regex: self.regex.clone(),
@@ -20,21 +20,22 @@ impl<C: Char, I, E> Clone for Regex<C, I, E> {
 }
 
 /// Match input based on a provided regex pattern
-pub fn regex<C: Char, I, E>(pattern: &str) -> Regex<C, I, E> {
+pub fn regex<I, E>(pattern: &str) -> Regex<I, E> {
     Regex {
         regex: meta::Regex::new(pattern).expect("Failed to compile regex"),
         phantom: EmptyPhantom::new(),
     }
 }
 
-impl<'src, C, I, E> Parser<'src, I, &'src C::Str, E> for Regex<C, I, E>
+impl<'src, S, I, E> Parser<'src, I, &'src S, E> for Regex<I, E>
 where
-    C: Char,
-    I: StrInput<'src, C>,
+    I: StrInput<'src, Slice = &'src S>,
+    I::Token: Char,
+    S: ?Sized + AsRef<[u8]> + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src C::Str> {
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src S> {
         let before = inp.cursor();
 
         let re_in = ReInput::new(inp.full_slice())
@@ -62,7 +63,7 @@ where
         }
     }
 
-    go_extra!(&'src C::Str);
+    go_extra!(&'src S);
 }
 
 #[cfg(test)]
@@ -74,7 +75,11 @@ mod tests {
         use self::prelude::*;
         use self::regex::*;
 
-        fn parser<'src, C: Char, I: StrInput<'src, C>>() -> impl Parser<'src, I, Vec<&'src C::Str>>
+        fn parser<'src, S, I>() -> impl Parser<'src, I, Vec<&'src S>>
+        where
+            S: ?Sized + AsRef<[u8]> + 'src,
+            I: StrInput<'src, Slice = &'src S>,
+            I::Token: Char,
         {
             regex("[a-zA-Z_][a-zA-Z0-9_]*")
                 .padded()

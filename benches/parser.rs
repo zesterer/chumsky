@@ -245,9 +245,9 @@ fn bench_then(c: &mut Criterion) {
 
 #[cfg(feature = "regex")]
 fn bench_regex(c: &mut Criterion) {
-    let re_foo = regex::<_, _, extra::Default>("foo");
-    let re_foo2 = regex::<_, _, extra::Default>("[fF]oo");
-    let re_rep = regex::<_, _, extra::Default>("(?:abc){4}");
+    let re_foo = regex::<_, extra::Default>("foo");
+    let re_foo2 = regex::<_, extra::Default>("[fF]oo");
+    let re_rep = regex::<_, extra::Default>("(?:abc){4}");
 
     let mut group = c.benchmark_group("regex");
 
