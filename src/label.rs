@@ -3,19 +3,59 @@
 use super::*;
 
 /// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
-pub trait LabelError<'src, I: Input<'src>, L>: Error<'src, I> {
+pub trait LabelError<'src, I: Input<'src>, L>: Sized {
+    /// Create a new error describing a conflict between expected inputs and that which was actually found.
+    ///
+    /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
+    ///
+    /// An expected input having the value `None` indicates that the end of input was expected.
+    fn expected_found<E: IntoIterator<Item = L>>(
+        expected: E,
+        found: Option<MaybeRef<'src, I::Token>>,
+        span: I::Span,
+    ) -> Self;
+
+    /// Fast path for `a.merge(LabelError::expected_found(...))` that may incur less overhead by, for example, reusing allocations.
+    #[inline(always)]
+    fn merge_expected_found<E: IntoIterator<Item = L>>(
+        self,
+        expected: E,
+        found: Option<MaybeRef<'src, I::Token>>,
+        span: I::Span,
+    ) -> Self
+    where
+        Self: Error<'src, I>,
+    {
+        self.merge(LabelError::expected_found(expected, found, span))
+    }
+
+    /// Fast path for `a = LabelError::expected_found(...)` that may incur less overhead by, for example, reusing allocations.
+    #[inline(always)]
+    fn replace_expected_found<E: IntoIterator<Item = L>>(
+        self,
+        expected: E,
+        found: Option<MaybeRef<'src, I::Token>>,
+        span: I::Span,
+    ) -> Self {
+        LabelError::expected_found(expected, found, span)
+    }
+
     /// Annotate the expected patterns within this parser with the given label.
     ///
     /// In practice, this usually removes all other labels and expected tokens in favor of a single label that
     /// represents the overall pattern.
-    fn label_with(&mut self, label: L);
+    fn label_with(&mut self, label: L) {
+        #![allow(unused_variables)]
+    }
 
     /// Annotate this error, indicating that it occurred within the context denoted by the given label.
     ///
     /// A span that runs from the beginning of the context up until the error location is also provided.
     ///
     /// In practice, this usually means adding the context to a context 'stack', similar to a backtrace.
-    fn in_context(&mut self, label: L, span: I::Span);
+    fn in_context(&mut self, label: L, span: I::Span) {
+        #![allow(unused_variables)]
+    }
 }
 
 /// See [`Parser::labelled`].

@@ -15,7 +15,13 @@
 //! # Example
 //!
 //! ```
-//! use chumsky::{prelude::*, input::InputRef, extension::v1::{ExtParser, Ext}};
+//! use chumsky::{
+//!     prelude::*,
+//!     error::LabelError,
+//!     input::InputRef,
+//!     extension::v1::{ExtParser, Ext},
+//!     DefaultExpected,
+//! };
 //!
 //! // An example extension parser that expects a null byte.
 //! pub struct Null_;
@@ -32,9 +38,9 @@
 //!             // The next token was a null byte, meaning that parsing was successful
 //!             Some(b'\0') => Ok(()),
 //!             // The next token was something that wasn't a null byte, generate an error instead
-//!             found => Err(E::Error::expected_found(
+//!             found => Err(LabelError::<I, _>::expected_found(
 //!                 // Expected a null byte
-//!                 core::iter::once(Some(b'\0'.into())),
+//!                 [DefaultExpected::Token(b'\0'.into())],
 //!                 // Found whatever the token was instead
 //!                 found.copied().map(Into::into),
 //!                 // The span of the error is the span of the token that was found instead

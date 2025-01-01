@@ -1,8 +1,5 @@
-use chumsky::extra::ParserExtra;
-use chumsky::input::IoInput;
-use chumsky::prelude::*;
-use std::env;
-use std::fs::File;
+use chumsky::{error::LabelError, extra::ParserExtra, input::IoInput, prelude::*, util::MaybeRef};
+use std::{env, fs::File};
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -29,7 +26,10 @@ fn digits<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<Fi
         .map(|v| String::from_utf8_lossy(&v).to_string())
 }
 
-fn parser<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<File>, Vec<Foo>, E> {
+fn parser<'a, E: ParserExtra<'a, IoInput<File>>>() -> impl Parser<'a, IoInput<File>, Vec<Foo>, E>
+where
+    E::Error: LabelError<'a, IoInput<File>, MaybeRef<'a, u8>>,
+{
     group((ident(), just(b':').padded(), digits()))
         .map(|(name, _, digits)| Foo {
             name,

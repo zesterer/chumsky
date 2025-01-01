@@ -47,7 +47,7 @@ where
             Some(tok) => {
                 let span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(Some(None), Some(tok.into()), span);
+                inp.add_alt([DefaultExpected::EndOfInput], Some(tok.into()), span);
                 Err(())
             }
         }
@@ -192,7 +192,7 @@ where
                     let span = inp.span_since(before.cursor());
                     inp.rewind(before);
                     inp.add_alt(
-                        Some(Some(T::to_maybe_ref(next))),
+                        [DefaultExpected::Token(T::to_maybe_ref(next))],
                         found.map(|f| f.into()),
                         span,
                     );
@@ -270,7 +270,9 @@ where
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(
-                    self.seq.seq_iter().map(|e| Some(T::to_maybe_ref(e))),
+                    self.seq
+                        .seq_iter()
+                        .map(|e| DefaultExpected::Token(T::to_maybe_ref(e))),
                     found.map(|f| f.into()),
                     err_span,
                 );
@@ -344,7 +346,11 @@ where
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(None, found.map(|f| f.into()), err_span);
+                inp.add_alt(
+                    [DefaultExpected::SomethingElse],
+                    found.map(|f| f.into()),
+                    err_span,
+                );
                 Err(())
             }
         }
@@ -470,7 +476,7 @@ where
         };
         let err_span = inp.span_since(before.cursor());
         inp.rewind(before);
-        inp.add_alt(None, found, err_span);
+        inp.add_alt([DefaultExpected::SomethingElse], found, err_span);
         Err(())
     }
 
@@ -528,7 +534,7 @@ where
         };
         let err_span = inp.span_since(before.cursor());
         inp.rewind(before);
-        inp.add_alt(None, found, err_span);
+        inp.add_alt([DefaultExpected::SomethingElse], found, err_span);
         Err(())
     }
 
@@ -561,7 +567,7 @@ where
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(None, found.map(|f| f.into()), err_span);
+                inp.add_alt([DefaultExpected::Any], found.map(|f| f.into()), err_span);
                 Err(())
             }
         }
@@ -617,7 +623,7 @@ where
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(None, found.map(|f| f.into()), err_span);
+                inp.add_alt([DefaultExpected::Any], found.map(|f| f.into()), err_span);
                 Err(())
             }
         }
@@ -944,7 +950,7 @@ where
         if self.parsers.is_empty() {
             let offs = inp.cursor();
             let err_span = inp.span_since(&offs);
-            inp.add_alt(None, None, err_span);
+            inp.add_alt([], None, err_span);
             Err(())
         } else {
             let before = inp.save();

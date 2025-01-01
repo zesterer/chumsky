@@ -1634,12 +1634,15 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
-    pub(crate) fn add_alt<Exp: IntoIterator<Item = Option<MaybeRef<'src, I::Token>>>>(
+    pub(crate) fn add_alt<Exp, L>(
         &mut self,
         expected: Exp,
         found: Option<MaybeRef<'src, I::Token>>,
         span: I::Span,
-    ) {
+    ) where
+        Exp: IntoIterator<Item = L>,
+        E::Error: LabelError<'src, I, L>,
+    {
         if core::mem::size_of::<E::Error>() == 0 {
             return;
         }
@@ -1658,7 +1661,10 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
                     alt.err.replace_expected_found(expected, found, span),
                 ),
             },
-            None => Located::at(at.clone(), Error::expected_found(expected, found, span)),
+            None => Located::at(
+                at.clone(),
+                LabelError::expected_found(expected, found, span),
+            ),
         });
     }
 

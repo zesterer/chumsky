@@ -26,12 +26,16 @@ pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
     }
 }
 
+/// A label denoting a parseable number.
+pub struct ExpectedNumber;
+
 impl<'src, const F: u128, I, O, E> Parser<'src, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
     I: SliceInput<'src, Cursor = usize>,
     <I as SliceInput<'src>>::Slice: AsRef<[u8]>,
     E: ParserExtra<'src, I>,
+    E::Error: LabelError<'src, I, ExpectedNumber>,
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
@@ -45,7 +49,7 @@ where
             Err(_err) => {
                 // TODO: Improve error
                 let span = inp.span_since(&before);
-                inp.add_alt(None, None, span);
+                inp.add_alt([ExpectedNumber], None, span);
                 Err(())
             }
         }

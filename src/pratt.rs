@@ -1111,7 +1111,11 @@ mod tests {
         c: C,
         span: S,
     ) -> Simple<'src, char> {
-        <Simple<_> as Error<'_, &'_ str>>::expected_found(None, c.into(), span.into())
+        <Simple<_> as LabelError<&[char], _>>::expected_found::<[DefaultExpected<char>; 0]>(
+            [],
+            c.into(),
+            span.into(),
+        )
     }
 
     #[test]

@@ -208,6 +208,26 @@ where
     go_extra!(O);
 }
 
+/// Labels denoting a variety of text-related patterns.
+#[non_exhaustive]
+pub enum TextExpected {
+    /// Whitespace (for example: spaces, tabs, or newlines).
+    Whitespace,
+    /// Inline whitespace (for example: spaces or tabs).
+    InlineWhitespace,
+    /// A newline character or sequence.
+    Newline,
+    /// A numeric digit within the given radix range.
+    ///
+    /// For example:
+    ///
+    /// - `Digit(0..10)` implies any base-10 digit
+    /// - `Digit(1..16)` implies any non-zero hexadecimal digit
+    Digit(Range<u32>),
+    /// An identifier, either ASCII or unicode.
+    Identifier,
+}
+
 /// A parser that accepts (and ignores) any number of whitespace characters.
 ///
 /// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
@@ -230,9 +250,20 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
+    E::Error: LabelError<'src, I, TextExpected>,
 {
-    select! { c if (c as I::Token).is_whitespace() => () }
-        .ignored()
+    any()
+        .try_map(|c: I::Token, span| {
+            if c.is_whitespace() {
+                Ok(())
+            } else {
+                Err(LabelError::expected_found(
+                    [TextExpected::Whitespace],
+                    Some(MaybeRef::Val(c)),
+                    span,
+                ))
+            }
+        })
         .repeated()
 }
 
@@ -260,9 +291,20 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
+    E::Error: LabelError<'src, I, TextExpected>,
 {
-    select! { c if (c as I::Token).is_inline_whitespace() => () }
-        .ignored()
+    any()
+        .try_map(|c: I::Token, span| {
+            if c.is_inline_whitespace() {
+                Ok(())
+            } else {
+                Err(LabelError::expected_found(
+                    [TextExpected::InlineWhitespace],
+                    Some(MaybeRef::Val(c)),
+                    span,
+                ))
+            }
+        })
         .repeated()
 }
 
@@ -303,10 +345,31 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
+    E::Error: LabelError<'src, I, TextExpected>,
 {
-    just("\r\n")
-        .ignored()
-        .or(any().filter(I::Token::is_newline).ignored())
+    custom(|inp| {
+        let before = inp.cursor();
+
+        if inp.peek().map_or(false, |c: I::Token| c.to_ascii() == Some(b'\r')) {
+            inp.skip();
+            if inp.peek().map_or(false, |c: I::Token| c.to_ascii() == Some(b'\n')) {
+                inp.skip();
+            }
+            Ok(())
+        } else {
+            let c = inp.next();
+            if c.map_or(false, |c: I::Token| c.is_newline()) {
+                Ok(())
+            } else {
+                let span = inp.span_since(&before);
+                Err(LabelError::expected_found(
+                    [TextExpected::Newline],
+                    c.map(MaybeRef::Val),
+                    span,
+                ))
+            }
+        }
+    })
 }
 
 /// A parser that accepts one or more ASCII digits.
@@ -338,14 +401,18 @@ where
     I: ValueInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
+    E::Error: LabelError<'src, I, TextExpected>,
 {
     any()
-        // Use try_map over filter to get a better error on failure
         .try_map(move |c: I::Token, span| {
             if c.is_digit(radix) {
                 Ok(c)
             } else {
-                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                Err(LabelError::expected_found(
+                    [TextExpected::Digit(0..radix)],
+                    Some(MaybeRef::Val(c)),
+                    span,
+                ))
             }
         })
         .repeated()
@@ -388,18 +455,35 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
+    E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
-        // Use try_map over filter to get a better error on failure
         .try_map(move |c: I::Token, span| {
             if c.is_digit(radix) && c != I::Token::digit_zero() {
                 Ok(c)
             } else {
-                Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                Err(LabelError::expected_found(
+                    [TextExpected::Digit(1..radix)],
+                    Some(MaybeRef::Val(c)),
+                    span,
+                ))
             }
         })
-        // This error never appears due to `repeated` so can use `filter`
-        .then(select! { c if (c as I::Token).is_digit(radix) => () }.repeated())
+        .then(
+            any()
+                .try_map(move |c: I::Token, span| {
+                    if c.is_digit(radix) {
+                        Ok(())
+                    } else {
+                        Err(LabelError::expected_found(
+                            [TextExpected::Digit(0..radix)],
+                            Some(MaybeRef::Val(c)),
+                            span,
+                        ))
+                    }
+                })
+                .repeated(),
+        )
         .ignored()
         .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
@@ -422,18 +506,33 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
+        E::Error: LabelError<'src, I, TextExpected>,
     {
         any()
-            // Use try_map over filter to get a better error on failure
             .try_map(|c: I::Token, span| {
                 if c.to_ascii().map(|i| i.is_ascii_alphabetic() || i == b'_').unwrap_or(false) {
                     Ok(c)
                 } else {
-                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier],
+                        Some(MaybeRef::Val(c)),
+                        span,
+                    ))
                 }
             })
             .then(
-                select! { c if (c as I::Token).to_ascii().map(|i| i.is_ascii_alphabetic() || i == b'_').unwrap_or(false) => () }
+                any()
+                    .try_map(|c: I::Token, span| {
+                        if c.to_ascii().map_or(false, |i| i.is_ascii_alphabetic() || i == b'_') {
+                            Ok(())
+                        } else {
+                            Err(LabelError::expected_found(
+                                [TextExpected::Identifier],
+                                Some(MaybeRef::Val(c)),
+                                span,
+                            ))
+                        }
+                    })
                     .repeated(),
             )
             .to_slice()
@@ -468,6 +567,7 @@ pub mod ascii {
         I::Token: Char + fmt::Debug + 'src,
         S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
+        E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -490,7 +590,7 @@ pub mod ascii {
                 if &s == keyword.borrow() {
                     Ok(())
                 } else {
-                    Err(Error::expected_found(None, None, span))
+                    Err(LabelError::expected_found([keyword.clone()], None, span))
                 }
             })
             .to_slice()
@@ -819,17 +919,35 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
+        E::Error: LabelError<'src, I, TextExpected>,
     {
         any()
-            // Use try_map over filter to get a better error on failure
             .try_map(|c: I::Token, span| {
                 if c.is_ident_start() {
                     Ok(c)
                 } else {
-                    Err(Error::expected_found([], Some(MaybeRef::Val(c)), span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier],
+                        Some(MaybeRef::Val(c)),
+                        span,
+                    ))
                 }
             })
-            .then(select! { c if (c as I::Token).is_ident_continue() => () }.repeated())
+            .then(
+                any()
+                    .try_map(|c: I::Token, span| {
+                        if c.is_ident_continue() {
+                            Ok(c)
+                        } else {
+                            Err(LabelError::expected_found(
+                                [TextExpected::Identifier],
+                                Some(MaybeRef::Val(c)),
+                                span,
+                            ))
+                        }
+                    })
+                    .repeated(),
+            )
             .to_slice()
     }
 
@@ -862,6 +980,7 @@ pub mod unicode {
         I::Token: Char + fmt::Debug + 'src,
         S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
+        E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -888,7 +1007,7 @@ pub mod unicode {
                 if &s == keyword.borrow() {
                     Ok(())
                 } else {
-                    Err(Error::expected_found(None, None, span))
+                    Err(LabelError::expected_found([keyword.clone()], None, span))
                 }
             })
             .to_slice()
