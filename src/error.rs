@@ -283,19 +283,19 @@ impl<'a, T> From<MaybeRef<'a, T>> for RichPattern<'a, T> {
     }
 }
 
-impl<'a, T> From<&'static str> for RichPattern<'a, T> {
+impl<T> From<&'static str> for RichPattern<'_, T> {
     fn from(label: &'static str) -> Self {
         Self::Label(Cow::Borrowed(label))
     }
 }
 
-impl<'a, T> From<String> for RichPattern<'a, T> {
+impl<T> From<String> for RichPattern<'_, T> {
     fn from(label: String) -> Self {
         Self::Label(Cow::Owned(label))
     }
 }
 
-impl<'a> From<char> for RichPattern<'a, char> {
+impl From<char> for RichPattern<'_, char> {
     fn from(c: char) -> Self {
         Self::Token(MaybeRef::Val(c))
     }

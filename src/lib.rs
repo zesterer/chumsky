@@ -198,7 +198,7 @@ pub enum DefaultExpected<'a, T> {
     EndOfInput,
 }
 
-impl<'a, T> DefaultExpected<'a, T> {
+impl<T> DefaultExpected<'_, T> {
     /// Convert this [`DefaultExpected`] into an owned version of itself, cloning any inner references if required.
     #[inline]
     pub fn into_owned(self) -> DefaultExpected<'static, T>
@@ -3644,7 +3644,7 @@ mod tests {
                     LabelError::<&str, char>::expected_found(
                         ['n'],
                         e.found().map(|i| From::from(*i)),
-                        e.span().clone(),
+                        *e.span(),
                     )
                 }))
                 .ignored()
