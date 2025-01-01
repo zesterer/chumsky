@@ -69,7 +69,6 @@ pub mod extra;
 pub mod guide;
 pub mod input;
 pub mod inspector;
-#[cfg(feature = "label")]
 pub mod label;
 #[cfg(feature = "lexical-numbers")]
 pub mod number;
@@ -136,8 +135,6 @@ use hashbrown::HashMap;
 #[cfg(feature = "serde")]
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-#[cfg(feature = "label")]
-use self::label::{LabelError, Labelled};
 use self::{
     combinator::*,
     container::*,
@@ -147,6 +144,7 @@ use self::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
     inspector::Inspector,
+    label::{LabelError, Labelled},
     prelude::*,
     primitive::Any,
     private::{Check, Emit, IPResult, Located, MaybeUninitExt, Mode, PResult, Sealed},
@@ -185,6 +183,36 @@ impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
 pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + 'b;
 #[cfg(feature = "pratt")]
 pub(crate) type DynOperator<'src, 'b, I, O, E> = dyn pratt::Operator<'src, I, O, E> + 'b;
+
+/// Labels corresponding to a variety of patterns.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum DefaultExpected<'a, T> {
+    /// A specific token was expected.
+    Token(MaybeRef<'a, T>),
+    /// Anything other than the end of input was expected.
+    Any,
+    /// Something other than the provided input was expected.
+    SomethingElse,
+    /// The end of input was expected.
+    EndOfInput,
+}
+
+impl<T> DefaultExpected<'_, T> {
+    /// Convert this [`DefaultExpected`] into an owned version of itself, cloning any inner references if required.
+    #[inline]
+    pub fn into_owned(self) -> DefaultExpected<'static, T>
+    where
+        T: Clone,
+    {
+        match self {
+            Self::Token(tok) => DefaultExpected::Token(tok.into_owned()),
+            Self::Any => DefaultExpected::Any,
+            Self::SomethingElse => DefaultExpected::SomethingElse,
+            Self::EndOfInput => DefaultExpected::EndOfInput,
+        }
+    }
+}
 
 /// The result of performing a parse on an input with [`Parser`].
 ///
@@ -359,6 +387,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         let res = self.then_ignore(end()).go::<Emit>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
+            // TODO: Why is this needed?
             E::Error::expected_found([], None, fake_span)
         });
         let mut errs = own.into_errs();
@@ -407,6 +436,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         let res = self.then_ignore(end()).go::<Check>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
+            // TODO: Why is this needed?
             E::Error::expected_found([], None, fake_span)
         });
         let mut errs = own.into_errs();
@@ -837,7 +867,6 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// within the parser. For example, labelling a parser for an expression would yield "expected expression" errors
     /// rather than "expected integer, string, binary op, etc." errors.
     // TODO: Example
-    #[cfg(feature = "label")]
     fn labelled<L>(self, label: L) -> Labelled<Self, L>
     where
         Self: Sized,
@@ -1852,10 +1881,9 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// To show the difference in behavior from [`Parser::try_map`]:
     ///
     /// ```
-    /// # use chumsky::prelude::*;
-    /// # use chumsky::util::MaybeRef;
-    /// # use chumsky::error::Error;
-    /// // start with the same large_int validator
+    /// # use chumsky::{text::TextExpected, util::MaybeRef, error::LabelError, prelude::*};
+    ///
+    /// // Start with the same large_int validator
     /// let large_int_val = text::int::<_, extra::Err<Rich<char>>>(10)
     ///         .from_str()
     ///         .unwrapped()
@@ -1897,7 +1925,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///     multi_step_val.parse("100 2").into_result(),
     ///     Err(vec![
     ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
-    ///         <Rich<char> as Error<&str>>::expected_found([], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<&str>::IdentifierPart], Some(MaybeRef::Val('2')), (4..5).into()),
     ///     ])
     /// );
     ///
@@ -3397,24 +3425,26 @@ mod tests {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     struct MyErr(&'static str);
 
-    impl<'src, I> crate::Error<'src, I> for MyErr
+    impl<'src, I: Input<'src>> crate::Error<'src, I> for MyErr {
+        fn merge(self, other: Self) -> Self {
+            if other == MyErr("special") {
+                MyErr("special")
+            } else {
+                self
+            }
+        }
+    }
+
+    impl<'src, I> crate::LabelError<'src, I, crate::DefaultExpected<'src, I::Token>> for MyErr
     where
         I: Input<'src>,
     {
-        fn expected_found<E: IntoIterator<Item = Option<crate::MaybeRef<'src, I::Token>>>>(
+        fn expected_found<E: IntoIterator<Item = crate::DefaultExpected<'src, I::Token>>>(
             _expected: E,
             _found: Option<crate::MaybeRef<'src, I::Token>>,
             _span: I::Span,
         ) -> Self {
             MyErr("expected found")
-        }
-
-        fn merge(self, other: Self) -> Self {
-            if self == MyErr("special") || other == MyErr("special") {
-                MyErr("special")
-            } else {
-                self
-            }
         }
     }
 
@@ -3535,7 +3565,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "label")]
     #[test]
     fn label() {
         use crate::label::LabelError;
@@ -3544,20 +3573,20 @@ mod tests {
             just("hello").labelled("greeting").as_context().ignored()
         }
 
-        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
-            Some(Some('h'.into())),
+        let mut err = <Rich<_> as crate::LabelError<&str, char>>::expected_found(
+            ['h'],
             Some('b'.into()),
             (0..1).into(),
         );
-        <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
+        <Rich<_, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
         assert_eq!(parser().parse("bye").into_errors(), vec![err]);
 
-        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
-            Some(Some('l'.into())),
+        let mut err = <Rich<_> as crate::LabelError<&str, char>>::expected_found(
+            ['l'],
             Some('p'.into()),
             (3..4).into(),
         );
-        <Rich<_, _, _> as LabelError<&str, _>>::in_context(&mut err, "greeting", (0..3).into());
+        <Rich<_, _> as LabelError<&str, _>>::in_context(&mut err, "greeting", (0..3).into());
         assert_eq!(parser().parse("help").into_errors(), vec![err]);
 
         fn parser2<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
@@ -3567,19 +3596,16 @@ mod tests {
                 .ignored()
         }
 
-        let mut err = <Rich<_> as crate::Error<&str>>::expected_found(
-            Some(Some('h'.into())),
-            None,
-            (0..7).into(),
-        );
-        <Rich<_, _, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
+        let mut err =
+            <Rich<_> as crate::LabelError<&str, char>>::expected_found(['h'], None, (0..7).into());
+        <Rich<_, _> as LabelError<&str, _>>::label_with(&mut err, "greeting");
         assert_eq!(parser2().parse("goodbye").into_errors(), vec![err]);
     }
 
     #[test]
     #[allow(dead_code)]
     fn invalid_escape() {
-        use crate::error::Error;
+        use crate::LabelError;
 
         fn string<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<Rich<'src, char>>> {
             let quote = just("\"");
@@ -3596,27 +3622,29 @@ mod tests {
 
         assert_eq!(
             string().parse(r#""Hello\m""#).into_result(),
-            Err(vec![<Rich<char> as Error::<&str>>::expected_found(
-                Some(Some('n'.into())),
-                Some('m'.into()),
-                (7..8).into(),
-            )]),
+            Err(vec![
+                <Rich<char> as LabelError::<&str, char>>::expected_found(
+                    ['n'],
+                    Some('m'.into()),
+                    (7..8).into(),
+                )
+            ]),
         );
     }
 
     #[test]
     #[allow(dead_code)]
     fn map_err_missed_info() {
-        use crate::error::Error;
+        use crate::LabelError;
 
         fn zero<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
             just("-")
                 .or_not()
                 .then(just("0").map_err(move |e: Rich<_>| {
-                    Error::<&str>::expected_found(
-                        vec![Some('n'.into())],
+                    LabelError::<&str, char>::expected_found(
+                        ['n'],
                         e.found().map(|i| From::from(*i)),
-                        e.span().clone(),
+                        *e.span(),
                     )
                 }))
                 .ignored()
@@ -3624,30 +3652,36 @@ mod tests {
 
         assert_eq!(
             zero().parse("_0").into_result(),
-            Err(vec![<Rich<char> as Error::<&str>>::expected_found(
-                vec![Some('-'.into()), Some('n'.into())],
-                Some('_'.into()),
-                (0..1).into(),
-            )]),
+            Err(vec![
+                <Rich<char> as LabelError::<&str, char>>::expected_found(
+                    ['-', 'n'],
+                    Some('_'.into()),
+                    (0..1).into(),
+                )
+            ]),
         );
     }
 
     #[test]
     fn map_err() {
-        use crate::{error::Error, util::Maybe::Val};
+        use crate::LabelError;
 
         let parser = just::<char, &str, extra::Err<_>>('"').map_err(move |e: Rich<char>| {
             println!("Found = {:?}", e.found());
             println!("Expected = {:?}", e.expected().collect::<Vec<_>>());
             println!("Span = {:?}", e.span());
-            Error::<&str>::expected_found([Some(Val('"'))], e.found().copied().map(Val), *e.span())
+            LabelError::<&str, char>::expected_found(
+                ['"'],
+                e.found().copied().map(Into::into),
+                *e.span(),
+            )
         });
 
         assert_eq!(
             parser.parse(r#"H"#).into_result(),
-            Err(vec![Error::<&str>::expected_found(
-                [Some(Val('"'))],
-                Some(Val('H')),
+            Err(vec![LabelError::<&str, char>::expected_found(
+                ['"'],
+                Some('H'.into()),
                 (0..1).into()
             )])
         );

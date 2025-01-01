@@ -254,7 +254,7 @@ where
                 Ok(M::bind(|| out))
             } else {
                 let err_span = inp.span_since(&before);
-                inp.add_alt(None, None, err_span);
+                inp.add_alt([DefaultExpected::SomethingElse], None, err_span);
                 Err(())
             }
         })
@@ -814,7 +814,8 @@ where
                     inp.add_alt_err(&before.inner /*&err.pos*/, err.err);
                 } else {
                     let err_span = inp.span_since(&before);
-                    inp.add_alt(None, None, err_span);
+                    // TODO: Is this an appropriate way to handle infinite recursion?
+                    inp.add_alt([], None, err_span);
                 }
                 return Err(());
             }
@@ -1992,7 +1993,7 @@ where
 {
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, C> {
-        let before = inp.cursor();
+        // let before = inp.cursor();
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
         for idx in 0..C::LEN {
@@ -2001,8 +2002,9 @@ where
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
-                    let span = inp.span_since(&before);
-                    inp.add_alt(None, None, span);
+                    // let span = inp.span_since(&before);
+                    // We don't add an alt here because we assume the inner parser will. Is this safe to assume?
+                    // inp.add_alt([ExpectedMoreElements(Some(C::LEN - idx))], None, span);
                     // SAFETY: We're guaranteed to have initialized up to `idx` values
                     M::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
@@ -2131,7 +2133,11 @@ where
         match result {
             Ok(()) => {
                 let found = inp.next_inner();
-                inp.add_alt(None, found.map(|f| f.into()), result_span);
+                inp.add_alt(
+                    [DefaultExpected::SomethingElse],
+                    found.map(|f| f.into()),
+                    result_span,
+                );
                 Err(())
             }
             Err(()) => Ok(M::bind(|| ())),

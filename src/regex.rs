@@ -57,7 +57,7 @@ where
             None => {
                 // TODO: Improve error
                 let span = inp.span_since(&before);
-                inp.add_alt(None, None, span);
+                inp.add_alt([DefaultExpected::SomethingElse], None, span);
                 Err(())
             }
         }

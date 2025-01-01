@@ -18,7 +18,7 @@ impl<I: Iterator> Stream<I> {
     /// # use chumsky::{prelude::*, input::Stream};
     /// let stream = Stream::from_iter((0..10).map(|i| char::from_digit(i, 10).unwrap()));
     ///
-    /// let parser = text::digits::<_, extra::Err<Simple<_>>>(10).collect::<String>();
+    /// let parser = any::<_, extra::Err<Simple<_>>>().filter(|c: &char| c.is_ascii_digit()).repeated().collect::<String>();
     ///
     /// assert_eq!(parser.parse(stream).into_result().as_deref(), Ok("0123456789"));
     /// ```
