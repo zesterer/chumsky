@@ -13,6 +13,7 @@ exclude = [
 	"/benches/samples/*",
 ]
 build = "build.rs"
+rust-version = "1.65"
 
 [features]
 default = ["std", "stacker"]
