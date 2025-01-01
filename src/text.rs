@@ -11,6 +11,8 @@ use alloc::string::ToString;
 
 use super::*;
 
+use alloc::string::ToString;
+
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should

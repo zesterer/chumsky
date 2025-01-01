@@ -1925,7 +1925,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///     multi_step_val.parse("100 2").into_result(),
     ///     Err(vec![
     ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
-    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::Identifier], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<char>::IdentifierPart], Some(MaybeRef::Val('2')), (4..5).into()),
     ///     ])
     /// );
     ///
