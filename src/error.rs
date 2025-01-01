@@ -237,6 +237,8 @@ pub enum RichPattern<'a, T> {
     Token(MaybeRef<'a, T>),
     /// A labelled pattern.
     Label(Cow<'a, str>),
+    /// A specific keyword.
+    Identifier(String),
     /// Anything other than the end of input.
     Any,
     /// Something other than the provided input.
@@ -256,8 +258,11 @@ impl<'a, T> From<DefaultExpected<'a, T>> for RichPattern<'a, T> {
     }
 }
 
-impl<'a, T> From<text::TextExpected> for RichPattern<'a, T> {
-    fn from(expected: text::TextExpected) -> Self {
+impl<'a, I: StrInput<'a>, T> From<text::TextExpected<'a, I>> for RichPattern<'a, T>
+where
+    I::Token: Char,
+{
+    fn from(expected: text::TextExpected<'a, I>) -> Self {
         match expected {
             text::TextExpected::Whitespace => Self::Label(Cow::Borrowed("whitespace")),
             text::TextExpected::InlineWhitespace => Self::Label(Cow::Borrowed("inline whitespace")),
@@ -266,7 +271,8 @@ impl<'a, T> From<text::TextExpected> for RichPattern<'a, T> {
                 Self::Label(Cow::Borrowed("non-zero digit"))
             }
             text::TextExpected::Digit(_) => Self::Label(Cow::Borrowed("digit")),
-            text::TextExpected::Identifier => Self::Label(Cow::Borrowed("identifier")),
+            text::TextExpected::IdentifierPart => Self::Label(Cow::Borrowed("identifier")),
+            text::TextExpected::Identifier(i) => Self::Identifier(I::stringify(i)),
         }
     }
 }
@@ -307,6 +313,7 @@ impl<'a, T> RichPattern<'a, T> {
         match self {
             Self::Token(t) => RichPattern::Token(f(t.into_inner()).into()),
             Self::Label(l) => RichPattern::Label(l),
+            Self::Identifier(i) => RichPattern::Identifier(i),
             Self::Any => RichPattern::Any,
             Self::SomethingElse => RichPattern::SomethingElse,
             Self::EndOfInput => RichPattern::EndOfInput,
@@ -321,6 +328,7 @@ impl<'a, T> RichPattern<'a, T> {
         match self {
             Self::Token(tok) => RichPattern::Token(tok.into_owned()),
             Self::Label(l) => RichPattern::Label(Cow::Owned(l.into_owned())),
+            Self::Identifier(i) => RichPattern::Identifier(i),
             Self::Any => RichPattern::Any,
             Self::SomethingElse => RichPattern::SomethingElse,
             Self::EndOfInput => RichPattern::EndOfInput,
@@ -339,6 +347,7 @@ impl<'a, T> RichPattern<'a, T> {
                 write!(f, "'")
             }
             Self::Label(l) => write!(f, "{l}"),
+            Self::Identifier(i) => write!(f, "'{i}'"),
             Self::Any => write!(f, "any"),
             Self::SomethingElse => write!(f, "something else"),
             Self::EndOfInput => write!(f, "end of input"),
@@ -772,7 +781,11 @@ fn write_token<T>(
     tok: Option<&T>,
 ) -> fmt::Result {
     match tok {
-        Some(tok) => fmt_token(tok, f),
+        Some(tok) => {
+            write!(f, "'")?;
+            fmt_token(tok, f)?;
+            write!(f, "'")
+        }
         None => write!(f, "end of input"),
     }
 }

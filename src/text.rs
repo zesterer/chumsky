@@ -7,6 +7,7 @@
 //! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
 
 use crate::prelude::*;
+use alloc::string::ToString;
 
 use super::*;
 
@@ -210,7 +211,10 @@ where
 
 /// Labels denoting a variety of text-related patterns.
 #[non_exhaustive]
-pub enum TextExpected {
+pub enum TextExpected<'src, I: StrInput<'src>>
+where
+    I::Token: Char,
+{
     /// Whitespace (for example: spaces, tabs, or newlines).
     Whitespace,
     /// Inline whitespace (for example: spaces or tabs).
@@ -224,8 +228,10 @@ pub enum TextExpected {
     /// - `Digit(0..10)` implies any base-10 digit
     /// - `Digit(1..16)` implies any non-zero hexadecimal digit
     Digit(Range<u32>),
-    /// An identifier, either ASCII or unicode.
-    Identifier,
+    /// Part of an identifier, either ASCII or unicode.
+    IdentifierPart,
+    /// A specific identifier.
+    Identifier(I::Slice),
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
@@ -250,7 +256,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected>,
+    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
         .try_map(|c: I::Token, span| {
@@ -291,7 +297,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected>,
+    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
         .try_map(|c: I::Token, span| {
@@ -341,18 +347,24 @@ where
 #[must_use]
 pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy
 where
-    I: ValueInput<'src>,
+    I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
-    E::Error: LabelError<'src, I, TextExpected>,
+    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     custom(|inp| {
         let before = inp.cursor();
 
-        if inp.peek().map_or(false, |c: I::Token| c.to_ascii() == Some(b'\r')) {
+        if inp
+            .peek()
+            .map_or(false, |c: I::Token| c.to_ascii() == Some(b'\r'))
+        {
             inp.skip();
-            if inp.peek().map_or(false, |c: I::Token| c.to_ascii() == Some(b'\n')) {
+            if inp
+                .peek()
+                .map_or(false, |c: I::Token| c.to_ascii() == Some(b'\n'))
+            {
                 inp.skip();
             }
             Ok(())
@@ -398,10 +410,10 @@ pub fn digits<'src, I, E>(
     radix: u32,
 ) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy, I::Token, I, E>
 where
-    I: ValueInput<'src>,
+    I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected>,
+    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
         .try_map(move |c: I::Token, span| {
@@ -455,7 +467,8 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
+    E::Error:
+        LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
         .try_map(move |c: I::Token, span| {
@@ -506,15 +519,18 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected>,
+        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
     {
         any()
             .try_map(|c: I::Token, span| {
-                if c.to_ascii().map(|i| i.is_ascii_alphabetic() || i == b'_').unwrap_or(false) {
+                if c.to_ascii()
+                    .map(|i| i.is_ascii_alphabetic() || i == b'_')
+                    .unwrap_or(false)
+                {
                     Ok(c)
                 } else {
                     Err(LabelError::expected_found(
-                        [TextExpected::Identifier],
+                        [TextExpected::IdentifierPart],
                         Some(MaybeRef::Val(c)),
                         span,
                     ))
@@ -523,11 +539,13 @@ pub mod ascii {
             .then(
                 any()
                     .try_map(|c: I::Token, span| {
-                        if c.to_ascii().map_or(false, |i| i.is_ascii_alphabetic() || i == b'_') {
+                        if c.to_ascii()
+                            .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
+                        {
                             Ok(())
                         } else {
                             Err(LabelError::expected_found(
-                                [TextExpected::Identifier],
+                                [TextExpected::IdentifierPart],
                                 Some(MaybeRef::Val(c)),
                                 span,
                             ))
@@ -567,7 +585,7 @@ pub mod ascii {
         I::Token: Char + fmt::Debug + 'src,
         S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -590,7 +608,11 @@ pub mod ascii {
                 if &s == keyword.borrow() {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found([keyword.clone()], None, span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier(*keyword.borrow())],
+                        None,
+                        span,
+                    ))
                 }
             })
             .to_slice()
@@ -777,7 +799,12 @@ pub mod unicode {
     }
 
     impl Sealed for &'_ Graphemes {}
-    impl<'src> StrInput<'src> for &'src Graphemes {}
+    impl<'src> StrInput<'src> for &'src Graphemes {
+        #[doc(hidden)]
+        fn stringify(slice: Self::Slice) -> String {
+            slice.to_string()
+        }
+    }
 
     impl<'src> Input<'src> for &'src Graphemes {
         type Cursor = usize;
@@ -919,7 +946,7 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected>,
+        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
     {
         any()
             .try_map(|c: I::Token, span| {
@@ -927,7 +954,7 @@ pub mod unicode {
                     Ok(c)
                 } else {
                     Err(LabelError::expected_found(
-                        [TextExpected::Identifier],
+                        [TextExpected::IdentifierPart],
                         Some(MaybeRef::Val(c)),
                         span,
                     ))
@@ -940,7 +967,7 @@ pub mod unicode {
                             Ok(c)
                         } else {
                             Err(LabelError::expected_found(
-                                [TextExpected::Identifier],
+                                [TextExpected::IdentifierPart],
                                 Some(MaybeRef::Val(c)),
                                 span,
                             ))
@@ -978,9 +1005,9 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: Borrow<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -1004,7 +1031,7 @@ pub mod unicode {
         */
         ident()
             .try_map(move |s: I::Slice, span| {
-                if &s == keyword.borrow() {
+                if keyword.borrow() == &s {
                     Ok(())
                 } else {
                     Err(LabelError::expected_found([keyword.clone()], None, span))

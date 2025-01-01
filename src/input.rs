@@ -10,6 +10,7 @@ use inspector::Inspector;
 pub use crate::stream::{BoxedExactSizeStream, BoxedStream, IterInput, Stream};
 
 use super::*;
+use alloc::string::ToString;
 #[cfg(feature = "std")]
 use std::io::{BufReader, Read, Seek};
 
@@ -182,7 +183,7 @@ pub trait ExactSizeInput<'src>: Input<'src> {
 /// Implemented by inputs that represent slice-like streams of input tokens.
 pub trait SliceInput<'src>: ExactSizeInput<'src> {
     /// The unsized slice type of this input. For [`&str`] it's `&str`, and for [`&[T]`] it will be `&[T]`.
-    type Slice;
+    type Slice: Copy;
 
     /// Get the full slice of the input
     ///
@@ -213,6 +214,8 @@ pub trait StrInput<'src>: Sealed + ValueInput<'src, Cursor = usize> + SliceInput
 where
     Self::Token: Char,
 {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String;
 }
 
 /// Implemented by inputs that can have tokens borrowed from them.
@@ -298,7 +301,12 @@ impl<'src> ValueInput<'src> for &'src str {
 }
 
 impl Sealed for &str {}
-impl<'src> StrInput<'src> for &'src str {}
+impl<'src> StrInput<'src> for &'src str {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String {
+        slice.to_string()
+    }
+}
 
 impl<'src> SliceInput<'src> for &'src str {
     type Slice = &'src str;
@@ -365,7 +373,16 @@ impl<'src, T> ExactSizeInput<'src> for &'src [T] {
 }
 
 impl Sealed for &[u8] {}
-impl<'src> StrInput<'src> for &'src [u8] {}
+impl<'src> StrInput<'src> for &'src [u8] {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String {
+        slice
+            .iter()
+            // .map(|e| core::ascii::Char::from_u8(e).unwrap_or(AsciiChar::Substitute).to_char())
+            .map(|e| char::from(*e))
+            .collect()
+    }
+}
 
 impl<'src, T> SliceInput<'src> for &'src [T] {
     type Slice = &'src [T];
@@ -449,7 +466,12 @@ impl<'src, T: 'src, const N: usize> ExactSizeInput<'src> for &'src [T; N] {
 }
 
 impl<const N: usize> Sealed for &[u8; N] {}
-impl<'src, const N: usize> StrInput<'src> for &'src [u8; N] {}
+impl<'src, const N: usize> StrInput<'src> for &'src [u8; N] {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String {
+        <&[u8]>::stringify(slice)
+    }
+}
 
 impl<'src, T: 'src, const N: usize> SliceInput<'src> for &'src [T; N] {
     type Slice = &'src [T];
@@ -807,6 +829,10 @@ where
     S::Offset: From<<I::Span as Span>::Offset>,
     F: Fn(I::Span) -> S,
 {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String {
+        I::stringify(slice)
+    }
 }
 
 /// An input wrapper that returns a custom span, with the user-defined context
@@ -952,6 +978,10 @@ where
     S::Context: Clone + 'src,
     S::Offset: From<<I::Span as Span>::Offset>,
 {
+    #[doc(hidden)]
+    fn stringify(slice: Self::Slice) -> String {
+        I::stringify(slice)
+    }
 }
 
 /// Input type which supports seekable readers. Uses a [`BufReader`] internally to buffer input and
