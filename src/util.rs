@@ -2,10 +2,7 @@
 
 use super::*;
 
-use core::{
-    hash::Hasher,
-    ops::{Deref, DerefMut},
-};
+use core::hash::Hasher;
 
 /// A value that may be a `T` or a mutable reference to a `T`.
 pub type MaybeMut<'a, T> = Maybe<T, &'a mut T>;

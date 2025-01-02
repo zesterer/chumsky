@@ -6,10 +6,6 @@
 //! beside his pillar and woken him with a start."*
 use super::*;
 use crate::input::{Checkpoint, Cursor};
-use core::ops::{Deref, DerefMut};
-
-#[allow(unused)] // for intra-doc links
-use crate::Parser;
 
 /// A type that receives event hooks when certain parsing actions occur.
 ///
