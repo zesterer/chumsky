@@ -281,7 +281,7 @@ impl Solver<'_> {
             }
             Expr::Let { lhs, rhs, then } => {
                 let rhs_ty = self.check(rhs, env);
-                env.push((&**lhs, rhs_ty));
+                env.push((**lhs, rhs_ty));
                 let out_ty = self.check(then, env);
                 env.pop();
                 out_ty
