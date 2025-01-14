@@ -92,6 +92,8 @@ where
     where
         I: 'src;
 
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -165,6 +167,8 @@ where
         = (A::IterState<M>, A::Config)
     where
         I: 'src;
+
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
 
     fn make_iter<M: Mode>(
         &self,
@@ -310,6 +314,8 @@ where
     where
         I: 'src;
 
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -381,6 +387,8 @@ where
         = A::IterState<M>
     where
         I: 'src;
+
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
 
     #[inline(always)]
     fn make_iter<M: Mode>(
@@ -460,6 +468,8 @@ where
         = A::IterState<M>
     where
         I: 'src;
+
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
 
     #[inline(always)]
     fn make_iter<M: Mode>(
@@ -1052,6 +1062,8 @@ where
     where
         I: 'src;
 
+    const NONCONSUMPTION_IS_OK: bool = B::NONCONSUMPTION_IS_OK;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -1125,6 +1137,8 @@ where
         = (OA, B::IterState<M>)
     where
         I: 'src;
+
+    const NONCONSUMPTION_IS_OK: bool = B::NONCONSUMPTION_IS_OK;
 
     #[inline(always)]
     fn make_iter<M: Mode>(
@@ -1878,6 +1892,8 @@ where
     where
         I: 'src;
 
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2058,6 +2074,8 @@ where
 {
     type IterState<M: Mode> = bool;
 
+    const NONCONSUMPTION_IS_OK: bool = true;
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2168,6 +2186,8 @@ where
     O: IntoIterator,
 {
     type IterState<M: Mode> = (A::IterState<M>, Option<M::Output<O::IntoIter>>);
+
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
 
     #[inline(always)]
     fn make_iter<M: Mode>(
