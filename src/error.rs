@@ -209,7 +209,7 @@ impl<T, S> Simple<'_, T, S> {
         &self.span
     }
 
-    /// Get the token, if any, that was found at the error location.
+    /// Get the token found by this error when parsing. `None` implies that the error expected the end of input.
     pub fn found(&self) -> Option<&T> {
         self.found.as_deref()
     }
