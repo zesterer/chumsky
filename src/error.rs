@@ -86,6 +86,17 @@ pub trait Error<'a, I: Input<'a>>:
 
 /// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
 /// you want maximum parse speed, at the cost of all error reporting.
+///
+/// # Examples
+/// 
+/// ```
+/// use chumsky::prelude::*;
+/// 
+/// let parser = just::<_, _, extra::Err<EmptyErr>>("valid");
+/// let error = parser.parse("invalid").into_errors()[0];
+/// 
+/// assert_eq!(error, EmptyErr::default());
+/// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone, Default)]
 pub struct EmptyErr(());
@@ -111,6 +122,17 @@ impl fmt::Display for EmptyErr {
 
 /// A very cheap error type that tracks only the error span. This type is most useful when you want fast parsing but do
 /// not particularly care about the quality of error messages.
+///
+/// # Examples
+/// 
+/// ```
+/// use chumsky::prelude::*;
+/// 
+/// let parser = just::<_, _, extra::Err<Cheap>>("+");
+/// let error = parser.parse("-").into_errors()[0];
+/// 
+/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Cheap<S = SimpleSpan<usize>> {
@@ -158,6 +180,18 @@ where
 
 /// A simple error type that tracks the error span and found token. This type is most useful when you want fast parsing
 /// but do not particularly care about the quality of error messages.
+///
+/// # Examples
+/// 
+/// ```
+/// use chumsky::prelude::*;
+/// 
+/// let parser = just::<_, _, extra::Err<Simple<char>>>("+");
+/// let error = parser.parse("-").into_errors()[0];
+/// 
+/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// assert_eq!(error.found(), Some(&'-'));
+/// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Simple<'a, T, S = SimpleSpan<usize>> {
@@ -537,6 +571,21 @@ where
 ///
 /// Please note that it uses a [`Vec`] to remember expected symbols. If you find this to be too slow, you can
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
+///
+/// # Examples
+/// 
+/// ```
+/// use chumsky::prelude::*;
+/// use chumsky::error::{RichReason, RichPattern};
+/// 
+/// let parser = one_of::<_, _, extra::Err<Rich<char>>>("1234");
+/// let error = parser.parse("5").into_errors()[0].clone();
+/// 
+/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// assert!(matches!(error.reason(), &RichReason::ExpectedFound {..}));
+/// assert_eq!(error.found(), Some(&'5'));
+/// 
+/// ```
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>> {
     span: S,
