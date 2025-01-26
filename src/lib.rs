@@ -452,6 +452,34 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
 
     /// Convert the output of this parser into a slice of the input, based on the current parser's
     /// span.
+    ///
+    /// Note: unlike the parser `.repeated().collect()`, this method includes all tokens that are 
+    /// "ignored" by the parser, including any padding, separators, and sub-parsers with 
+    /// [`Parser::ignored`], [`Parser::ignore_then`], and [`Parser::then_ignore`].
+    ///
+    /// # Examples
+    /// Example with input of type `&str` (token type is `char`).
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// // Matches a number with underscores that is surrounded by apostrophes.
+    /// let quoted_numeric = any::<&str, extra::Err<Simple<char>>>()
+    ///     .filter(|c: &char| c.is_digit(10))
+    ///     .separated_by(just("_").repeated().at_most(1))
+    ///     .to_slice()
+    ///     .padded_by(just("'"));
+    /// assert_eq!(quoted_numeric.parse("'1_23'").into_result(), Ok("1_23"));
+    /// ```
+    /// Example with input of type `&[u32]` (token type is `u32`).
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// // Matches even numbers, then ignoring the rest of the input when an odd number is reached.
+    /// let even_matcher = any::<&[u32], extra::Err<Simple<u32>>>()
+    ///     .filter(|c: &u32| c % 2 == 0)
+    ///     .repeated()
+    ///     .to_slice()
+    ///     .lazy();
+    /// assert_eq!(even_matcher.parse(&[2, 4, 8, 5, 6]).unwrap(), &[2, 4, 8]);
+    /// ```
     fn to_slice(self) -> ToSlice<Self, O>
     where
         Self: Sized,
