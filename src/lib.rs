@@ -2036,7 +2036,21 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// The resulting iterable parser will emit each element of the output type in turn.
     ///
     /// This is *broadly* analogous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
-    // TODO: Example
+    ///
+    /// # Examples
+    /// 
+    /// ```
+    /// use chumsky::prelude::*;
+    /// let letter = one_of::<_, _, extra::Err<Simple<char>>>("0123456789");
+    /// // Match a four digit number
+    /// let list = letter
+    ///     .repeated()
+    ///     .to_slice()
+    ///     .map(|string: &str| string.chars())
+    ///     .into_iter()
+    ///     .collect_exactly::<[char; 4]>();
+    /// assert_eq!(list.parse("1235").unwrap(), ['1', '2', '3', '5']);
+    /// ```
     fn into_iter(self) -> IntoIter<Self, O>
     where
         Self: Sized,
