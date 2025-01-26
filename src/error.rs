@@ -88,13 +88,13 @@ pub trait Error<'a, I: Input<'a>>:
 /// you want maximum parse speed, at the cost of all error reporting.
 ///
 /// # Examples
-/// 
+///
 /// ```
 /// use chumsky::prelude::*;
-/// 
+///
 /// let parser = just::<_, _, extra::Err<EmptyErr>>("valid");
 /// let error = parser.parse("invalid").into_errors()[0];
-/// 
+///
 /// assert_eq!(error, EmptyErr::default());
 /// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -120,17 +120,17 @@ impl fmt::Display for EmptyErr {
     }
 }
 
-/// A very cheap error type that tracks only the error span ([`SimpleSpan`] by default). 
+/// A very cheap error type that tracks only the error span ([`SimpleSpan`] by default).
 /// This type is most useful when you want fast parsing but do not particularly care about the quality of error messages.
 ///
 /// # Examples
-/// 
+///
 /// ```
 /// use chumsky::prelude::*;
-/// 
+///
 /// let parser = just::<_, _, extra::Err<Cheap>>("+");
 /// let error = parser.parse("-").into_errors()[0];
-/// 
+///
 /// assert_eq!(error.span(), &SimpleSpan::new(0,1));
 /// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -141,7 +141,7 @@ pub struct Cheap<S = SimpleSpan<usize>> {
 
 impl<S> Cheap<S> {
     /// Get the span than that error related to.
-    /// 
+    ///
     /// If the span type is unspecified, it is [`SimpleSpan`].
     pub fn span(&self) -> &S {
         &self.span
@@ -184,13 +184,13 @@ where
 /// but do not particularly care about the quality of error messages.
 ///
 /// # Examples
-/// 
+///
 /// ```
 /// use chumsky::prelude::*;
-/// 
+///
 /// let parser = just::<_, _, extra::Err<Simple<char>>>("+");
 /// let error = parser.parse("-").into_errors()[0];
-/// 
+///
 /// assert_eq!(error.span(), &SimpleSpan::new(0,1));
 /// assert_eq!(error.found(), Some(&'-'));
 /// ```
@@ -203,7 +203,7 @@ pub struct Simple<'a, T, S = SimpleSpan<usize>> {
 
 impl<T, S> Simple<'_, T, S> {
     /// Get the span than that error related to.
-    /// 
+    ///
     /// If the span type is unspecified, it is [`SimpleSpan`].
     pub fn span(&self) -> &S {
         &self.span
@@ -577,20 +577,20 @@ where
 /// implement [`Error`] for your own error type or use [`Simple`] instead.
 ///
 /// This error type stores a span ([`SimpleSpan`] by default), a [`RichReason`], and a list of expected [`RichPattern`] with their spans.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use chumsky::prelude::*;
 /// use chumsky::error::{RichReason, RichPattern};
-/// 
+///
 /// let parser = one_of::<_, _, extra::Err<Rich<char>>>("1234");
 /// let error = parser.parse("5").into_errors()[0].clone();
-/// 
+///
 /// assert_eq!(error.span(), &SimpleSpan::new(0,1));
 /// assert!(matches!(error.reason(), &RichReason::ExpectedFound {..}));
 /// assert_eq!(error.found(), Some(&'5'));
-/// 
+///
 /// ```
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>> {
@@ -629,7 +629,7 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 
     /// Get the span associated with this error.
-    /// 
+    ///
     /// If the span type is unspecified, it is [`SimpleSpan`].
     pub fn span(&self) -> &S {
         &self.span

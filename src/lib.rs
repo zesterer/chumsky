@@ -453,8 +453,8 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// Convert the output of this parser into a slice of the input, based on the current parser's
     /// span.
     ///
-    /// Note: unlike the parser `.repeated().collect()`, this method includes all tokens that are 
-    /// "ignored" by the parser, including any padding, separators, and sub-parsers with 
+    /// Note: unlike the parser `.repeated().collect()`, this method includes all tokens that are
+    /// "ignored" by the parser, including any padding, separators, and sub-parsers with
     /// [`Parser::ignored`], [`Parser::ignore_then`], and [`Parser::then_ignore`].
     ///
     /// # Examples
@@ -2066,7 +2066,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// This is *broadly* analogous to functions like [`Vec::into_iter`], but operating at the level of parser outputs.
     ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use chumsky::prelude::*;
     /// let letter = one_of::<_, _, extra::Err<Simple<char>>>("0123456789");
