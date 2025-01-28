@@ -2068,16 +2068,19 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// # Examples
     ///
     /// ```
-    /// use chumsky::prelude::*;
-    /// let letter = one_of::<_, _, extra::Err<Simple<char>>>("0123456789");
-    /// // Match a four digit number
-    /// let list = letter
-    ///     .repeated()
-    ///     .to_slice()
-    ///     .map(|string: &str| string.chars())
+    /// # use chumsky::prelude::*;
+    /// // Parses whole integers
+    /// let num = text::int::<&str, extra::Default>(10).padded().map(|x: &str| x.parse::<u64>().unwrap());
+    /// // Parses a range like `0..4` into a vector like `[0, 1, 2, 3]`
+    /// let range = num.then_ignore(just("..")).then(num)
+    ///     .map(|(x, y)| x..y)
     ///     .into_iter()
-    ///     .collect_exactly::<[char; 4]>();
-    /// assert_eq!(list.parse("1235").unwrap(), ['1', '2', '3', '5']);
+    ///     .collect::<Vec<u64>>();
+    /// // Parses a list of numbers into a vector
+    /// let list = num.separated_by(just(',')).collect::<Vec<u64>>();
+    /// let set = range.or(list);
+    /// assert_eq!(set.parse("0, 1, 2, 3").unwrap(), [0, 1, 2, 3]);
+    /// assert_eq!(set.parse("0..4").unwrap(), [0, 1, 2, 3]);
     /// ```
     fn into_iter(self) -> IntoIter<Self, O>
     where
