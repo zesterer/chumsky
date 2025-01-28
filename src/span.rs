@@ -94,15 +94,6 @@ pub struct SimpleSpan<T = usize, C = ()> {
     context: C,
 }
 
-impl<T: Clone, C: Clone> SimpleSpan<T, C> {
-    /// Create a new `SimpleSpan` from a single offset, useful for an EOI (End Of Input) span.
-    ///
-    /// Context is the unit type `()` by default.
-    pub fn splat(context: C, offset: T) -> SimpleSpan<T, C> {
-        Self::new(context, offset.clone()..offset)
-    }
-}
-
 impl<T, C> SimpleSpan<T, C> {
     /// Convert this span into a [`std::ops::Range`].
     pub fn into_range(self) -> Range<T> {
