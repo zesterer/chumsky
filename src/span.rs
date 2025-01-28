@@ -103,7 +103,7 @@ impl<T: Clone, C: Clone> SimpleSpan<T, C> {
     }
 }
 
-impl<T> SimpleSpan<T> {
+impl<T, C> SimpleSpan<T, C> {
     /// Convert this span into a [`std::ops::Range`].
     pub fn into_range(self) -> Range<T> {
         self.into()
@@ -120,8 +120,8 @@ impl<T> From<Range<T>> for SimpleSpan<T> {
     }
 }
 
-impl<T> From<SimpleSpan<T>> for Range<T> {
-    fn from(span: SimpleSpan<T>) -> Self {
+impl<T, C> From<SimpleSpan<T, C>> for Range<T> {
+    fn from(span: SimpleSpan<T, C>) -> Self {
         Range {
             start: span.start,
             end: span.end,
@@ -147,7 +147,7 @@ where
     }
 }
 
-impl<T> IntoIterator for SimpleSpan<T>
+impl<T, C> IntoIterator for SimpleSpan<T, C>
 where
     Range<T>: Iterator<Item = T>,
 {
