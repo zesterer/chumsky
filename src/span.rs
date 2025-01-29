@@ -94,27 +94,10 @@ pub struct SimpleSpan<T = usize, C = ()> {
     context: C,
 }
 
-impl<T> SimpleSpan<T> {
-    /// Create a new `SimpleSpan` from a start and end offset
-    pub fn new(start: T, end: T) -> SimpleSpan<T> {
-        SimpleSpan {
-            start,
-            end,
-            context: (),
-        }
-    }
-
-    /// Create a new `SimpleSpan` from a single offset, useful for an EOI (End Of Input) span.
-    pub fn splat(offset: T) -> SimpleSpan<T>
-    where
-        T: Clone,
-    {
-        Self::new(offset.clone(), offset)
-    }
-
+impl<T, C> SimpleSpan<T, C> {
     /// Convert this span into a [`std::ops::Range`].
     pub fn into_range(self) -> Range<T> {
-        self.into()
+        self.start..self.end
     }
 }
 
@@ -128,7 +111,7 @@ impl<T> From<Range<T>> for SimpleSpan<T> {
     }
 }
 
-impl<T> From<SimpleSpan<T>> for Range<T> {
+impl<T> From<SimpleSpan<T, ()>> for Range<T> {
     fn from(span: SimpleSpan<T>) -> Self {
         Range {
             start: span.start,
@@ -155,7 +138,7 @@ where
     }
 }
 
-impl<T> IntoIterator for SimpleSpan<T>
+impl<T, C> IntoIterator for SimpleSpan<T, C>
 where
     Range<T>: Iterator<Item = T>,
 {
@@ -163,7 +146,7 @@ where
     type Item = T;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.into()
+        self.start..self.end
     }
 }
 

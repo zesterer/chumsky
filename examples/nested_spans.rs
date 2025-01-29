@@ -49,17 +49,17 @@ fn main() {
     let tokens = [
         (
             Token::Parens(vec![
-                (Token::Num(2), SimpleSpan::new(1, 2)),
-                (Token::Add, SimpleSpan::new(3, 4)),
-                (Token::Num(3), SimpleSpan::new(5, 6)),
+                (Token::Num(2), SimpleSpan::new((), 1..2)),
+                (Token::Add, SimpleSpan::new((), 3..4)),
+                (Token::Num(3), SimpleSpan::new((), 5..6)),
             ]),
-            SimpleSpan::new(0, 7),
+            SimpleSpan::new((), 0..7),
         ),
-        (Token::Mul, SimpleSpan::new(8, 9)),
-        (Token::Num(4), SimpleSpan::new(10, 11)),
+        (Token::Mul, SimpleSpan::new((), 8..9)),
+        (Token::Num(4), SimpleSpan::new((), 10..11)),
     ];
 
-    let eoi = SimpleSpan::new(11, 11); // Example EoI
+    let eoi = SimpleSpan::new((), 11..11); // Example EoI
 
     assert_eq!(
         parser(make_input)
