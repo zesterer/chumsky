@@ -444,7 +444,7 @@ mod winnow {
                 b'n' => "null".value(JsonZero::Null),
                 b't' => "true".value(JsonZero::Bool(true)),
                 b'f' => "false".value(JsonZero::Bool(false)),
-                b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
+                b'+' | b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
                 b'"' => string.map(JsonZero::Str),
                 b'[' => array.map(JsonZero::Array),
                 b'{' => object.map(JsonZero::Object),
