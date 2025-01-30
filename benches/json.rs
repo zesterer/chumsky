@@ -357,7 +357,7 @@ mod winnow {
         ascii::{digit0, digit1, take_escaped},
         combinator::separated,
         combinator::{alt, dispatch},
-        combinator::{cut_err, fail, opt, peek},
+        combinator::{fail, opt, peek},
         combinator::{preceded, separated_pair, terminated},
         error::{EmptyError, ParserError},
         prelude::*,
@@ -376,11 +376,7 @@ mod winnow {
             opt('-'),
             alt(((one_of(b'1'..=b'9'), digit0).void(), one_of('0').void())),
             opt(('.', digit1)),
-            opt((
-                one_of([b'e', b'E']),
-                opt(one_of([b'+', b'-'])),
-                cut_err(digit1),
-            )),
+            opt((one_of([b'e', b'E']), opt(one_of([b'+', b'-'])), digit1)),
         )
             .take()
             .map(|bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap())
