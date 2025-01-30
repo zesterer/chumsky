@@ -390,14 +390,14 @@ mod winnow {
     fn string<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<&'a [u8], E> {
         preceded(
             '"',
-            cut_err(terminated(
+            terminated(
                 take_escaped(
                     none_of([b'\\', b'"']),
                     '\\',
                     one_of([b'\\', b'/', b'"', b'b', b'f', b'n', b'r', b't']),
                 ),
                 '"',
-            )),
+            ),
         )
         .parse_next(i)
     }
@@ -405,10 +405,10 @@ mod winnow {
     fn array<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<Vec<JsonZero<'a>>, E> {
         preceded(
             '[',
-            cut_err(terminated(
+            terminated(
                 separated(0.., value, preceded(space, ',')),
                 preceded(space, ']'),
-            )),
+            ),
         )
         .parse_next(i)
     }
@@ -416,12 +416,7 @@ mod winnow {
     fn member<'a, E: ParserError<&'a [u8]>>(
         i: &mut &'a [u8],
     ) -> ModalResult<(&'a [u8], JsonZero<'a>), E> {
-        separated_pair(
-            preceded(space, string),
-            cut_err(preceded(space, ':')),
-            value,
-        )
-        .parse_next(i)
+        separated_pair(preceded(space, string), preceded(space, ':'), value).parse_next(i)
     }
 
     fn object<'a, E: ParserError<&'a [u8]>>(
@@ -429,10 +424,10 @@ mod winnow {
     ) -> ModalResult<Vec<(&'a [u8], JsonZero<'a>)>, E> {
         preceded(
             '{',
-            cut_err(terminated(
+            terminated(
                 separated(0.., member, preceded(space, ',')),
                 preceded(space, '}'),
-            )),
+            ),
         )
         .parse_next(i)
     }
