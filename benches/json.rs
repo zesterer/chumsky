@@ -359,7 +359,7 @@ mod winnow {
         combinator::{alt, dispatch},
         combinator::{cut_err, fail, opt, peek},
         combinator::{preceded, separated_pair, terminated},
-        error::{InputError, ParserError},
+        error::{EmptyError, ParserError},
         prelude::*,
         token::{any, none_of, one_of, take_while},
     };
@@ -367,11 +367,11 @@ mod winnow {
     use super::JsonZero;
     use std::str;
 
-    fn space<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<&'a [u8], E> {
+    fn space<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<&'a [u8], E> {
         take_while(0.., [b' ', b'\t', b'\r', b'\n']).parse_next(i)
     }
 
-    fn number<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<f64, E> {
+    fn number<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<f64, E> {
         (
             opt('-'),
             alt(((one_of(b'1'..=b'9'), digit0).void(), one_of('0').void())),
@@ -387,7 +387,7 @@ mod winnow {
             .parse_next(i)
     }
 
-    fn string<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<&'a [u8], E> {
+    fn string<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<&'a [u8], E> {
         preceded(
             '"',
             cut_err(terminated(
@@ -402,7 +402,7 @@ mod winnow {
         .parse_next(i)
     }
 
-    fn array<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<Vec<JsonZero<'a>>, E> {
+    fn array<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<Vec<JsonZero<'a>>, E> {
         preceded(
             '[',
             cut_err(terminated(
@@ -415,7 +415,7 @@ mod winnow {
 
     fn member<'a, E: ParserError<&'a [u8]>>(
         i: &mut &'a [u8],
-    ) -> PResult<(&'a [u8], JsonZero<'a>), E> {
+    ) -> ModalResult<(&'a [u8], JsonZero<'a>), E> {
         separated_pair(
             preceded(space, string),
             cut_err(preceded(space, ':')),
@@ -426,7 +426,7 @@ mod winnow {
 
     fn object<'a, E: ParserError<&'a [u8]>>(
         i: &mut &'a [u8],
-    ) -> PResult<Vec<(&'a [u8], JsonZero<'a>)>, E> {
+    ) -> ModalResult<Vec<(&'a [u8], JsonZero<'a>)>, E> {
         preceded(
             '{',
             cut_err(terminated(
@@ -437,7 +437,7 @@ mod winnow {
         .parse_next(i)
     }
 
-    fn value<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, E> {
+    fn value<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<JsonZero<'a>, E> {
         preceded(
             space,
             dispatch!(peek(any);
@@ -454,11 +454,11 @@ mod winnow {
         .parse_next(i)
     }
 
-    fn root<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, E> {
+    fn root<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> ModalResult<JsonZero<'a>, E> {
         terminated(value, space).parse_next(i)
     }
 
-    pub fn json<'a>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, InputError<&'a [u8]>> {
+    pub fn json<'a>(i: &mut &'a [u8]) -> ModalResult<JsonZero<'a>, EmptyError> {
         root.parse_next(i)
     }
 }
