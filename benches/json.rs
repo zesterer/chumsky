@@ -357,94 +357,86 @@ mod winnow {
         ascii::{digit0, digit1, take_escaped},
         combinator::separated,
         combinator::{alt, dispatch},
-        combinator::{cut_err, fail, opt, peek},
+        combinator::{fail, opt, peek},
         combinator::{preceded, separated_pair, terminated},
-        error::{InputError, ParserError},
+        error::{EmptyError, ParserError},
         prelude::*,
         token::{any, none_of, one_of, take_while},
+        Result,
     };
 
     use super::JsonZero;
     use std::str;
 
-    fn space<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<&'a [u8], E> {
+    fn space<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<&'a [u8], E> {
         take_while(0.., [b' ', b'\t', b'\r', b'\n']).parse_next(i)
     }
 
-    fn number<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<f64, E> {
+    fn number<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<f64, E> {
         (
             opt('-'),
             alt(((one_of(b'1'..=b'9'), digit0).void(), one_of('0').void())),
             opt(('.', digit1)),
-            opt((
-                one_of([b'e', b'E']),
-                opt(one_of([b'+', b'-'])),
-                cut_err(digit1),
-            )),
+            opt((one_of([b'e', b'E']), opt(one_of([b'+', b'-'])), digit1)),
         )
             .take()
             .map(|bytes| str::from_utf8(bytes).unwrap().parse::<f64>().unwrap())
             .parse_next(i)
     }
 
-    fn string<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<&'a [u8], E> {
+    fn string<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<&'a [u8], E> {
         preceded(
             '"',
-            cut_err(terminated(
+            terminated(
                 take_escaped(
                     none_of([b'\\', b'"']),
                     '\\',
                     one_of([b'\\', b'/', b'"', b'b', b'f', b'n', b'r', b't']),
                 ),
                 '"',
-            )),
+            ),
         )
         .parse_next(i)
     }
 
-    fn array<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<Vec<JsonZero<'a>>, E> {
+    fn array<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<Vec<JsonZero<'a>>, E> {
         preceded(
             '[',
-            cut_err(terminated(
+            terminated(
                 separated(0.., value, preceded(space, ',')),
                 preceded(space, ']'),
-            )),
+            ),
         )
         .parse_next(i)
     }
 
     fn member<'a, E: ParserError<&'a [u8]>>(
         i: &mut &'a [u8],
-    ) -> PResult<(&'a [u8], JsonZero<'a>), E> {
-        separated_pair(
-            preceded(space, string),
-            cut_err(preceded(space, ':')),
-            value,
-        )
-        .parse_next(i)
+    ) -> Result<(&'a [u8], JsonZero<'a>), E> {
+        separated_pair(preceded(space, string), preceded(space, ':'), value).parse_next(i)
     }
 
     fn object<'a, E: ParserError<&'a [u8]>>(
         i: &mut &'a [u8],
-    ) -> PResult<Vec<(&'a [u8], JsonZero<'a>)>, E> {
+    ) -> Result<Vec<(&'a [u8], JsonZero<'a>)>, E> {
         preceded(
             '{',
-            cut_err(terminated(
+            terminated(
                 separated(0.., member, preceded(space, ',')),
                 preceded(space, '}'),
-            )),
+            ),
         )
         .parse_next(i)
     }
 
-    fn value<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, E> {
+    fn value<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<JsonZero<'a>, E> {
         preceded(
             space,
             dispatch!(peek(any);
                 b'n' => "null".value(JsonZero::Null),
                 b't' => "true".value(JsonZero::Bool(true)),
                 b'f' => "false".value(JsonZero::Bool(false)),
-                b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
+                b'+' | b'-' | b'0'..=b'9' => number.map(JsonZero::Num),
                 b'"' => string.map(JsonZero::Str),
                 b'[' => array.map(JsonZero::Array),
                 b'{' => object.map(JsonZero::Object),
@@ -454,11 +446,11 @@ mod winnow {
         .parse_next(i)
     }
 
-    fn root<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, E> {
+    fn root<'a, E: ParserError<&'a [u8]>>(i: &mut &'a [u8]) -> Result<JsonZero<'a>, E> {
         terminated(value, space).parse_next(i)
     }
 
-    pub fn json<'a>(i: &mut &'a [u8]) -> PResult<JsonZero<'a>, InputError<&'a [u8]>> {
+    pub fn json<'a>(i: &mut &'a [u8]) -> Result<JsonZero<'a>, EmptyError> {
         root.parse_next(i)
     }
 }
