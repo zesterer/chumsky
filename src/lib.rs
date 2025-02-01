@@ -3686,4 +3686,19 @@ mod tests {
             )])
         );
     }
+
+    #[test]
+    fn zero_size_custom_failure() {
+        fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
+            custom(|inp| {
+                let check = inp.save();
+                if inp.parse(just("foo")).is_err() {
+                    inp.rewind(check);
+                }
+                Ok(())
+            })
+        }
+
+        assert!(my_custom().parse("not foo").has_errors());
+    }
 }

@@ -1673,11 +1673,16 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         Exp: IntoIterator<Item = L>,
         E::Error: LabelError<'src, I, L>,
     {
+        // Fast path: if the error doesn't carry meaningful information, avoid unnecessary decision-making!
         if core::mem::size_of::<E::Error>() == 0 {
+            self.errors.alt = Some(Located::at(
+                self.cursor.clone(),
+                LabelError::expected_found(expected, found, span),
+            ));
             return;
         }
 
-        let at = &self.cursor.clone();
+        let at = &self.cursor;
 
         // Prioritize errors before choosing whether to generate the alt (avoids unnecessary error creation)
         self.errors.alt = Some(match self.errors.alt.take() {
