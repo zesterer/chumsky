@@ -2187,7 +2187,10 @@ where
 {
     type IterState<M: Mode> = (A::IterState<M>, Option<M::Output<O::IntoIter>>);
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
+    // A::NONCONSUMPTION_IS_OK cannot be used because if we are iterating
+    // over O, we are not consuming any input (input has probably
+    // already been comsumed when constructing O)
+    const NONCONSUMPTION_IS_OK: bool = true;
 
     #[inline(always)]
     fn make_iter<M: Mode>(
