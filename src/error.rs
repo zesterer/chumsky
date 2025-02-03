@@ -131,7 +131,7 @@ impl fmt::Display for EmptyErr {
 /// let parser = just::<_, _, extra::Err<Cheap>>("+");
 /// let error = parser.parse("-").into_errors()[0];
 ///
-/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// assert_eq!(error.span(), &SimpleSpan::new((), 0..1));
 /// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -191,7 +191,7 @@ where
 /// let parser = just::<_, _, extra::Err<Simple<char>>>("+");
 /// let error = parser.parse("-").into_errors()[0];
 ///
-/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// assert_eq!(error.span(), &SimpleSpan::new((), 0..1));
 /// assert_eq!(error.found(), Some(&'-'));
 /// ```
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -587,7 +587,7 @@ where
 /// let parser = one_of::<_, _, extra::Err<Rich<char>>>("1234");
 /// let error = parser.parse("5").into_errors()[0].clone();
 ///
-/// assert_eq!(error.span(), &SimpleSpan::new(0,1));
+/// assert_eq!(error.span(), &SimpleSpan::new((), 0..1));
 /// assert!(matches!(error.reason(), &RichReason::ExpectedFound {..}));
 /// assert_eq!(error.found(), Some(&'5'));
 ///
