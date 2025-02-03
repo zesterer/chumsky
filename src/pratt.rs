@@ -607,7 +607,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I,
 /// expression. It must have the following signature:
 ///
 /// ```ignore
-/// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
+/// impl Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn prefix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
@@ -692,7 +692,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I
 /// expression. It must have the following signature:
 ///
 /// ```ignore
-/// impl Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
+/// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn postfix<'src, A, F, Atom, Op, I, E>(
     binding_power: u16,
