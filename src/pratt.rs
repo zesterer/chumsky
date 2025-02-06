@@ -444,6 +444,8 @@ pub enum Associativity {
     Left(u16),
     /// Specifies that the operator should be right-associative, with the given binding power (see [`right`]).
     Right(u16),
+    /// Specifies that the operator should non-associative, with the given binding power (see [`non`]).
+    Non(u16),
 }
 
 /// Specifies a left [`Associativity`] with the given binding power.
@@ -462,11 +464,21 @@ pub fn right(binding_power: u16) -> Associativity {
     Associativity::Right(binding_power)
 }
 
+/// Specifies a non-associative [`Associativity`] with the given binding power.
+///
+/// Non-associative operators cannot be chained, but otherwise respect binding powers. For example,
+/// the expression `a == b == c` is invalid if `==` is a non-associative operator (which in
+/// general, all comparison operators are).
+pub fn non(binding_power: u16) -> Associativity {
+    Associativity::Non(binding_power)
+}
+
 impl Associativity {
     fn left_power(&self) -> u32 {
         match self {
             Self::Left(x) => *x as u32 * 2,
             Self::Right(x) => *x as u32 * 2 + 1,
+            Self::Non(x) => todo!(),
         }
     }
 
@@ -474,6 +486,7 @@ impl Associativity {
         match self {
             Self::Left(x) => *x as u32 * 2 + 1,
             Self::Right(x) => *x as u32 * 2,
+            Self::Non(x) => todo!()
         }
     }
 }
@@ -536,7 +549,6 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
