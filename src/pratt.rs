@@ -492,23 +492,21 @@ pub fn non(binding_power: u16) -> Associativity {
 
 impl Associativity {
     fn left_power(&self) -> u32 {
-        match self {
-            &Self::Left(x) | &Self::Non(x) => x as u32 * 3,
-            &Self::Right(x) => x as u32 * 3 + 1,
-        }
+        let (&Self::Left(x) | &Self::Non(x) | &Self::Right(x)) = self;
+        x as u32 * 3
     }
 
     fn right_power(&self) -> u32 {
         match self {
-            &Self::Right(x) | &Self::Non(x) => x as u32 * 3,
-            &Self::Left(x) => x as u32 * 3 + 1,
+            &Self::Left(x) | &Self::Non(x) => x as u32 * 3 + 1,
+            &Self::Right(x) => x as u32 * 3,
         }
     }
 
     fn next_power(&self) -> u32 {
         match self {
             &Self::Left(x) | &Self::Right(x) => x as u32 * 3,
-            &Self::Non(x) => x as u32 * 3 + 1,
+            &Self::Non(x) => x as u32 * 3 - 1,
         }
     }
 }
@@ -610,12 +608,13 @@ where
             }
         };
 
-        *max_power = assoc.next_power();
-        Ok(M::combine(
+        let res = M::combine(
             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
             op,
             |(lhs, rhs), op| { (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp)) },
-        ))
+        );
+        *max_power = assoc.next_power();
+        Ok(res)
     }
 
     op_check_and_emit!();
@@ -964,6 +963,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         min_power: u32,
+        max_power: Option<u32>,
     ) -> PResult<M, O>
     where
         I: Input<'src>,
@@ -971,17 +971,17 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         Atom: Parser<'src, I, O, E>,
         Ops: Operator<'src, I, O, E>,
     {
+        let mut max_power: u32 = max_power.unwrap_or(u32::MAX);
         let pre_expr = inp.save();
         // Prefix unary operators
         let mut lhs = match self
             .ops
             .do_parse_prefix::<M>(inp, &pre_expr, &|inp, min_power| {
-                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power, None))
             }) {
             Ok(out) => out,
             Err(()) => self.atom.go::<M>(inp)?,
         };
-        let mut max_power: u32 = u32::MAX;
 
         loop {
             let pre_op = inp.save();
@@ -1007,7 +1007,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                 min_power,
                 &mut max_power,
                 &|inp, min_power| {
-                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power, None))
                 },
             ) {
                 Ok(out) => {
@@ -1034,7 +1034,7 @@ where
     Ops: Operator<'src, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        self.pratt_go::<M, _, _, _>(inp, 0)
+        self.pratt_go::<M, _, _, _>(inp, 0, None)
     }
 
     go_extra!(O);
@@ -1317,9 +1317,6 @@ mod tests {
                 infix(non(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
             ))
             .map(|x| x.to_string());
-        assert_eq!(
-            parser.parse("1+2*3").into_result(),
-            Ok("(1 + (2 * 3))".to_string()),
-        )
+        assert!(parser.parse("1+2*3*3").has_errors())
     }
 }
