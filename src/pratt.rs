@@ -162,9 +162,10 @@ macro_rules! op_check_and_emit {
             >,
             lhs: (),
             min_power: u32,
+            max_power: &mut u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
         ) -> Result<(), ()> {
-            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
         }
         #[inline(always)]
         fn do_parse_infix_emit<'parse>(
@@ -179,9 +180,10 @@ macro_rules! op_check_and_emit {
             >,
             lhs: O,
             min_power: u32,
+            max_power: &mut u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
         ) -> Result<O, O> {
-            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
         }
     };
 }
@@ -244,6 +246,7 @@ where
         _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         _min_power: u32,
+        _max_power: &mut u32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
@@ -292,6 +295,7 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()>;
     #[doc(hidden)]
@@ -302,6 +306,7 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O>;
 }
@@ -356,12 +361,13 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
+        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, max_power, f)
     }
 
     #[inline(always)]
@@ -414,10 +420,11 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()> {
         self.0
-            .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
+            .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
     #[inline(always)]
     fn do_parse_infix_emit<'parse>(
@@ -427,10 +434,11 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O> {
         self.0
-            .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
+            .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
 }
 
@@ -570,34 +578,44 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        if self.associativity.left_power() >= min_power {
-            match self.op_parser.go::<M>(inp) {
-                Ok(op) => match f(inp, self.associativity.right_power()) {
-                    Ok(rhs) => Ok(M::combine(
-                        M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                        op,
-                        |(lhs, rhs), op| {
-                            (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
-                        },
-                    )),
-                    Err(()) => {
-                        inp.rewind(pre_op.clone());
-                        Err(lhs)
-                    }
-                },
-                Err(()) => {
-                    inp.rewind(pre_op.clone());
-                    Err(lhs)
-                }
-            }
-        } else {
-            Err(lhs)
+        let assoc = self.associativity;
+        if assoc.left_power() < min_power || assoc.left_power() > *max_power {
+            return Err(lhs);
         }
+
+        let op = match self.op_parser.go::<M>(inp) {
+            Ok(op) => op,
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                return Err(lhs);
+            }
+        };
+
+        let next_power = match assoc {
+            Associativity::Non(_) => assoc.next_power(),
+            _ => assoc.right_power(),
+        };
+
+        let rhs = match f(inp, next_power) {
+            Ok(rhs) => rhs,
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                return Err(lhs);
+            }
+        };
+
+        *max_power = assoc.next_power();
+        Ok(M::combine(
+            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+            op,
+            |(lhs, rhs), op| { (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp)) },
+        ))
     }
 
     op_check_and_emit!();
@@ -844,6 +862,7 @@ macro_rules! impl_operator_for_tuple {
                 pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
                 mut lhs: M::Output<O>,
                 min_power: u32,
+                max_power: &mut u32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
             ) -> Result<M::Output<O>, M::Output<O>>
             where
@@ -851,7 +870,7 @@ macro_rules! impl_operator_for_tuple {
             {
                 let ($($X,)*) = self;
                 $(
-                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, max_power, f) {
                         Ok(out) => return Ok(out),
                         Err(out) => lhs = out,
                     }
@@ -920,13 +939,14 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         mut lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
         for op in self {
-            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, max_power, f) {
                 Ok(out) => return Ok(out),
                 Err(out) => lhs = out,
             }
@@ -961,6 +981,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
             Ok(out) => out,
             Err(()) => self.atom.go::<M>(inp)?,
         };
+        let mut max_power: u32 = u32::MAX;
 
         loop {
             let pre_op = inp.save();
@@ -984,6 +1005,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                 &pre_op,
                 lhs,
                 min_power,
+                &mut max_power,
                 &|inp, min_power| {
                     recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
                 },
@@ -1278,6 +1300,26 @@ mod tests {
         assert_eq!(
             parser.parse("§1+-~2!$*3").into_result(),
             Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_pre_and_postfix_ops_and_parentheses() {
+        let atom = text::int::<_, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt((
+                // -- Infix
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(non(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            ))
+            .map(|x| x.to_string());
+        assert_eq!(
+            parser.parse("1+2*3").into_result(),
+            Ok("(1 + (2 * 3))".to_string()),
         )
     }
 }
