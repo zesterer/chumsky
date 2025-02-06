@@ -435,9 +435,18 @@ where
 }
 
 /// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and binding power of an [`infix`]
-/// operator (see [`left`] and [`right`]).
+/// operator (see [`left`], [`right`], and [`non`]).
 ///
 /// Higher binding powers should be used for higher precedence operators.
+///
+/// The left, right, and next binding powers are used to determine precedence in the parser. They
+/// are calculated as follows:
+///
+/// |       | left power | right power | next power |
+/// |-------|------------|-------------|------------|
+/// | Left  | bp * 3     | bp * 3 + 1  | bp * 3     |
+/// | Right | bp * 3 + 1 | bp * 3      | bp * 3     |
+/// | Non   | bp * 3     | bp * 3      | bp * 3 + 1 |
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Associativity {
     /// Specifies that the operator should be left-associative, with the given binding power (see [`left`]).
@@ -476,17 +485,22 @@ pub fn non(binding_power: u16) -> Associativity {
 impl Associativity {
     fn left_power(&self) -> u32 {
         match self {
-            Self::Left(x) => *x as u32 * 2,
-            Self::Right(x) => *x as u32 * 2 + 1,
-            Self::Non(x) => todo!(),
+            &Self::Left(x) | &Self::Non(x) => x as u32 * 3,
+            &Self::Right(x) => x as u32 * 3 + 1,
         }
     }
 
     fn right_power(&self) -> u32 {
         match self {
-            Self::Left(x) => *x as u32 * 2 + 1,
-            Self::Right(x) => *x as u32 * 2,
-            Self::Non(x) => todo!()
+            &Self::Right(x) | &Self::Non(x) => x as u32 * 3,
+            &Self::Left(x) => x as u32 * 3 + 1,
+        }
+    }
+
+    fn next_power(&self) -> u32 {
+        match self {
+            &Self::Left(x) | &Self::Right(x) => x as u32 * 3,
+            &Self::Non(x) => x as u32 * 3 + 1,
         }
     }
 }
