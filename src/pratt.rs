@@ -595,12 +595,7 @@ where
             }
         };
 
-        let next_power = match assoc {
-            Associativity::Non(_) => assoc.next_power(),
-            _ => assoc.right_power(),
-        };
-
-        let rhs = match f(inp, next_power) {
+        let rhs = match f(inp, assoc.right_power()) {
             Ok(rhs) => rhs,
             Err(()) => {
                 inp.rewind(pre_op.clone());
@@ -1317,6 +1312,10 @@ mod tests {
                 infix(non(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
             ))
             .map(|x| x.to_string());
-        assert!(parser.parse("1+2*3*3").has_errors())
+        assert_eq!(
+            parser.parse("1+2*3").into_result(),
+            Ok("(1 + (2 * 3))".to_string())
+        );
+        assert!(parser.parse("1+2*3*3").has_errors());
     }
 }
