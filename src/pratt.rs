@@ -493,20 +493,20 @@ pub fn non(binding_power: u16) -> Associativity {
 impl Associativity {
     fn left_power(&self) -> u32 {
         let (&Self::Left(x) | &Self::Non(x) | &Self::Right(x)) = self;
-        x as u32 * 3
+        x as u32 * 3 + 1
     }
 
     fn right_power(&self) -> u32 {
         match self {
-            &Self::Left(x) | &Self::Non(x) => x as u32 * 3 + 1,
-            &Self::Right(x) => x as u32 * 3,
+            &Self::Left(x) | &Self::Non(x) => x as u32 * 3 + 2,
+            &Self::Right(x) => x as u32 * 3 + 1,
         }
     }
 
     fn next_power(&self) -> u32 {
         match self {
-            &Self::Left(x) | &Self::Right(x) => x as u32 * 3,
-            &Self::Non(x) => x as u32 * 3 - 1,
+            &Self::Left(x) | &Self::Right(x) => x as u32 * 3 + 1,
+            &Self::Non(x) => x as u32 * 3,
         }
     }
 }
@@ -608,7 +608,10 @@ where
             op,
             |(lhs, rhs), op| { (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp)) },
         );
-        *max_power = assoc.next_power();
+
+        if let Associativity::Non(_) | Associativity::Left(_) = assoc {
+            *max_power = assoc.next_power();
+        }
         Ok(res)
     }
 
