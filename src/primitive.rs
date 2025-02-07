@@ -204,7 +204,6 @@ where
         Ok(M::bind(|| seq.clone()))
     }
 
-    go_cfg_extra!(T);
 }
 
 /// See [`one_of`].

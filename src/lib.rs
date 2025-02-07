@@ -33,27 +33,6 @@ macro_rules! go_extra {
     };
 }
 
-macro_rules! go_cfg_extra {
-    ( $O :ty ) => {
-        #[inline(always)]
-        fn go_emit_cfg(
-            &self,
-            inp: &mut InputRef<'src, '_, I, E>,
-            cfg: Self::Config,
-        ) -> PResult<Emit, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Emit>(self, inp, cfg)
-        }
-        #[inline(always)]
-        fn go_check_cfg(
-            &self,
-            inp: &mut InputRef<'src, '_, I, E>,
-            cfg: Self::Config,
-        ) -> PResult<Check, $O> {
-            ConfigParser::<I, $O, E>::go_cfg::<Check>(self, inp, cfg)
-        }
-    };
-}
-
 mod blanket;
 #[cfg(feature = "unstable")]
 pub mod cache;
@@ -143,7 +122,6 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
-    inspector::Inspector,
     label::{LabelError, Labelled},
     prelude::*,
     primitive::Any,
@@ -2288,22 +2266,26 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, O>
-    where
-        Self: Sized;
+    ) -> PResult<M, O>;
 
     #[doc(hidden)]
+    #[inline(always)]
     fn go_emit_cfg(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<Emit, O>;
+    ) -> PResult<Emit, O> {
+        self.go_cfg::<Emit>(inp, cfg)
+    }
     #[doc(hidden)]
+    #[inline(always)]
     fn go_check_cfg(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<Check, O>;
+    ) -> PResult<Check, O> {
+        self.go_cfg::<Check>(inp, cfg)
+    }
 
     /// A combinator that allows configuration of the parser from the current context. Context
     /// is most often derived from [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] or [`map_ctx`],

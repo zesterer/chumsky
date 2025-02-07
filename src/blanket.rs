@@ -29,11 +29,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<M, O>
-    where
-        Self: Sized,
     {
         M::invoke_cfg(*self, inp, cfg)
     }
-
-    go_cfg_extra!(O);
 }
