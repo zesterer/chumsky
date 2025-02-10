@@ -1320,5 +1320,6 @@ mod tests {
             Ok("(1 + (2 * 3))".to_string())
         );
         assert!(parser.parse("1+2*3*3").has_errors());
+        assert!(parser.parse("1+2*3*5").has_errors());
     }
 }
