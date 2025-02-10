@@ -122,6 +122,7 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
+    inspector::Inspector,
     label::{LabelError, Labelled},
     prelude::*,
     primitive::Any,
