@@ -203,7 +203,6 @@ where
 
         Ok(M::bind(|| seq.clone()))
     }
-
 }
 
 /// See [`one_of`].

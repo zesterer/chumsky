@@ -28,8 +28,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, O>
-    {
+    ) -> PResult<M, O> {
         M::invoke_cfg(*self, inp, cfg)
     }
 }
