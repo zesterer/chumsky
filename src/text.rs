@@ -540,7 +540,7 @@ pub mod ascii {
                 any()
                     .try_map(|c: I::Token, span| {
                         if c.to_ascii()
-                            .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
+                            .map_or(false, |i| i.is_ascii_alphanumeric() || i == b'_')
                         {
                             Ok(())
                         } else {
