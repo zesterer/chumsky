@@ -2753,6 +2753,81 @@ where
     go_extra!(U);
 }
 
+/// See [`Parser::then_or_not`]
+pub struct ThenOrNot<A, B> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+}
+
+impl<A: Copy, B: Copy> Copy for ThenOrNot<A, B> {}
+impl<A: Clone, B: Clone> Clone for ThenOrNot<A, B> {
+    fn clone(&self) -> Self {
+        ThenOrNot {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+        }
+    }
+}
+
+impl<'src, I, T, U, E, A, B> Parser<'src, I, Option<(T, U)>, E> for ThenOrNot<A, B>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, T, E>,
+    B: Parser<'src, I, U, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Option<(T, U)>>
+    where
+        Self: Sized,
+    {
+        let before = inp.save();
+        let Ok(pre) = self.parser_a.go::<Emit>(inp) else {
+            inp.rewind(before);
+            return Ok(M::bind(|| None));
+        };
+        let post = self.parser_b.go::<M>(inp)?;
+        Ok(M::combine(M::bind(move || pre), post, |a, b| Some((a, b))))
+    }
+
+    go_extra!(Option<(T, U)>);
+}
+
+impl<'src, I, T, U, E, A, B> IterParser<'src, I, (T, U), E> for ThenOrNot<A, B>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, T, E>,
+    B: Parser<'src, I, U, E>,
+{
+    type IterState<M: Mode> = Option<M::Output<T>>;
+
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        let before = inp.save();
+        Ok(match self.parser_a.go::<M>(inp) {
+            Ok(v) => Some(v),
+            Err(()) => {
+                inp.rewind(before);
+                None
+            }
+        })
+    }
+
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, (T, U)> {
+        let Some(pre) = state.take() else {
+            return Ok(None);
+        };
+        let post = self.parser_b.go::<M>(inp)?;
+        Ok(Some(M::combine(pre, post, |a, b| (a, b))))
+    }
+}
+
 // /// See [`Parser::or_else`].
 // #[derive(Copy, Clone)]
 // pub struct OrElse<A, F> {

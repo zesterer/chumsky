@@ -1957,6 +1957,31 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
+    /// Parse another pattern if the current pattern succeeds.
+    ///
+    /// The output type of this parser is `Option<(O, U)>`, combining the outputs of both parsers if
+    /// the former succeed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    /// let range = text::int::<_, extra::Err<Simple<char>>>(10)
+    ///     .then(just("..").then_or_not(text::int(10)));
+    /// assert_eq!(range.parse("1..2").into_result(), Ok(("1", Some(("..", "2")))));
+    /// assert_eq!(range.parse("1").into_result(), Ok(("1", None)));
+    /// assert!(range.parse("1..").has_errors());
+    /// ```
+    fn then_or_not<U, B: Parser<'src, I, U, E>>(self, other: B) -> ThenOrNot<Self, B>
+    where
+        Self: Sized,
+    {
+        ThenOrNot {
+            parser_a: self,
+            parser_b: other,
+        }
+    }
+
     // /// Map the primary error of this parser to a result. If the result is [`Ok`], the parser succeeds with that value.
     // ///
     // /// Note that, if the closure returns [`Err`], the parser will not consume any input.
