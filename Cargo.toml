@@ -57,6 +57,9 @@ regex = ["dep:regex-automata"]
 # Enable serde serialization support
 serde = ["dep:serde"]
 
+# Enable support for using Tokio's byte slices as inputs
+bytes = ["dep:bytes"]
+
 # Enable dependencies only needed for generation of documentation on docs.rs
 docsrs = ["dep:vergen-gix"]
 
@@ -79,6 +82,7 @@ either = { version = "1.8.1", optional = true }
 serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
 unicode-ident =  "1.0.10"
 unicode-segmentation = "1"
+bytes = { version = "1", default-features = false, optional = true }
 
 [build-dependencies]
 vergen-gix = { version = "1.0", optional = true, features = ["emit_and_set"] }

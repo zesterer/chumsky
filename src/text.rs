@@ -609,7 +609,7 @@ pub mod ascii {
                     Ok(())
                 } else {
                     Err(LabelError::expected_found(
-                        [TextExpected::Identifier(*keyword.borrow())],
+                        [TextExpected::Identifier(keyword.borrow().clone())],
                         None,
                         span,
                     ))

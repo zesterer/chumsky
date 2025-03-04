@@ -62,6 +62,8 @@ pub mod regex;
 pub mod span;
 mod stream;
 pub mod text;
+#[cfg(feature = "bytes")]
+mod tokio;
 pub mod util;
 
 /// Commonly used functions, traits and types.

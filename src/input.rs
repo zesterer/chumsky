@@ -183,7 +183,7 @@ pub trait ExactSizeInput<'src>: Input<'src> {
 /// Implemented by inputs that represent slice-like streams of input tokens.
 pub trait SliceInput<'src>: ExactSizeInput<'src> {
     /// The unsized slice type of this input. For [`&str`] it's `&str`, and for [`&[T]`] it will be `&[T]`.
-    type Slice: Copy;
+    type Slice: Clone;
 
     /// Get the full slice of the input
     ///
