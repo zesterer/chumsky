@@ -3729,4 +3729,39 @@ mod tests {
 
         assert!(my_custom().parse("not foo").has_errors());
     }
+
+    #[test]
+    fn labels() {
+        use crate::{DefaultExpected, Error, LabelError, TextExpected};
+
+        let parser = just("a")
+            .or_not()
+            .then(text::whitespace::<&str, extra::Err<Rich<_>>>());
+
+        assert_eq!(
+            parser.parse("b").into_output_errors(),
+            (
+                None,
+                vec![Error::<&str>::merge(
+                    Error::<&str>::merge(
+                        LabelError::<&str, _>::expected_found(
+                            vec![DefaultExpected::Token('a'.into())],
+                            Some('b'.into()),
+                            SimpleSpan::new((), 0..1)
+                        ),
+                        LabelError::<&str, _>::expected_found(
+                            vec![TextExpected::<&str>::Whitespace],
+                            Some('b'.into()),
+                            SimpleSpan::new((), 0..1)
+                        ),
+                    ),
+                    LabelError::<&str, _>::expected_found(
+                        vec![DefaultExpected::EndOfInput],
+                        Some('b'.into()),
+                        SimpleSpan::new((), 0..1)
+                    ),
+                )]
+            )
+        );
+    }
 }

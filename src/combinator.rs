@@ -555,15 +555,25 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
+        // Remove the pre-inner alt, to be reinserted later so we always preserve it
+        let old_alt = inp.errors.alt.take();
+
         let out = self.parser.go::<Emit>(inp)?;
         let span = inp.span_since(&before);
-        let old_alt = inp.errors.alt.take();
+        let new_alt = inp.errors.alt.take();
+
         match (self.mapper)(out, span) {
             Ok(out) => {
+                // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
                 inp.errors.alt = old_alt;
+                if let Some(new_alt) = new_alt {
+                    inp.add_alt_err(&before.inner, new_alt.err);
+                }
                 Ok(M::bind(|| out))
             }
             Err(err) => {
+                // If unsuccessful, reinsert the original alt but replace the new alt with the mapper error (since it overrides it)
+                inp.errors.alt = old_alt;
                 inp.add_alt_err(&before.inner, err);
                 Err(())
             }
