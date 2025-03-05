@@ -129,6 +129,11 @@ harness = false
 name = "cbor"
 harness = false
 
+[[bench]]
+name = "pratt"
+harness = false
+required-features = ["pratt"]
+
 [[example]]
 name = "nano_rust"
 
