@@ -15,6 +15,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.10.0] - 2025-03-22
+
+*Note: version 0.10 is a from-scratch rewrite of chumsky with innumerable small changes. To avoid this changelog being
+longer than the compiled works of Douglas Adams, the following is a high-level overview of the major feature additions
+and does not include small details.*
+
+### Added
+
+- Support for zero-copy parsing (i.e: parser outputs that hold references to the parser input)
+- Support for parsing nested inputs like token trees
+- Support for parsing context-sensitive grammars such as Python-style indentation, Rust-style raw strings, and much
+more
+- Support for parsing by graphemes as well as unicode codepoints
+- Support for caching parsers independent of the lifetime of the parser
+- A new trait, `IterParser`, that allows expressing parsers that generate many outputs
+- Added the ability to collect iterable parsers into fixed-size arrays, along with a plethora of other container types
+- Support for manipulating shared state during parsing, elegantly allowing support for arena allocators, cstrees,
+interners, and much more
+- Support for a vast array of new input types: slices, strings, arrays, `impl Read`ers, iterators, etc.
+- Experimental support for memoization, allowing chumsky to parse left-recursive grammars and reducing the
+computational complexity of parsing certain grammars
+- An extension API, allowing third-party crates to extend chumsky's capabilities and introduce new combinators
+- A `pratt` parser combinator, allowing for conveniently and simply creating expression parsers with precise operator
+precedence
+- A `regex` combinator, allowing the parsing of terms based on a specific regex pattern
+- Properly differentiated ASCII and Unicode text parsers
+
+## Removed
+
+- `Parser::then_with` has been removed in favour of the new context-sensitive combinators
+
+### Changed
+
+- Performance has *radically* improved
+- Error generation and handling is now significantly more flexible
+
 # [0.9.2] - 2023-03-02
 
 ### Fixed
