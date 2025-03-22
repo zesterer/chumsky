@@ -50,6 +50,7 @@ fn execute(ast: &[Instr], ptr: &mut usize, tape: &mut [u8; TAPE_LEN]) {
             Right => *ptr = (*ptr + 1).rem_euclid(TAPE_LEN),
             Incr => tape[*ptr] = tape[*ptr].wrapping_add(1),
             Decr => tape[*ptr] = tape[*ptr].wrapping_sub(1),
+            #[allow(clippy::unbuffered_bytes)]
             Read => tape[*ptr] = io::stdin().bytes().next().unwrap().unwrap(),
             Write => print!("{}", tape[*ptr] as char),
             Loop(ast) => {
