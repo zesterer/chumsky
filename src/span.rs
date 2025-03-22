@@ -91,7 +91,8 @@ pub struct SimpleSpan<T = usize, C = ()> {
     pub start: T,
     /// The end (exclusive) offset of the span.
     pub end: T,
-    context: C,
+    /// The context of the span (usually some ID representing the file path the span relates to).
+    pub context: C,
 }
 
 impl<T, C> SimpleSpan<T, C> {
