@@ -55,6 +55,7 @@ pub mod number;
 pub mod pratt;
 pub mod primitive;
 mod private;
+pub mod problems;
 pub mod recovery;
 pub mod recursive;
 #[cfg(feature = "regex")]
@@ -65,6 +66,7 @@ pub mod text;
 #[cfg(feature = "bytes")]
 mod tokio;
 pub mod util;
+pub(crate) mod visit;
 
 /// Commonly used functions, traits and types.
 ///
