@@ -2139,11 +2139,11 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// use chumsky::prelude::*;
     ///
     /// pub trait Parseable: Sized {
-    ///     fn parser<'src>() -> Boxed<'src, 'src, &'src str, Self, extra::Default>;
+    ///     fn parser<'src>() -> Boxed<'src, 'src, &'src str, Self>;
     /// }
     ///
     /// impl Parseable for i32 {
-    ///     fn parser<'src>() -> Boxed<'src, 'src, &'src str, Self, extra::Default> {
+    ///     fn parser<'src>() -> Boxed<'src, 'src, &'src str, Self> {
     ///         todo().boxed()
     ///     }
     /// }
@@ -2718,7 +2718,7 @@ where
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc (why?)
-pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> {
+pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
     inner: Rc<DynParser<'src, 'b, I, O, E>>,
 }
 

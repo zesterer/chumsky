@@ -307,7 +307,7 @@ where
 }
 
 /// A boxed pratt parser operator. See [`Operator`].
-pub struct Boxed<'src, 'a, I, O, E>(Rc<DynOperator<'src, 'a, I, O, E>>);
+pub struct Boxed<'src, 'a, I, O, E = extra::Default>(Rc<DynOperator<'src, 'a, I, O, E>>);
 
 impl<I, O, E> Clone for Boxed<'_, '_, I, O, E> {
     fn clone(&self) -> Self {
