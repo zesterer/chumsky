@@ -130,6 +130,16 @@ impl<T: Eq + Hash> Container<T> for std::collections::HashSet<T> {
     }
 }
 
+#[cfg(feature = "std")]
+impl<T> Container<T> for std::collections::VecDeque<T> {
+    fn with_capacity(n: usize) -> Self {
+        Self::with_capacity(n)
+    }
+    fn push(&mut self, item: T) {
+        self.push_back(item);
+    }
+}
+
 impl<K: Ord, V> Container<(K, V)> for alloc::collections::BTreeMap<K, V> {
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
