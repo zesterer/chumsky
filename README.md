@@ -21,8 +21,7 @@ you may need. It also has `no_std` support, making it suitable for embedded envi
 - 🎛️ **Fully generic** across input, token, output, span, and error types
 - 📑 **Zero-copy parsing** minimises allocation by having outputs hold references/slices of the input
 - 🚦 **Flexible error recovery** strategies out of the box
-- ☑️ **Check-only parsing** every chumsky parser supports a fast 'check-only' mode, which verifies the input without
-generating output
+- ☑️ **Check-only mode** for fast verification of inputs, automatically supported
 - 🚀 **Internal optimiser** leverages the power of [GATs](https://smallcultfollowing.com/babysteps/blog/2022/06/27/many-modes-a-gats-pattern/) to optimise your parser for you
 - 📖 **Text-oriented parsers** for text inputs (i.e: `&[u8]` and `&str`)
 - 👁️‍🗨️ **Context-free grammars** are fully supported, with support for context-sensitivity
@@ -30,7 +29,7 @@ generating output
 - 🪺 **Nested inputs** such as token trees are fully supported both as inputs and outputs
 - 🏷️ **Pattern labelling** for dynamic, user-friendly error messages
 - 🗃️ **Caching** allows parsers to be created once and reused many times
-- ↔️ **Pratt parsing** support for unary and binary operators
+- ↔️ **Pratt parsing** support for simple yet flexible expression parsing
 - 🪛 **no_std** support, allowing chumsky to run in embedded environments
 
 *Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
