@@ -140,6 +140,11 @@ pub struct Cheap<S = SimpleSpan<usize>> {
 }
 
 impl<S> Cheap<S> {
+    /// Create a new [`Cheap`] error.
+    pub fn new(span: S) -> Self {
+        Self { span }
+    }
+
     /// Get the span than that error related to.
     ///
     /// If the span type is unspecified, it is [`SimpleSpan`].
@@ -216,6 +221,11 @@ impl<T, S> Simple<'_, T, S> {
 }
 
 impl<'a, T, S> Simple<'a, T, S> {
+    /// Create a new [`Simple`] error.
+    pub fn new(found: Option<MaybeRef<'a, T>>, span: S) -> Self {
+        Self { span, found }
+    }
+
     /// Transform this error's tokens using the given function.
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where

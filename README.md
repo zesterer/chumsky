@@ -87,9 +87,9 @@ Other examples include:
 
 ## Tutorial
 
-Chumsky has [a tutorial](https://github.com/zesterer/chumsky/blob/master/tutorial.md) that teaches you how to write a
-parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence, functions,
-let declarations, and calls.
+Chumsky has [a tutorial](https://docs.rs/chumsky/latest/chumsky/guide/_07_tutorial/index.html) that teaches you how to
+write a parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence,
+functions, let declarations, and calls.
 
 ## Cargo Features
 

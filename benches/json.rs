@@ -162,7 +162,7 @@ mod chumsky_zero_copy {
                 .padded()
                 .delimited_by(just(b'['), just(b']'));
 
-            let member = string.clone().then_ignore(just(b':').padded()).then(value);
+            let member = string.then_ignore(just(b':').padded()).then(value);
             let object = member
                 .clone()
                 .separated_by(just(b',').padded())

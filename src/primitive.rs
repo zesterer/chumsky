@@ -387,12 +387,13 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 /// # Example
 ///
 /// ```
-/// # use chumsky::{prelude::*, error::Simple};
+/// # use chumsky::{prelude::*, error::{Simple, LabelError}};
 ///
 /// let question = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
+///     let before = inp.cursor();
 ///     match inp.next() {
-///         Ok('?') => Ok(()),
-///         _ => Err(()),
+///         Some('?') => Ok(()),
+///         found => Err(Simple::new(found.map(Into::into), inp.span_since(&before))),
 ///     }
 /// });
 ///

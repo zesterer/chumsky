@@ -18,3 +18,5 @@ This guide is split up into several sections.
 - [Recursion](./_04_recursion/index.html): How chumsky handles recursion and self-reference
 - [Debugging](./_05_debugging/index.html): Tips and tricks for debugging chumsky parsers
 - [Technical Notes](./_06_technical_notes/index.html): Information about chumsky for advanced users
+
+- [Foo: A Tutorial](./_07_tutorial/index.html): Example implementation of a simple programming language using chumsky

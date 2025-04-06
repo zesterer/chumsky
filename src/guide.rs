@@ -37,3 +37,8 @@ pub mod _06_technical_notes {
     #![doc = include_str!("../guide/technical_notes.md")]
     use super::*;
 }
+
+pub mod _07_tutorial {
+    #![doc = include_str!("../guide/tutorial.md")]
+    use super::*;
+}
