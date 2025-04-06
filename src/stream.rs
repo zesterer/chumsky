@@ -1,9 +1,12 @@
 use super::*;
 
-/// An input that dynamically pulls tokens from an [`Iterator`].
+/// An input that dynamically pulls tokens from a cached [`Iterator`].
 ///
-/// Internally, the stream will pull tokens in batches so as to avoid invoking the iterator every time a new token is
-/// required.
+/// Internally, the stream will pull tokens in batches and cache the results on the heap so as to avoid invoking the
+/// iterator every time a new token is required.
+///
+/// Note: This input type should be used when the internal iterator type, `I`, is *expensive* to clone. This is usually
+/// not the case: you might find that [`IterInput`] performs better.
 pub struct Stream<I: Iterator> {
     tokens: Vec<I::Item>,
     iter: I,
@@ -126,10 +129,10 @@ where
     }
 }
 
-/// An input type that uses an iterator to generate tokens.
+/// An input that dynamically pulls tokens from an [`Iterator`].
 ///
-/// This input type supports backtracking by duplicating the iterator. It is recommended that your iterator is very
-/// cheap to copy/clone.
+/// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
+/// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches the inputs internally.
 pub struct IterInput<I, S> {
     iter: I,
     eoi: S,

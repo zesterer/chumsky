@@ -145,8 +145,7 @@ mod chumsky_zero_copy {
                 .then(frac.or_not())
                 .then(exp.or_not())
                 .to_slice()
-                .map(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap())
-                .boxed();
+                .map(|bytes| str::from_utf8(bytes).unwrap().parse().unwrap());
 
             let escape = just(b'\\').then_ignore(one_of(b"\\/\"bfnrt"));
 
@@ -154,16 +153,14 @@ mod chumsky_zero_copy {
                 .or(escape)
                 .repeated()
                 .to_slice()
-                .delimited_by(just(b'"'), just(b'"'))
-                .boxed();
+                .delimited_by(just(b'"'), just(b'"'));
 
             let array = value
                 .clone()
                 .separated_by(just(b','))
                 .collect()
                 .padded()
-                .delimited_by(just(b'['), just(b']'))
-                .boxed();
+                .delimited_by(just(b'['), just(b']'));
 
             let member = string.clone().then_ignore(just(b':').padded()).then(value);
             let object = member
@@ -171,8 +168,7 @@ mod chumsky_zero_copy {
                 .separated_by(just(b',').padded())
                 .collect()
                 .padded()
-                .delimited_by(just(b'{'), just(b'}'))
-                .boxed();
+                .delimited_by(just(b'{'), just(b'}'));
 
             choice((
                 just(b"null").to(JsonZero::Null),

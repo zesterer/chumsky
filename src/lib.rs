@@ -15,7 +15,6 @@
     clippy::type_complexity,
     clippy::result_unit_err
 )]
-// TODO: Talk about `.map` and purity assumptions
 
 extern crate alloc;
 extern crate core;
@@ -537,7 +536,9 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
-    /// Map the output of this parser to another value, with the opportunity to get extra metadata.
+    /// Map the output of this parser to another value, with the opportunity to get extra metadata from the parse like the span or parser state.
+    ///
+    /// See the docs for [`MapExtra`] for examples of metadata that can be fetched.
     ///
     /// The output type of this parser is `U`, the same as the function's output.
     ///
@@ -1132,7 +1133,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
-    /// Run the previous contextual parser with the provided context
+    /// Run the previous contextual parser with the provided context.
     ///
     /// ```
     /// # use chumsky::prelude::*;
@@ -1156,7 +1157,14 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         WithCtx { parser: self, ctx }
     }
 
-    /// TODO
+    /// Runs the previous parser with the provided state.
+    ///
+    /// This is very uncommonly used and exists mostly for completeness.
+    ///
+    /// One possible use-case is 'glueing' together parsers declared in different places with incompatible state types.
+    ///
+    /// Note that the state value will be cloned and dropping *during* parsing, so it is recommended to ensure that
+    /// this is a relatively performant operation.
     fn with_state<State>(self, state: State) -> WithState<Self, State>
     where
         Self: Sized,
@@ -1678,8 +1686,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         Rewind { parser: self }
     }
 
-    /// Make the parser lazy, such that it parses as much as it validly can and then finished successfully, leaving
-    /// trailing input untouched.
+    /// Make the parser lazy, such that it parses as much of the input as it can finishes successfully, leaving the trailing input untouched.
     ///
     /// The output type of this parser is `O`, the same as the original parser.
     ///

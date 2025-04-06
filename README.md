@@ -3,83 +3,124 @@
 [![crates.io](https://img.shields.io/crates/v/chumsky.svg)](https://crates.io/crates/chumsky)
 [![crates.io](https://docs.rs/chumsky/badge.svg)](https://docs.rs/chumsky)
 [![License](https://img.shields.io/crates/l/chumsky.svg)](https://github.com/zesterer/chumsky)
-[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=main)](https://github.com/zesterer/chumsky/actions)
+[![actions-badge](https://github.com/zesterer/chumsky/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/chumsky/actions)
 
-A parser library for humans with powerful error recovery.
+Chumsky is a parser combinator library for Rust that makes writing expressive, high-performance parsers easy.
 
 <a href = "https://www.github.com/zesterer/tao">
-    <img src="https://raw.githubusercontent.com/zesterer/chumsky/main/misc/example.png" alt="Example usage with my own language, Tao"/>
+    <img src="https://raw.githubusercontent.com/zesterer/chumsky/master/misc/example.png" alt="Example usage with my own language, Tao"/>
 </a>
 
-*Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
-
-## Contents
-
-- [Features](#features)
-- [Example Brainfuck Parser](#example-brainfuck-parser)
-- [Tutorial](#tutorial)
-- [*What* is a parser combinator?](#what-is-a-parser-combinator)
-- [*Why* use parser combinators?](#why-use-parser-combinators)
-- [Classification](#classification)
-- [Error Recovery](#error-recovery)
-- [Performance](#performance)
-- [Planned Features](#planned-features)
-- [Philosophy](#philosophy)
-- [Notes](#notes)
-- [License](#license)
+Although chumsky is designed primarily for user-fancing parsers such as compilers, chumsky is just as much at home
+parsing binary protocols at the networking layer, configuration files, or any other form of complex input validation that
+you may need. It also has `no_std` support, making it suitable for embedded environments.
 
 ## Features
 
-- Lots of combinators!
-- Generic across input, output, error, and span types
-- Powerful error recovery strategies
-- Inline mapping to your AST
-- Text-specific parsers for both `u8`s and `char`s
-- Recursive parsers
-- Backtracking is fully supported, allowing the parsing of all known context-free grammars
-- Parsing of nesting inputs, allowing you to move delimiter parsing to the lexical stage (as Rust does!)
-- Built-in parser debugging
+- 🪄 **Expressive combinators** that make writing your parser a joy
+- 🎛️ **Fully generic** across input, token, output, span, and error types
+- 📑 **Zero-copy parsing** minimises allocation by having outputs hold references/slices of the input
+- 🚦 **Flexible error recovery** strategies out of the box
+- ☑️ **Check-only parsing** every chumsky parser supports a fast 'check-only' mode, which verifies the input without
+generating output
+- 🚀 **Internal optimiser** leverages the power of [GATs](https://smallcultfollowing.com/babysteps/blog/2022/06/27/many-modes-a-gats-pattern/) to optimise your parser for you
+- 📖 **Text-oriented parsers** for text inputs (i.e: `&[u8]` and `&str`)
+- 👁️‍🗨️ **Context-free grammars** are fully supported, with support for context-sensitivity
+- 🔄 **Left recursion and memoization** have opt-in support
+- 🪺 **Nested inputs** such as token trees are fully supported both as inputs and outputs
+- 🏷️ **Pattern labelling** for dynamic, user-friendly error messages
+- 🗃️ **Caching** allows parsers to be created once and reused many times
+- ↔️ **Pratt parsing** support for unary and binary operators
+- 🪛 **no_std** support, allowing chumsky to run in embedded environments
 
-## Example [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) Parser
+*Note: Error diagnostic rendering is performed by [Ariadne](https://github.com/zesterer/ariadne)*
 
-See [`examples/brainfuck.rs`] for the full interpreter (`cargo run --example brainfuck -- examples/sample.bf`).
+## Example
 
-```rust
+See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for a full
+[Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter
+(`cargo run --example brainfuck -- examples/sample.bf`).
+
+```rust,ignore
 use chumsky::prelude::*;
 
+/// An AST (Abstract Syntax Tree) for Brainfuck instructions
 #[derive(Clone)]
 enum Instr {
     Left, Right,
     Incr, Decr,
     Read, Write,
-    Loop(Vec<Self>),
+    Loop(Vec<Self>), // In Brainfuck, `[...]` loops contain sub-blocks of instructions
 }
 
+/// A function that returns an instance of our Brainfuck parser
 fn parser<'a>() -> impl Parser<'a, &'a str, Vec<Instr>> {
+	// Brainfuck syntax is recursive: each block can contain many sub-blocks (via `[...]` loops)
     recursive(|bf| choice((
+		// All of the basic instructions are just single characters
         just('<').to(Instr::Left),
         just('>').to(Instr::Right),
         just('+').to(Instr::Incr),
         just('-').to(Instr::Decr),
         just(',').to(Instr::Read),
         just('.').to(Instr::Write),
+		// Loops are strings of Brainfuck instructions, delimited by square brackets
         bf.delimited_by(just('['), just(']')).map(Instr::Loop),
     ))
+		// Brainfuck instructions are sequential, so parse as many as we need
         .repeated()
         .collect())
 }
+
+// Parse some Brainfuck with our parser
+parser().parse("--[>--->->->++>-<<<<<-------]>--.>---------.>--..+++.>----.>+++++++++.<<.+++.------.<-.>>+.")
 ```
+
+See [`examples/`](examples/) for more example uses of chumsky, including a toy Rust-like interpreter.
 
 Other examples include:
 
-- A [JSON parser] (`cargo run --example json -- examples/sample.json`)
-- An [interpreter for a simple Rust-y language][examples/nano_rust.rs]
+- A [JSON parser](https://github.com/zesterer/chumsky/blob/master/examples/json.rs) (`cargo run --example json --
+  examples/sample.json`)
+- An [interpreter for a simple Rust-y language](https://github.com/zesterer/chumsky/blob/master/examples/nano_rust.rs)
   (`cargo run --example nano_rust -- examples/sample.nrs`)
 
 ## Tutorial
 
-Chumsky has a [tutorial] that teaches you how to write a parser and interpreter for a simple dynamic language
-with unary and binary operators, operator precedence, functions, let declarations, and calls.
+Chumsky has [a tutorial](https://github.com/zesterer/chumsky/blob/master/tutorial.md) that teaches you how to write a
+parser and interpreter for a simple dynamic language with unary and binary operators, operator precedence, functions,
+let declarations, and calls.
+
+## Cargo Features
+
+Chumsky contains several optional features that extend the crate's functionality.
+
+- `bytes`: adds support for parsing types from the [`bytes`](https://docs.rs/bytes/) crate.
+
+- `either`: implements `Parser` for `either::Either`, allowing dynamic configuration of parsers at run-time
+
+- `extension`: enables the extension API, allowing you to write your own first-class combinators that integrate with
+and extend chumsky
+
+- `lexical-numbers`: Enables use of the `Number` parser for parsing various numeric formats
+
+- `memoization`: enables [memoization](https://en.wikipedia.org/wiki/Memoization#Parsers) features
+
+- `nightly`: enable support for features only supported by the nightly Rust compiler
+
+- `pratt`: enables the [pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
+combinator
+
+- `regex`: enables the regex combinator
+
+- `serde`: enables `serde` (de)serialization support for several types
+
+- `stacker` (enabled by default): avoid stack overflows by spilling stack data to the heap via the `stacker` crate
+
+- `std` (enabled by default): support for standard library features
+
+- `unstable`: enables experimental chumsky features (API features enabled by `unstable` are NOT considered to fall
+under the semver guarantees of chumsky!)
 
 ## *What* is a parser combinator?
 
@@ -139,45 +180,35 @@ implementing your own strategies! If you come up with a useful strategy, feel fr
 
 ## Performance
 
-Chumsky focuses on high-quality errors and ergonomics over performance. That said, it's important that Chumsky can keep
-up with the rest of your compiler! Unfortunately, it's *extremely* difficult to come up with sensible benchmarks given
-that exactly how Chumsky performs depends entirely on what you are parsing, how you structure your parser, which
-patterns the parser attempts to match first, how complex your error type is, what is involved in constructing your AST,
-etc. All that said, here are some numbers from the
-[JSON benchmark](https://github.com/zesterer/chumsky/blob/main/benches/json.rs) included in the repository running on
-my Ryzen 7 3700x.
+Chumsky allows you to choose your priorities. When needed, it can be configured for high-quality parser errors. It can
+also be configured for *performance* too.
 
-```ignore
-test chumsky ... bench:   4,782,390 ns/iter (+/- 997,208)
-test pom     ... bench:  12,793,490 ns/iter (+/- 1,954,583)
-```
+It's incredibly difficult to produce general benchmark results for parser libraries. By their nature, the performance
+of a parser is intimately tied to exactly how the grammar they implement has been specified. That said, here are some
+numbers for a fairly routine JSON parsing benchmark implemented idiomatically in various libraries. As you can see,
+chumsky ranks quite well!
 
-I've included results from [`pom`](https://github.com/J-F-Liu/pom), another parser combinator crate with a similar
-design, as a point of reference. The sample file being parsed is broadly representative of typical JSON data and has
-3,018 lines. This translates to a little over 630,000 lines of JSON per second.
+| Ranking | Library | Time (smaller is better) |
+|---------|---------|--------------------------|
+| 1 | `chumsky` (check-only) | 140.77 µs |
+| 2 | [`winnow`](https://github.com/winnow-rs/winnow) | 178.91 µs |
+| 3 | `chumsky` | 210.43 µs |
+| 4 | [`sn`](https://github.com/Jacherr/sn) (hand-written) | 237.94 µs |
+| 5 | [`serde_json`](https://github.com/serde-rs/json) | 477.41 µs |
+| 6 | [`nom`](https://github.com/rust-bakery/nom) | 526.52 µs |
+| 7 | [`pest`](https://github.com/pest-parser/pest) | 1.9706 ms |
+| 8 | [`pom`](https://github.com/J-F-Liu/pom) | 13.730 ms|
 
-Clearly, this is a little slower than a well-optimised hand-written parser: but that's okay! Chumsky's goal is to be
-*fast enough*. If you've written enough code in your language that parsing performance even starts to be a problem,
-you've already committed enough time and resources to your language that hand-writing a parser is the best choice going!
+What should you take from this? It's difficult to say. 'Chumsky is faster than X' or 'chumsky is slower than Y' is too
+strong a statement: this is just one particular benchmark with one particular set of implementations and one
+particular workload.
 
-## Planned Features
+That said, there is something you can take: chumsky isn't going to be your bottleneck. In this benchmark, chumsky is
+within 20% of the performance of the 'pack leader' and has performance comparable to a hand-written parser. The
+performance standards for Rust libraries are already far above most language ecosystems, so you can be sure that
+chumsky will keep pace with your use-case.
 
-- An optimised 'happy path' parser mode that skips error recovery & error generation
-- An even faster 'validation' parser mode, guaranteed to not allocate, that doesn't generate outputs but just verifies
-  the validity of an input
-
-## Philosophy
-
-Chumsky should:
-
-- Be easy to use, even if you don't understand exactly what the parser is doing under the hood
-- Be type-driven, pushing users away from anti-patterns at compile-time
-- Be a mature, 'batteries-included' solution for context-free parsing by default. If you need to implement either
-  `Parser` or `Strategy` by hand, that's a problem that needs fixing
-- Be 'fast enough', but no faster (i.e: when there is a tradeoff between error quality and performance, Chumsky will
-  always take the former option)
-- Be modular and extensible, allowing users to implement their own parsers, recovery strategies, error types, spans, and
-  be generic over both input tokens and the output AST
+Benchmarks were performed on a 16-core AMD Ryzen 7 3700x.
 
 ## Notes
 
@@ -186,9 +217,3 @@ My apologies to Noam for choosing such an absurd name.
 ## License
 
 Chumsky is licensed under the MIT license (see `LICENSE` in the main repository).
-
-<!-- These link destinations are defined like this so that src/lib.rs can override them. -->
-[`examples/brainfuck.rs`]: https://github.com/zesterer/chumsky/blob/main/examples/brainfuck.rs
-[JSON parser]: https://github.com/zesterer/chumsky/blob/main/examples/json.rs
-[examples/nano_rust.rs]: https://github.com/zesterer/chumsky/blob/main/examples/nano_rust.rs
-[tutorial]: https://github.com/zesterer/chumsky/blob/main/tutorial.md

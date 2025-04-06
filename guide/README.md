@@ -1,6 +1,6 @@
 # Guide
 
-Chumsky's guide is intended to be viewed through [docs.rs](https://docs.rs/chumsky/1.0.0-alpha.4/chumsky/guide/index.html).
+Chumsky's guide is intended to be viewed through [docs.rs](https://docs.rs/chumsky/latest/chumsky/guide/index.html).
 
 ## For contributors
 

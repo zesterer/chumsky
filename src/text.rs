@@ -1041,8 +1041,6 @@ pub mod unicode {
     }
 }
 
-// TODO: Better native form of semantic indentation that uses the context system?
-
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;

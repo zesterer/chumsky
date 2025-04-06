@@ -374,19 +374,30 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
     }
 }
 
-/// TODO
+/// Declare a parser that uses custom imperative parsing logic.
+///
+/// This is useful when a particular parser is difficult or impossible to express with chumsky's built-in combinators
+/// alone. For example, custom context-sensitive logic can often be implemented using a custom parser and then
+/// integrated seamlessly into a more 'vanilla' chumsky parser.
+///
+/// See the [`InputRef`] docs for information about what operations custom parsers can perform.
+///
+/// If you are building a library of custom parsers, it is recommended to make use of the [`extension`] API.
 ///
 /// # Example
 ///
 /// ```
 /// # use chumsky::{prelude::*, error::Simple};
 ///
-/// let x = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
-///     let _ = inp.next();
-///     Ok(())
+/// let question = custom::<_, &str, _, extra::Err<Simple<char>>>(|inp| {
+///     match inp.next() {
+///         Ok('?') => Ok(()),
+///         _ => Err(()),
+///     }
 /// });
 ///
-/// assert_eq!(x.parse("!").into_result(), Ok(()));
+/// assert_eq!(question.parse("?").into_result(), Ok(()));
+/// assert!(question.parse("!").has_errors());
 /// ```
 pub const fn custom<'src, F, I, O, E>(f: F) -> Custom<F, I, O, E>
 where

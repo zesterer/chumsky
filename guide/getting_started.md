@@ -23,13 +23,13 @@ Chumsky can be added as a project dependency in one of two ways.
 1) By executing the following command in your cargo project:
 
 ```sh
-$ cargo add chumsky@1
+$ cargo add chumsky
 ```
 
 2) By adding the following to your `Cargo.toml` file:
 
 ```toml
-chumsky = "1"
+chumsky = "0.10"
 ```
 
 <details>
