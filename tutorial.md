@@ -223,7 +223,7 @@ let int = text::int(10)
 int // `int` will be used later, bear with it now
 ```
 
-`text::int(10)` accepts decimal integers (`10` identities 10-based numbers); `map` is still used but now it can parse multiple digits; `padded` is a shortcut for ignoring whitespaces.
+`text::int(10)` accepts decimal integers (`10` is the base); `map` is still used but now it can parse multiple digits; `padded` is a shortcut for ignoring whitespaces.
 
 That's better. We've also swapped out our custom digit parser with a built-in parser that parses any non-negative integer.
 
@@ -304,9 +304,9 @@ Here, we meet a few new combinators:
 
 - `just` defines a parser that accepts only the given input. We leverage it to define `op` that can easily construct an operator parser later by passing the operator character.
 
-- `repeated` will parse a given pattern any number of times (including zero!), collecting the outputs into a `Vec`
+- `repeated` will parse a given pattern any number of times (including zero!).
 
-- `foldr` means "right-fold", it takes a collection(provided by the preceding `repeated`), fold them into a single value by repeatedly applying the given closure. The first argument `atom` provides the initial value of the folding process. 
+- `foldr` means "right-fold", it iterates the preceding output(provided by `repeated`), fold all values into a single value by repeatedly applying the given closure. The first argument `atom` provides the initial value of the folding process. 
 
 This is worth a little more consideration. We're trying to parse *any number* of negation operators,
 followed by a single atom (for now, just a number). For example, the input `---42` would generate the following input to `foldr`:
@@ -490,13 +490,15 @@ recursive(|expr| {
 
 There are a few things worth paying attention to here.
 
-1. `recursive` allows us to define a parser recursively in terms of itself by giving us a copy of it within the
+1. `or` attempts to parse a pattern and, if unsuccessful, instead attempts another pattern
+
+2. `recursive` allows us to define a parser recursively in terms of itself by giving us a copy of it within the
    closure's scope
 
-2. We use the recursive definition of `expr` within the definition of `atom`. We use the new `delimited_by` combinator
+3. We use the recursive definition of `expr` within the definition of `atom`. We use the new `delimited_by` combinator
    to allow it to sit nested within a pair of parentheses
 
-3. We have to clone `unary` and `product` to use them in the closure of `recursive`
+4. We have to clone `unary` and `product` to use them in the closure of `recursive`
 
 Try running the interpreter. You'll find that it can handle a surprising number of cases elegantly. Make sure that the
 following cases work correctly:
