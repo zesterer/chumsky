@@ -188,7 +188,7 @@ numbers for a fairly routine JSON parsing benchmark implemented idiomatically in
 chumsky ranks quite well!
 
 | Ranking | Library | Time (smaller is better) | Throughput |
-|---------|---------|--------------------------|
+|---------|---------|--------------------------|------------|
 | 1 | `chumsky` (check-only) | 140.77 µs | 797 MB/s |
 | 2 | [`winnow`](https://github.com/winnow-rs/winnow) | 178.91 µs | 627 MB/s |
 | 3 | `chumsky` | 210.43 µs | 533 MB/s |
