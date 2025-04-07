@@ -187,16 +187,16 @@ of a parser is intimately tied to exactly how the grammar they implement has bee
 numbers for a fairly routine JSON parsing benchmark implemented idiomatically in various libraries. As you can see,
 chumsky ranks quite well!
 
-| Ranking | Library | Time (smaller is better) |
+| Ranking | Library | Time (smaller is better) | Throughput |
 |---------|---------|--------------------------|
-| 1 | `chumsky` (check-only) | 140.77 µs |
-| 2 | [`winnow`](https://github.com/winnow-rs/winnow) | 178.91 µs |
-| 3 | `chumsky` | 210.43 µs |
-| 4 | [`sn`](https://github.com/Jacherr/sn) (hand-written) | 237.94 µs |
-| 5 | [`serde_json`](https://github.com/serde-rs/json) | 477.41 µs |
-| 6 | [`nom`](https://github.com/rust-bakery/nom) | 526.52 µs |
-| 7 | [`pest`](https://github.com/pest-parser/pest) | 1.9706 ms |
-| 8 | [`pom`](https://github.com/J-F-Liu/pom) | 13.730 ms|
+| 1 | `chumsky` (check-only) | 140.77 µs | 797 MB/s |
+| 2 | [`winnow`](https://github.com/winnow-rs/winnow) | 178.91 µs | 627 MB/s |
+| 3 | `chumsky` | 210.43 µs | 533 MB/s |
+| 4 | [`sn`](https://github.com/Jacherr/sn) (hand-written) | 237.94 µs | 472 MB/s |
+| 5 | [`serde_json`](https://github.com/serde-rs/json) | 477.41 µs | 235 MB/s |
+| 6 | [`nom`](https://github.com/rust-bakery/nom) | 526.52 µs |  213 MB/s |
+| 7 | [`pest`](https://github.com/pest-parser/pest) | 1.9706 ms | 57 MB/s |
+| 8 | [`pom`](https://github.com/J-F-Liu/pom) | 13.730 ms| 8 MB/s |
 
 What should you take from this? It's difficult to say. 'Chumsky is faster than X' or 'chumsky is slower than Y' is too
 strong a statement: this is just one particular benchmark with one particular set of implementations and one
