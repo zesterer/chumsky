@@ -411,7 +411,7 @@ fn failure(
     src: &str,
 ) -> ! {
     let fname = "example";
-    Report::build(ReportKind::Error, fname, label.1.start)
+    Report::build(ReportKind::Error, (fname, label.1.into_range()))
         .with_message(&msg)
         .with_label(
             Label::new((fname, label.1.into_range()))
