@@ -1,4 +1,28 @@
 //! Types and functions that relate to error recovery.
+//!
+//! When chumsky encounters an erroneous input that it cannot parse, it can be told to attempt to recover from the
+//! error using a variety of strategies (you can also create your own strategies).
+//!
+//! There is no silver bullet strategy for error recovery. By definition, if the input to a parser is invalid then the
+//! parser can only make educated guesses as to the meaning of the input. Different recovery strategies will work
+//! better for different languages, and for different patterns within those languages.
+//!
+//! Chumsky provides a variety of recovery strategies (each implementing the `Strategy` trait), but it's important to
+//! understand that all of
+//!
+//! - which you apply
+//! - where you apply them
+//! - what order you apply them
+//!
+//! will greatly affect the quality of the errors that Chumsky is able to produce, along with the extent to which it
+//! is able to recover a useful AST. Where possible, you should attempt more 'specific' recovery strategies first
+//! rather than those that mindlessly skip large swathes of the input.
+//!
+//! It is recommended that you experiment with applying different strategies in different situations and at different
+//! levels of the parser to find a configuration that you are happy with. If none of the provided error recovery
+//! strategies cover the specific pattern you wish to catch, you can even create your own by digging into Chumsky's
+//! internals and implementing your own strategies! If you come up with a useful strategy, feel free to open a PR
+//! against the [main repository](https://github.com/zesterer/chumsky/)!
 
 use super::*;
 
