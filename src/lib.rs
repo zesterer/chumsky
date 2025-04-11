@@ -83,7 +83,7 @@ pub mod prelude {
         },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
-        span::{SimpleSpan, Span as _},
+        span::{SimpleSpan, Span as _, SpanWrap as _, Spanned},
         text, Boxed, ConfigIterParser, ConfigParser, IterParser, ParseResult, Parser,
     };
     pub use crate::{select, select_ref};
@@ -107,7 +107,7 @@ use core::{
     hash::Hash,
     marker::PhantomData,
     mem::MaybeUninit,
-    ops::{Range, RangeFrom},
+    ops::{Deref, DerefMut, Range, RangeFrom},
     panic::Location,
     str::FromStr,
 };
@@ -129,7 +129,7 @@ use self::{
     primitive::Any,
     private::{Check, Emit, IPResult, Located, MaybeUninitExt, Mode, PResult, Sealed},
     recovery::{RecoverWith, Strategy},
-    span::Span,
+    span::{Span, WrappingSpan},
     text::*,
     util::{IntoMaybe, MaybeMut, MaybeRef},
 };
@@ -732,6 +732,22 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         Self: Sized,
     {
         ToSpan {
+            parser: self,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Wrap the output of this parser in the pattern's span.
+    ///
+    /// This is often used to preserve the span of AST nodes for error generation by future passes.
+    ///
+    /// The output type of this parser is `<I::Span as WrappingSpan>::Spanned<O>`. For parsers using [`SimpleSpan`],
+    /// that means the output type is [`Spanned<O, SimpleSpan>`].
+    fn spanned(self) -> combinator::Spanned<Self, O>
+    where
+        Self: Sized,
+    {
+        combinator::Spanned {
             parser: self,
             phantom: EmptyPhantom::new(),
         }
