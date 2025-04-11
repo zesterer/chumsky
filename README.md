@@ -150,8 +150,10 @@ with the help of a decent parser combinator library.
 
 Chumsky's parsers are [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) parsers and are
 capable of parsing [parsing expression grammars (PEGs)](https://en.wikipedia.org/wiki/Parsing_expression_grammar), which
-includes all known context-free languages. It is theoretically possible to extend Chumsky further to accept limited
-context-sensitive grammars too, although this is rarely required.
+includes all known context-free languages. However, chumsky doesn't stop there: it also supports context-sensitive
+grammars via a set of dedicated combinators that integrate cleanly with the rest of the library. This allows it to
+additionally parse a number of context-sensitive syntaxes like Rust-style raw strings, Python-style semantic
+indentation, and much more.
 
 ## Error recovery
 
