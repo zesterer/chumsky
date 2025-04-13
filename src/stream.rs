@@ -180,15 +180,13 @@ where
     }
 
     unsafe fn span(eoi: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
-        let start = range
-            .start
-            .0
-            .clone()
-            .next()
-            .map(|(_, s)| s.start())
-            .unwrap_or_else(|| eoi.start());
-        let end = range.end.2.clone().unwrap_or_else(|| eoi.end());
-        S::new(eoi.context(), start..end)
+        match range.start.0.clone().next() {
+            Some((_, s)) => {
+                let end = range.end.2.clone().unwrap_or_else(|| eoi.end());
+                S::new(eoi.context(), s.start()..end)
+            }
+            None => S::new(eoi.context(), eoi.end()..eoi.end()),
+        }
     }
 }
 

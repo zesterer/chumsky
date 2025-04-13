@@ -3773,4 +3773,42 @@ mod tests {
             )
         );
     }
+
+    /*
+    #[test]
+    fn label_sets() {
+        use crate::{DefaultExpected, Error, LabelError, TextExpected, text::whitespace};
+
+        fn tuple<'input>() -> impl Parser<'input, &'input str, (), extra::Err<Rich<'input, char, SimpleSpan>>> {
+            just("a")
+                .repeated()
+                .then_ignore(whitespace())
+                .separated_by(just(","))
+                .then_ignore(just(")"))
+        }
+
+        assert_eq!(
+            tuple().parse("a").into_output_errors(),
+            (
+                None,
+                vec![Error::<&str>::merge(
+                    LabelError::<&str, _>::expected_found(
+                        vec![TextExpected::<&str>::Whitespace],
+                        None,
+                        SimpleSpan::new((), 1..1)
+                    ),
+                    LabelError::<&str, _>::expected_found(
+                        vec![
+                            DefaultExpected::Token('a'.into()),
+                            DefaultExpected::Token(','.into()),
+                            DefaultExpected::Token(')'.into()),
+                        ],
+                        None,
+                        SimpleSpan::new((), 1..1)
+                    )
+                )]
+            )
+        );
+    }
+    */
 }

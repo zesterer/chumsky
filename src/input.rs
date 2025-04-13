@@ -638,12 +638,14 @@ where
         (cache, mapper, eoi): &mut Self::Cache,
         range: Range<&Self::Cursor>,
     ) -> Self::Span {
-        let start = I::next_maybe(cache, &mut range.start.0.clone())
-            .map(|tok| mapper(tok).1.borrow().start())
-            // .or_else(|| self.input.next_maybe(self.input.start()).1)
-            .unwrap_or_else(|| eoi.start());
-        let end = range.end.1.clone().unwrap_or_else(|| eoi.end());
-        S::new(eoi.context(), start..end)
+        match I::next_maybe(cache, &mut range.start.0.clone()) {
+            Some(tok) => {
+                let start = mapper(tok).1.borrow().start();
+                let end = range.end.1.clone().unwrap_or_else(|| eoi.end());
+                S::new(eoi.context(), start..end)
+            }
+            None => S::new(eoi.context(), eoi.end()..eoi.end()),
+        }
     }
 }
 
@@ -666,8 +668,7 @@ where
     ) -> Self::Span {
         let start = I::next_maybe(cache, &mut range.start.0.clone())
             .map(|tok| mapper(tok).1.borrow().start())
-            // .or_else(|| self.input.next_maybe(self.input.start()).1)
-            .unwrap_or_else(|| eoi.start());
+            .unwrap_or_else(|| eoi.end());
         S::new(eoi.context(), start..eoi.end())
     }
 }
