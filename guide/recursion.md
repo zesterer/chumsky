@@ -9,7 +9,7 @@ human and non-human language. This is debated in academic circles, but chumsky t
 
 In Rust, writing a recursive function is usually trivial.
 
-```rs
+```rust
 fn factorial(x: u32) -> u32 {
     if x <= 1 {
         1
@@ -22,7 +22,7 @@ fn factorial(x: u32) -> u32 {
 However, chumsky parsers are *values*, not *functions*. Just like [`Iterator`]s, they can be moved around, manipulated,
 and invoked in a lazy manner. Intuitively, we might think to write a recursive parser to parse `4 + (1 + 2) + 3` like so:
 
-```rs compile_fail
+```rust compile_fail
 use chumsky::prelude::*;
 
 fn a_parser<'src>() -> impl Parser<'src, &'src str, i32> + Clone {
@@ -69,7 +69,7 @@ calling itself again... forever. We've created infinite recursion. No dice.
 To get us out of this somewhat sticky bind, chumsky provides a special combinator called `recursive`. I allows us to
 refer to a parser within its own definition - without getting us caught in recursive hot water.
 
-```rs
+```rust
 use chumsky::prelude::*;
 
 fn a_parser<'src>() -> impl Parser<'src, &'src str, i32> {
