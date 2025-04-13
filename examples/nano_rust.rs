@@ -599,7 +599,7 @@ fn main() {
                 .map(|e| e.map_token(|tok| tok.to_string())),
         )
         .for_each(|e| {
-            Report::build(ReportKind::Error, filename.clone(), e.span().start)
+            Report::build(ReportKind::Error, (filename.clone(), e.span().into_range()))
                 .with_message(e.to_string())
                 .with_label(
                     Label::new((filename.clone(), e.span().into_range()))
