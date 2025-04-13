@@ -103,7 +103,7 @@ Chumsky contains several optional features that extend the crate's functionality
 - `either`: implements `Parser` for `either::Either`, allowing dynamic configuration of parsers at run-time
 
 - `extension`: enables the extension API, allowing you to write your own first-class combinators that integrate with
-and extend chumsky
+  and extend chumsky
 
 - `lexical-numbers`: Enables use of the `Number` parser for parsing various numeric formats
 
@@ -112,7 +112,7 @@ and extend chumsky
 - `nightly`: enable support for features only supported by the nightly Rust compiler
 
 - `pratt`: enables the [pratt parsing](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
-combinator
+  combinator
 
 - `regex`: enables the regex combinator
 
@@ -123,7 +123,7 @@ combinator
 - `std` (enabled by default): support for standard library features
 
 - `unstable`: enables experimental chumsky features (API features enabled by `unstable` are NOT considered to fall
-under the semver guarantees of chumsky!)
+  under the semver guarantees of chumsky!)
 
 ## *What* is a parser combinator?
 
@@ -172,16 +172,16 @@ is intimately tied to exactly how the grammar they implement has been specified.
 fairly routine JSON parsing benchmark implemented idiomatically in various libraries. As you can see, chumsky ranks
 quite well!
 
-| Ranking | Library | Time (smaller is better) | Throughput |
-|---------|---------|--------------------------|------------|
-| 1 | `chumsky` (check-only) | 140.77 µs | 797 MB/s |
-| 2 | [`winnow`](https://github.com/winnow-rs/winnow) | 178.91 µs | 627 MB/s |
-| 3 | `chumsky` | 210.43 µs | 533 MB/s |
-| 4 | [`sn`](https://github.com/Jacherr/sn) (hand-written) | 237.94 µs | 472 MB/s |
-| 5 | [`serde_json`](https://github.com/serde-rs/json) | 477.41 µs | 235 MB/s |
-| 6 | [`nom`](https://github.com/rust-bakery/nom) | 526.52 µs |  213 MB/s |
-| 7 | [`pest`](https://github.com/pest-parser/pest) | 1.9706 ms | 57 MB/s |
-| 8 | [`pom`](https://github.com/J-F-Liu/pom) | 13.730 ms| 8 MB/s |
+| Ranking | Library                                              | Time (smaller is better) | Throughput |
+|---------|------------------------------------------------------|--------------------------|------------|
+| 1       | `chumsky` (check-only)                               | 140.77 µs                | 797 MB/s   |
+| 2       | [`winnow`](https://github.com/winnow-rs/winnow)      | 178.91 µs                | 627 MB/s   |
+| 3       | `chumsky`                                            | 210.43 µs                | 533 MB/s   |
+| 4       | [`sn`](https://github.com/Jacherr/sn) (hand-written) | 237.94 µs                | 472 MB/s   |
+| 5       | [`serde_json`](https://github.com/serde-rs/json)     | 477.41 µs                | 235 MB/s   |
+| 6       | [`nom`](https://github.com/rust-bakery/nom)          | 526.52 µs                | 213 MB/s   |
+| 7       | [`pest`](https://github.com/pest-parser/pest)        | 1.9706 ms                | 57 MB/s    |
+| 8       | [`pom`](https://github.com/J-F-Liu/pom)              | 13.730 ms                | 8 MB/s     |
 
 What should you take from this? It's difficult to say. 'Chumsky is faster than X' or 'chumsky is slower than Y' is too
 strong a statement: this is just one particular benchmark with one particular set of implementations and one

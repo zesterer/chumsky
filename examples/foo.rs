@@ -1,5 +1,7 @@
-//! This is the parser and interpreter for the 'Foo' language. See `tutorial.md` in the repository's root to learn
-//! about it.
+//! This is the parser and interpreter for the 'Foo' language.
+//!
+//! See the tutorial in the guide to learn more about it: https://docs.rs/chumsky/latest/chumsky/guide/index.html
+
 use chumsky::prelude::*;
 
 #[derive(Debug)]
