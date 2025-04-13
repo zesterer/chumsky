@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.10.1] - 2025-04-13
+
+### Added
+
+- Implemented `Container` for `VecDeque`
+- New section covering recursion in the guide
+
+### Changed
+
+- `Boxed` types now have a default type parameter of `extra::Default`, like `Parser` and `IterParser`
+- The tutorial has been updated for `0.10` and has been moved to the guide
+
+### Fixed
+
+- Nonsense spans occasionally generated for non-existent tokens
+- Improved docs have been added for several items
+- Many minor documentation issues have been fixed
+
 # [0.10.0] - 2025-03-22
 
 *Note: version 0.10 is a from-scratch rewrite of chumsky with innumerable small changes. To avoid this changelog being
