@@ -10,7 +10,7 @@ categories = ["parsing", "text-processing"]
 edition = "2021"
 exclude = [
     "/misc/*",
-	"/benches/samples/*",
+    "/benches/samples/*",
 ]
 build = "build.rs"
 rust-version = "1.65"
@@ -89,7 +89,7 @@ bytes = { version = "1", default-features = false, optional = true }
 vergen-gix = { version = "1.0", optional = true, features = ["emit_and_set"] }
 
 [dev-dependencies]
-ariadne = "0.2"
+ariadne = "0.5"
 pom = "3.2"
 nom = "7.1"
 winnow = "0.7.0"

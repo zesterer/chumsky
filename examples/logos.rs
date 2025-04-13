@@ -156,11 +156,12 @@ fn main() {
         // with Rust's built-in `Display` trait, but it's a little crude
         Err(errs) => {
             for err in errs {
-                Report::build(ReportKind::Error, (), err.span().start)
+                Report::build(ReportKind::Error, ((), err.span().into_range()))
+                    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
                     .with_code(3)
                     .with_message(err.to_string())
                     .with_label(
-                        Label::new(err.span().into_range())
+                        Label::new(((), err.span().into_range()))
                             .with_message(err.reason().to_string())
                             .with_color(Color::Red),
                     )
