@@ -5,10 +5,6 @@
     feature(never_type, fn_traits, tuple_trait, unboxed_closures)
 )]
 #![doc = include_str!("../README.md")]
-#![doc = "## Examples"]
-#![doc = concat!("-", "[Brainfuck parser](", env!("CHUMSKY_REPO_URL"), "/examples/brainfuck.rs", ")\n\n")]
-#![doc = concat!("-", "[JSON parser](", env!("CHUMSKY_REPO_URL"), "/examples/json.rs", ")\n\n")]
-#![doc = concat!("-", "[A small Rust-like language](", env!("CHUMSKY_REPO_URL"), "/examples/nano_rust.rs", ")\n\n")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![allow(
     clippy::should_implement_trait,

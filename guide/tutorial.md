@@ -75,27 +75,27 @@ so we'll call it `Expr`.
 
 ```rust ignore
 #[derive(Debug)]
-enum Expr<'a> {
+enum Expr<'src> {
     Num(f64),
-    Var(&'a str),
+    Var(&'src str),
 
-    Neg(Box<Expr<'a>>),
-    Add(Box<Expr<'a>>, Box<Expr<'a>>),
-    Sub(Box<Expr<'a>>, Box<Expr<'a>>),
-    Mul(Box<Expr<'a>>, Box<Expr<'a>>),
-    Div(Box<Expr<'a>>, Box<Expr<'a>>),
+    Neg(Box<Expr<'src>>),
+    Add(Box<Expr<'src>>, Box<Expr<'src>>),
+    Sub(Box<Expr<'src>>, Box<Expr<'src>>),
+    Mul(Box<Expr<'src>>, Box<Expr<'src>>),
+    Div(Box<Expr<'src>>, Box<Expr<'src>>),
 
-    Call(&'a str, Vec<Expr<'a>>),
+    Call(&'src str, Vec<Expr<'src>>),
     Let {
-        name: &'a str,
-        rhs: Box<Expr<'a>>,
-        then: Box<Expr<'a>>,
+        name: &'src str,
+        rhs: Box<Expr<'src>>,
+        then: Box<Expr<'src>>,
     },
     Fn {
-        name: &'a str,
-        args: Vec<&'a str>,
-        body: Box<Expr<'a>>,
-        then: Box<Expr<'a>>,
+        name: &'src str,
+        args: Vec<&'src str>,
+        body: Box<Expr<'src>>,
+        then: Box<Expr<'src>>,
     }
 }
 
@@ -120,11 +120,11 @@ Expr::Let {
 
 The purpose of our parser will be to perform this conversion, from source code to AST.
 
-We're also going to create a function that creates Foo's parser. Our parser takes in a `char` stream and
+We're also going to create a function that creates Foo's parser. Our parser takes in a `&str` (a string slice) and
 produces an `Expr`, so we'll use those types for the `I` (input) and `O` (output) type parameters.
 
 ```rust ignore
-fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
+fn parser<'src>() -> impl Parser<'src, &'src str, Expr<'src>> {
     // To be filled in later...
 }
 ```
@@ -230,7 +230,7 @@ We'll now take a diversion away from the parser to create a function that can ev
 our interpreter and is the thing that actually performs the computation of programs.
 
 ```rust ignore
-fn eval<'a>(expr: &'a Expr<'a>) -> Result<f64, String> {
+fn eval<'src>(expr: &'src Expr<'src>) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),
         Expr::Neg(a) => Ok(-eval(a)?),
@@ -445,7 +445,7 @@ entirely. We can do this by nesting expressions within parentheses, like `(3 + 4
 
 The creation of the `atom` pattern a few sections before was no accident: parentheses have a greater precedence than
 any operator, so we should treat a parenthesized expression as if it were equivalent to a single value. We call things
-that behave like single values 'atoms' by convention.
+that behave like single values 'srctoms' by convention.
 
 We're going to hoist our entire parser up into a closure, allowing us to define it in terms of itself.
 
@@ -605,7 +605,7 @@ Unfortunately, the `eval` function will panic because we've not yet handled `Exp
 now.
 
 ```rust ignore
-fn eval<'a>(expr: &'a Expr<'a>, vars: &mut Vec<(&'a str, f64)>) -> Result<f64, String> {
+fn eval<'src>(expr: &'src Expr<'src>, vars: &mut Vec<(&'src str, f64)>) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),
         Expr::Neg(a) => Ok(-eval(a, vars)?),
@@ -730,10 +730,10 @@ elements.
 Next, we modify our `eval` function to support a function stack.
 
 ```rust ignore
-fn eval<'a>(
-    expr: &'a Expr<'a>,
-    vars: &mut Vec<(&'a str, f64)>,
-    funcs: &mut Vec<(&'a str, &'a [&'a str], &'a Expr<'a>)>,
+fn eval<'src>(
+    expr: &'src Expr<'src>,
+    vars: &mut Vec<(&'src str, f64)>,
+    funcs: &mut Vec<(&'src str, &'src [&'src str], &'src Expr<'src>)>,
 ) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),

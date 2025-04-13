@@ -3,32 +3,32 @@
 use chumsky::prelude::*;
 
 #[derive(Debug)]
-enum Expr<'a> {
+enum Expr<'src> {
     Num(f64),
-    Var(&'a str),
+    Var(&'src str),
 
-    Neg(Box<Expr<'a>>),
-    Add(Box<Expr<'a>>, Box<Expr<'a>>),
-    Sub(Box<Expr<'a>>, Box<Expr<'a>>),
-    Mul(Box<Expr<'a>>, Box<Expr<'a>>),
-    Div(Box<Expr<'a>>, Box<Expr<'a>>),
+    Neg(Box<Expr<'src>>),
+    Add(Box<Expr<'src>>, Box<Expr<'src>>),
+    Sub(Box<Expr<'src>>, Box<Expr<'src>>),
+    Mul(Box<Expr<'src>>, Box<Expr<'src>>),
+    Div(Box<Expr<'src>>, Box<Expr<'src>>),
 
-    Call(&'a str, Vec<Expr<'a>>),
+    Call(&'src str, Vec<Expr<'src>>),
     Let {
-        name: &'a str,
-        rhs: Box<Expr<'a>>,
-        then: Box<Expr<'a>>,
+        name: &'src str,
+        rhs: Box<Expr<'src>>,
+        then: Box<Expr<'src>>,
     },
     Fn {
-        name: &'a str,
-        args: Vec<&'a str>,
-        body: Box<Expr<'a>>,
-        then: Box<Expr<'a>>,
+        name: &'src str,
+        args: Vec<&'src str>,
+        body: Box<Expr<'src>>,
+        then: Box<Expr<'src>>,
     },
 }
 
 #[allow(clippy::let_and_return)]
-fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
+fn parser<'src>() -> impl Parser<'src, &'src str, Expr<'src>> {
     let ident = text::ascii::ident().padded();
 
     let expr = recursive(|expr| {
@@ -112,10 +112,10 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     decl
 }
 
-fn eval<'a>(
-    expr: &'a Expr<'a>,
-    vars: &mut Vec<(&'a str, f64)>,
-    funcs: &mut Vec<(&'a str, &'a [&'a str], &'a Expr<'a>)>,
+fn eval<'src>(
+    expr: &'src Expr<'src>,
+    vars: &mut Vec<(&'src str, f64)>,
+    funcs: &mut Vec<(&'src str, &'src [&'src str], &'src Expr<'src>)>,
 ) -> Result<f64, String> {
     match expr {
         Expr::Num(x) => Ok(*x),
