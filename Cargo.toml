@@ -88,6 +88,7 @@ bytes = { version = "1", default-features = false, optional = true }
 ariadne = "0.5"
 pom = "3.2"
 nom = "7.1"
+nom8 = { package = "nom", version = "8"}
 winnow = "0.7.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 ciborium = { version = "0.2" }
