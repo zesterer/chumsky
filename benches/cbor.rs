@@ -312,7 +312,10 @@ mod nom {
 mod nom8 {
     use super::CborZero;
     use nom8::{
-        bits::{bits, bytes, complete::{tag, take}},
+        bits::{
+            bits, bytes,
+            complete::{tag, take},
+        },
         branch::alt,
         bytes::complete::take as take_bytes,
         combinator::{map, value as to, verify},
@@ -329,21 +332,24 @@ mod nom8 {
             preceded(tag(25, 5usize), take(16usize)),
             preceded(tag(26, 5usize), take(32usize)),
             preceded(tag(27, 5usize), take(64usize)),
-        )).parse_complete(i)
+        ))
+        .parse_complete(i)
     }
 
     fn uint<'a>(i: &[u8]) -> IResult<&[u8], CborZero<'a>> {
         bits(preceded(
             tag(0, 3usize),
             map(integer, |v| CborZero::Int(v.try_into().unwrap())),
-        )).parse_complete(i)
+        ))
+        .parse_complete(i)
     }
 
     fn nint<'a>(i: &[u8]) -> IResult<&[u8], CborZero<'a>> {
         bits(preceded(
             tag(1, 3usize),
             map(integer, |v| CborZero::Int(-1 - i64::try_from(v).unwrap())),
-        )).parse_complete(i)
+        ))
+        .parse_complete(i)
     }
 
     fn bstr(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
@@ -405,7 +411,8 @@ mod nom8 {
                     }),
                 ),
             )),
-        )).parse_complete(i)
+        ))
+        .parse_complete(i)
     }
 
     fn value(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
@@ -418,7 +425,8 @@ mod nom8 {
             cbor_map,
             cbor_tag,
             float_simple,
-        )).parse_complete(i)
+        ))
+        .parse_complete(i)
     }
 
     pub fn cbor(i: &[u8]) -> IResult<&[u8], CborZero<'_>> {
