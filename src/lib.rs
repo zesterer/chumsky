@@ -3543,6 +3543,25 @@ mod tests {
     }
 
     #[test]
+    fn iterable_then() {
+        fn parser<'src>() -> impl Parser<'src, &'src str, Vec<char>> {
+            just('a')
+                .map(Some)
+                .into_iter()
+                .then(just('b').repeated())
+                .then(just('c').repeated())
+                .collect()
+        }
+
+        assert_eq!(
+            parser().parse("abbcc").into_result(),
+            Ok(vec!['a', 'b', 'b', 'c', 'c'])
+        );
+        assert_eq!(parser().parse("acc").into_result(), Ok(vec!['a', 'c', 'c']));
+        assert!(parser().parse("bbc").has_errors());
+    }
+
+    #[test]
     #[cfg(feature = "unstable")]
     fn cached() {
         fn my_parser<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Default> {

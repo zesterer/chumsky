@@ -677,6 +677,22 @@ impl<A: Clone, O> Clone for IntoIter<A, O> {
     }
 }
 
+impl<'src, A, O, I, E> Parser<'src, I, (), E> for IntoIter<A, O>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
+    O: IntoIterator,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
+        self.parser.go::<Check>(inp)?;
+        Ok(M::bind(|| ()))
+    }
+
+    go_extra!(());
+}
+
 impl<'src, A, O, I, E> IterParser<'src, I, O::Item, E> for IntoIter<A, O>
 where
     I: Input<'src>,
@@ -893,6 +909,47 @@ where
     }
 
     go_extra!((OA, OB));
+}
+
+impl<'src, I, E, A, B, O, U, V> IterParser<'src, I, O, E> for Then<A, B, U, V, E>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: IterParser<'src, I, O, E>,
+    B: IterParser<'src, I, O, E>,
+{
+    type IterState<M: Mode>
+        = (A::IterState<M>, Option<B::IterState<M>>)
+    where
+        I: 'src;
+
+    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK && B::NONCONSUMPTION_IS_OK;
+
+    #[inline(always)]
+    fn make_iter<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Emit, Self::IterState<M>> {
+        Ok((self.parser_a.make_iter::<M>(inp)?, None))
+    }
+
+    #[inline(always)]
+    fn next<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        state: &mut Self::IterState<M>,
+    ) -> IPResult<M, O> {
+        match state {
+            (_, Some(b)) => self.parser_b.next(inp, b),
+            (a, b) => match self.parser_a.next(inp, a)? {
+                Some(a_out) => Ok(Some(a_out)),
+                None => {
+                    let b = b.insert(self.parser_b.make_iter(inp)?);
+                    self.parser_b.next(inp, b)
+                }
+            },
+        }
+    }
 }
 
 /// See [`Parser::ignore_then`].
