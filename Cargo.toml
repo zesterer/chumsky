@@ -135,6 +135,10 @@ name = "json"
 required-features = ["std"]
 
 [[example]]
+name = "json_fast"
+required-features = ["std"]
+
+[[example]]
 name = "io"
 required-features = ["std"]
 
