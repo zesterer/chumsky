@@ -583,7 +583,7 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: Borrow<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
         E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
     {
@@ -605,14 +605,10 @@ pub mod ascii {
         */
         ident()
             .try_map(move |s: I::Slice, span| {
-                if &s == keyword.borrow() {
+                if keyword == s {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found(
-                        [TextExpected::Identifier(keyword.borrow().clone())],
-                        None,
-                        span,
-                    ))
+                    Err(LabelError::expected_found([keyword.clone()], None, span))
                 }
             })
             .to_slice()
