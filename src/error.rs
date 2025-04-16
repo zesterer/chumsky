@@ -417,7 +417,7 @@ where
     T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.write(f, |t, f| write!(f, "'{t}'"))
+        self.write(f, |t, f| write!(f, "{t}"))
     }
 }
 
