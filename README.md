@@ -34,7 +34,7 @@ that you may need. It also has `no_std` support, making it suitable for embedded
 
 ## Example
 
-See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/master/examples/brainfuck.rs) for a full
+See [`examples/brainfuck.rs`](https://github.com/zesterer/chumsky/blob/main/examples/brainfuck.rs) for a full
 [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter
 (`cargo run --example brainfuck -- examples/sample.bf`).
 
@@ -192,7 +192,7 @@ within 20% of the performance of the 'pack leader' and has performance comparabl
 performance standards for Rust libraries are already far above most language ecosystems, so you can be sure that
 chumsky will keep pace with your use-case.
 
-Benchmarks were performed on a 16-core AMD Ryzen 7 3700x.
+Benchmarks were performed on a single core of an AMD Ryzen 7 3700x.
 
 ## Notes
 
