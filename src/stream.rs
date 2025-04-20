@@ -132,7 +132,8 @@ where
 /// An input that dynamically pulls tokens from an [`Iterator`].
 ///
 /// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
-/// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches the inputs internally.
+/// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches generated tokens
+/// internally.
 pub struct IterInput<I, S> {
     iter: I,
     eoi: S,
