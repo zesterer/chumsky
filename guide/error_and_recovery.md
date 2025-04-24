@@ -113,6 +113,8 @@ assert_eq!(
 );
 ```
 
+Because we can combine and define recovery strategies as with any other grammar rule in our language, this allows us the liberty to even attempt parsing constructs that don't make sense in our language, as exemplified above with text_recovery. Many modern languages (even Rust!) attempt invalid parses like the above in order to teach new users coming from unfamiliar grammars.
+
 ## Error Handling in Practice
 TODO
 
