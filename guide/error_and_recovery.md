@@ -81,8 +81,8 @@ pub fn lexer<'src>() -> impl Parser<'src, &'src str, Expr, extra::Err<Rich<'src,
             .map(Expr::List)
             // If parsing a list expression fails, guess at the error being accidental text input.
             .recover_with(via_parser(text_recovery.map(Expr::Error)))
-            // Fallback to less conservative recovery otherwise.
             .or(int)
+            // Fallback to less conservative recovery otherwise.
             .recover_with(via_parser(naive_recovery.map(Expr::Error)))
             .padded()
     })
