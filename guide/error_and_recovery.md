@@ -43,16 +43,74 @@ In the next section we'll see how to define custom Recovery Strategies for our p
 A Recovery Strategy is nothing more than a parser expression to be called in exceptional conditions, Consider the following code:
 
 ```
-# use chumsky::prelude::*;
-# fn parser<'src>() -> impl Parser<'src, &'src str, ()> { end() }
-#[test]
-fn test_parser() {
-    // Our parser expects empty strings, so this should parse successfully
-    assert_eq!(parser().parse("").into_result(), Ok(()));
-
-    // Anything other than an empty string should produce an error
-    assert!(parser().parse("123").has_errors());
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ErrorKind {
+    UnexpectedText(String),
+    Unknown,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Expr {
+    Error(ErrorKind),
+    Int(i64),
+    List(Vec<Expr>),
+}
+
+pub fn lexer<'src>() -> impl Parser<'src, &'src str, Expr, extra::Err<Rich<'src, char>>> {
+    // Atoms.
+    let int = text::int(10).from_str().map(|r| match r {
+        Ok(int) => Expr::Int(int),
+        Err(_) => Expr::Error(ErrorKind::Unknown),
+    });
+
+    // Errors.
+    let text_recovery = any()
+        .filter(|c: &char| c.is_ascii_alphabetic())
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+        .map(|s| ErrorKind::UnexpectedText(s));
+    let naive_recovery = just('[')
+        .then(none_of(']').repeated().then(just(']')))
+        .map(|_| ErrorKind::Unknown);
+
+    recursive(|expr| {
+        expr.separated_by(just(','))
+            .collect::<Vec<_>>()
+            .delimited_by(just('['), just(']'))
+            .map(Expr::List)
+            // If parsing a list expression fails, guess at the error being accidental text input.
+            .recover_with(via_parser(text_recovery.map(Expr::Error)))
+            // Fallback to less conservative recovery otherwise.
+            .or(int)
+            .recover_with(via_parser(naive_recovery.map(Expr::Error)))
+            .padded()
+    })
+}
+
+// Naive recovery strategy gives us little information...
+assert_eq!(
+    lexer().parse("[[💥, two], [💥, 4]]").output(),
+    Some(&Expr::List(vec![
+        Expr::Error(ErrorKind::Unknown),
+        Expr::Error(ErrorKind::Unknown)
+    ]))
+);
+
+// But more specific strategies allow us to extract more and better information!
+assert_eq!(
+    lexer().parse("[[1, two], [three, 4]]").output(),
+    Some(&Expr::List(vec![
+        Expr::List(vec![
+            Expr::Int(1),
+            Expr::Error(ErrorKind::UnexpectedText(String::from("two")))
+        ]),
+        Expr::List(vec![
+            Expr::Error(ErrorKind::UnexpectedText(String::from("three"))),
+            Expr::Int(4)
+        ])
+    ]))
+);
 ```
 
 ## Error Handling in Practice
