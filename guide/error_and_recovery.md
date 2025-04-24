@@ -115,8 +115,15 @@ assert_eq!(
 
 Because we can combine and define recovery strategies as with any other grammar rule in our language, this allows us the liberty to even attempt parsing constructs that don't make sense in our language, as exemplified above with text_recovery. Many modern languages (even Rust!) attempt invalid parses like the above in order to teach new users coming from unfamiliar grammars.
 
-## Error Handling in Practice
-TODO
+To define your own recovery strategy, Chumsky provides the `recovery::via_parser` utility to be used in conjunction with `Parser::recover_with`.
+
+### Skipping tokens with [`recovery::skip_until`] and [`recovery::skip_then_retry_until`]
+
+Chumsky provides two primitive recovery strategies that can be used in lieu of defining your own:
+
+- [`recovery::skip_until`]: will *skip* input *until* it matches a new construct. It is naive and recommended only as a last resort, as it will result in very poor error generation if abused. TODO what is fallback?
+
+- [`recovery::skip_then_retry_until`]: TODO can't remember where I saw docs for this one before.
 
 ## Error Diagnostics
 TODO Section on Ariadne?
