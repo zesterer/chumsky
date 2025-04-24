@@ -1,14 +1,12 @@
 # Error And Recovery
 
-A key property of parsing unstructured data into a more structured, semantic form, is that that unstructured data may not be correctly arranged such that the conversion is possible. While this happens with (basically) any parser, different parsers might have different expectations of how much they want to do to recover from or provide info on malformed data. A high speed assembly interpreter might decide that it just needs to know that something bad happened, while a programming language compiler might want to ponder on the data and its surrounding context and provide as much information as possible to the end user, which might itself involve going over *more* data instead of failing immediately. Certain categories of errors may even be entirely recoverable from!
+A key property of parsing unstructured data into a more structured, semantic form, is that that unstructured data may not be correctly arranged such that the conversion is possible. While this happens with (basically) any parser, different parsers might have different expectations of how much they want to do to recover from or provide info on malformed data. A network-facing protocol parser might decide that it just needs to know that something bad happened, while a programming language compiler might want to ponder on the data and its surrounding context and provide as much information as possible to the end user, which might itself involve going over *more* data instead of failing immediately. Certain categories of errors may even be entirely recoverable from!
 
 ## What is an [`Error`]?
 
-While Chumsky is responsible for the plumbing and detection of errors based on Parser Combinator outputs, you have full control over the creation, display, contained data and interactions for errors you define. Chumsky achieves this by having parser combinators automatically generate errors based on their parser function's type signature while providing the [`Parser::map_err`] utility to convert the original error type into your own.
+Chumsky manages the tracking and generation of errors for you. However, you may customise what information an error keeps track of (and how) by changing the error type (see [extra::Err]). Chumsky provides a range of built-in error types to handle a range of use-cases, but you can also implement the [Error] trait for your own error type if you want even more fine-grained control.
 
-It is also entirely possible to rely only on Chumsky's default error types, labelling them with descriptions on [`Parser::map_err`] calls, or letting details emerge from the interplay of the declared parser combinations.
-
-## The Quintessential Quadruplet of Errors
+### The Quintessential Quadruplet of Errors
 
 For prototyping and modest use cases, Chumsky provides 4 separate built-in types that implement [`Error`], ranging from a super cheap ZeroSizedType (ZST) to a complex and detailed user-centric error. Instances of these types can be modified to alter their contained data, such as altering the expected value of an expression, the span where the failure ocurred, or by providing an arbitrary context as in [`Rich`].
 
@@ -21,7 +19,10 @@ For prototyping and modest use cases, Chumsky provides 4 separate built-in types
 - [`Rich`]: the recommended type for dealing with user input at the expense of raw speed. Rich is still *fast* for applications like compilers and interpreters, and a great choice if you want to give users a pleasant editing experience first and foremost. Rich error types contain [`Span`] information as well as found and expected values, a [`Label`] to describe the associated parser construction, the ability to merge errors in the same span, as well as a potential [`Context`] with truly arbitrary data.
 
 ## The [`Span`] Trait
-TODO
+
+Spans are an important feature of any competent parser. They provide a location within a source file, denoted with start and end offsets, that corresponds to the location of some element within the source code (often a single character or token, but also an entire multi-token high-level structure like an expression, statement, or function).
+
+Relevant to this section, spans are also used as an input to parser errors, allowing the final message shown to the user to reference the location at which an error occurred, along with other contextual information (such as which structure the error occurred within).
 
 ## Recovering from an [`Error`]
 
