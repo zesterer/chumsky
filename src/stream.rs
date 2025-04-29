@@ -63,7 +63,7 @@ pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 pub type BoxedExactSizeStream<'a, T> = Stream<Box<dyn ExactSizeIterator<Item = T> + 'a>>;
 
 impl<I: Iterator> Sealed for Stream<I> {}
-impl<'a, I: Iterator + 'a> Input<'a> for Stream<I>
+impl<'src, I: Iterator + 'src> Input<'src> for Stream<I>
 where
     I::Item: Clone,
 {
@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<'a, I: ExactSizeIterator + 'a> ExactSizeInput<'a> for Stream<I>
+impl<'src, I: ExactSizeIterator + 'src> ExactSizeInput<'src> for Stream<I>
 where
     I::Item: Clone,
 {
@@ -110,7 +110,7 @@ where
     }
 }
 
-impl<'a, I: Iterator + 'a> ValueInput<'a> for Stream<I>
+impl<'src, I: Iterator + 'src> ValueInput<'src> for Stream<I>
 where
     I::Item: Clone,
 {
@@ -188,6 +188,28 @@ where
             }
             None => S::new(eoi.context(), eoi.end()..eoi.end()),
         }
+    }
+}
+
+// impl<'src, I, S> ExactSizeInput<'src> for IterInput<I, S>
+// where
+//     I: Iterator<Item = (T, S)> + Clone + 'src,
+//     S: Span + 'src,
+// {
+//     #[inline(always)]
+//     unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+//         (*range.start..this.tokens.len() + cursor.0.len()).into()
+//     }
+// }
+
+impl<'src, I, T: 'src, S> ValueInput<'src> for IterInput<I, S>
+where
+    I: Iterator<Item = (T, S)> + Clone + 'src,
+    S: Span + 'src,
+{
+    #[inline]
+    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+        Self::next_maybe(this, cursor)
     }
 }
 

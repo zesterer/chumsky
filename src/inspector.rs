@@ -92,9 +92,13 @@ impl<'src, T: Clone, I: Input<'src>> Inspector<'src, I> for RollbackState<T> {
     #[inline(always)]
     fn on_token(&mut self, _: &<I as Input<'src>>::Token) {}
     #[inline(always)]
-    fn on_save<'parse>(&self, _: &Cursor<'src, 'parse, I>) -> Self::Checkpoint { self.0.clone() }
+    fn on_save<'parse>(&self, _: &Cursor<'src, 'parse, I>) -> Self::Checkpoint {
+        self.0.clone()
+    }
     #[inline(always)]
-    fn on_rewind<'parse>(&mut self, cp: &Checkpoint<'src, 'parse, I, Self::Checkpoint>) { self.0 = cp.inspector.clone(); }
+    fn on_rewind<'parse>(&mut self, cp: &Checkpoint<'src, 'parse, I, Self::Checkpoint>) {
+        self.0 = cp.inspector.clone();
+    }
 }
 
 impl<T> Deref for RollbackState<T> {
@@ -127,9 +131,13 @@ impl<'src, T: Clone, I: Input<'src>> Inspector<'src, I> for TruncateState<T> {
     #[inline(always)]
     fn on_token(&mut self, _: &<I as Input<'src>>::Token) {}
     #[inline(always)]
-    fn on_save<'parse>(&self, _: &Cursor<'src, 'parse, I>) -> Self::Checkpoint { self.0.len() }
+    fn on_save<'parse>(&self, _: &Cursor<'src, 'parse, I>) -> Self::Checkpoint {
+        self.0.len()
+    }
     #[inline(always)]
-    fn on_rewind<'parse>(&mut self, cp: &Checkpoint<'src, 'parse, I, Self::Checkpoint>) { self.0.truncate(cp.inspector); }
+    fn on_rewind<'parse>(&mut self, cp: &Checkpoint<'src, 'parse, I, Self::Checkpoint>) {
+        self.0.truncate(cp.inspector);
+    }
 }
 
 impl<T> Deref for TruncateState<T> {
