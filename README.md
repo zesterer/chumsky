@@ -11,7 +11,7 @@ Chumsky is a parser library for Rust that makes writing expressive, high-perform
 
 *Note: Error diagnostic rendering in this example is performed by [Ariadne](https://github.com/zesterer/ariadne)*
 
-Although chumsky is designed primarily for user-fancing parsers such as compilers, chumsky is just as much at home
+Although chumsky is designed primarily for user-facing parsers such as compilers, chumsky is just as much at home
 parsing binary protocols at the networking layer, configuration files, or any other form of complex input validation
 that you may need. It also has `no_std` support, making it suitable for embedded environments.
 
