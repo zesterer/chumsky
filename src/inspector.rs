@@ -4,10 +4,8 @@
 //! and rubber bungs in his ears. He knew exactly what was happening and had known
 //! ever since his Sub-Etha Sens-O-Matic had started winking in the dead of night
 //! beside his pillar and woken him with a start."*
-use crate::{
-    input::{Checkpoint, Cursor},
-    Input,
-};
+use super::*;
+use crate::input::{Checkpoint, Cursor};
 use core::ops::{Deref, DerefMut};
 
 #[allow(unused)] // for intra-doc links
