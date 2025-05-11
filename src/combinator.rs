@@ -2864,6 +2864,51 @@ where
 //     go_extra!(O);
 // }
 
+/// See [`Parser::contextual`].
+#[derive(Copy, Clone)]
+pub struct Contextual<A> {
+    pub(crate) inner: A,
+}
+
+impl<'src, I, O, E, A> Parser<'src, I, O, E> for Contextual<A>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        Self::go_cfg::<M>(self, inp, true)
+    }
+
+    go_extra!(O);
+}
+
+impl<'src, I, O, E, A> ConfigParser<'src, I, O, E> for Contextual<A>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
+{
+    type Config = bool;
+
+    #[inline]
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, O> {
+        let before = inp.cursor();
+        if cfg {
+            self.inner.go::<M>(inp)
+        } else {
+            let err_span = inp.span_since(&before);
+            inp.add_alt([DefaultExpected::SomethingElse], None, err_span);
+            Err(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;

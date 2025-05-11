@@ -2186,6 +2186,41 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         self
     }
 
+    /// Have this parser be enabled or disabled depending on context.
+    ///
+    /// This method, by itself, does nothing: you must use [`ConfigParser::configure`] to specify when the parser is
+    /// enabled.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use chumsky::prelude::*;
+    ///
+    /// // Our parser can be in two modes depending on context: hexadecimal, or denary
+    /// #[derive(Clone)]
+    /// enum Mode { Hex, Dec }
+    ///
+    /// let digits = one_of::<_, _, extra::Context<Mode>>("0123456789")
+    ///     .or(one_of("abcdef").contextual().configure(|cfg, ctx| matches!(ctx, Mode::Hex)))
+    ///     .repeated();
+    ///
+    /// let num = just::<_, _, extra::Default>("0x").ignore_then(digits.with_ctx(Mode::Hex))
+    ///     // Fallback: when '0x' isn't present, parse using denary mode
+    ///     .or(digits.with_ctx(Mode::Dec))
+    ///     .to_slice();
+    ///
+    /// assert_eq!(num.parse("0x1a3f5b").into_result(), Ok("0x1a3f5b"));
+    /// assert_eq!(num.parse("12345").into_result(), Ok("12345"));
+    /// // Without the '0x' prefix, hexadecimal digits are invalid
+    /// assert!(num.parse("1a3f5b").has_errors());
+    /// ```
+    fn contextual(self) -> Contextual<Self>
+    where
+        Self: Sized,
+    {
+        Contextual { inner: self }
+    }
+
     /// Use [Pratt parsing](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) to ergonomically
     /// parse this pattern separated by prefix, postfix, and infix operators of various associativites and precedence.
     ///
