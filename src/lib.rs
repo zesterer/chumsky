@@ -1137,7 +1137,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// let generic = just(b'0').configure(|cfg, ctx: &u8| cfg.seq(*ctx));
     ///
-    /// let parse_a = just::<_, _, extra::Default>(b'b').ignore_then(generic.with_ctx::<u8>(b'a'));
+    /// let parse_a = just::<_, _, extra::Default>(b'b').ignore_then(generic.with_ctx(b'a'));
     /// let parse_b = just::<_, _, extra::Default>(b'a').ignore_then(generic.with_ctx(b'b'));
     ///
     /// assert_eq!(parse_a.parse(b"ba" as &[_]).into_result(), Ok::<_, Vec<EmptyErr>>(b'a'));
@@ -1145,10 +1145,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// assert_eq!(parse_b.parse(b"ab" as &[_]).into_result(), Ok(b'b'));
     /// assert!(parse_b.parse(b"aa").has_errors());
     /// ```
-    fn with_ctx<Ctx>(self, ctx: Ctx) -> WithCtx<Self, Ctx>
+    fn with_ctx(self, ctx: E::Context) -> WithCtx<Self, E::Context>
     where
         Self: Sized,
-        Ctx: 'src + Clone,
+        E::Context: Clone,
     {
         WithCtx { parser: self, ctx }
     }
