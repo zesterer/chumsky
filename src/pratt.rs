@@ -87,6 +87,16 @@
 
 use super::*;
 
+/// The result of calling [`Operator::do_parse_infix`]
+pub enum InfixResult<T, E> {
+   /// Input was parsed
+   Ok(T),
+   /// Input could not be parsed
+   Err(E),
+   /// Input could not be parsed, because it was ambigious
+   Ambigious(E),
+}
+
 macro_rules! op_check_and_emit {
     () => {
         #[inline(always)]
@@ -163,7 +173,7 @@ macro_rules! op_check_and_emit {
             lhs: (),
             min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-        ) -> Result<(), ()> {
+        ) -> InfixResult<(), ()> {
             self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
         #[inline(always)]
@@ -180,7 +190,7 @@ macro_rules! op_check_and_emit {
             lhs: O,
             min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-        ) -> Result<O, O> {
+        ) -> InfixResult<O, O> {
             self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
     };
@@ -245,11 +255,11 @@ where
         lhs: M::Output<O>,
         _min_power: u32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        Err(lhs)
+        InfixResult::Err(lhs)
     }
 
     #[doc(hidden)]
@@ -293,7 +303,7 @@ where
         lhs: (),
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-    ) -> Result<(), ()>;
+    ) -> InfixResult<(), ()>;
     #[doc(hidden)]
     fn do_parse_infix_emit<'parse>(
         &self,
@@ -303,7 +313,7 @@ where
         lhs: O,
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-    ) -> Result<O, O>;
+    ) -> InfixResult<O, O>;
 }
 
 /// A boxed pratt parser operator. See [`Operator`].
@@ -357,7 +367,7 @@ where
         lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
@@ -415,7 +425,7 @@ where
         lhs: (),
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-    ) -> Result<(), ()> {
+    ) -> InfixResult<(), ()> {
         self.0
             .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
@@ -428,38 +438,51 @@ where
         lhs: O,
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-    ) -> Result<O, O> {
+    ) -> InfixResult<O, O> {
         self.0
             .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
 }
 
-/// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and binding power of an [`infix`]
-/// operator (see [`left`] and [`right`]).
+/// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and precedence of an [`infix`]
+/// operator (see [`left`], [`right`] and [`none`]).
 ///
-/// Higher binding powers should be used for higher precedence operators.
+/// Higher numbers should be used for higher precedence operators. Precedences must be greater than zero.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Associativity {
-    /// Specifies that the operator should be left-associative, with the given binding power (see [`left`]).
+    /// Specifies that the operator should be left-associative, with the given precedence (see [`left`]).
     Left(u16),
-    /// Specifies that the operator should be right-associative, with the given binding power (see [`right`]).
+    /// Specifies that the operator should be right-associative, with the given precedence (see [`right`]).
     Right(u16),
+    /// Specifies that the operator is non-associative, with the given precedence (see [`none`]).
+    None(u16),
 }
 
-/// Specifies a left [`Associativity`] with the given binding power.
+/// Specifies a left [`Associativity`] with the given precedence.
 ///
 /// Left-associative operators are evaluated from the left-most terms, moving rightward. For example, the expression
 /// `a + b + c + d` will be evaluated as `((a + b) + c) + d` because addition is conventionally left-associative.
-pub fn left(binding_power: u16) -> Associativity {
-    Associativity::Left(binding_power)
+pub fn left(precedence: u16) -> Associativity {
+    assert!(precedence > 0);
+    Associativity::Left(precedence)
 }
 
-/// Specifies a right [`Associativity`] with the given binding power.
+/// Specifies a right [`Associativity`] with the given precedence.
 ///
 /// Right-associative operators are evaluated from the right-most terms, moving leftward. For example, the expression
 /// `a ^ b ^ c ^ d` will be evaluated as `a ^ (b ^ (c ^ d))` because exponents are conventionally right-associative.
-pub fn right(binding_power: u16) -> Associativity {
-    Associativity::Right(binding_power)
+pub fn right(precedence: u16) -> Associativity {
+    assert!(precedence > 0);
+    Associativity::Right(precedence)
+}
+
+/// Specifies no [`Associativity`] with the given precedence.
+///
+/// Non-associative operators can't be chained. For example, the expression
+/// `a < b < c` will produce an error, because comparisons are conventionally non-associative.
+pub fn none(precedence: u16) -> Associativity {
+    assert!(precedence > 0);
+    Associativity::None(precedence)
 }
 
 impl Associativity {
@@ -467,6 +490,7 @@ impl Associativity {
         match self {
             Self::Left(x) => *x as u32 * 2,
             Self::Right(x) => *x as u32 * 2 + 1,
+            Self::None(x) => *x as u32 * 2,
         }
     }
 
@@ -474,6 +498,7 @@ impl Associativity {
         match self {
             Self::Left(x) => *x as u32 * 2 + 1,
             Self::Right(x) => *x as u32 * 2,
+            Self::None(x) => *x as u32 * 2,
         }
     }
 }
@@ -545,32 +570,38 @@ where
         lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        if self.associativity.left_power() >= min_power {
-            match self.op_parser.go::<M>(inp) {
-                Ok(op) => match f(inp, self.associativity.right_power()) {
-                    Ok(rhs) => Ok(M::combine(
-                        M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                        op,
-                        |(lhs, rhs), op| {
-                            (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
-                        },
-                    )),
-                    Err(()) => {
-                        inp.rewind(pre_op.clone());
-                        Err(lhs)
+        match self.op_parser.go::<M>(inp) {
+            Ok(op) => {
+                if self.associativity.left_power() > min_power {
+                    match f(inp, self.associativity.right_power()) {
+                        Ok(rhs) => InfixResult::Ok(M::combine(
+                            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                            op,
+                            |(lhs, rhs), op| {
+                                (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
+                            },
+                        )),
+                        Err(()) => {
+                            inp.rewind(pre_op.clone());
+                            InfixResult::Err(lhs)
+                        }
                     }
-                },
-                Err(()) => {
+                } else if self.associativity.left_power() == min_power {
                     inp.rewind(pre_op.clone());
-                    Err(lhs)
+                    InfixResult::Ambigious(lhs)
+                } else {
+                    inp.rewind(pre_op.clone());
+                    InfixResult::Err(lhs)
                 }
             }
-        } else {
-            Err(lhs)
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                InfixResult::Err(lhs)
+            }
         }
     }
 
@@ -581,7 +612,7 @@ where
 pub struct Prefix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
-    binding_power: u16,
+    binding_power: u32,
     #[allow(dead_code)]
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
@@ -610,7 +641,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I,
 /// impl Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn prefix<'src, A, F, Atom, Op, I, E>(
-    binding_power: u16,
+    precedence: u16,
     op_parser: A,
     fold: F,
 ) -> Prefix<'src, A, F, Atom, Op, I, E>
@@ -620,7 +651,7 @@ where
     Prefix {
         op_parser,
         fold,
-        binding_power,
+        binding_power: precedence as u32 * 2,
         phantom: EmptyPhantom::new(),
     }
 }
@@ -643,7 +674,7 @@ where
         Self: Sized,
     {
         match self.op_parser.go::<M>(inp) {
-            Ok(op) => match f(inp, Associativity::Left(self.binding_power).left_power()) {
+            Ok(op) => match f(inp, self.binding_power) {
                 Ok(rhs) => Ok(M::combine(op, rhs, |op, rhs| {
                     (self.fold)(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                 })),
@@ -666,7 +697,7 @@ where
 pub struct Postfix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
-    binding_power: u16,
+    binding_power: u32,
     #[allow(dead_code)]
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
@@ -695,7 +726,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I
 /// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn postfix<'src, A, F, Atom, Op, I, E>(
-    binding_power: u16,
+    precedence: u16,
     op_parser: A,
     fold: F,
 ) -> Postfix<'src, A, F, Atom, Op, I, E>
@@ -705,7 +736,7 @@ where
     Postfix {
         op_parser,
         fold,
-        binding_power,
+        binding_power: precedence as u32 * 2 + 1,
         phantom: EmptyPhantom::new(),
     }
 }
@@ -729,7 +760,7 @@ where
     where
         Self: Sized,
     {
-        if Associativity::Left(self.binding_power).right_power() >= min_power {
+        if self.binding_power >= min_power {
             match self.op_parser.go::<M>(inp) {
                 Ok(op) => Ok(M::combine(lhs, op, |lhs, op| {
                     (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
@@ -819,18 +850,19 @@ macro_rules! impl_operator_for_tuple {
                 mut lhs: M::Output<O>,
                 min_power: u32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-            ) -> Result<M::Output<O>, M::Output<O>>
+            ) -> InfixResult<M::Output<O>, M::Output<O>>
             where
                 Self: Sized,
             {
                 let ($($X,)*) = self;
                 $(
                     match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
-                        Ok(out) => return Ok(out),
-                        Err(out) => lhs = out,
+                        InfixResult::Ok(out) => return InfixResult::Ok(out),
+                        InfixResult::Err(out) => lhs = out,
+                        InfixResult::Ambigious(out) => return InfixResult::Ambigious(out),
                     }
                 )*
-                Err(lhs)
+                InfixResult::Err(lhs)
             }
 
             op_check_and_emit!();
@@ -895,17 +927,18 @@ where
         mut lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
         for op in self {
             match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
-                Ok(out) => return Ok(out),
-                Err(out) => lhs = out,
+                InfixResult::Ok(out) => return InfixResult::Ok(out),
+                InfixResult::Err(out) => lhs = out,
+                InfixResult::Ambigious(out) => return InfixResult::Ambigious(out),
             }
         }
-        Err(lhs)
+        InfixResult::Err(lhs)
     }
 
     op_check_and_emit!();
@@ -962,11 +995,14 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                     recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
                 },
             ) {
-                Ok(out) => {
+                InfixResult::Ok(out) => {
                     lhs = out;
                     continue;
                 }
-                Err(out) => lhs = out,
+                InfixResult::Err(out) => lhs = out,
+                InfixResult::Ambigious(out) => {
+                    return Err(());
+                }
             }
 
             inp.rewind(pre_op);
@@ -1009,12 +1045,12 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt((
-            prefix(2, just('-'), |_, x: i64, _| -x),
-            postfix(2, just('!'), |x, _, _| factorial(x)),
-            infix(left(0), just('+'), |l, _, r, _| l + r),
-            infix(left(0), just('-'), |l, _, r, _| l - r),
-            infix(left(1), just('*'), |l, _, r, _| l * r),
-            infix(left(1), just('/'), |l, _, r, _| l / r),
+            prefix(3, just('-'), |_, x: i64, _| -x),
+            postfix(3, just('!'), |x, _, _| factorial(x)),
+            infix(left(1), just('+'), |l, _, r, _| l + r),
+            infix(left(1), just('-'), |l, _, r, _| l - r),
+            infix(left(2), just('*'), |l, _, r, _| l * r),
+            infix(left(2), just('/'), |l, _, r, _| l / r),
         ))
     }
 
@@ -1037,12 +1073,12 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt(vec![
-            prefix(2, just('-'), |_, x: i64, _| -x).boxed(),
-            postfix(2, just('!'), |x, _, _| factorial(x)).boxed(),
-            infix(left(0), just('+'), |l, _, r, _| l + r).boxed(),
-            infix(left(0), just('-'), |l, _, r, _| l - r).boxed(),
-            infix(left(1), just('*'), |l, _, r, _| l * r).boxed(),
-            infix(left(1), just('/'), |l, _, r, _| l / r).boxed(),
+            prefix(3, just('-'), |_, x: i64, _| -x).boxed(),
+            postfix(3, just('!'), |x, _, _| factorial(x)).boxed(),
+            infix(left(1), just('+'), |l, _, r, _| l + r).boxed(),
+            infix(left(1), just('-'), |l, _, r, _| l - r).boxed(),
+            infix(left(2), just('*'), |l, _, r, _| l * r).boxed(),
+            infix(left(2), just('/'), |l, _, r, _| l / r).boxed(),
         ])
     }
 
@@ -1053,6 +1089,7 @@ mod tests {
         Confusion(Box<Expr>),
         Factorial(Box<Expr>),
         Value(Box<Expr>),
+        Less(Box<Expr>, Box<Expr>),
         Add(Box<Expr>, Box<Expr>),
         Sub(Box<Expr>, Box<Expr>),
         Mul(Box<Expr>, Box<Expr>),
@@ -1068,6 +1105,7 @@ mod tests {
                 Self::Confusion(right) => write!(f, "(§{right})"),
                 Self::Factorial(right) => write!(f, "({right}!)"),
                 Self::Value(right) => write!(f, "({right}$)"),
+                Self::Less(left, right) => write!(f, "({left} < {right})"),
                 Self::Add(left, right) => write!(f, "({left} + {right})"),
                 Self::Sub(left, right) => write!(f, "({left} - {right})"),
                 Self::Mul(left, right) => write!(f, "({left} * {right})"),
@@ -1087,10 +1125,10 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((
-            infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-            infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-            infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-            infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+            infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+            infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+            infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
         ))
         .map(|x| x.to_string())
     }
@@ -1178,15 +1216,15 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                prefix(2, just('-'), |_, r, _| u(Expr::Negate, r)),
-                prefix(2, just('~'), |_, r, _| u(Expr::Not, r)),
+                prefix(3, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(3, just('~'), |_, r, _| u(Expr::Not, r)),
                 // This is what happens when not
-                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
+                prefix(2, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Infix
-                infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -1209,14 +1247,14 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                postfix(2, just('!'), |l, _, _| u(Expr::Factorial, l)),
+                postfix(3, just('!'), |l, _, _| u(Expr::Factorial, l)),
                 // This is what happens when not
-                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
+                postfix(1, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -1236,22 +1274,55 @@ mod tests {
         let parser = atom
             .pratt((
                 // -- Prefix
-                prefix(4, just('-'), |_, r, _| u(Expr::Negate, r)),
-                prefix(4, just('~'), |_, r, _| u(Expr::Not, r)),
-                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
+                prefix(5, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(5, just('~'), |_, r, _| u(Expr::Not, r)),
+                prefix(2, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Postfix
-                postfix(5, just('!'), |l, _, _| u(Expr::Factorial, l)),
-                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
+                postfix(6, just('!'), |l, _, _| u(Expr::Factorial, l)),
+                postfix(1, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
         assert_eq!(
             parser.parse("§1+-~2!$*3").into_result(),
             Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
+        )
+    }
+
+    fn non_associative_parser<'src>() -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
+        let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
+
+        atom.pratt((
+            infix(none(1), just('<'), |l, _, r, _| i(Expr::Less, l, r)),
+            infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+            infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+            infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+        ))
+        .map(|x| x.to_string())
+    }
+
+    #[test]
+    fn with_non_associative_infix_ops() {
+        assert_eq!(
+            non_associative_parser().parse("1+2*3<10/2").into_result(),
+            Ok("((1 + (2 * 3)) < (10 / 2))".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_chained_non_associative_infix_ops() {
+        assert_eq!(
+            non_associative_parser().parse("1<2<3").into_result(),
+            Err(vec![dbg!(unexpected(Some('<'.into()), 3..4))])
+        );
+        assert_eq!(
+            non_associative_parser().parse("1+2*3<10/2<42").into_result(),
+            Err(vec![dbg!(unexpected(Some('<'.into()), 10..11))])
         )
     }
 }
