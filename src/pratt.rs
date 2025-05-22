@@ -437,7 +437,7 @@ where
 /// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and precedence of an [`infix`]
 /// operator (see [`left`], [`right`] and [`none`]).
 ///
-/// Higher numbers should be used for higher precedence operators.
+/// Higher numbers should be used for higher precedence operators. Precedences must be greater than zero.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Associativity {
     /// Specifies that the operator should be left-associative, with the given precedence (see [`left`]).
@@ -451,6 +451,7 @@ pub enum Associativity {
 /// Left-associative operators are evaluated from the left-most terms, moving rightward. For example, the expression
 /// `a + b + c + d` will be evaluated as `((a + b) + c) + d` because addition is conventionally left-associative.
 pub fn left(precedence: u16) -> Associativity {
+    assert!(precedence > 0);
     Associativity::Left(precedence)
 }
 
@@ -459,6 +460,7 @@ pub fn left(precedence: u16) -> Associativity {
 /// Right-associative operators are evaluated from the right-most terms, moving leftward. For example, the expression
 /// `a ^ b ^ c ^ d` will be evaluated as `a ^ (b ^ (c ^ d))` because exponents are conventionally right-associative.
 pub fn right(precedence: u16) -> Associativity {
+    assert!(precedence > 0);
     Associativity::Right(precedence)
 }
 
@@ -1009,12 +1011,12 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt((
-            prefix(2, just('-'), |_, x: i64, _| -x),
-            postfix(2, just('!'), |x, _, _| factorial(x)),
-            infix(left(0), just('+'), |l, _, r, _| l + r),
-            infix(left(0), just('-'), |l, _, r, _| l - r),
-            infix(left(1), just('*'), |l, _, r, _| l * r),
-            infix(left(1), just('/'), |l, _, r, _| l / r),
+            prefix(3, just('-'), |_, x: i64, _| -x),
+            postfix(3, just('!'), |x, _, _| factorial(x)),
+            infix(left(1), just('+'), |l, _, r, _| l + r),
+            infix(left(1), just('-'), |l, _, r, _| l - r),
+            infix(left(2), just('*'), |l, _, r, _| l * r),
+            infix(left(2), just('/'), |l, _, r, _| l / r),
         ))
     }
 
@@ -1037,12 +1039,12 @@ mod tests {
         let atom = text::int(10).padded().from_str::<i64>().unwrapped();
 
         atom.pratt(vec![
-            prefix(2, just('-'), |_, x: i64, _| -x).boxed(),
-            postfix(2, just('!'), |x, _, _| factorial(x)).boxed(),
-            infix(left(0), just('+'), |l, _, r, _| l + r).boxed(),
-            infix(left(0), just('-'), |l, _, r, _| l - r).boxed(),
-            infix(left(1), just('*'), |l, _, r, _| l * r).boxed(),
-            infix(left(1), just('/'), |l, _, r, _| l / r).boxed(),
+            prefix(3, just('-'), |_, x: i64, _| -x).boxed(),
+            postfix(3, just('!'), |x, _, _| factorial(x)).boxed(),
+            infix(left(1), just('+'), |l, _, r, _| l + r).boxed(),
+            infix(left(1), just('-'), |l, _, r, _| l - r).boxed(),
+            infix(left(2), just('*'), |l, _, r, _| l * r).boxed(),
+            infix(left(2), just('/'), |l, _, r, _| l / r).boxed(),
         ])
     }
 
@@ -1087,10 +1089,10 @@ mod tests {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((
-            infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-            infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-            infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-            infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+            infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+            infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+            infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
         ))
         .map(|x| x.to_string())
     }
@@ -1178,15 +1180,15 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                prefix(2, just('-'), |_, r, _| u(Expr::Negate, r)),
-                prefix(2, just('~'), |_, r, _| u(Expr::Not, r)),
+                prefix(3, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(3, just('~'), |_, r, _| u(Expr::Not, r)),
                 // This is what happens when not
-                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
+                prefix(2, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Infix
-                infix(left(0), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(0), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(1), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(1), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -1209,14 +1211,14 @@ mod tests {
                 // Because we defined '*' and '/' as right associative operators,
                 // in order to get these to function as expected, their strength
                 // must be higher
-                postfix(2, just('!'), |l, _, _| u(Expr::Factorial, l)),
+                postfix(3, just('!'), |l, _, _| u(Expr::Factorial, l)),
                 // This is what happens when not
-                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
+                postfix(1, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
 
@@ -1236,17 +1238,17 @@ mod tests {
         let parser = atom
             .pratt((
                 // -- Prefix
-                prefix(4, just('-'), |_, r, _| u(Expr::Negate, r)),
-                prefix(4, just('~'), |_, r, _| u(Expr::Not, r)),
-                prefix(1, just('§'), |_, r, _| u(Expr::Confusion, r)),
+                prefix(5, just('-'), |_, r, _| u(Expr::Negate, r)),
+                prefix(5, just('~'), |_, r, _| u(Expr::Not, r)),
+                prefix(2, just('§'), |_, r, _| u(Expr::Confusion, r)),
                 // -- Postfix
-                postfix(5, just('!'), |l, _, _| u(Expr::Factorial, l)),
-                postfix(0, just('$'), |l, _, _| u(Expr::Value, l)),
+                postfix(6, just('!'), |l, _, _| u(Expr::Factorial, l)),
+                postfix(1, just('$'), |l, _, _| u(Expr::Value, l)),
                 // -- Infix
-                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
-                infix(left(1), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
-                infix(right(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
-                infix(right(2), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+                infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+                infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+                infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
             ))
             .map(|x| x.to_string());
         assert_eq!(
