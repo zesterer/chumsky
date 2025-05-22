@@ -444,6 +444,8 @@ pub enum Associativity {
     Left(u16),
     /// Specifies that the operator should be right-associative, with the given precedence (see [`right`]).
     Right(u16),
+    /// Specifies that the operator is non-associative, with the given precedence (see [`none`]).
+    None(u16),
 }
 
 /// Specifies a left [`Associativity`] with the given precedence.
@@ -462,11 +464,20 @@ pub fn right(precedence: u16) -> Associativity {
     Associativity::Right(precedence)
 }
 
+/// Specifies no [`Associativity`] with the given precedence.
+///
+/// Non-associative operators can't be chained. For example, the expression
+/// `a < b < c` will produce an error, because comparisons are conventionally non-associative.
+pub fn none(precedence: u16) -> Associativity {
+    Associativity::None(precedence)
+}
+
 impl Associativity {
     fn left_power(&self) -> i32 {
         match self {
             Self::Left(x) => *x as i32 * 2,
             Self::Right(x) => *x as i32 * 2 + 1,
+            Self::None(x) => *x as i32 * 2,
         }
     }
 
@@ -474,6 +485,7 @@ impl Associativity {
         match self {
             Self::Left(x) => *x as i32 * 2 + 1,
             Self::Right(x) => *x as i32 * 2,
+            Self::None(x) => *x as i32 * 2,
         }
     }
 }
@@ -1053,6 +1065,7 @@ mod tests {
         Confusion(Box<Expr>),
         Factorial(Box<Expr>),
         Value(Box<Expr>),
+        Less(Box<Expr>, Box<Expr>),
         Add(Box<Expr>, Box<Expr>),
         Sub(Box<Expr>, Box<Expr>),
         Mul(Box<Expr>, Box<Expr>),
@@ -1068,6 +1081,7 @@ mod tests {
                 Self::Confusion(right) => write!(f, "(§{right})"),
                 Self::Factorial(right) => write!(f, "({right}!)"),
                 Self::Value(right) => write!(f, "({right}$)"),
+                Self::Less(left, right) => write!(f, "({left} < {right})"),
                 Self::Add(left, right) => write!(f, "({left} + {right})"),
                 Self::Sub(left, right) => write!(f, "({left} - {right})"),
                 Self::Mul(left, right) => write!(f, "({left} * {right})"),
@@ -1252,6 +1266,39 @@ mod tests {
         assert_eq!(
             parser.parse("§1+-~2!$*3").into_result(),
             Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
+        )
+    }
+
+    fn non_associative_parser<'src>() -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
+        let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
+
+        atom.pratt((
+            infix(none(1), just('<'), |l, _, r, _| i(Expr::Less, l, r)),
+            infix(left(2), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+            infix(left(2), just('-'), |l, _, r, _| i(Expr::Sub, l, r)),
+            infix(right(3), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            infix(right(3), just('/'), |l, _, r, _| i(Expr::Div, l, r)),
+        ))
+        .map(|x| x.to_string())
+    }
+
+    #[test]
+    fn with_non_associative_infix_ops() {
+        assert_eq!(
+            non_associative_parser().parse("1+2*3<10/2").into_result(),
+            Ok("((1 + (2 * 3)) < (10 / 2))".to_string()),
+        )
+    }
+
+    #[test]
+    fn with_chained_non_associative_infix_ops() {
+        assert_eq!(
+            non_associative_parser().parse("1<2<3").into_result(),
+            Err(vec![dbg!(unexpected(Some('<'.into()), 3..4))])
+        );
+        assert_eq!(
+            non_associative_parser().parse("1+2*3<10/2<42").into_result(),
+            Err(vec![dbg!(unexpected(Some('<'.into()), 10..11))])
         )
     }
 }
