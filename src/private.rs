@@ -109,7 +109,7 @@ pub trait Mode {
         lhs: Self::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+    ) -> pratt::InfixResult::<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -229,7 +229,7 @@ impl Mode for Emit {
         lhs: Self::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+    ) -> pratt::InfixResult::<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -340,7 +340,7 @@ impl Mode for Check {
         lhs: Self::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+    ) -> pratt::InfixResult::<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,

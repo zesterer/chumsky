@@ -87,6 +87,16 @@
 
 use super::*;
 
+/// The result of calling [`Operator::do_parse_infix`]
+pub enum InfixResult<T, E> {
+   /// Input was parsed
+   Ok(T),
+   /// Input could not be parsed
+   Err(E),
+   /// Input could not be parsed, because it was ambigious
+   Ambigious(E),
+}
+
 macro_rules! op_check_and_emit {
     () => {
         #[inline(always)]
@@ -163,7 +173,7 @@ macro_rules! op_check_and_emit {
             lhs: (),
             min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-        ) -> Result<(), ()> {
+        ) -> InfixResult<(), ()> {
             self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
         #[inline(always)]
@@ -180,7 +190,7 @@ macro_rules! op_check_and_emit {
             lhs: O,
             min_power: u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-        ) -> Result<O, O> {
+        ) -> InfixResult<O, O> {
             self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
     };
@@ -245,11 +255,11 @@ where
         lhs: M::Output<O>,
         _min_power: u32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        Err(lhs)
+        InfixResult::Err(lhs)
     }
 
     #[doc(hidden)]
@@ -293,7 +303,7 @@ where
         lhs: (),
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-    ) -> Result<(), ()>;
+    ) -> InfixResult<(), ()>;
     #[doc(hidden)]
     fn do_parse_infix_emit<'parse>(
         &self,
@@ -303,7 +313,7 @@ where
         lhs: O,
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-    ) -> Result<O, O>;
+    ) -> InfixResult<O, O>;
 }
 
 /// A boxed pratt parser operator. See [`Operator`].
@@ -357,7 +367,7 @@ where
         lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
@@ -415,7 +425,7 @@ where
         lhs: (),
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
-    ) -> Result<(), ()> {
+    ) -> InfixResult<(), ()> {
         self.0
             .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
@@ -428,7 +438,7 @@ where
         lhs: O,
         min_power: u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
-    ) -> Result<O, O> {
+    ) -> InfixResult<O, O> {
         self.0
             .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
@@ -560,32 +570,38 @@ where
         lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        if self.associativity.left_power() >= min_power {
-            match self.op_parser.go::<M>(inp) {
-                Ok(op) => match f(inp, self.associativity.right_power()) {
-                    Ok(rhs) => Ok(M::combine(
-                        M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                        op,
-                        |(lhs, rhs), op| {
-                            (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
-                        },
-                    )),
-                    Err(()) => {
-                        inp.rewind(pre_op.clone());
-                        Err(lhs)
+        match self.op_parser.go::<M>(inp) {
+            Ok(op) => {
+                if self.associativity.left_power() > min_power {
+                    match f(inp, self.associativity.right_power()) {
+                        Ok(rhs) => InfixResult::Ok(M::combine(
+                            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                            op,
+                            |(lhs, rhs), op| {
+                                (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
+                            },
+                        )),
+                        Err(()) => {
+                            inp.rewind(pre_op.clone());
+                            InfixResult::Err(lhs)
+                        }
                     }
-                },
-                Err(()) => {
+                } else if self.associativity.left_power() == min_power {
                     inp.rewind(pre_op.clone());
-                    Err(lhs)
+                    InfixResult::Ambigious(lhs)
+                } else {
+                    inp.rewind(pre_op.clone());
+                    InfixResult::Err(lhs)
                 }
             }
-        } else {
-            Err(lhs)
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                InfixResult::Err(lhs)
+            }
         }
     }
 
@@ -834,18 +850,19 @@ macro_rules! impl_operator_for_tuple {
                 mut lhs: M::Output<O>,
                 min_power: u32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-            ) -> Result<M::Output<O>, M::Output<O>>
+            ) -> InfixResult<M::Output<O>, M::Output<O>>
             where
                 Self: Sized,
             {
                 let ($($X,)*) = self;
                 $(
                     match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
-                        Ok(out) => return Ok(out),
-                        Err(out) => lhs = out,
+                        InfixResult::Ok(out) => return InfixResult::Ok(out),
+                        InfixResult::Err(out) => lhs = out,
+                        InfixResult::Ambigious(out) => return InfixResult::Ambigious(out),
                     }
                 )*
-                Err(lhs)
+                InfixResult::Err(lhs)
             }
 
             op_check_and_emit!();
@@ -910,17 +927,18 @@ where
         mut lhs: M::Output<O>,
         min_power: u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
-    ) -> Result<M::Output<O>, M::Output<O>>
+    ) -> InfixResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
         for op in self {
             match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
-                Ok(out) => return Ok(out),
-                Err(out) => lhs = out,
+                InfixResult::Ok(out) => return InfixResult::Ok(out),
+                InfixResult::Err(out) => lhs = out,
+                InfixResult::Ambigious(out) => return InfixResult::Ambigious(out),
             }
         }
-        Err(lhs)
+        InfixResult::Err(lhs)
     }
 
     op_check_and_emit!();
@@ -977,11 +995,14 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                     recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
                 },
             ) {
-                Ok(out) => {
+                InfixResult::Ok(out) => {
                     lhs = out;
                     continue;
                 }
-                Err(out) => lhs = out,
+                InfixResult::Err(out) => lhs = out,
+                InfixResult::Ambigious(out) => {
+                    return Err(());
+                }
             }
 
             inp.rewind(pre_op);
