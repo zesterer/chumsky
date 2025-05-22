@@ -434,32 +434,32 @@ where
     }
 }
 
-/// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and binding power of an [`infix`]
-/// operator (see [`left`] and [`right`]).
+/// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and precedence of an [`infix`]
+/// operator (see [`left`], [`right`] and [`none`]).
 ///
-/// Higher binding powers should be used for higher precedence operators.
+/// Higher numbers should be used for higher precedence operators.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Associativity {
-    /// Specifies that the operator should be left-associative, with the given binding power (see [`left`]).
+    /// Specifies that the operator should be left-associative, with the given precedence (see [`left`]).
     Left(u16),
-    /// Specifies that the operator should be right-associative, with the given binding power (see [`right`]).
+    /// Specifies that the operator should be right-associative, with the given precedence (see [`right`]).
     Right(u16),
 }
 
-/// Specifies a left [`Associativity`] with the given binding power.
+/// Specifies a left [`Associativity`] with the given precedence.
 ///
 /// Left-associative operators are evaluated from the left-most terms, moving rightward. For example, the expression
 /// `a + b + c + d` will be evaluated as `((a + b) + c) + d` because addition is conventionally left-associative.
-pub fn left(binding_power: u16) -> Associativity {
-    Associativity::Left(binding_power)
+pub fn left(precedence: u16) -> Associativity {
+    Associativity::Left(precedence)
 }
 
-/// Specifies a right [`Associativity`] with the given binding power.
+/// Specifies a right [`Associativity`] with the given precedence.
 ///
 /// Right-associative operators are evaluated from the right-most terms, moving leftward. For example, the expression
 /// `a ^ b ^ c ^ d` will be evaluated as `a ^ (b ^ (c ^ d))` because exponents are conventionally right-associative.
-pub fn right(binding_power: u16) -> Associativity {
-    Associativity::Right(binding_power)
+pub fn right(precedence: u16) -> Associativity {
+    Associativity::Right(precedence)
 }
 
 impl Associativity {
@@ -499,7 +499,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Infix<'_, A, F, Atom, Op, I, 
     }
 }
 
-/// Specify a binary infix operator for a pratt parser with the given associativity, binding power, and
+/// Specify a binary infix operator for a pratt parser with the given associativity, precedence, and
 /// [fold function](crate::pratt#fold-functions).
 ///
 /// Operators like addition, subtraction, multiplication, division, remainder, exponentiation, etc. are infix binary
@@ -581,7 +581,7 @@ where
 pub struct Prefix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
-    binding_power: u16,
+    binding_power: u32,
     #[allow(dead_code)]
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
@@ -598,7 +598,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I,
     }
 }
 
-/// Specify a unary prefix operator for a pratt parser with the given binding power and
+/// Specify a unary prefix operator for a pratt parser with the given precedence and
 /// [fold function](crate::pratt#fold-functions).
 ///
 /// Operators like negation, not, dereferencing, etc. are prefix unary operators in most languages.
@@ -610,7 +610,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Prefix<'_, A, F, Atom, Op, I,
 /// impl Fn(Op, Atom, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn prefix<'src, A, F, Atom, Op, I, E>(
-    binding_power: u16,
+    precedence: u16,
     op_parser: A,
     fold: F,
 ) -> Prefix<'src, A, F, Atom, Op, I, E>
@@ -620,7 +620,7 @@ where
     Prefix {
         op_parser,
         fold,
-        binding_power,
+        binding_power: precedence as u32 * 2,
         phantom: EmptyPhantom::new(),
     }
 }
@@ -643,7 +643,7 @@ where
         Self: Sized,
     {
         match self.op_parser.go::<M>(inp) {
-            Ok(op) => match f(inp, Associativity::Left(self.binding_power).left_power()) {
+            Ok(op) => match f(inp, self.binding_power) {
                 Ok(rhs) => Ok(M::combine(op, rhs, |op, rhs| {
                     (self.fold)(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                 })),
@@ -666,7 +666,7 @@ where
 pub struct Postfix<'src, A, F, Atom, Op, I, E> {
     op_parser: A,
     fold: F,
-    binding_power: u16,
+    binding_power: u32,
     #[allow(dead_code)]
     phantom: EmptyPhantom<&'src (Atom, Op, I, E)>,
 }
@@ -683,7 +683,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I
     }
 }
 
-/// Specify a unary postfix operator for a pratt parser with the given binding power and
+/// Specify a unary postfix operator for a pratt parser with the given precedence and
 /// [fold function](crate::pratt#fold-functions).
 ///
 /// Operators like factorial, field access, etc. are postfix unary operators in most languages.
@@ -695,7 +695,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<'_, A, F, Atom, Op, I
 /// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
 pub const fn postfix<'src, A, F, Atom, Op, I, E>(
-    binding_power: u16,
+    precedence: u16,
     op_parser: A,
     fold: F,
 ) -> Postfix<'src, A, F, Atom, Op, I, E>
@@ -705,7 +705,7 @@ where
     Postfix {
         op_parser,
         fold,
-        binding_power,
+        binding_power: precedence as u32 * 2 + 1,
         phantom: EmptyPhantom::new(),
     }
 }
@@ -729,7 +729,7 @@ where
     where
         Self: Sized,
     {
-        if Associativity::Left(self.binding_power).right_power() >= min_power {
+        if self.binding_power >= min_power {
             match self.op_parser.go::<M>(inp) {
                 Ok(op) => Ok(M::combine(lhs, op, |lhs, op| {
                     (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
