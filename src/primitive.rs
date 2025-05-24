@@ -466,7 +466,7 @@ where
 
 impl<'src, I, O, E, F> Parser<'src, I, O, E> for Select<F, I, O, E>
 where
-    I: ValueInput<'src>,
+    I: Input<'src>,
     I::Token: Clone + 'src,
     E: ParserExtra<'src, I>,
     F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
@@ -474,10 +474,13 @@ where
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();
-        let next = inp.next_inner();
+        let next = inp.next_maybe_inner();
         let found = match next {
             Some(tok) => {
-                match (self.filter)(tok.clone(), &mut MapExtra::new(before.cursor(), inp)) {
+                match (self.filter)(
+                    tok.borrow().clone(),
+                    &mut MapExtra::new(before.cursor(), inp),
+                ) {
                     Some(out) => return Ok(M::bind(|| out)),
                     None => Some(tok.into()),
                 }
