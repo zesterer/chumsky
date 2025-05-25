@@ -526,6 +526,80 @@ where
     go_extra!(I::Span);
 }
 
+
+/// See [`Parser::try_foldl`].
+pub struct TryFoldl<F, A, B, OB, E> {
+    pub(crate) parser_a: A,
+    pub(crate) parser_b: B,
+    pub(crate) folder: F,
+    #[cfg(debug_assertions)]
+    pub(crate) location: Location<'static>,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(OB, E)>,
+}
+
+impl<F: Copy, A: Copy, B: Copy, OB, E> Copy for TryFoldl<F, A, B, OB, E> {}
+impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for TryFoldl<F, A, B, OB, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser_a: self.parser_a.clone(),
+            parser_b: self.parser_b.clone(),
+            folder: self.folder.clone(),
+            #[cfg(debug_assertions)]
+            location: self.location,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'src, I, F, A, B, OA, OB, E> Parser<'src, I, OA, E> for TryFoldl<F, A, B, OB, E>
+where
+    I: Input<'src>,
+    A: Parser<'src, I, OA, E>,
+    B: IterParser<'src, I, OB, E>,
+    E: ParserExtra<'src, I>,
+    F: Fn(OA, OB, I::Span) -> Result<OA, E::Error>,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA>
+    where
+        Self: Sized,
+    {
+        let mut out = self.parser_a.go::<Emit>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<Emit>(inp)?;
+        loop {
+            // TODO what span is appropriate to pass here?
+            // only from this iteration or since the beginning?
+            let before = inp.cursor();
+            match self.parser_b.next::<Emit>(inp, &mut iter_state) {
+                Ok(Some(b_out)) => {
+                    let span = inp.span_since(&before);
+                    match (self.folder)(out, b_out, span) {
+                        Ok(b_f_out) => {
+                            out = b_f_out;
+                        }
+                        // TODO properly report error
+                        // how does the `Errors` struct work (alt, secondary)?
+                        Err(_) => break Err(())
+                    }
+                }
+                Ok(None) => break Ok(M::bind(|| out)),
+                Err(()) => break Err(()),
+            }
+            #[cfg(debug_assertions)]
+            if !B::NONCONSUMPTION_IS_OK {
+                debug_assert!(
+                    before != inp.cursor(),
+                    "found Foldl combinator making no progress at {}",
+                    self.location,
+                );
+            }
+        }
+    }
+
+    go_extra!(OA);
+}
+
 /// See [`Parser::try_map`].
 pub struct TryMap<A, OA, F> {
     pub(crate) parser: A,
