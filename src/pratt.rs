@@ -573,7 +573,14 @@ where
     {
         match self.op_parser.go::<M>(inp) {
             Ok(op) => {
-                if self.associativity.left_power() > min_power {
+                let binding_power = self.associativity.left_power();
+
+                let power_check = if let Associativity::None(_) = self.associativity {
+                    binding_power > min_power
+                } else {
+                    binding_power >= min_power
+                };
+                if power_check {
                     match f(inp, self.associativity.right_power()) {
                         Ok(rhs) => OperatorResult::Ok(M::combine(
                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
@@ -590,7 +597,7 @@ where
                 } else {
                     inp.rewind(pre_op.clone());
 
-                    if self.associativity.left_power() == min_power {
+                    if binding_power == min_power {
                         // TODO: Add error "Ambigious operator order"
                         OperatorResult::Err(lhs)
                     } else {
