@@ -732,6 +732,44 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             phantom: EmptyPhantom::new(),
         }
     }
+    /// Left-fold the output of the parser into a single value, possibly failing during the reduction.
+    /// The parser only consumes input from the inner parser until it either completes or the reduction
+    /// step fails ("short circuting").
+    ///
+    /// The output type of this parser is `A`, the left-hand component of the original parser's output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, extra::Err<Simple<char>>>(10)
+    ///     .from_str::<u8>()
+    ///     .unwrapped();
+    ///
+    /// let sum = int
+    ///     .clone()
+    ///     .try_foldl(just('+').ignore_then(int).repeated(), |a, b, e| a.checked_add(b).ok_or(Simple::new(None, e.span())));
+    ///
+    /// assert_eq!(sum.parse("1+12+3+9").into_result(), Ok(25));
+    /// assert_eq!(sum.parse("6").into_result(), Ok(6));
+    /// assert!(sum.parse("255+1").has_errors()); // due to u8 overflow
+    /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn try_foldl<B, F, OB>(self, other: B, f: F) -> TryFoldl<F, Self, B, OB, E>
+    where
+        F: Fn(O, OB, &mut MapExtra<'src, '_, I, E>) -> Result<O, E::Error>,
+        B: IterParser<'src, I, OB, E>,
+        Self: Sized,
+    {
+        TryFoldl {
+            parser_a: self,
+            parser_b: other,
+            folder: f,
+            #[cfg(debug_assertions)]
+            location: *Location::caller(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
 
     /// After a successful parse, apply a fallible function to the output. If the function produces an error, treat it
     /// as a parsing error.
