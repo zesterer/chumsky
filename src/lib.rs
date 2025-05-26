@@ -748,7 +748,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// let sum = int
     ///     .clone()
-    ///     .try_foldl(just('+').ignore_then(int).repeated(), |a, b, span| a.checked_add(b).ok_or(Simple::new(None, span)));
+    ///     .try_foldl(just('+').ignore_then(int).repeated(), |a, b, e| a.checked_add(b).ok_or(Simple::new(None, e.span())));
     ///
     /// assert_eq!(sum.parse("1+12+3+9").into_result(), Ok(25));
     /// assert_eq!(sum.parse("6").into_result(), Ok(6));
@@ -757,7 +757,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     #[cfg_attr(debug_assertions, track_caller)]
     fn try_foldl<B, F, OB>(self, other: B, f: F) -> TryFoldl<F, Self, B, OB, E>
     where
-        F: Fn(O, OB, I::Span) -> Result<O, E::Error>,
+        F: Fn(O, OB, &mut MapExtra<'src, '_, I, E>) -> Result<O, E::Error>,
         B: IterParser<'src, I, OB, E>,
         Self: Sized,
     {

@@ -558,29 +558,28 @@ where
     A: Parser<'src, I, OA, E>,
     B: IterParser<'src, I, OB, E>,
     E: ParserExtra<'src, I>,
-    F: Fn(OA, OB, I::Span) -> Result<OA, E::Error>,
+    F: Fn(OA, OB, &mut MapExtra<'src, '_, I, E>) -> Result<OA, E::Error>,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA>
     where
         Self: Sized,
     {
+        let before_all = inp.cursor();
         let mut out = self.parser_a.go::<Emit>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<Emit>(inp)?;
         loop {
-            // TODO what span is appropriate to pass here?
-            // only from this iteration or since the beginning?
             let before = inp.cursor();
             match self.parser_b.next::<Emit>(inp, &mut iter_state) {
                 Ok(Some(b_out)) => {
-                    let span = inp.span_since(&before);
-                    match (self.folder)(out, b_out, span) {
+                    match (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp)) {
                         Ok(b_f_out) => {
                             out = b_f_out;
                         }
-                        // TODO properly report error
-                        // how does the `Errors` struct work (alt, secondary)?
-                        Err(_) => break Err(())
+                        Err(err) => {
+                            inp.add_alt_err(&before.inner, err);
+                            break Err(());
+                        },
                     }
                 }
                 Ok(None) => break Ok(M::bind(|| out)),
