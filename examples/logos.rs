@@ -38,7 +38,7 @@ enum Token<'a> {
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Float(s) => write!(f, "{}", s),
+            Self::Float(s) => write!(f, "{s}"),
             Self::Add => write!(f, "+"),
             Self::Sub => write!(f, "-"),
             Self::Mul => write!(f, "*"),
@@ -148,8 +148,8 @@ fn main() {
     match parser().parse(token_stream).into_result() {
         // If parsing was successful, attempt to evaluate the s-expression
         Ok(sexpr) => match sexpr.eval() {
-            Ok(out) => println!("Result = {}", out),
-            Err(err) => println!("Runtime error: {}", err),
+            Ok(out) => println!("Result = {out}"),
+            Err(err) => println!("Runtime error: {err}"),
         },
         // If parsing was unsuccessful, generate a nice user-friendly diagnostic with ariadne. You could also use
         // codespan, or whatever other diagnostic library you care about. You could even just display-print the errors

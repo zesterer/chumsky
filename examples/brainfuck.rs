@@ -68,6 +68,6 @@ fn main() {
 
     match parser().parse(src.trim()).into_result() {
         Ok(ast) => execute(&ast, &mut 0, &mut [0; TAPE_LEN]),
-        Err(errs) => errs.into_iter().for_each(|e| println!("{:?}", e)),
+        Err(errs) => errs.into_iter().for_each(|e| println!("{e:?}")),
     };
 }

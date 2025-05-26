@@ -3265,7 +3265,7 @@ mod tests {
                 atom.clone()
                     .then_ignore(just('+'))
                     .then(atom.clone())
-                    .map(|(a, b)| format!("{}{}", a, b))
+                    .map(|(a, b)| format!("{a}{b}"))
                     .memoized()
                     .or(atom)
             })
@@ -3295,7 +3295,7 @@ mod tests {
                     .clone()
                     .then_ignore(just('+'))
                     .then(expr)
-                    .map(|(a, b)| format!("{}{}", a, b))
+                    .map(|(a, b)| format!("{a}{b}"))
                     .memoized();
 
                 sum.or(atom)
@@ -3325,7 +3325,7 @@ mod tests {
         //             .clone()
         //             .then_ignore(just('+'))
         //             .then(expr)
-        //             .map(|(a, b)| format!("{}{}", a, b));
+        //             .map(|(a, b)| format!("{a}{b}"));
 
         //         sum.or(atom)
         //     })
@@ -3444,7 +3444,7 @@ mod tests {
                 .clone()
                 .then_ignore(just('+'))
                 .then(expr.clone())
-                .map(|(a, b)| format!("{}{}", a, b));
+                .map(|(a, b)| format!("{a}{b}"));
 
             sum.or(atom)
         });

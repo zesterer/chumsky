@@ -96,7 +96,7 @@ mod tests {
         fn huge_pow10() {
             for e in 300..310 {
                 for i in 0..100000 {
-                    validate(&format!("{}e{}", i, e));
+                    validate(&format!("{i}e{e}"));
                 }
             }
         }
@@ -123,8 +123,8 @@ mod tests {
                         continue;
                     }
 
-                    validate(&format!("{}e{}", i, e));
-                    validate(&format!("{}e-{}", i, e));
+                    validate(&format!("{i}e{e}"));
+                    validate(&format!("{i}e-{e}"));
                 }
             }
         }
@@ -133,9 +133,9 @@ mod tests {
         fn subnorm() {
             for bits in 0u32..(1 << 21) {
                 let single: f32 = f32::from_bits(bits);
-                validate(&format!("{:e}", single));
+                validate(&format!("{single:e}"));
                 let double: f64 = f64::from_bits(bits as u64);
-                validate(&format!("{:e}", double));
+                validate(&format!("{double:e}"));
             }
         }
 
@@ -143,7 +143,7 @@ mod tests {
         fn tiny_pow10() {
             for e in 301..327 {
                 for i in 0..100000 {
-                    validate(&format!("{}e-{}", i, e));
+                    validate(&format!("{i}e-{e}"));
                 }
             }
         }

@@ -31,12 +31,12 @@ impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Token::Null => write!(f, "null"),
-            Token::Bool(x) => write!(f, "{}", x),
-            Token::Num(n) => write!(f, "{}", n),
-            Token::Str(s) => write!(f, "{}", s),
-            Token::Op(s) => write!(f, "{}", s),
-            Token::Ctrl(c) => write!(f, "{}", c),
-            Token::Ident(s) => write!(f, "{}", s),
+            Token::Bool(x) => write!(f, "{x}"),
+            Token::Num(n) => write!(f, "{n}"),
+            Token::Str(s) => write!(f, "{s}"),
+            Token::Op(s) => write!(f, "{s}"),
+            Token::Ctrl(c) => write!(f, "{c}"),
+            Token::Ident(s) => write!(f, "{s}"),
             Token::Fn => write!(f, "fn"),
             Token::Let => write!(f, "let"),
             Token::Print => write!(f, "print"),
@@ -119,7 +119,7 @@ impl Value<'_> {
         } else {
             Err(Error {
                 span,
-                msg: format!("'{}' is not a number", self),
+                msg: format!("'{self}' is not a number"),
             })
         }
     }
@@ -129,9 +129,9 @@ impl std::fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
-            Self::Bool(x) => write!(f, "{}", x),
-            Self::Num(x) => write!(f, "{}", x),
-            Self::Str(x) => write!(f, "{}", x),
+            Self::Bool(x) => write!(f, "{x}"),
+            Self::Num(x) => write!(f, "{x}"),
+            Self::Str(x) => write!(f, "{x}"),
             Self::List(xs) => write!(
                 f,
                 "[{}]",
@@ -140,7 +140,7 @@ impl std::fmt::Display for Value<'_> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::Func(name) => write!(f, "<function: {}>", name),
+            Self::Func(name) => write!(f, "<function: {name}>"),
         }
     }
 }
@@ -435,7 +435,7 @@ where
                 if funcs.insert(name, f).is_some() {
                     emitter.emit(Rich::custom(
                         name_span,
-                        format!("Function '{}' already exists", name),
+                        format!("Function '{name}' already exists"),
                     ));
                 }
             }
@@ -470,7 +470,7 @@ fn eval_expr<'src>(
             .or_else(|| Some(Value::Func(name)).filter(|_| funcs.contains_key(name)))
             .ok_or_else(|| Error {
                 span: expr.1,
-                msg: format!("No such variable '{}' in scope", name),
+                msg: format!("No such variable '{name}' in scope"),
             })?,
         Expr::Let(local, val, body) => {
             let val = eval_expr(val, funcs, stack)?;
@@ -509,7 +509,7 @@ fn eval_expr<'src>(
                     let mut stack = if f.args.len() != args.0.len() {
                         return Err(Error {
                             span: expr.1,
-                            msg: format!("'{}' called with wrong number of arguments (expected {}, found {})", name, f.args.len(), args.0.len()),
+                            msg: format!("'{}' called with wrong number of arguments (expected {name}, found {})", f.args.len(), args.0.len()),
                         });
                     } else {
                         f.args
@@ -523,7 +523,7 @@ fn eval_expr<'src>(
                 f => {
                     return Err(Error {
                         span: func.1,
-                        msg: format!("'{:?}' is not callable", f),
+                        msg: format!("'{f:?}' is not callable"),
                     })
                 }
             }
@@ -536,14 +536,14 @@ fn eval_expr<'src>(
                 c => {
                     return Err(Error {
                         span: cond.1,
-                        msg: format!("Conditions must be booleans, found '{:?}'", c),
+                        msg: format!("Conditions must be booleans, found '{c:?}'"),
                     })
                 }
             }
         }
         Expr::Print(a) => {
             let val = eval_expr(a, funcs, stack)?;
-            println!("{}", val);
+            println!("{val}");
             val
         }
     })
@@ -574,7 +574,7 @@ fn main() {
                     ))
                 } else {
                     match eval_expr(&main.body, &funcs, &mut Vec::new()) {
-                        Ok(val) => println!("Return value: {}", val),
+                        Ok(val) => println!("Return value: {val}"),
                         Err(e) => errs.push(Rich::custom(e.span, e.msg)),
                     }
                 }
@@ -609,7 +609,7 @@ fn main() {
                 )
                 .with_labels(e.contexts().map(|(label, span)| {
                     Label::new((filename.clone(), span.into_range()))
-                        .with_message(format!("while parsing this {}", label))
+                        .with_message(format!("while parsing this {label}"))
                         .with_color(Color::Yellow)
                 }))
                 .finish()

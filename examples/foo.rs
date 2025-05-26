@@ -130,7 +130,7 @@ fn eval<'src>(
             if let Some((_, val)) = vars.iter().rev().find(|(var, _)| var == name) {
                 Ok(*val)
             } else {
-                Err(format!("Cannot find variable `{}` in scope", name))
+                Err(format!("Cannot find variable `{name}` in scope"))
             }
         }
         Expr::Let { name, rhs, then } => {
@@ -158,14 +158,13 @@ fn eval<'src>(
                     output
                 } else {
                     Err(format!(
-                        "Wrong number of arguments for function `{}`: expected {}, found {}",
-                        name,
+                        "Wrong number of arguments for function `{name}`: expected {}, found {}",
                         arg_names.len(),
                         args.len(),
                     ))
                 }
             } else {
-                Err(format!("Cannot find function `{}` in scope", name))
+                Err(format!("Cannot find function `{name}` in scope"))
             }
         }
         Expr::Fn {
@@ -188,11 +187,11 @@ fn main() {
 
     match parser().parse(&src).into_result() {
         Ok(ast) => match eval(&ast, &mut Vec::new(), &mut Vec::new()) {
-            Ok(output) => println!("{}", output),
-            Err(eval_err) => println!("Evaluation error: {}", eval_err),
+            Ok(output) => println!("{output}"),
+            Err(eval_err) => println!("Evaluation error: {eval_err}"),
         },
         Err(parse_errs) => parse_errs
             .into_iter()
-            .for_each(|e| println!("Parse error: {}", e)),
+            .for_each(|err| println!("Parse error: {err}")),
     };
 }

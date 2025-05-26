@@ -526,7 +526,6 @@ where
     go_extra!(I::Span);
 }
 
-
 /// See [`Parser::try_foldl`].
 pub struct TryFoldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
@@ -579,7 +578,7 @@ where
                         Err(err) => {
                             inp.add_alt_err(&before.inner, err);
                             break Err(());
-                        },
+                        }
                     }
                 }
                 Ok(None) => break Ok(M::bind(|| out)),

@@ -47,5 +47,5 @@ fn main() {
     let json = parser::<extra::Err<Rich<_>>>()
         .parse(IoInput::new(src))
         .into_result();
-    println!("{:#?}", json);
+    println!("{json:#?}");
 }

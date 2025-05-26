@@ -140,7 +140,7 @@ fn main() {
         .expect("Failed to read file");
 
     let (json, errs) = parser().parse(src.trim()).into_output_errors();
-    println!("{:#?}", json);
+    println!("{json:#?}");
     errs.into_iter().for_each(|e| {
         Report::build(ReportKind::Error, ((), e.span().into_range()))
             .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))

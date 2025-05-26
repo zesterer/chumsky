@@ -73,7 +73,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json> {
             .padded()
             .delimited_by(just('['), just(']'));
 
-        let member = string.clone().then_ignore(just(':').padded()).then(value);
+        let member = string.then_ignore(just(':').padded()).then(value);
         let object = member
             .clone()
             .separated_by(just(',').padded())
@@ -99,5 +99,5 @@ fn main() {
         .expect("Failed to read file");
 
     let json = parser().parse(src.trim()).unwrap();
-    println!("{:#?}", json);
+    println!("{json:#?}");
 }
