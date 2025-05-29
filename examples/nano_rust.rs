@@ -178,10 +178,10 @@ struct Func<'src> {
     body: Spanned<Expr<'src>>,
 }
 
-fn expr_parser<'src, I>(
-) -> impl Parser<'src, I, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>, Span>>> + Clone
+fn expr_parser<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Spanned<Expr<'src>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
-    I: ValueInput<'src, Token = Token<'src>, Span = Span>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
     recursive(|expr| {
         let inline_expr = recursive(|inline_expr| {
@@ -386,11 +386,14 @@ where
     })
 }
 
-fn funcs_parser<'src, I>(
-) -> impl Parser<'src, I, HashMap<&'src str, Func<'src>>, extra::Err<Rich<'src, Token<'src>, Span>>>
-       + Clone
+fn funcs_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
+    'tokens,
+    I,
+    HashMap<&'src str, Func<'src>>,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
+> + Clone
 where
-    I: ValueInput<'src, Token = Token<'src>, Span = Span>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
     let ident = select! { Token::Ident(ident) => ident };
 

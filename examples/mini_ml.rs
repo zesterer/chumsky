@@ -109,14 +109,14 @@ pub enum Expr<'src> {
     },
 }
 
-fn parser<'src, I, M>(
+fn parser<'tokens, 'src: 'tokens, I, M>(
     make_input: M,
-) -> impl Parser<'src, I, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>>>>
+) -> impl Parser<'tokens, I, Spanned<Expr<'src>>, extra::Err<Rich<'tokens, Token<'src>>>>
 where
-    I: BorrowInput<'src, Token = Token<'src>, Span = SimpleSpan>,
+    I: BorrowInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
     // Because this function is generic over the input type, we need the caller to tell us how to create a new input,
     // `I`, from a nested token tree. This function serves that purpose.
-    M: Fn(SimpleSpan, &'src [Spanned<Token<'src>>]) -> I + Clone + 'src,
+    M: Fn(SimpleSpan, &'tokens [Spanned<Token<'src>>]) -> I + Clone + 'src,
 {
     recursive(|expr| {
         let ident = select_ref! { Token::Ident(x) => *x };
