@@ -602,12 +602,20 @@ where
 /// assert_eq!(error.found(), Some(&'5'));
 ///
 /// ```
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>> {
     span: S,
     reason: Box<RichReason<'a, T>>,
     context: Vec<(RichPattern<'a, T>, S)>,
 }
+
+impl<'a, T, S: PartialEq> PartialEq for Rich<'a, T, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.span.eq(&other.span)
+    }
+}
+
+impl<'a, T, S: Eq> Eq for Rich<'a, T, S> {}
 
 impl<T, S> Rich<'_, T, S> {
     fn inner_fmt(
