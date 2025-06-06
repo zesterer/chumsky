@@ -49,7 +49,7 @@ impl Char for &Grapheme {
 
     fn is_whitespace(&self) -> bool {
         let mut iter = self.as_str().chars();
-        iter.all(char::is_whitespace)
+        iter.all(unicode::is_whitespace)
     }
 
     fn is_newline(&self) -> bool {
@@ -106,7 +106,7 @@ impl Char for char {
     }
 
     fn is_whitespace(&self) -> bool {
-        char::is_whitespace(*self)
+        unicode::is_whitespace(*self)
     }
 
     fn is_newline(&self) -> bool {
@@ -1034,6 +1034,24 @@ pub mod unicode {
                 }
             })
             .to_slice()
+    }
+
+    /// Like [`char::is_whitespace`], but rejects the characters U+202A, U+202B, U+202C, U+202D, U+202E, U+2066, U+2067, U+2068, U+2069
+    /// to mitigate against [CVE-2021-42574](https://nvd.nist.gov/vuln/detail/CVE-2021-42574)
+    pub fn is_whitespace(c: char) -> bool {
+        c.is_whitespace()
+            && !matches!(
+                c,
+                '\u{202A}'
+                    | '\u{202B}'
+                    | '\u{202C}'
+                    | '\u{202D}'
+                    | '\u{202E}'
+                    | '\u{2066}'
+                    | '\u{2067}'
+                    | '\u{2068}'
+                    | '\u{2069}'
+            )
     }
 }
 
