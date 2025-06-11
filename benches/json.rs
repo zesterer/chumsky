@@ -347,7 +347,7 @@ mod nom {
         terminated(value, space)(i)
     }
 
-    pub fn json(i: &[u8]) -> IResult<&[u8], JsonZero, (&[u8], nom::error::ErrorKind)> {
+    pub fn json(i: &[u8]) -> IResult<&[u8], JsonZero<'_>, (&[u8], nom::error::ErrorKind)> {
         root(i)
     }
 }
@@ -450,7 +450,7 @@ mod nom8 {
         terminated(value, space).parse_complete(i)
     }
 
-    pub fn json(i: &[u8]) -> IResult<&[u8], JsonZero, (&[u8], nom8::error::ErrorKind)> {
+    pub fn json(i: &[u8]) -> IResult<&[u8], JsonZero<'_>, (&[u8], nom8::error::ErrorKind)> {
         root(i)
     }
 }
@@ -568,7 +568,7 @@ mod pest {
     #[grammar = "benches/json.pest"]
     struct JsonParser;
 
-    pub fn parse(file: &str) -> Result<JsonZero, Error<Rule>> {
+    pub fn parse(file: &str) -> Result<JsonZero<'_>, Error<Rule>> {
         let json = JsonParser::parse(Rule::json, file)?.next().unwrap();
 
         use pest::iterators::Pair;

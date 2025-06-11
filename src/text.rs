@@ -644,12 +644,12 @@ pub mod unicode {
         }
 
         /// Gets an iterator over code points.
-        pub fn code_points(&self) -> Chars {
+        pub fn code_points(&self) -> Chars<'_> {
             self.inner.chars()
         }
 
         /// Gets an iterator over bytes.
-        pub fn bytes(&self) -> Bytes {
+        pub fn bytes(&self) -> Bytes<'_> {
             self.inner.bytes()
         }
 
@@ -704,17 +704,17 @@ pub mod unicode {
         }
 
         /// Gets an iterator over graphemes.
-        pub fn iter(&self) -> GraphemesIter {
+        pub fn iter(&self) -> GraphemesIter<'_> {
             self.into_iter()
         }
 
         /// Gets an iterator over code points.
-        pub fn code_points(&self) -> Chars {
+        pub fn code_points(&self) -> Chars<'_> {
             self.inner.chars()
         }
 
         /// Gets an iterator over bytes.
-        pub fn bytes(&self) -> Bytes {
+        pub fn bytes(&self) -> Bytes<'_> {
             self.inner.bytes()
         }
 

@@ -1099,11 +1099,11 @@ mod tests {
         expr_parser().then_ignore(end())
     }
 
-    fn parse(input: &str) -> ParseResult<String, Simple<char>> {
+    fn parse(input: &str) -> ParseResult<String, Simple<'_, char>> {
         complete_parser().parse(input)
     }
 
-    fn parse_partial(input: &str) -> ParseResult<String, Simple<char>> {
+    fn parse_partial(input: &str) -> ParseResult<String, Simple<'_, char>> {
         expr_parser().lazy().parse(input)
     }
 
