@@ -162,9 +162,10 @@ macro_rules! op_check_and_emit {
             >,
             lhs: (),
             min_power: u32,
+            max_power: &mut u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
         ) -> Result<(), ()> {
-            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
         }
         #[inline(always)]
         fn do_parse_infix_emit<'parse>(
@@ -179,9 +180,10 @@ macro_rules! op_check_and_emit {
             >,
             lhs: O,
             min_power: u32,
+            max_power: &mut u32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
         ) -> Result<O, O> {
-            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
         }
     };
 }
@@ -244,6 +246,7 @@ where
         _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         _min_power: u32,
+        _max_power: &mut u32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
@@ -292,6 +295,7 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()>;
     #[doc(hidden)]
@@ -302,6 +306,7 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O>;
 }
@@ -356,12 +361,13 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
+        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, max_power, f)
     }
 
     #[inline(always)]
@@ -414,10 +420,11 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: (),
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Check, O>,
     ) -> Result<(), ()> {
         self.0
-            .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
+            .do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
     #[inline(always)]
     fn do_parse_infix_emit<'parse>(
@@ -427,23 +434,35 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: O,
         min_power: u32,
+        max_power: &mut u32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Emit, O>,
     ) -> Result<O, O> {
         self.0
-            .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
+            .do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
 }
 
 /// Defines the [associativity](https://en.wikipedia.org/wiki/Associative_property) and binding power of an [`infix`]
-/// operator (see [`left`] and [`right`]).
+/// operator (see [`left`], [`right`], and [`non`]).
 ///
 /// Higher binding powers should be used for higher precedence operators.
+///
+/// The left, right, and next binding powers are used to determine precedence in the parser. They
+/// are calculated as follows:
+///
+/// |       | left power | right power | next power |
+/// |-------|------------|-------------|------------|
+/// | Left  | bp * 3     | bp * 3 + 1  | bp * 3     |
+/// | Right | bp * 3 + 1 | bp * 3      | bp * 3     |
+/// | Non   | bp * 3     | bp * 3      | bp * 3 + 1 |
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Associativity {
     /// Specifies that the operator should be left-associative, with the given binding power (see [`left`]).
     Left(u16),
     /// Specifies that the operator should be right-associative, with the given binding power (see [`right`]).
     Right(u16),
+    /// Specifies that the operator should non-associative, with the given binding power (see [`non`]).
+    Non(u16),
 }
 
 /// Specifies a left [`Associativity`] with the given binding power.
@@ -462,18 +481,32 @@ pub fn right(binding_power: u16) -> Associativity {
     Associativity::Right(binding_power)
 }
 
+/// Specifies a non-associative [`Associativity`] with the given binding power.
+///
+/// Non-associative operators cannot be chained, but otherwise respect binding powers. For example,
+/// the expression `a == b == c` is invalid if `==` is a non-associative operator (which in
+/// general, all comparison operators are).
+pub fn non(binding_power: u16) -> Associativity {
+    Associativity::Non(binding_power)
+}
+
 impl Associativity {
     fn left_power(&self) -> u32 {
-        match self {
-            Self::Left(x) => *x as u32 * 2,
-            Self::Right(x) => *x as u32 * 2 + 1,
-        }
+        let (&Self::Left(x) | &Self::Non(x) | &Self::Right(x)) = self;
+        x as u32 * 3 + 1
     }
 
     fn right_power(&self) -> u32 {
         match self {
-            Self::Left(x) => *x as u32 * 2 + 1,
-            Self::Right(x) => *x as u32 * 2,
+            &Self::Left(x) | &Self::Non(x) => x as u32 * 3 + 2,
+            &Self::Right(x) => x as u32 * 3 + 1,
+        }
+    }
+
+    fn next_power(&self) -> u32 {
+        match self {
+            &Self::Left(x) | &Self::Right(x) => x as u32 * 3 + 1,
+            &Self::Non(x) => x as u32 * 3,
         }
     }
 }
@@ -536,7 +569,6 @@ where
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    #[inline]
     fn do_parse_infix<'parse, M: Mode>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
@@ -544,34 +576,43 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        if self.associativity.left_power() >= min_power {
-            match self.op_parser.go::<M>(inp) {
-                Ok(op) => match f(inp, self.associativity.right_power()) {
-                    Ok(rhs) => Ok(M::combine(
-                        M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
-                        op,
-                        |(lhs, rhs), op| {
-                            (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
-                        },
-                    )),
-                    Err(()) => {
-                        inp.rewind(pre_op.clone());
-                        Err(lhs)
-                    }
-                },
-                Err(()) => {
-                    inp.rewind(pre_op.clone());
-                    Err(lhs)
-                }
-            }
-        } else {
-            Err(lhs)
+        let assoc = self.associativity;
+        if assoc.left_power() < min_power || assoc.left_power() > *max_power {
+            return Err(lhs);
         }
+
+        let op = match self.op_parser.go::<M>(inp) {
+            Ok(op) => op,
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                return Err(lhs);
+            }
+        };
+
+        let rhs = match f(inp, assoc.right_power()) {
+            Ok(rhs) => rhs,
+            Err(()) => {
+                inp.rewind(pre_op.clone());
+                return Err(lhs);
+            }
+        };
+
+        let res = M::combine(
+            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+            op,
+            |(lhs, rhs), op| { (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp)) },
+        );
+
+        if let Associativity::Non(_) | Associativity::Left(_) = assoc {
+            *max_power = assoc.next_power();
+        }
+        Ok(res)
     }
 
     op_check_and_emit!();
@@ -818,6 +859,7 @@ macro_rules! impl_operator_for_tuple {
                 pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
                 mut lhs: M::Output<O>,
                 min_power: u32,
+                max_power: &mut u32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
             ) -> Result<M::Output<O>, M::Output<O>>
             where
@@ -825,7 +867,7 @@ macro_rules! impl_operator_for_tuple {
             {
                 let ($($X,)*) = self;
                 $(
-                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, max_power, f) {
                         Ok(out) => return Ok(out),
                         Err(out) => lhs = out,
                     }
@@ -894,13 +936,14 @@ where
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         mut lhs: M::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<M, O>,
     ) -> Result<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
         for op in self {
-            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, max_power, f) {
                 Ok(out) => return Ok(out),
                 Err(out) => lhs = out,
             }
@@ -918,6 +961,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         min_power: u32,
+        max_power: Option<u32>,
     ) -> PResult<M, O>
     where
         I: Input<'src>,
@@ -925,12 +969,13 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         Atom: Parser<'src, I, O, E>,
         Ops: Operator<'src, I, O, E>,
     {
+        let mut max_power: u32 = max_power.unwrap_or(u32::MAX);
         let pre_expr = inp.save();
         // Prefix unary operators
         let mut lhs = match self
             .ops
             .do_parse_prefix::<M>(inp, &pre_expr, &|inp, min_power| {
-                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power, None))
             }) {
             Ok(out) => out,
             Err(()) => self.atom.go::<M>(inp)?,
@@ -958,8 +1003,9 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                 &pre_op,
                 lhs,
                 min_power,
+                &mut max_power,
                 &|inp, min_power| {
-                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power, None))
                 },
             ) {
                 Ok(out) => {
@@ -986,7 +1032,7 @@ where
     Ops: Operator<'src, I, O, E>,
 {
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        self.pratt_go::<M, _, _, _>(inp, 0)
+        self.pratt_go::<M, _, _, _>(inp, 0, None)
     }
 
     go_extra!(O);
@@ -1253,5 +1299,27 @@ mod tests {
             parser.parse("§1+-~2!$*3").into_result(),
             Ok("(((§(1 + (-(~(2!)))))$) * 3)".to_string()),
         )
+    }
+
+    #[test]
+    fn with_pre_and_postfix_ops_and_parentheses() {
+        let atom = text::int::<_, Err<Simple<char>>>(10)
+            .from_str()
+            .unwrapped()
+            .map(Expr::Literal);
+
+        let parser = atom
+            .pratt((
+                // -- Infix
+                infix(left(1), just('+'), |l, _, r, _| i(Expr::Add, l, r)),
+                infix(non(2), just('*'), |l, _, r, _| i(Expr::Mul, l, r)),
+            ))
+            .map(|x| x.to_string());
+        assert_eq!(
+            parser.parse("1+2*3").into_result(),
+            Ok("(1 + (2 * 3))".to_string())
+        );
+        assert!(parser.parse("1+2*3*3").has_errors());
+        assert!(parser.parse("1+2*3*5").has_errors());
     }
 }

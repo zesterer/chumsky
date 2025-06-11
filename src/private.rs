@@ -108,6 +108,7 @@ pub trait Mode {
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
     ) -> Result<Self::Output<O>, Self::Output<O>>
     where
@@ -228,6 +229,7 @@ impl Mode for Emit {
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
     ) -> Result<Self::Output<O>, Self::Output<O>>
     where
@@ -235,7 +237,7 @@ impl Mode for Emit {
         I: Input<'src>,
         E: ParserExtra<'src, I>,
     {
-        op.do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
+        op.do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
 }
 
@@ -339,6 +341,7 @@ impl Mode for Check {
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: u32,
+        max_power: &mut u32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
     ) -> Result<Self::Output<O>, Self::Output<O>>
     where
@@ -346,7 +349,7 @@ impl Mode for Check {
         I: Input<'src>,
         E: ParserExtra<'src, I>,
     {
-        op.do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
+        op.do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, max_power, &f)
     }
 }
 
