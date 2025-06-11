@@ -81,8 +81,8 @@ pub trait Mode {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> PResult<Self, O>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -94,8 +94,8 @@ pub trait Mode {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -107,9 +107,9 @@ pub trait Mode {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -193,8 +193,8 @@ impl Mode for Emit {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> PResult<Self, O>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -210,8 +210,8 @@ impl Mode for Emit {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -227,9 +227,9 @@ impl Mode for Emit {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -304,8 +304,8 @@ impl Mode for Check {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> PResult<Self, O>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -321,8 +321,8 @@ impl Mode for Check {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
@@ -338,9 +338,9 @@ impl Mode for Check {
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: Self::Output<O>,
-        min_power: u32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, u32) -> PResult<Self, O>,
-    ) -> Result<Self::Output<O>, Self::Output<O>>
+        min_power: i32,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
+    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
         I: Input<'src>,
