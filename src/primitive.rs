@@ -126,7 +126,7 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 
 /// A parser that accepts only the given input.
 ///
-/// The output type of this parser is `C`, the input or sequence that was provided.
+/// The output type of this parser is `T`, the input or sequence that was provided.
 ///
 /// # Examples
 ///
