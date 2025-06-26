@@ -48,7 +48,7 @@ your program *how* to parse inputs. This is a valid approach to writing parsers,
 in an imperative style.
 
 However, imperative-style parsers are often extremely 'noisy': resulting in parser code that is long, difficult to
-maintain, is hard to read, time-consuming to optimise, and easy to break, and difficult to debug.
+maintain, hard to read, time-consuming to optimise, easy to break, and difficult to debug.
 
 In comparison, chumsky encourages you to write [**declarative**](https://en.wikipedia.org/wiki/Declarative_programming)
 parsers. In the declarative style, instead of telling your code *how* to parse inputs, you tell it *what* to parse. This
@@ -62,7 +62,7 @@ faster!) than hand-written parsers both easy and quick.
 
 ## Combinators
 
-Modern software is written primarily through through the use of *functions*. Each function performs a specific task and
+Modern software is written primarily through the use of *functions*. Each function performs a specific task and
 may call out to sub-functions. To create a whole program, it is necessary to **combine** functions to get the desired
 behaviour of the program as a whole.
 
