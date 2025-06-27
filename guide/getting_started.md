@@ -130,8 +130,8 @@ fn test_parser() {
 }
 ```
 
-Hopefully, this code is fairly self-explanatory. We call `parse()` (the function we wrote in the previous section) to
-create an instance of our parsers, and then we call [`Parser::parse`] on it with the desired input to actually do some
+Hopefully, this code is fairly self-explanatory. We call `parser()` (the function we wrote in the previous section) to
+create an instance of our parser, and then we call [`Parser::parse`] on it with the desired input to actually do some
 parsing. The return value is the result of the parse.
 
 From here, the world is your lobster: you can move on to the tutorial sections of this guide or you can jump write into
