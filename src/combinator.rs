@@ -2289,7 +2289,7 @@ where
 
         match result {
             Ok(()) => {
-                let found = inp.next_inner();
+                let found = inp.peek_inner();
                 inp.add_alt(
                     [DefaultExpected::SomethingElse],
                     found.map(|f| f.into()),
