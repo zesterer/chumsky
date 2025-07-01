@@ -1983,6 +1983,8 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
+        #[cfg(debug_assertions)]
+        let mut first_loop = true;
         loop {
             #[cfg(debug_assertions)]
             let before = inp.cursor();
@@ -1995,11 +1997,15 @@ where
                 Err(()) => break Err(()),
             }
             #[cfg(debug_assertions)]
-            debug_assert!(
-                before != inp.cursor(),
-                "found SeparatedBy combinator making no progress at {}",
-                self.location,
-            );
+            if !first_loop {
+                debug_assert!(
+                    before != inp.cursor(),
+                    "found SeparatedBy combinator making no progress at {}",
+                    self.location,
+                );
+            } else {
+                first_loop = false;
+            }
         }
     }
 

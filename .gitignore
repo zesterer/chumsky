@@ -1,5 +1,6 @@
 # IDE projects
 .idea/
+.vscode/
 
 # Project output
 /target
