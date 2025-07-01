@@ -3813,6 +3813,34 @@ mod tests {
     }
 
     #[test]
+    fn try_map() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((
+                just("a").or_not(),
+                just("b").try_map(|_, _| Ok(())).or_not(),
+                just::<_, &str, extra::Err<Rich<_>>>("c"),
+            ))
+            .ignored();
+
+        assert_eq!(
+            parser.parse("").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![
+                        DefaultExpected::Token('a'.into()),
+                        DefaultExpected::Token('b'.into()),
+                        DefaultExpected::Token('c'.into()),
+                    ],
+                    None,
+                    SimpleSpan::new((), 0..0)
+                )]
+            )
+        );
+    }
+
+    #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
             custom(|inp| {

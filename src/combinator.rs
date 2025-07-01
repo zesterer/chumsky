@@ -630,25 +630,38 @@ where
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
-        let out = self.parser.go::<Emit>(inp)?;
+        let res = self.parser.go::<Emit>(inp);
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
-        match (self.mapper)(out, span) {
+        match res {
             Ok(out) => {
-                // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
+                match (self.mapper)(out, span) {
+                    Ok(out) => {
+                        // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
+                        inp.errors.alt = old_alt;
+                        if let Some(new_alt) = new_alt {
+                            inp.add_alt_err(&new_alt.pos, new_alt.err);
+                        }
+                        Ok(M::bind(|| out))
+                    }
+
+                    Err(err) => {
+                        // If unsuccessful, reinsert the original alt but replace the new alt with the mapper error (since it overrides it)
+                        inp.errors.alt = old_alt;
+                        inp.add_alt_err(&before.inner, err);
+                        Err(())
+                    }
+                }
+            }
+
+            Err(_) => {
                 inp.errors.alt = old_alt;
                 if let Some(new_alt) = new_alt {
-                    inp.add_alt_err(&before.inner, new_alt.err);
+                    inp.add_alt_err(&new_alt.pos, new_alt.err);
                 }
-                Ok(M::bind(|| out))
-            }
-            Err(err) => {
-                // If unsuccessful, reinsert the original alt but replace the new alt with the mapper error (since it overrides it)
-                inp.errors.alt = old_alt;
-                inp.add_alt_err(&before.inner, err);
                 Err(())
-            }
+            },
         }
     }
 
