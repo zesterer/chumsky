@@ -252,6 +252,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        let found = inp.peek_maybe();
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
@@ -272,7 +273,7 @@ where
                 } else {
                     // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
                     let expected = [DefaultExpected::SomethingElse];
-                    let err = E::Error::expected_found(expected, None, span);
+                    let err = E::Error::expected_found(expected, found, span);
                     inp.errors.alt = old_alt;
                     inp.add_alt_err(&before.inner, err);
                     Err(())
