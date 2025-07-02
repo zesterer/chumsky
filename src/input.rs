@@ -1778,6 +1778,9 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     #[inline]
     pub(crate) fn add_alt_err(&mut self, at: &I::Cursor, err: E::Error) {
         if core::mem::size_of::<E::Error>() == 0 {
+            if self.errors.alt.is_none() {
+                self.errors.alt = Some(Located::at(at.clone(), err))
+            }
             return;
         }
 
