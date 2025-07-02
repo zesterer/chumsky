@@ -3840,6 +3840,50 @@ mod tests {
     }
 
     #[test]
+    fn zst_error() {
+        use crate::newline;
+
+        fn filter_ok<'src>() -> impl Parser<'src, &'src str, ()>
+        {
+            any()
+                .filter(|_| true)
+                .map_err(|err: EmptyErr| err)
+                .repeated()
+                .ignored()
+        }
+
+        assert_eq!(filter_ok().parse("").into_result(), Ok(()));
+
+        fn custom_err<'input>() -> impl Parser<'input, &'input str, &'input str> {
+            custom(|i| {
+                let end_cursor = custom(|i| {
+                    let result = i.parse(newline());
+                    let cursor = i.cursor();
+                    let cursor: &usize = cursor.inner();
+                    let cursor: usize = cursor.clone();
+                    result.map(|_| cursor)
+                });
+        
+                let start_cursor = i.cursor();
+                let start: &usize = start_cursor.inner();
+                let start: usize = start.clone();
+                i.parse(end_cursor).map(|end| {
+                    if end > start {
+                        let length = end - start;
+                        let slice: &str = i.slice_from(&start_cursor..);
+                        let (slice, _) = slice.split_at(length);
+                        slice
+                    } else {
+                        ""
+                    }
+                })
+            })
+        }
+        
+        assert_eq!(custom_err().parse("n").into_output(), None);
+    }
+
+    #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
             custom(|inp| {
