@@ -253,15 +253,40 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
-        self.parser.go::<Emit>(inp).and_then(|out| {
-            if (self.filter)(&out) {
-                Ok(M::bind(|| out))
-            } else {
-                let err_span = inp.span_since(&before);
-                inp.add_alt([DefaultExpected::SomethingElse], None, err_span);
+        // Remove the pre-inner alt, to be reinserted later so we always preserve it
+        let old_alt = inp.errors.alt.take();
+
+        let res = self.parser.go::<Emit>(inp);
+        let span = inp.span_since(&before);
+        let new_alt = inp.errors.alt.take();
+
+        match res {
+            Ok(out) => {
+                if (self.filter)(&out) {
+                    // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
+                    inp.errors.alt = old_alt;
+                    if let Some(new_alt) = new_alt {
+                        inp.add_alt_err(&new_alt.pos, new_alt.err);
+                    }
+                    Ok(M::bind(|| out))
+                } else {
+                    // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
+                    let expected = [DefaultExpected::SomethingElse];
+                    let err = E::Error::expected_found(expected, None, span);
+                    inp.errors.alt = old_alt;
+                    inp.add_alt_err(&before.inner, err);
+                    Err(())
+                }
+            }
+
+            Err(_) => {
+                inp.errors.alt = old_alt;
+                if let Some(new_alt) = new_alt {
+                    inp.add_alt_err(&new_alt.pos, new_alt.err);
+                }
                 Err(())
             }
-        })
+        }
     }
 
     go_extra!(O);
