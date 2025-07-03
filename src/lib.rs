@@ -3841,6 +3841,33 @@ mod tests {
     }
 
     #[test]
+    fn filter() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((
+            just("a").or_not(),
+            just("b").filter(|_| false).or_not(),
+            just::<_, &str, extra::Err<Rich<_>>>("c"),
+        ));
+
+        assert_eq!(
+            parser.parse("b").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![
+                        DefaultExpected::Token('a'.into()),
+                        DefaultExpected::SomethingElse,
+                        DefaultExpected::Token('c'.into()),
+                    ],
+                    Some('b'.into()),
+                    SimpleSpan::new((), 0..1)
+                )]
+            )
+        );
+    }
+
+    #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
             custom(|inp| {
