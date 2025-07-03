@@ -659,12 +659,12 @@ where
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
+        inp.errors.alt = old_alt;
         match res {
             Ok(out) => {
                 match (self.mapper)(out, span) {
                     Ok(out) => {
                         // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
-                        inp.errors.alt = old_alt;
                         if let Some(new_alt) = new_alt {
                             inp.add_alt_err(&new_alt.pos, new_alt.err);
                         }
@@ -673,18 +673,16 @@ where
 
                     Err(err) => {
                         // If unsuccessful, reinsert the original alt but replace the new alt with the mapper error (since it overrides it)
-                        inp.errors.alt = old_alt;
                         inp.add_alt_err(&before.inner, err);
                         Err(())
                     }
                 }
             }
 
-            Err(_) => {
-                inp.errors.alt = old_alt;
-                if let Some(new_alt) = new_alt {
-                    inp.add_alt_err(&new_alt.pos, new_alt.err);
-                }
+            Err(_) => {                
+                // Can't fail!
+                let new_alt = new_alt.unwrap();
+                inp.add_alt_err(&new_alt.pos, new_alt.err);
                 Err(())
             },
         }
