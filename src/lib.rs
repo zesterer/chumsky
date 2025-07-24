@@ -3937,6 +3937,6 @@ mod tests {
             .recover_with(via_parser(any().and_is(text::newline().not()).to_span()))
         }
 
-        let res = parser().parse("tru").into_result();
+        let _ = parser().parse("tru");
     }
 }

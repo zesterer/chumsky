@@ -1207,7 +1207,7 @@ impl<'src, I: Input<'src>> PartialEq for Cursor<'src, '_, I> {
 
 impl<'src, I: Input<'src>> PartialOrd for Cursor<'src, '_, I> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(I::cursor_location(&self.inner).cmp(&I::cursor_location(&other.inner)))
+        Some(self.cmp(other))
     }
 }
 
