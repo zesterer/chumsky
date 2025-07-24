@@ -1131,3 +1131,126 @@ impl_group_for_tuple! {
     Y_ OY
     Z_ OZ
 }
+
+/// See [`set`].
+#[derive(Copy, Clone)]
+pub struct Set<T> {
+    parsers: T,
+}
+
+/// Parse using a tuple of parsers in any order, producing the output of the parser set in the provided order.
+///
+/// The output type of this parser is a tuple of the output types of the inner parsers.
+///
+/// All parsers must successfully parse.
+///
+/// Parsers are always in the provided order, which means that most specific parsers must be
+/// provided first or they might never match.
+///
+/// Parsers that match without making progress (like `empty()` or `something.or_not()`) are applied
+/// last to make sure they have no better alternative.
+///
+/// This means that you can make a parser optional by adding a call to `.or_not()` to it.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// let options = set((
+///     just("option_a\n"),
+///     just("option_b\n"),
+///     just("option_c\n").or_not(),
+/// ));
+///
+/// assert_eq!(
+///     options.parse("option_b\noption_a\n"),
+///     Ok(("option_a\n", "option_b\n", None)),
+/// );
+/// ```
+pub const fn set<T>(parsers: T) -> Set<T> {
+    Set { parsers }
+}
+
+fn go_or_finish<'src, O, I, E, P>(item: &mut Option<O>, parser: &P, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Emit, ()>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    P: Parser<'src, I, O, E>,
+{
+    if item.is_none() {
+        match parser.go::<Emit>(inp) {
+            Ok(out) => {
+                *item = Some(out);
+            }
+            Err(()) => { return Err(()); }
+        }
+    }
+    Ok(())
+
+}
+
+fn go_or_rewind<'src, O, I, E, P>(item: &mut Option<O>, parser: &P, inp: &mut InputRef<'src, '_, I, E>)
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    P: Parser<'src, I, O, E>,
+{
+    if item.is_none() {
+        let save_before = inp.save();
+        let pos_before = inp.cursor();
+        match parser.go::<Emit>(inp) {
+            Ok(out) => {
+                if pos_before == inp.cursor() {
+                    inp.rewind(save_before.clone());
+                } else {
+                    *item = Some(out);
+                }
+            }
+            Err(()) => { inp.rewind(save_before.clone()) }
+        }
+    }
+}
+
+macro_rules! impl_set_for_tuple {
+    () => {};
+    ($head_1:ident $head_2:ident $head_3:ident $($X:ident)*) => {
+        impl_set_for_tuple!($($X)*);
+        impl_set_for_tuple!(~ $head_1 $head_2 $head_3 $($X)*);
+    };
+    (~ $($O:ident $P:ident $I:ident)+) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'src, I, E, $($P),*, $($O,)*> Parser<'src, I, ($($O,)*), E> for Set<($($P,)*)>
+        where
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $($P: Parser<'src, I, $O, E>),*
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ($($O,)*)> {
+                let Set { parsers: ($($P,)*), .. } = self;
+                $( let mut $I = None; )*
+
+                // first iterate until there are no progress
+                loop {
+                    let start = inp.cursor();
+                    $( go_or_rewind(&mut $I, $P, inp); )*
+                    // none matched during this loop
+                    if start == inp.cursor() {
+                        break;
+                    }
+                }
+
+                // Then a final iteration that matches remaining empty parsers
+                $( go_or_finish(&mut $I, $P, inp)?; )*
+
+                // unwrap is ok since we matched all items in the set exactly once
+                Ok(M::bind(|| ( $($I.unwrap(),)* )))
+            }
+
+            go_extra!(($($O,)*));
+        }
+    };
+}
+
+impl_set_for_tuple!(A1 A2 A3 B1 B2 B3 C1 C2 C3 D1 D2 D3 E1 E2 E3 F1 F2 F3 G1 G2 G3 H1 H2 H3 I1 I2 I3 J1 J2 J3 K1 K2 K3 L1 L2 L3 M1 M2 M3 N1 N2 N3 O1 O2 O3 P1 P2 P3 Q1 Q2 Q3 R1 R2 R3 S1 S2 S3 T1 T2 T3 U1 U2 U3 V1 V2 V3 W1 W2 W3 X1 X2 X3 Y1 Y2 Y3 Z1 Z2 Z3);
+
