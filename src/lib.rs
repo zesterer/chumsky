@@ -3926,4 +3926,17 @@ mod tests {
         );
     }
     */
+
+    // Prevent a regression
+    #[test]
+    fn labelled_recovery_dont_panic() {
+        fn parser<'i>() -> impl Parser<'i, &'i str, SimpleSpan> {
+            choice((choice((just("true"), just("false")))
+                .labelled("boolean")
+                .to_span(),))
+            .recover_with(via_parser(any().and_is(text::newline().not()).to_span()))
+        }
+
+        let res = parser().parse("tru").into_result();
+    }
 }
