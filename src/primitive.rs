@@ -1267,3 +1267,132 @@ macro_rules! impl_set_for_tuple {
 }
 
 impl_set_for_tuple!(A1 A2 A3 B1 B2 B3 C1 C2 C3 D1 D2 D3 E1 E2 E3 F1 F2 F3 G1 G2 G3 H1 H2 H3 I1 I2 I3 J1 J2 J3 K1 K2 K3 L1 L2 L3 M1 M2 M3 N1 N2 N3 O1 O2 O3 P1 P2 P3 Q1 Q2 Q3 R1 R2 R3 S1 S2 S3 T1 T2 T3 U1 U2 U3 V1 V2 V3 W1 W2 W3 X1 X2 X3 Y1 Y2 Y3 Z1 Z2 Z3);
+
+impl<'src, P, I, O, E> Parser<'src, I, Vec<O>, E> for Set<Vec<P>>
+where
+    P: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Vec<O>> {
+        let mut tmp = self.parsers.iter().map(|_| None).collect::<Vec<Option<O>>>();
+
+        // first iterate until there are no progress
+        loop {
+            let start = inp.cursor();
+            for i in 0..self.parsers.len() {
+                go_or_rewind(&mut tmp[i], &self.parsers[i], inp);
+            }
+            // none matched during this loop
+            if start == inp.cursor() {
+                break;
+            }
+        }
+
+        // Then a final iteration that matches remaining empty parsers
+        for i in 0..self.parsers.len() {
+            go_or_finish(&mut tmp[i], &self.parsers[i], inp)?;
+        }
+
+        // unwrap is ok since we matched all items in the se
+        Ok(M::bind(|| tmp.into_iter().map(|x| x.unwrap()).collect() ))
+    }
+
+    go_extra!(Vec<O>);
+}
+
+impl<'src, P, I, O, E, const N: usize> Parser<'src, I, [O; N], E> for Set<[P; N]>
+where
+    P: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, [O; N]> {
+        let mut tmp: [Option<O>; N] = [const { None }; N];
+
+        // first iterate until there are no progress
+        loop {
+            let start = inp.cursor();
+            for i in 0..N {
+                go_or_rewind(&mut tmp[i], &self.parsers[i], inp);
+            }
+            // none matched during this loop
+            if start == inp.cursor() {
+                break;
+            }
+        }
+
+        // Then a final iteration that matches remaining empty parsers
+        for i in 0..N {
+            go_or_finish(&mut tmp[i], &self.parsers[i], inp)?;
+        }
+
+        // unwrap is ok since we matched all items in the se
+        Ok(M::bind(|| tmp.map(|x| x.unwrap()) ))
+    }
+
+    go_extra!([O; N]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_parser() {
+        fn just(s: &str) -> Just<&str, &str, extra::Err<EmptyErr>> {
+            super::just(s)
+        }
+
+        // test ordering
+        let parser = set((just("abc"), just("def"), just("ijk") ));
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(("abc", "def", "ijk")),
+        );
+        assert_eq!(
+            parser.parse("abcdefijk").into_result(),
+            Ok(("abc", "def", "ijk")),
+        );
+
+        // test inclusion
+        let parser = set(( choice((just("abc"), just("def"))), just("abc") ));
+        assert_eq!(
+            parser.parse("defabc").into_result(),
+            Ok(("def", "abc")),
+        );
+        let parser = set(( choice((just("abc"), just("def"))), just("abc") ));
+        assert!(parser.parse("abcdef").into_result().is_err());
+
+        // test optionals
+        let parser = set((just("abc").or_not(), just("def").or_not(), just("ijk").or_not() ));
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok((Some("abc"), Some("def"), Some("ijk"))),
+        );
+        assert_eq!(
+            parser.parse("ijkabc").into_result(),
+            Ok((Some("abc"), None, Some("ijk"))),
+        );
+        assert_eq!(
+            parser.parse("").into_result(),
+            Ok((None, None, None)),
+        );
+
+        // test types
+        let parser = set(vec![just("abc"), just("def"), just("ijk") ]);
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(vec!["abc", "def", "ijk"]),
+        );
+        let parser = set([just("abc"), just("def"), just("ijk") ]);
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(["abc", "def", "ijk"]),
+        );
+
+    }
+}
+
