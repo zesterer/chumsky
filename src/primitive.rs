@@ -1131,3 +1131,284 @@ impl_group_for_tuple! {
     Y_ OY
     Z_ OZ
 }
+
+/// See [`set`].
+#[derive(Copy, Clone)]
+pub struct Set<T> {
+    parsers: T,
+}
+
+/// Parse using a tuple of parsers in any order, producing the output of the parser set in the provided order.
+///
+/// The output type of this parser is a tuple of the output types of the inner parsers.
+///
+/// All parsers must successfully parse.
+///
+/// Parsers are always tried in the provided order, which means that most specific parsers must be
+/// provided first or they might never match. In other words, if two parsers match the same item,
+/// the `set`'s input must containt this item twice for the `set` to be successful.
+///
+/// Be careful! This combinator is O(n^2), which means that in the worst case you could slow down parsing with
+/// a lot of parser calls. The worst case happens when all items are present but in the reverse
+/// order compared to the list of parsers. To mitigate this you should order your parsers in the
+/// same order input usually happens. And you should avoid having too many parsers in the set.
+///
+/// Parsers that match without making progress (like `empty()` or `something.or_not()`) are applied
+/// last to make sure they have no better alternative.
+///
+/// This means that you can make a parser optional by adding a call to `.or_not()` to it.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// let options = set((
+///     just::<_, _, extra::Err<Simple<char>>>("apple\n"),
+///     just("banana\n"),
+///     just("carrot\n").or_not(),
+/// ));
+///
+/// assert_eq!(
+///     options.parse("banana\napple\n").into_result(),
+///     Ok(("apple\n", "banana\n", None)),
+/// );
+/// ```
+pub const fn set<T>(parsers: T) -> Set<T> {
+    Set { parsers }
+}
+
+fn go_or_finish<'src, O, I, E, P, M>(
+    item: &mut Option<M::Output<O>>,
+    parser: &P,
+    inp: &mut InputRef<'src, '_, I, E>,
+) -> PResult<M, ()>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    P: Parser<'src, I, O, E>,
+    M: Mode,
+{
+    if item.is_none() {
+        match parser.go::<M>(inp) {
+            Ok(out) => {
+                *item = Some(out);
+            }
+            Err(()) => {
+                return Err(());
+            }
+        }
+    }
+    Ok(M::bind(|| ()))
+}
+
+fn go_or_rewind<'src, O, I, E, P, M>(
+    item: &mut Option<M::Output<O>>,
+    parser: &P,
+    inp: &mut InputRef<'src, '_, I, E>,
+) where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    P: Parser<'src, I, O, E>,
+    M: Mode,
+{
+    if item.is_none() {
+        let save_before = inp.save();
+        let pos_before = inp.cursor();
+        match parser.go::<M>(inp) {
+            Ok(out) => {
+                if pos_before == inp.cursor() {
+                    inp.rewind(save_before.clone());
+                } else {
+                    *item = Some(out);
+                }
+            }
+            Err(()) => inp.rewind(save_before.clone()),
+        }
+    }
+}
+
+macro_rules! impl_set_for_tuple {
+    () => {};
+    ($head_1:ident $head_2:ident $head_3:ident $($X:ident)*) => {
+        impl_set_for_tuple!($($X)*);
+        impl_set_for_tuple!(~ $head_1 $head_2 $head_3 $($X)*);
+    };
+    (~ $($O:ident $P:ident $I:ident)+) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'src, I, E, $($P),*, $($O,)*> Parser<'src, I, ($($O,)*), E> for Set<($($P,)*)>
+        where
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $($P: Parser<'src, I, $O, E>),*
+        {
+            #[inline]
+            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ($($O,)*)> {
+                let Set { parsers: ($($P,)*), .. } = self;
+                $( let mut $I: Option<M::Output<$O>> = None; )*
+
+                // first iterate until there are no progress
+                loop {
+                    let start = inp.cursor();
+                    $( go_or_rewind::<_, _, _, _, M>(&mut $I, $P, inp); )*
+                    // none matched during this loop
+                    if start == inp.cursor() {
+                        break;
+                    }
+                }
+
+                // Then a final iteration that matches remaining empty parsers
+                $( go_or_finish::<_, _, _, _, M>(&mut $I, $P, inp)?; )*
+
+                // unwrap is ok since we matched all items in the set exactly once
+                $( let $I = $I.unwrap(); )*
+                Ok(flatten_map!(<M> $($I)*))
+            }
+
+            go_extra!(($($O,)*));
+        }
+    };
+}
+
+impl_set_for_tuple!(A1 A2 A3 B1 B2 B3 C1 C2 C3 D1 D2 D3 E1 E2 E3 F1 F2 F3 G1 G2 G3 H1 H2 H3 I1 I2 I3 J1 J2 J3 K1 K2 K3 L1 L2 L3 M1 M2 M3 N1 N2 N3 O1 O2 O3 P1 P2 P3 Q1 Q2 Q3 R1 R2 R3 S1 S2 S3 T1 T2 T3 U1 U2 U3 V1 V2 V3 W1 W2 W3 X1 X2 X3 Y1 Y2 Y3 Z1 Z2 Z3);
+
+impl<'src, P, I, O, E> Parser<'src, I, Vec<O>, E> for Set<Vec<P>>
+where
+    P: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Vec<O>> {
+        let mut tmp = self
+            .parsers
+            .iter()
+            .map(|_| None)
+            .collect::<Vec<Option<M::Output<O>>>>();
+
+        // first iterate until there are no progress
+        loop {
+            let start = inp.cursor();
+            for (i, parser) in self.parsers.iter().enumerate() {
+                go_or_rewind::<_, _, _, _, M>(&mut tmp[i], parser, inp);
+            }
+            // none matched during this loop
+            if start == inp.cursor() {
+                break;
+            }
+        }
+
+        // Then a final iteration that matches remaining empty parsers
+        for (i, parser) in self.parsers.iter().enumerate() {
+            go_or_finish::<_, _, _, _, M>(&mut tmp[i], parser, inp)?;
+        }
+
+        // unwrap is ok since we matched all items in the se
+        let mut result = M::bind(|| Vec::new());
+        tmp.into_iter()
+            .for_each(|x| M::combine_mut(&mut result, x.unwrap(), |result, x| result.push(x)));
+        Ok(result)
+    }
+
+    go_extra!(Vec<O>);
+}
+
+impl<'src, P, I, O, E, const N: usize> Parser<'src, I, [O; N], E> for Set<[P; N]>
+where
+    P: Parser<'src, I, O, E>,
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    // remove this requirement when MSRV > 1.80
+    O: Copy,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, [O; N]> {
+        // Replace this when MRSV > 1.80
+        //let mut tmp: [Option<M::Output<O>>; N] = [ const { None }; N];
+        let mut tmp: [Option<O>; N] = [None; N];
+
+        // first iterate until there are no progress
+        loop {
+            let start = inp.cursor();
+            for (i, parser) in self.parsers.iter().enumerate() {
+                // Replace this when MRSV > 1.80
+                //go_or_rewind::<_, _, _, _, M>(&mut tmp[i], parser, inp);
+                go_or_rewind::<_, _, _, _, Emit>(&mut tmp[i], parser, inp);
+            }
+            // none matched during this loop
+            if start == inp.cursor() {
+                break;
+            }
+        }
+
+        // Then a final iteration that matches remaining empty parsers
+        for (i, parser) in self.parsers.iter().enumerate() {
+            // Replace this when MRSV > 1.80
+            //go_or_finish::<_, _, _, _, M>(&mut tmp[i], parser, inp)?;
+            go_or_finish::<_, _, _, _, Emit>(&mut tmp[i], parser, inp)?;
+        }
+
+        // unwrap is ok since we matched all items in the se
+        // Replace this when MRSV > 1.80
+        //Ok(M::array( tmp.map(|x| x.unwrap()) ))
+        Ok(M::bind(|| tmp.map(|x| x.unwrap())))
+    }
+
+    go_extra!([O; N]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_parser() {
+        fn just(s: &str) -> Just<&str, &str, extra::Err<EmptyErr>> {
+            super::just(s)
+        }
+
+        // test ordering
+        let parser = set((just("abc"), just("def"), just("ijk")));
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(("abc", "def", "ijk")),
+        );
+        assert_eq!(
+            parser.parse("abcdefijk").into_result(),
+            Ok(("abc", "def", "ijk")),
+        );
+
+        // test inclusion
+        let parser = set((choice((just("abc"), just("def"))), just("abc")));
+        assert_eq!(parser.parse("defabc").into_result(), Ok(("def", "abc")),);
+        let parser = set((choice((just("abc"), just("def"))), just("abc")));
+        assert!(parser.parse("abcdef").into_result().is_err());
+
+        // test optionals
+        let parser = set((
+            just("abc").or_not(),
+            just("def").or_not(),
+            just("ijk").or_not(),
+        ));
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok((Some("abc"), Some("def"), Some("ijk"))),
+        );
+        assert_eq!(
+            parser.parse("ijkabc").into_result(),
+            Ok((Some("abc"), None, Some("ijk"))),
+        );
+        assert_eq!(parser.parse("").into_result(), Ok((None, None, None)),);
+
+        // test types
+        let parser = set(vec![just("abc"), just("def"), just("ijk")]);
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(vec!["abc", "def", "ijk"]),
+        );
+        let parser = set([just("abc"), just("def"), just("ijk")]);
+        assert_eq!(
+            parser.parse("ijkdefabc").into_result(),
+            Ok(["abc", "def", "ijk"]),
+        );
+    }
+}
