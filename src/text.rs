@@ -259,17 +259,12 @@ where
     E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
-        .try_map(|c: I::Token, span| {
-            if c.is_whitespace() {
-                Ok(())
-            } else {
-                Err(LabelError::expected_found(
-                    [TextExpected::Whitespace],
-                    Some(MaybeRef::Val(c)),
-                    span,
-                ))
-            }
+        .filter(|c: &I::Token| c.is_whitespace())
+        .map_err(|mut err: E::Error| {
+            err.label_with(TextExpected::Whitespace);
+            err
         })
+        .ignored()
         .repeated()
 }
 
@@ -300,17 +295,12 @@ where
     E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
-        .try_map(|c: I::Token, span| {
-            if c.is_inline_whitespace() {
-                Ok(())
-            } else {
-                Err(LabelError::expected_found(
-                    [TextExpected::InlineWhitespace],
-                    Some(MaybeRef::Val(c)),
-                    span,
-                ))
-            }
+        .filter(|c: &I::Token| c.is_inline_whitespace())
+        .map_err(|mut err: E::Error| {
+            err.label_with(TextExpected::InlineWhitespace);
+            err
         })
+        .ignored()
         .repeated()
 }
 
@@ -416,16 +406,10 @@ where
     E::Error: LabelError<'src, I, TextExpected<'src, I>>,
 {
     any()
-        .try_map(move |c: I::Token, span| {
-            if c.is_digit(radix) {
-                Ok(c)
-            } else {
-                Err(LabelError::expected_found(
-                    [TextExpected::Digit(0..radix)],
-                    Some(MaybeRef::Val(c)),
-                    span,
-                ))
-            }
+        .filter(move |c: &I::Token| c.is_digit(radix))
+        .map_err(move |mut err: E::Error| {
+            err.label_with(TextExpected::Digit(0..radix));
+            err
         })
         .repeated()
         .at_least(1)
@@ -471,29 +455,17 @@ where
         LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
-        .try_map(move |c: I::Token, span| {
-            if c.is_digit(radix) && c != I::Token::digit_zero() {
-                Ok(c)
-            } else {
-                Err(LabelError::expected_found(
-                    [TextExpected::Digit(1..radix)],
-                    Some(MaybeRef::Val(c)),
-                    span,
-                ))
-            }
+        .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
+        .map_err(move |mut err: E::Error| {
+            err.label_with(TextExpected::Digit(1..radix));
+            err
         })
         .then(
             any()
-                .try_map(move |c: I::Token, span| {
-                    if c.is_digit(radix) {
-                        Ok(())
-                    } else {
-                        Err(LabelError::expected_found(
-                            [TextExpected::Digit(0..radix)],
-                            Some(MaybeRef::Val(c)),
-                            span,
-                        ))
-                    }
+                .filter(move |c: &I::Token| c.is_digit(radix))
+                .map_err(move |mut err: E::Error| {
+                    err.label_with(TextExpected::Digit(0..radix));
+                    err
                 })
                 .repeated(),
         )
@@ -522,34 +494,23 @@ pub mod ascii {
         E::Error: LabelError<'src, I, TextExpected<'src, I>>,
     {
         any()
-            .try_map(|c: I::Token, span| {
-                if c.to_ascii()
-                    .map(|i| i.is_ascii_alphabetic() || i == b'_')
-                    .unwrap_or(false)
-                {
-                    Ok(c)
-                } else {
-                    Err(LabelError::expected_found(
-                        [TextExpected::IdentifierPart],
-                        Some(MaybeRef::Val(c)),
-                        span,
-                    ))
-                }
+            .filter(|c: &I::Token| {
+                c.to_ascii()
+                    .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
+            })
+            .map_err(|mut err: E::Error| {
+                err.label_with(TextExpected::IdentifierPart);
+                err
             })
             .then(
                 any()
-                    .try_map(|c: I::Token, span| {
-                        if c.to_ascii()
+                    .filter(|c: &I::Token| {
+                        c.to_ascii()
                             .map_or(false, |i| i.is_ascii_alphanumeric() || i == b'_')
-                        {
-                            Ok(())
-                        } else {
-                            Err(LabelError::expected_found(
-                                [TextExpected::IdentifierPart],
-                                Some(MaybeRef::Val(c)),
-                                span,
-                            ))
-                        }
+                    })
+                    .map_err(|mut err: E::Error| {
+                        err.label_with(TextExpected::IdentifierPart);
+                        err
                     })
                     .repeated(),
             )
@@ -945,29 +906,17 @@ pub mod unicode {
         E::Error: LabelError<'src, I, TextExpected<'src, I>>,
     {
         any()
-            .try_map(|c: I::Token, span| {
-                if c.is_ident_start() {
-                    Ok(c)
-                } else {
-                    Err(LabelError::expected_found(
-                        [TextExpected::IdentifierPart],
-                        Some(MaybeRef::Val(c)),
-                        span,
-                    ))
-                }
+            .filter(|c: &I::Token| c.is_ident_start())
+            .map_err(|mut err: E::Error| {
+                err.label_with(TextExpected::IdentifierPart);
+                err
             })
             .then(
                 any()
-                    .try_map(|c: I::Token, span| {
-                        if c.is_ident_continue() {
-                            Ok(c)
-                        } else {
-                            Err(LabelError::expected_found(
-                                [TextExpected::IdentifierPart],
-                                Some(MaybeRef::Val(c)),
-                                span,
-                            ))
-                        }
+                    .filter(|c: &I::Token| c.is_ident_continue())
+                    .map_err(|mut err: E::Error| {
+                        err.label_with(TextExpected::IdentifierPart);
+                        err
                     })
                     .repeated(),
             )
@@ -1122,6 +1071,25 @@ mod tests {
         test_err(ident, "");
         test_err(ident, ".");
         test_err(ident, "123");
+    }
+
+    #[test]
+    fn whitespace() {
+        use crate::{whitespace, LabelError, TextExpected};
+
+        let parser = whitespace::<&str, extra::Err<Rich<_>>>().exactly(1);
+
+        assert_eq!(
+            parser.parse("").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![TextExpected::<&str>::Whitespace],
+                    None,
+                    SimpleSpan::new((), 0..0)
+                )]
+            )
+        );
     }
 
     /*
