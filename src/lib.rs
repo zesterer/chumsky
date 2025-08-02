@@ -2,7 +2,7 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures)
+    feature(new_range_api, never_type, fn_traits, tuple_trait, unboxed_closures)
 )]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
