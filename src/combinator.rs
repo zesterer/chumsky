@@ -252,6 +252,47 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        Self::go_cfg::<M>(&self, inp, FilterCfg::default())
+    }
+
+    go_extra!(O);
+}
+
+/// Configuration for [`Filter`], used in [`ConfigParser::configure`]
+pub struct FilterCfg<F> {
+    pub(crate) filter: Option<F>,
+}
+
+impl<F> Default for FilterCfg<F> {
+    #[inline]
+    fn default() -> Self {
+        FilterCfg { filter: None }
+    }
+}
+
+impl<F> FilterCfg<F> {
+    /// Set the filter function for this configuration.
+    #[inline]
+    pub fn filter(mut self, filter: F) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+}
+
+impl<'src, A, I, O, E, F> ConfigParser<'src, I, O, E> for Filter<A, F>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
+    F: Fn(&O) -> bool,
+{
+    type Config = FilterCfg<F>;
+
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, O> {
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
@@ -262,7 +303,8 @@ where
 
         match res {
             Ok(out) => {
-                if (self.filter)(&out) {
+                let filter = cfg.filter.as_ref().unwrap_or(&self.filter);
+                if filter(&out) {
                     // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
                     inp.errors.alt = old_alt;
                     if let Some(new_alt) = new_alt {
@@ -288,8 +330,6 @@ where
             }
         }
     }
-
-    go_extra!(O);
 }
 
 /// See [`Parser::map`].
