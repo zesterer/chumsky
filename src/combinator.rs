@@ -259,22 +259,22 @@ where
 }
 
 /// Configuration for [`Filter`], used in [`ConfigParser::configure`]
-pub struct FilterCfg<F> {
-    pub(crate) filter: Option<F>,
+pub struct FilterCfg<O> {
+    pub(crate) filter: Option<Box<dyn Fn(&O) -> bool>>,
 }
 
-impl<F> Default for FilterCfg<F> {
+impl<O> Default for FilterCfg<O> {
     #[inline]
     fn default() -> Self {
         FilterCfg { filter: None }
     }
 }
 
-impl<F> FilterCfg<F> {
+impl<O> FilterCfg<O> {
     /// Set the filter function for this configuration.
     #[inline]
-    pub fn filter(mut self, filter: F) -> Self {
-        self.filter = Some(filter);
+    pub fn filter(mut self, filter: impl Fn(&O) -> bool + 'static) -> Self {
+        self.filter = Some(Box::new(filter));
         self
     }
 }
@@ -286,7 +286,7 @@ where
     A: Parser<'src, I, O, E>,
     F: Fn(&O) -> bool,
 {
-    type Config = FilterCfg<F>;
+    type Config = FilterCfg<O>;
 
     fn go_cfg<M: Mode>(
         &self,
@@ -303,8 +303,12 @@ where
 
         match res {
             Ok(out) => {
-                let filter = cfg.filter.as_ref().unwrap_or(&self.filter);
-                if filter(&out) {
+                let filtered = if let Some(filter) = cfg.filter {
+                    filter(&out)
+                } else {
+                    (self.filter)(&out)
+                };
+                if filtered {
                     // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
                     inp.errors.alt = old_alt;
                     if let Some(new_alt) = new_alt {
