@@ -3841,6 +3841,27 @@ mod tests {
     }
 
     #[test]
+    fn rewind() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((just("a"), any(), just("b").or_not()))
+            .rewind()
+            .then(just::<_, _, extra::Err<Rich<_>>>("ac"));
+
+        assert_eq!(
+            parser.parse("ad").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    [DefaultExpected::Token('c'.into())],
+                    Some('d'.into()),
+                    SimpleSpan::new((), 1..2)
+                )]
+            )
+        )
+    }
+
+    #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
             custom(|inp| {
@@ -3888,6 +3909,24 @@ mod tests {
                 )]
             )
         );
+    }
+
+    #[test]
+    fn state_rewind() {
+        use crate::{extra::Full, inspector::TruncateState};
+
+        let parser = any::<_, Full<EmptyErr, TruncateState<char>, ()>>()
+            .map_with(|out, extra| {
+                extra.state().0.push(out);
+                extra.state().0.len() - 1
+            })
+            .rewind()
+            .then_ignore(any());
+
+        let mut state = TruncateState::default();
+        let res = parser.parse_with_state("a", &mut state).unwrap();
+        assert_eq!(res, 0);
+        assert_eq!(state.0.as_slice(), ['a']);
     }
 
     /*
