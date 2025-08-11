@@ -173,3 +173,76 @@ implementations for types in Rust's standard library such as [`std::ops::Range<u
 
 Chumsky will use its internal knowledge of your parser to generate spans for you whenever you need them, such as for
 attaching to nodes of an abstract syntax tree. See [`Parser::map_with`] for more information.
+
+## Parser state
+
+Chumsky parsers should be considered 'stateless'. That is, they operate as pure functions that transform an input into
+an output (and a selection of errors). However, this is not always satisfactory for some applications. It is
+occasionally necessary to touch some sort of shared state during the parsing process. For example:
+
+- When an identifier is occured in a programming language, we might want to insert it into a
+  [string interner](https://en.wikipedia.org/wiki/String_interning), for more performant comparisons in later passes.
+
+- We might want to avoid touching the heap by inserting generated AST nodes into an
+  [arena allocator](https://en.wikipedia.org/wiki/Region-based_memory_management), which can be faster for certain kinds
+  of parsing.
+
+- Track syntax trees losslessly, such as with [`cstree`](https://github.com/domenicquirl/cstree/) or
+  [`rowan`](https://github.com/rust-analyzer/rowan).
+
+These approaches require access to some shared mutable state that gets passed into the parser, and then used during
+parsing (usually with methods like [`Parser::map_with`]). Chumsky allows you to provide shared state to a parser using
+the top-level [`Parser::parse_with_state`] and [`Parser::check_with_state`] functions. You will also need to specify the
+shared state type on the parser signature.
+
+As an example, here is a very simple string interner implemented with a `HashMap`.
+
+```rs
+use chumsky::{prelude::*, inspector::SimpleState};
+
+// A type alias that describes the extra type parameters of our parser (including the intern table).
+// `SimpleState` just represents a bog-standard ball of mutable state that does not care about input rewinding.
+type MyExtra = extra::Full<EmptyErr, SimpleState<HashMap<String, usize>>, ()>;
+
+// Our parser emits a vector of IDs. IDs correspond to identifiers, and can be quickly compared for equality
+fn my_parser<'a>() -> impl Parser<'a, &'a str, Vec<usize>, MyExtra> {
+    text::ident()
+        .map_with(|s: &str, e| {
+            // Fetch our shared parser state
+            let state: &mut SimpleState<HashMap<_, _>> = e.state();
+            // We use the size of the intern table to generate new IDs
+            let id = state.len();
+            // If the string already exists in the table, find the old ID. Otherwise, insert a new ID.
+            *state.entry(s.to_string()).or_insert(id)
+        })
+        .padded()
+        .repeated()
+        .collect()
+}
+
+// Parse a list of identifiers. Some of them are repeated!
+let idents = my_parser().parse("the rabbit saw the other rabbit").into_result().unwrap();
+
+// 'the' and 'rabbit' are not the same
+assert_ne!(idents[0], idents[1]);
+
+// But the two occurences of 'the' are the same...
+assert_eq!(idents[0], idents[3]);
+// ...as are the occurrences of 'rabbit'
+assert_eq!(idents[1], idents[5]);
+```
+
+### A note on purity
+
+Because chumsky parsers are conceptually 'pure', you should not rely on your parser state being touched any specific
+number of times, or even at all. As documented elsewhere, chumsky may freely optimise out `map_with` closures or even
+invoke them an arbitrary number of times during a parse. For example, do not use parser state to 'count' occurences of a
+pattern in the input.
+
+### More advanced uses
+
+Sometimes chumsky takes an incorrect path through the parse tree and needs to rewind the input. For most state types
+this is not a concern, and so [`SimpleState`] may be used, but for some states it may be important to rewind any state
+changes that might have occurred (for example, lossless syntax tree tracking). To facilitate this, chumsky provides the
+[`Inspector`] trait, which all state types must implement. It provides 'hooks' for checkpoint saving and rewinding that
+allow failed parse paths to be rolled back.
