@@ -242,7 +242,7 @@ pattern in the input.
 ### More advanced uses
 
 Sometimes chumsky takes an incorrect path through the parse tree and needs to rewind the input. For most state types
-this is not a concern, and so [`SimpleState`] may be used, but for some states it may be important to rewind any state
+this is not a concern, and so [`SimpleState`](crate::inspector::SimpleState) may be used, but for some states it may be important to rewind any state
 changes that might have occurred (for example, lossless syntax tree tracking). To facilitate this, chumsky provides the
 [`Inspector`] trait, which all state types must implement. It provides 'hooks' for checkpoint saving and rewinding that
 allow failed parse paths to be rolled back.
