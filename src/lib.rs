@@ -3910,6 +3910,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn state_rewind() {
+        use crate::{extra::Full, inspector::TruncateState};
+
+        let parser = any::<_, Full<EmptyErr, TruncateState<char>, ()>>()
+            .map_with(|out, extra| {
+                extra.state().0.push(out);
+                extra.state().0.len() - 1
+            })
+            .rewind()
+            .then_ignore(any());
+
+        let mut state = TruncateState::default();
+        let res = parser.parse_with_state("a", &mut state).unwrap();
+        assert_eq!(res, 0);
+        assert_eq!(state.0.as_slice(), ['a']);
+    }
+
     /*
     #[test]
     fn label_sets() {

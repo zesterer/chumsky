@@ -1453,6 +1453,15 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         self.cursor = checkpoint.cursor.inner;
     }
 
+    #[inline(always)]
+    pub(crate) fn rewind_input(
+        &mut self,
+        checkpoint: Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+    ) {
+        self.errors.secondary.truncate(checkpoint.err_count);
+        self.cursor = checkpoint.cursor.inner;
+    }
+
     /// Get a mutable reference to the state associated with the current parse.
     #[inline(always)]
     pub fn state(&mut self) -> &mut E::State {
