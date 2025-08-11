@@ -16,7 +16,7 @@ For prototyping and modest use cases, Chumsky provides 4 separate built-in types
 
 - [`Simple`]: contains the [`Span`], but also the found token at the location of the error. This error is a good middle ground between the raw speed of [`Cheap`] and the detailed user-centric focus of [`Rich`], while still being able to satisfy medium performance requirements.
 
-- [`Rich`]: the recommended type for dealing with user input at the expense of raw speed. Rich is still *fast* for applications like compilers and interpreters, and a great choice if you want to give users a pleasant editing experience first and foremost. Rich error types contain [`Span`] information as well as found and expected values, a [`Label`] to describe the associated parser construction, the ability to merge errors in the same span, as well as a potential [`Context`] with truly arbitrary data.
+- [`Rich`]: the recommended type for dealing with user input at the expense of raw speed. Rich is still *fast* for applications like compilers and interpreters, and a great choice if you want to give users a pleasant editing experience first and foremost. Rich error types contain [`Span`] information as well as found and expected values, a label to describe the associated parser construction, the ability to merge errors in the same span, as well as a potential context with truly arbitrary data.
 
 ## The [`Span`] Trait
 
@@ -42,7 +42,7 @@ In the next section we'll see how to define custom Recovery Strategies for our p
 
 A Recovery Strategy is nothing more than a parser expression to be called in exceptional conditions, Consider the following code:
 
-```
+```ignore
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ErrorKind {
     UnexpectedText(String),
