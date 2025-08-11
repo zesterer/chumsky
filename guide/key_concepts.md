@@ -180,7 +180,7 @@ Chumsky parsers should be considered 'stateless'. That is, they operate as pure 
 an output (and a selection of errors). However, this is not always satisfactory for some applications. It is
 occasionally necessary to touch some sort of shared state during the parsing process. For example:
 
-- When an identifier is occured in a programming language, we might want to insert it into a
+- When an identifier is encountered in a programming language, we might want to insert it into a
   [string interner](https://en.wikipedia.org/wiki/String_interning), for more performant comparisons in later passes.
 
 - We might want to avoid touching the heap by inserting generated AST nodes into an
