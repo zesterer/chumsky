@@ -75,7 +75,8 @@ pub mod prelude {
         extra,
         input::Input,
         primitive::{
-            any, any_ref, choice, custom, empty, end, group, just, map_ctx, none_of, one_of, todo,
+            any, any_ref, choice, custom, empty, end, group, just, map_ctx, none_of, one_of, set,
+            todo,
         },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
         recursive::{recursive, Recursive},
@@ -3813,6 +3814,54 @@ mod tests {
     }
 
     #[test]
+    fn filter() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((
+            just("a").or_not(),
+            just("b").filter(|_| false).or_not(),
+            just::<_, &str, extra::Err<Rich<_>>>("c"),
+        ));
+
+        assert_eq!(
+            parser.parse("b").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![
+                        DefaultExpected::Token('a'.into()),
+                        DefaultExpected::SomethingElse,
+                        DefaultExpected::Token('c'.into()),
+                    ],
+                    Some('b'.into()),
+                    SimpleSpan::new((), 0..1)
+                )]
+            )
+        );
+    }
+
+    #[test]
+    fn rewind() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((just("a"), any(), just("b").or_not()))
+            .rewind()
+            .then(just::<_, _, extra::Err<Rich<_>>>("ac"));
+
+        assert_eq!(
+            parser.parse("ad").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    [DefaultExpected::Token('c'.into())],
+                    Some('d'.into()),
+                    SimpleSpan::new((), 1..2)
+                )]
+            )
+        )
+    }
+
+    #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
             custom(|inp| {
@@ -3877,6 +3926,24 @@ mod tests {
         assert_eq!(parser.parse("b").into_output_errors(), (None, vec![err]));
     }
 
+    #[test]
+    fn state_rewind() {
+        use crate::{extra::Full, inspector::TruncateState};
+
+        let parser = any::<_, Full<EmptyErr, TruncateState<char>, ()>>()
+            .map_with(|out, extra| {
+                extra.state().0.push(out);
+                extra.state().0.len() - 1
+            })
+            .rewind()
+            .then_ignore(any());
+
+        let mut state = TruncateState::default();
+        let res = parser.parse_with_state("a", &mut state).unwrap();
+        assert_eq!(res, 0);
+        assert_eq!(state.0.as_slice(), ['a']);
+    }
+
     /*
     #[test]
     fn label_sets() {
@@ -3914,4 +3981,17 @@ mod tests {
         );
     }
     */
+
+    // Prevent a regression
+    #[test]
+    fn labelled_recovery_dont_panic() {
+        fn parser<'i>() -> impl Parser<'i, &'i str, SimpleSpan> {
+            choice((choice((just("true"), just("false")))
+                .labelled("boolean")
+                .to_span(),))
+            .recover_with(via_parser(any().and_is(text::newline().not()).to_span()))
+        }
+
+        let _ = parser().parse("tru");
+    }
 }

@@ -66,7 +66,7 @@ calling itself again... forever. We've created infinite recursion. No dice.
 
 ## A Solution
 
-To get us out of this somewhat sticky bind, chumsky provides a special combinator called `recursive`. I allows us to
+To get us out of this somewhat sticky bind, chumsky provides a special combinator called `recursive`. It allows us to
 refer to a parser within its own definition - without getting us caught in recursive hot water.
 
 ```rust
