@@ -19,7 +19,7 @@ pub trait Span {
     /// path, URL, etc.
     ///
     /// NOTE: Span contexts have no inherent meaning to Chumsky and can be anything. For example, [`Range<usize>`]'s
-    /// implementation of [`Span`] simply uses [`()`] as its context.
+    /// implementation of [`Span`] simply uses `()` as its context.
     type Context;
 
     /// A type representing a span's start or end offset from the start of the input.
