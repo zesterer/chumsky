@@ -3929,6 +3929,22 @@ mod tests {
         assert_eq!(state.0.as_slice(), ['a']);
     }
 
+    #[test]
+    fn error_rewind() {
+        let parser = any::<_, extra::Default>()
+            .validate(|out, _, emitter| {
+                emitter.emit(EmptyErr::default());
+                out
+            })
+            .rewind()
+            .then_ignore(any());
+
+        assert_eq!(
+            parser.parse("a").into_output_errors(),
+            (Some('a'), vec![EmptyErr::default()])
+        );
+    }
+
     /*
     #[test]
     fn label_sets() {
