@@ -23,15 +23,15 @@ jobs:
             toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo check (all features)
-        run: cargo check --benches --examples --tests --verbose --all-features
+        run: cargo check --benches --examples --tests --all-features
       - name: Run cargo check (no features)
-        run: cargo check --benches --examples --tests --verbose --no-default-features
+        run: cargo check --benches --examples --tests --no-default-features
       - name: Run cargo clippy
-        run: cargo clippy --benches --examples --tests --verbose --all-features -- -D warnings
+        run: cargo clippy --benches --examples --tests --all-features -- -D warnings
       - name: Run cargo fmt
-        run: cargo fmt --verbose --check
+        run: cargo fmt --check
       - name: Run cargo doc
-        run: cargo doc --all-features --verbose
+        run: cargo doc --all-features
         env:
             RUSTDOCFLAGS: --cfg docsrs
   test:
@@ -45,7 +45,7 @@ jobs:
             toolchain: nightly
             components: rustfmt, clippy
       - name: Run cargo test
-        run: cargo test --verbose --all-features
+        run: cargo test --all-features
         env:
             RUSTDOCFLAGS: --cfg docsrs
   msrv:
@@ -59,7 +59,7 @@ jobs:
             toolchain: "1.65"
             components: rustfmt, clippy
       - name: Check MSRV compatibility
-        run: cargo check --verbose --features _test_stable
+        run: cargo check --features _test_stable
   semver:
     name: SemVer
     runs-on: ubuntu-latest
