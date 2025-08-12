@@ -92,7 +92,7 @@ fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
    more than just string slices.
 
 4. The second type parameter of the [`Parser`] trait is the output type. This is the type of the value that your parser
-   will eventually give you, assuming that parsing was successful. For now, we just use an output type of [`()`], i.e:
+   will eventually give you, assuming that parsing was successful. For now, we just use an output type of `()`, i.e:
    nothing.
 
 5. Because this is just an example parser, the implementation is just a single parser primitive, [`end`]. This is a

@@ -2449,12 +2449,12 @@ where
             Ok(out) => {
                 // A succeeded -- go back to the beginning and try B
                 let after = inp.save();
-                inp.rewind(before);
+                inp.rewind_input(before);
 
                 match self.parser_b.go::<Check>(inp) {
                     Ok(()) => {
                         // B succeeded -- go to the end of A and return its output
-                        inp.rewind(after);
+                        inp.rewind_input(after);
                         Ok(out)
                     }
                     Err(()) => {
@@ -2764,13 +2764,25 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
-            Ok(out) => {
-                inp.rewind(before);
-                Ok(out)
+        let old_alt = inp.take_alt();
+        let res = self.parser.go::<M>(inp);
+        let new_alt = inp.take_alt();
+
+        inp.errors.alt = old_alt;
+        if res.is_ok() {
+            if let Some(new_alt) = new_alt {
+                if I::cursor_location(&before.cursor().inner) >= I::cursor_location(&new_alt.pos) {
+                    inp.add_alt_err(&new_alt.pos, new_alt.err);
+                }
             }
-            Err(()) => Err(()),
+            inp.rewind_input(before);
+        } else {
+            // Can't fail!
+            let new_alt = new_alt.unwrap();
+            inp.add_alt_err(&new_alt.pos, new_alt.err);
         }
+
+        res
     }
 
     go_extra!(O);

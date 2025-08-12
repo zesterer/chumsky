@@ -89,12 +89,12 @@ use super::*;
 
 /// The result of calling [`Operator::do_parse_prefix`], [`Operator::do_parse_postfix`] or [`Operator::do_parse_infix`]
 pub enum OperatorResult<T, E> {
-   /// Input was parsed
-   Ok(T),
-   /// Input could not be parsed, not fatal
-   NoMatch(E),
-   /// Input could not be parsed, fatal error
-   Err(E),
+    /// Input was parsed
+    Ok(T),
+    /// Input could not be parsed, not fatal
+    NoMatch(E),
+    /// Input could not be parsed, fatal error
+    Err(E),
 }
 
 macro_rules! op_check_and_emit {
@@ -897,7 +897,7 @@ where
     {
         for op in self {
             match op.do_parse_prefix::<M>(inp, pre_expr, f) {
-                OperatorResult::NoMatch(()) => {},
+                OperatorResult::NoMatch(()) => {}
                 result => return result,
             }
         }
@@ -973,7 +973,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
             }) {
             OperatorResult::Ok(out) => out,
             OperatorResult::NoMatch(()) => self.atom.go::<M>(inp)?,
-            OperatorResult::Err(()) => return Err(())
+            OperatorResult::Err(()) => return Err(()),
         };
 
         loop {
@@ -992,7 +992,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                 OperatorResult::Err(out) => {
                     inp.rewind(pre_op);
                     return Err(());
-                },
+                }
             }
 
             // Infix binary operators
@@ -1305,7 +1305,8 @@ mod tests {
         )
     }
 
-    fn non_associative_parser<'src>() -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
+    fn non_associative_parser<'src>(
+    ) -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((
@@ -1333,7 +1334,9 @@ mod tests {
             Err(vec![dbg!(unexpected(Some('<'.into()), 3..4))])
         );
         assert_eq!(
-            non_associative_parser().parse("1+2*3<10/2<42").into_result(),
+            non_associative_parser()
+                .parse("1+2*3<10/2<42")
+                .into_result(),
             Err(vec![dbg!(unexpected(Some('<'.into()), 10..11))])
         )
     }
