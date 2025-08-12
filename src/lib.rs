@@ -3871,7 +3871,7 @@ mod tests {
 
         assert_eq!(parser.parse("bba").into_result(), Ok(()));
     }
-    
+
     #[test]
     fn zero_size_custom_failure() {
         fn my_custom<'src>() -> impl Parser<'src, &'src str, ()> {
