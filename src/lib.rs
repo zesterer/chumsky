@@ -3818,11 +3818,11 @@ mod tests {
         use crate::{DefaultExpected, LabelError};
 
         let parser = group((
-                just("a").or_not(),
-                just("b").try_map(|_, _| Ok(())).or_not(),
-                just::<_, &str, extra::Err<Rich<_>>>("c"),
-            ))
-            .ignored();
+            just("a").or_not(),
+            just("b").try_map(|_, _| Ok(())).or_not(),
+            just::<_, &str, extra::Err<Rich<_>>>("c"),
+        ))
+        .ignored();
 
         assert_eq!(
             parser.parse("").into_output_errors(),
