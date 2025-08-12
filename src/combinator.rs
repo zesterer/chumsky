@@ -679,12 +679,12 @@ where
                 }
             }
 
-            Err(_) => {                
+            Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
                 inp.add_alt_err(&new_alt.pos, new_alt.err);
                 Err(())
-            },
+            }
         }
     }
 
