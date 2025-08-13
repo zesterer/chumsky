@@ -659,12 +659,13 @@ where
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
+        // Reinsert the original alt
         inp.errors.alt = old_alt;
         match res {
             Ok(out) => {
                 match (self.mapper)(out, span) {
                     Ok(out) => {
-                        // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
+                        // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
                             inp.add_alt_err(&new_alt.pos, new_alt.err);
                         }
@@ -672,7 +673,7 @@ where
                     }
 
                     Err(err) => {
-                        // If unsuccessful, reinsert the original alt but replace the new alt with the mapper error (since it overrides it)
+                        // If unsuccessful replace the new alt with the mapper error (since it overrides it)
                         inp.add_alt_err(&before.inner, err);
                         Err(())
                     }
@@ -720,11 +721,37 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
-        let out = self.parser.go::<Emit>(inp)?;
-        match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
-            Ok(out) => Ok(M::bind(|| out)),
-            Err(err) => {
-                inp.add_alt_err(&inp.cursor().inner, err);
+        // Remove the pre-inner alt, to be reinserted later so we always preserve it
+        let old_alt = inp.errors.alt.take();
+
+        let res = self.parser.go::<Emit>(inp);
+        let new_alt = inp.errors.alt.take();
+
+        // Reinsert the original alt
+        inp.errors.alt = old_alt;
+        match res {
+            Ok(out) => {
+                match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
+                    Ok(out) => {
+                        // If successful apply the new alt on top of the original alt, since both are valid
+                        if let Some(new_alt) = new_alt {
+                            inp.add_alt_err(&new_alt.pos, new_alt.err);
+                        }
+                        Ok(M::bind(|| out))
+                    },
+
+                    Err(err) => {
+                        // If unsuccessful replace the new alt with the mapper error (since it overrides it)
+                        inp.add_alt_err(&before.inner, err);
+                        Err(())
+                    }
+                }
+            }
+
+            Err(_) => {
+                // Can't fail!
+                let new_alt = new_alt.unwrap();
+                inp.add_alt_err(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
