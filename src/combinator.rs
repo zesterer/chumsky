@@ -2867,10 +2867,16 @@ where
         let start = inp.cursor();
         let old_alt = inp.take_alt();
         let res = self.parser.go::<M>(inp);
+        let new_alt = inp.take_alt();
 
-        if res.is_err() {
+        if res.is_ok() {
+            inp.errors.alt = old_alt;
+            if let Some(new_alt) = new_alt {
+                inp.add_alt_err(&new_alt.pos, new_alt.err);
+            }
+        } else {
             // Can't fail!
-            let mut new_alt = inp.take_alt().unwrap();
+            let mut new_alt = new_alt.unwrap();
             let span = inp.span_since(&start);
             new_alt.err = (self.mapper)(new_alt.err, span, inp.state());
 

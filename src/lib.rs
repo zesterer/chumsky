@@ -3761,30 +3761,53 @@ mod tests {
     #[test]
     #[allow(dead_code)]
     fn map_err_missed_info() {
-        use crate::LabelError;
+        use crate::{extra::Err, LabelError};
 
-        fn zero<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, char>>> {
-            just("-")
-                .or_not()
-                .then(just("0").map_err(move |e: Rich<_>| {
-                    LabelError::<&str, char>::expected_found(
-                        ['n'],
-                        e.found().map(|i| From::from(*i)),
-                        *e.span(),
-                    )
-                }))
-                .ignored()
+        fn erroneous_map_err<'src>() -> impl Parser<'src, &'src str, (), Err<Rich<'src, char>>> {
+            group((
+                just("a").or_not(),
+                just("b").map_err(|mut err| {
+                    LabelError::<&str, _>::label_with(&mut err, 'l');
+                    err
+                }),
+            ))
+            .ignored()
         }
 
         assert_eq!(
-            zero().parse("_0").into_result(),
-            Err(vec![
-                <Rich<char> as LabelError::<&str, char>>::expected_found(
-                    ['-', 'n'],
+            erroneous_map_err().parse("_").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    ['a', 'l'],
                     Some('_'.into()),
-                    (0..1).into(),
-                )
-            ]),
+                    SimpleSpan::new((), 0..1),
+                )]
+            ),
+        );
+
+        fn erroneous_then<'src>() -> impl Parser<'src, &'src str, (), Err<Rich<'src, char>>> {
+            group((
+                just("a").or_not(),
+                empty().map_err(|mut err| {
+                    LabelError::<&str, _>::label_with(&mut err, 'l');
+                    err
+                }),
+                just("c"),
+            ))
+            .ignored()
+        }
+
+        assert_eq!(
+            erroneous_then().parse("_").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    ['a', 'c'],
+                    Some('_'.into()),
+                    SimpleSpan::new((), 0..1),
+                )]
+            ),
         );
     }
 
@@ -3927,6 +3950,22 @@ mod tests {
         let res = parser.parse_with_state("a", &mut state).unwrap();
         assert_eq!(res, 0);
         assert_eq!(state.0.as_slice(), ['a']);
+    }
+
+    #[test]
+    fn error_rewind() {
+        let parser = any::<_, extra::Default>()
+            .validate(|out, _, emitter| {
+                emitter.emit(EmptyErr::default());
+                out
+            })
+            .rewind()
+            .then_ignore(any());
+
+        assert_eq!(
+            parser.parse("a").into_output_errors(),
+            (Some('a'), vec![EmptyErr::default()])
+        );
     }
 
     /*
