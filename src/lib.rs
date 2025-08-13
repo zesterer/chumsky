@@ -3840,7 +3840,7 @@ mod tests {
     fn filter() {
         use crate::{DefaultExpected, LabelError};
 
-        let parser = any::<_, extra::Err<Rich<_>>>().filter(|_| false);
+        let parser = just::<_, _, extra::Err<Rich<_>>>("a").filter(|_| false);
 
         assert_eq!(
             parser.parse("a").into_result(),

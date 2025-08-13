@@ -273,6 +273,7 @@ where
                 } else {
                     // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
                     let expected = [DefaultExpected::SomethingElse];
+                    // TODO: Use something more detailed than the next token as the found
                     let err = E::Error::expected_found(expected, found, span);
                     inp.add_alt_err(&before.inner, err);
                     Err(())
