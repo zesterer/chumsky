@@ -1458,7 +1458,6 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         &mut self,
         checkpoint: Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
     ) {
-        self.errors.secondary.truncate(checkpoint.err_count);
         self.cursor = checkpoint.cursor.inner;
     }
 
