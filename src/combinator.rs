@@ -738,7 +738,7 @@ where
                             inp.add_alt_err(&new_alt.pos, new_alt.err);
                         }
                         Ok(M::bind(|| out))
-                    },
+                    }
 
                     Err(err) => {
                         // If unsuccessful replace the new alt with the mapper error (since it overrides it)
