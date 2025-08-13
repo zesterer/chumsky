@@ -69,7 +69,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
-            match self.next::<Check>(inp, &mut state) {
+            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 Err(()) => break Err(()),
@@ -92,8 +92,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -110,8 +108,9 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
-        self.parser.next_cfg(inp, &mut state.0, &state.1)
+        self.parser.next_cfg(inp, &mut state.0, &state.1, debug)
     }
 }
 
@@ -145,7 +144,7 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
         loop {
-            match self.next::<Check>(inp, &mut state) {
+            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 Err(()) => break Err(()),
@@ -168,8 +167,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     fn make_iter<M: Mode>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
@@ -185,8 +182,9 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
-        self.parser.next_cfg(inp, &mut state.0, &state.1)
+        self.parser.next_cfg(inp, &mut state.0, &state.1, debug)
     }
 }
 
@@ -339,8 +337,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -354,8 +350,9 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
-        match self.parser.next::<M>(inp, state) {
+        match self.parser.next::<M>(inp, state, debug) {
             Ok(Some(o)) => Ok(Some(M::map(o, &self.mapper))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
@@ -413,8 +410,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -428,9 +423,10 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
         let before = inp.cursor();
-        match self.parser.next::<M>(inp, state) {
+        match self.parser.next::<M>(inp, state, debug) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| {
                 (self.mapper)(o, &mut MapExtra::new(&before, inp))
             }))),
@@ -494,8 +490,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -509,8 +503,9 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
-        match self.parser.next::<M>(inp, state) {
+        match self.parser.next::<M>(inp, state, debug) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| self.mapper.call(o)))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
@@ -556,8 +551,6 @@ pub struct TryFoldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
@@ -569,8 +562,6 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for TryFoldl<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -594,7 +585,10 @@ where
         let mut iter_state = self.parser_b.make_iter::<Emit>(inp)?;
         loop {
             let before = inp.cursor();
-            match self.parser_b.next::<Emit>(inp, &mut iter_state) {
+            match self
+                .parser_b
+                .next::<Emit>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(b_out)) => {
                     match (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp)) {
                         Ok(b_f_out) => {
@@ -608,14 +602,6 @@ where
                 }
                 Ok(None) => break Ok(M::bind(|| out)),
                 Err(()) => break Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !B::NONCONSUMPTION_IS_OK {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found Foldl combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
     }
@@ -801,8 +787,6 @@ where
     // between iterator and usize at compile time.
     type IterState<M: Mode> = O::IntoIter; //M::Output<O::IntoIter>;
 
-    const NONCONSUMPTION_IS_OK: bool = true;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -817,6 +801,7 @@ where
         &self,
         _inp: &mut InputRef<'src, '_, I, E>,
         iter: &mut Self::IterState<M>,
+        _debug: IterParserDebug,
     ) -> IPResult<M, O::Item> {
         Ok(iter.next().map(|out| M::bind(|| out)))
     }
@@ -857,6 +842,7 @@ where
 /// See [`Parser::unwrapped`].
 pub struct Unwrapped<A, O> {
     pub(crate) parser: A,
+    #[cfg(debug_assertions)]
     pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<O>,
@@ -885,10 +871,16 @@ where
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| match out {
             Ok(out) => out,
-            Err(err) => panic!(
-                "called `Result::unwrap` on a `Err(_)` value at {}: {:?}",
-                self.location, err
-            ),
+
+            Err(err) => {
+                #[cfg(debug_assertions)]
+                panic!(
+                    "called `Result::unwrap` on a `Err(_)` value at {}: {:?}",
+                    self.location, err
+                );
+                #[cfg(not(debug_assertions))]
+                panic!("called `Result::unwrap` on a `Err(_)` value: {:?}", err);
+            }
         }))
     }
 
@@ -906,10 +898,15 @@ where
         let out = self.parser.go::<M>(inp)?;
         Ok(M::map(out, |out| match out {
             Some(out) => out,
-            None => panic!(
-                "called `Option::unwrap` on a `None` value at {}",
-                self.location
-            ),
+            None => {
+                #[cfg(debug_assertions)]
+                panic!(
+                    "called `Option::unwrap` on a `None` value at {}",
+                    self.location
+                );
+                #[cfg(not(debug_assertions))]
+                panic!("called `Option::unwrap` on a `None` value");
+            }
         }))
     }
 
@@ -1020,8 +1017,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK && B::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -1035,14 +1030,15 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
         match state {
-            (_, Some(b)) => self.parser_b.next(inp, b),
-            (a, b) => match self.parser_a.next(inp, a)? {
+            (_, Some(b)) => self.parser_b.next(inp, b, debug),
+            (a, b) => match self.parser_a.next(inp, a, debug)? {
                 Some(a_out) => Ok(Some(a_out)),
                 None => {
                     let b = b.insert(self.parser_b.make_iter(inp)?);
-                    self.parser_b.next(inp, b)
+                    self.parser_b.next(inp, b, debug)
                 }
             },
         }
@@ -1231,8 +1227,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = B::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -1248,10 +1242,11 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, OB> {
         let (ctx, inner_state) = state;
 
-        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state, debug))
     }
 }
 
@@ -1307,8 +1302,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = B::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -1324,10 +1317,11 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, OB> {
         let (ctx, inner_state) = state;
 
-        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state))
+        inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state, debug))
     }
 }
 
@@ -1625,25 +1619,24 @@ where
             loop {
                 let before = inp.save();
                 match self.parser.go::<Check>(inp) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        #[cfg(debug_assertions)]
+                        debug_assert!(
+                            *before.cursor() != inp.cursor(),
+                            "found Repeated combinator making no progress at {}",
+                            self.location,
+                        );
+                    }
                     Err(()) => {
                         inp.rewind(before);
                         break Ok(M::bind(|| ()));
                     }
                 }
-                #[cfg(debug_assertions)]
-                debug_assert!(
-                    *before.cursor() != inp.cursor(),
-                    "found Repeated combinator making no progress at {}",
-                    self.location,
-                );
             }
         } else {
             let mut state = self.make_iter::<Check>(inp)?;
             loop {
-                #[cfg(debug_assertions)]
-                let before = inp.cursor();
-                match self.next::<Check>(inp, &mut state) {
+                match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
                     Ok(Some(())) => {}
                     Ok(None) => break Ok(M::bind(|| ())),
                     // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
@@ -1651,12 +1644,6 @@ where
                     // `next`.
                     Err(()) => break Err(()),
                 }
-                #[cfg(debug_assertions)]
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found Repeated combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
     }
@@ -1685,6 +1672,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         count: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
         if *count as u64 >= self.at_most {
             return Ok(None);
@@ -1693,6 +1681,14 @@ where
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(item) => {
+                #[cfg(debug_assertions)]
+                if !debug.nonconsumption_is_ok && self.at_most == !0 {
+                    debug_assert!(
+                        *before.cursor() != inp.cursor(),
+                        "found Repeated combinator making no progress at {}",
+                        self.location,
+                    );
+                }
                 *count += 1;
                 Ok(Some(item))
             }
@@ -1722,6 +1718,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         count: &mut Self::IterState<M>,
         cfg: &Self::Config,
+        debug: IterParserDebug,
     ) -> IPResult<M, O> {
         let at_most = cfg.at_most.map(|x| x as u64).unwrap_or(self.at_most);
         let at_least = cfg.at_least.unwrap_or(self.at_least);
@@ -1733,6 +1730,14 @@ where
         let before = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(item) => {
+                #[cfg(debug_assertions)]
+                if !debug.nonconsumption_is_ok {
+                    debug_assert!(
+                        *before.cursor() != inp.cursor(),
+                        "found Repeated combinator making no progress at {}",
+                        self.location,
+                    );
+                }
                 *count += 1;
                 Ok(Some(item))
             }
@@ -1942,7 +1947,11 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, OA> {
+        #[cfg(debug_assertions)]
+        let before = inp.cursor();
+
         if *state as u64 >= self.at_most {
             return Ok(None);
         }
@@ -1971,6 +1980,14 @@ where
         let before_item = inp.save();
         match self.parser.go::<M>(inp) {
             Ok(item) => {
+                #[cfg(debug_assertions)]
+                if !debug.nonconsumption_is_ok && self.at_most == !0 && *state > 0 {
+                    debug_assert!(
+                        before != inp.cursor(),
+                        "found SeparatedBy combinator making no progress at {}",
+                        self.location,
+                    );
+                }
                 *state += 1;
                 Ok(Some(item))
             }
@@ -2008,28 +2025,14 @@ where
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut first_loop = true;
         loop {
-            #[cfg(debug_assertions)]
-            let before = inp.cursor();
-            match self.next::<Check>(inp, &mut state) {
+            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
                 Ok(None) => break Ok(M::bind(|| ())),
                 // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
                 // are permitted to leave input state unspecified. Really, unwinding should occur *here* and not in
                 // `next`.
                 Err(()) => break Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !first_loop {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found SeparatedBy combinator making no progress at {}",
-                    self.location,
-                );
-            } else {
-                first_loop = false;
             }
         }
     }
@@ -2065,8 +2068,6 @@ where
     where
         I: 'src;
 
-    const NONCONSUMPTION_IS_OK: bool = A::NONCONSUMPTION_IS_OK;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2080,10 +2081,11 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, (usize, O)> {
         let out = self
             .parser
-            .next(inp, &mut state.1)?
+            .next(inp, &mut state.1, debug)?
             .map(|out| M::map(out, |out| (state.0, out)));
         state.0 += 1;
         Ok(out)
@@ -2093,8 +2095,6 @@ where
 /// See [`IterParser::collect`].
 pub struct Collect<A, O, C> {
     pub(crate) parser: A,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(O, C)>,
 }
@@ -2104,8 +2104,6 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2122,30 +2120,18 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
-        #[cfg(debug_assertions)]
-        let mut i = 0;
         loop {
-            #[cfg(debug_assertions)]
-            let before = inp.cursor();
-            match self.parser.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut output, out, |output: &mut C, item| output.push(item));
                 }
+
                 Ok(None) => break Ok(output),
+
                 Err(()) => break Err(()),
-            }
-            // We only check after the second iteration because that's when we *must* have consumed both item
-            // and separator.
-            #[cfg(debug_assertions)]
-            if !A::NONCONSUMPTION_IS_OK {
-                if i >= 1 {
-                    debug_assert!(
-                        before != inp.cursor(),
-                        "found Collect combinator making no progress at {}",
-                        self.location,
-                    );
-                }
-                i += 1;
             }
         }
     }
@@ -2183,7 +2169,10 @@ where
         let mut output = M::bind(|| C::uninit());
         let mut iter_state = self.parser.make_iter::<M>(inp)?;
         for idx in 0..C::LEN {
-            match self.parser.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(true))
+            {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
@@ -2248,8 +2237,6 @@ where
 {
     type IterState<M: Mode> = bool;
 
-    const NONCONSUMPTION_IS_OK: bool = true;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2263,6 +2250,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         finished: &mut Self::IterState<M>,
+        _debug: IterParserDebug,
     ) -> IPResult<M, O> {
         if *finished {
             return Ok(None);
@@ -2365,11 +2353,6 @@ where
 {
     type IterState<M: Mode> = (A::IterState<M>, Option<M::Output<O::IntoIter>>);
 
-    // A::NONCONSUMPTION_IS_OK cannot be used because if we are iterating
-    // over O, we are not consuming any input (input has probably
-    // already been comsumed when constructing O)
-    const NONCONSUMPTION_IS_OK: bool = true;
-
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2383,6 +2366,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         (st, iter): &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O::Item> {
         if let Some(item) = iter
             .as_mut()
@@ -2394,7 +2378,7 @@ where
         // TODO: Debug looping check
         loop {
             let before = inp.save();
-            match self.parser.next::<M>(inp, st) {
+            match self.parser.next::<M>(inp, st, debug) {
                 Ok(Some(item)) => match M::get_or(
                     M::map(
                         M::from_mut(iter.insert(M::map(item, |i| i.into_iter()))),
@@ -2406,7 +2390,9 @@ where
                     Some(None) => break Ok(Some(M::bind(|| unreachable!()))),
                     None => continue,
                 },
+
                 Ok(None) => break Ok(None),
+
                 Err(()) => {
                     inp.rewind(before);
                     break Err(());
@@ -2479,8 +2465,6 @@ pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
@@ -2492,8 +2476,6 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2515,22 +2497,17 @@ where
         let mut a_out = M::bind(|| Vec::new());
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
-            #[cfg(debug_assertions)]
-            let before = inp.cursor();
-            match self.parser_a.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser_a
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
                 }
+
                 Ok(None) => break,
+
                 Err(()) => return Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !A::NONCONSUMPTION_IS_OK {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found Foldr combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
 
@@ -2549,8 +2526,6 @@ pub struct FoldrWith<F, A, B, OA, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OA, E)>,
 }
@@ -2562,8 +2537,6 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWith<F, A, B, OA, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2586,22 +2559,19 @@ where
         let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
         loop {
             let before = inp.cursor();
-            match self.parser_a.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser_a
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(out)) => {
                     M::combine_mut(&mut a_out, out, |a_out, item| {
                         a_out.push((item, before.clone()))
                     });
                 }
+
                 Ok(None) => break,
+
                 Err(()) => return Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !A::NONCONSUMPTION_IS_OK {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found FoldrWithState combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
 
@@ -2622,8 +2592,6 @@ pub struct Foldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
@@ -2635,8 +2603,6 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2658,22 +2624,17 @@ where
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
-            #[cfg(debug_assertions)]
-            let before = inp.cursor();
-            match self.parser_b.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser_b
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out));
                 }
+
                 Ok(None) => break Ok(out),
+
                 Err(()) => break Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !B::NONCONSUMPTION_IS_OK {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found Foldl combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
     }
@@ -2686,8 +2647,6 @@ pub struct FoldlWith<F, A, B, OB, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     pub(crate) folder: F,
-    #[cfg(debug_assertions)]
-    pub(crate) location: Location<'static>,
     #[allow(dead_code)]
     pub(crate) phantom: EmptyPhantom<(OB, E)>,
 }
@@ -2699,8 +2658,6 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWith<F, A, B, OB, E> {
             parser_a: self.parser_a.clone(),
             parser_b: self.parser_b.clone(),
             folder: self.folder.clone(),
-            #[cfg(debug_assertions)]
-            location: self.location,
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2723,24 +2680,19 @@ where
         let mut out = self.parser_a.go::<M>(inp)?;
         let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
         loop {
-            #[cfg(debug_assertions)]
-            let before = inp.cursor();
-            match self.parser_b.next::<M>(inp, &mut iter_state) {
+            match self
+                .parser_b
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
                 Ok(Some(b_out)) => {
                     out = M::combine(out, b_out, |out, b_out| {
                         (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp))
                     })
                 }
+
                 Ok(None) => break Ok(out),
+
                 Err(()) => break Err(()),
-            }
-            #[cfg(debug_assertions)]
-            if !B::NONCONSUMPTION_IS_OK {
-                debug_assert!(
-                    before != inp.cursor(),
-                    "found FoldlWithState combinator making no progress at {}",
-                    self.location,
-                );
             }
         }
     }
