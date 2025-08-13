@@ -2314,12 +2314,8 @@ where
 
         match result {
             Ok(()) => {
-                let found = inp.peek_inner();
-                inp.add_alt(
-                    [DefaultExpected::SomethingElse],
-                    found.map(|f| f.into()),
-                    result_span,
-                );
+                let found = inp.peek_maybe();
+                inp.add_alt([DefaultExpected::SomethingElse], found, result_span);
                 Err(())
             }
             Err(()) => Ok(M::bind(|| ())),
