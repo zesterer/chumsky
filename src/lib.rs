@@ -3840,6 +3840,62 @@ mod tests {
     }
 
     #[test]
+    fn try_map() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((
+            just("a").or_not(),
+            just("b").try_map(|_, _| Ok(())).or_not(),
+            just::<_, &str, extra::Err<Rich<_>>>("c"),
+        ))
+        .ignored();
+
+        assert_eq!(
+            parser.parse("").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![
+                        DefaultExpected::Token('a'.into()),
+                        DefaultExpected::Token('b'.into()),
+                        DefaultExpected::Token('c'.into()),
+                    ],
+                    None,
+                    SimpleSpan::new((), 0..0)
+                )]
+            )
+        );
+    }
+
+    #[test]
+    fn try_map_with() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = group((
+            just("a").or_not(),
+            just("b").try_map_with(|_, _| Ok(())).or_not(),
+            just::<_, &str, extra::Err<Rich<_>>>("c"),
+        ))
+        .ignored();
+
+        assert_eq!(
+            parser.parse("").into_output_errors(),
+            (
+                None,
+                vec![LabelError::<&str, _>::expected_found(
+                    vec![
+                        DefaultExpected::Token('a'.into()),
+                        DefaultExpected::Token('b'.into()),
+                        DefaultExpected::Token('c'.into()),
+                    ],
+                    None,
+                    SimpleSpan::new((), 0..0)
+                )]
+            )
+        );
+    }
+
+    #[test]
     fn filter() {
         use crate::{DefaultExpected, LabelError};
 
