@@ -4002,6 +4002,21 @@ mod tests {
     }
 
     #[test]
+    fn labelled_not() {
+        use crate::{DefaultExpected, LabelError};
+
+        let parser = any::<_, extra::Err<Rich<_>>>().not().labelled("label");
+
+        let mut err = LabelError::<&str, _>::expected_found(
+            [DefaultExpected::SomethingElse],
+            Some('b'.into()),
+            SimpleSpan::new((), 0..1),
+        );
+        LabelError::<&str, _>::label_with(&mut err, "label");
+        assert_eq!(parser.parse("b").into_output_errors(), (None, vec![err]));
+    }
+
+    #[test]
     fn state_rewind() {
         use crate::{extra::Full, inspector::TruncateState};
 
