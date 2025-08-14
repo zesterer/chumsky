@@ -3840,6 +3840,17 @@ mod tests {
     fn filter() {
         use crate::{DefaultExpected, LabelError};
 
+        let parser = just::<_, _, extra::Err<Rich<_>>>("a").filter(|_| false);
+
+        assert_eq!(
+            parser.parse("a").into_result(),
+            Err(vec![LabelError::<&str, _>::expected_found(
+                [DefaultExpected::SomethingElse],
+                Some('a'.into()),
+                SimpleSpan::new((), 0..1)
+            ),])
+        );
+
         let parser = group((
             just("a").or_not(),
             just("b").filter(|_| false).or_not(),
