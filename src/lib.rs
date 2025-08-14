@@ -766,8 +766,6 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser_a: self,
             parser_b: other,
             folder: f,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1596,8 +1594,6 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser_a: self,
             parser_b: other,
             folder: f,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -1686,8 +1682,6 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser_a: self,
             parser_b: other,
             folder: f,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2411,6 +2405,23 @@ where
     }
 }
 
+/// Data that is needed by IterParser when debug_assertions are enabled.
+#[derive(Clone, Copy)]
+pub struct IterParserDebug {
+    #[cfg(debug_assertions)]
+    pub(crate) nonconsumption_is_ok: bool,
+}
+
+impl IterParserDebug {
+    #[inline(always)]
+    pub(crate) fn new(nonconsumption_is_ok: bool) -> Self {
+        Self {
+            #[cfg(debug_assertions)]
+            nonconsumption_is_ok,
+        }
+    }
+}
+
 /// An iterator that wraps an iterable parser. See [`IterParser::parse_iter`].
 #[cfg(test)]
 pub struct ParserIter<
@@ -2449,7 +2460,7 @@ where
             }
         };
 
-        let res = parser.next::<Emit>(&mut inp, iter_state);
+        let res = parser.next::<Emit>(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone
         self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)
@@ -2467,10 +2478,6 @@ where
     where
         I: 'src;
 
-    // Determines whether this iter parser is expected to not consume input on each iteration
-    #[doc(hidden)]
-    const NONCONSUMPTION_IS_OK: bool = false;
-
     #[doc(hidden)]
     fn make_iter<M: Mode>(
         &self,
@@ -2481,6 +2488,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
+        debug: IterParserDebug,
     ) -> IPResult<M, O>;
 
     /// Collect this iterable parser into a [`Container`].
@@ -2507,8 +2515,6 @@ where
     {
         Collect {
             parser: self,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2628,8 +2634,6 @@ where
             parser_a: self,
             parser_b: other,
             folder: f,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2676,8 +2680,6 @@ where
             parser_a: self,
             parser_b: other,
             folder: f,
-            #[cfg(debug_assertions)]
-            location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }
     }
@@ -2759,6 +2761,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         state: &mut Self::IterState<M>,
         cfg: &Self::Config,
+        debug: IterParserDebug,
     ) -> IPResult<M, O>;
 
     /// A combinator that allows configuration of the parser from the current context
@@ -3949,6 +3952,17 @@ mod tests {
                 )]
             )
         )
+    }
+
+    #[test]
+    fn separated_by() {
+        use crate::{error::Simple, extra};
+
+        let parser = just::<_, &str, extra::Err<Simple<_>>>("a")
+            .or_not()
+            .separated_by(just("b"));
+
+        assert_eq!(parser.parse("bba").into_result(), Ok(()));
     }
 
     #[test]
