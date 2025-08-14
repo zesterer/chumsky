@@ -250,6 +250,7 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        let found = inp.peek_maybe();
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
@@ -258,11 +259,11 @@ where
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
+        inp.errors.alt = old_alt;
         match res {
             Ok(out) => {
                 if (self.filter)(&out) {
                     // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
-                    inp.errors.alt = old_alt;
                     if let Some(new_alt) = new_alt {
                         inp.add_alt_err(&new_alt.pos, new_alt.err);
                     }
@@ -270,18 +271,17 @@ where
                 } else {
                     // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
                     let expected = [DefaultExpected::SomethingElse];
-                    let err = E::Error::expected_found(expected, None, span);
-                    inp.errors.alt = old_alt;
+                    // TODO: Use something more detailed than the next token as the found
+                    let err = E::Error::expected_found(expected, found, span);
                     inp.add_alt_err(&before.inner, err);
                     Err(())
                 }
             }
 
             Err(_) => {
-                inp.errors.alt = old_alt;
-                if let Some(new_alt) = new_alt {
-                    inp.add_alt_err(&new_alt.pos, new_alt.err);
-                }
+                // Can't fail!
+                let new_alt = new_alt.unwrap();
+                inp.add_alt_err(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
