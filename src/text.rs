@@ -650,6 +650,57 @@ pub mod unicode {
         }
     }
 
+    impl AsRef<str> for Grapheme {
+        fn as_ref(&self) -> &str {
+            self.as_str()
+        }
+    }
+
+    impl AsRef<[u8]> for Grapheme {
+        fn as_ref(&self) -> &[u8] {
+            self.as_bytes()
+        }
+    }
+
+    impl AsRef<Grapheme> for Grapheme {
+        fn as_ref(&self) -> &Grapheme {
+            self
+        }
+    }
+
+    impl Borrow<str> for Grapheme {
+        fn borrow(&self) -> &str {
+            self.as_str()
+        }
+    }
+
+    impl Borrow<[u8]> for Grapheme {
+        fn borrow(&self) -> &[u8] {
+            self.as_bytes()
+        }
+    }
+
+    impl<'src> From<&'src Grapheme> for Box<Grapheme> {
+        fn from(value: &'src Grapheme) -> Self {
+            let value: Box<str> = Box::from(value.as_str());
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { Box::from_raw(Box::into_raw(value) as *mut Grapheme) }
+        }
+    }
+
+    impl From<Box<Grapheme>> for Box<str> {
+        fn from(value: Box<Grapheme>) -> Self {
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { Box::from_raw(Box::into_raw(value) as *mut str) }
+        }
+    }
+
+    impl From<Box<Grapheme>> for Box<[u8]> {
+        fn from(value: Box<Grapheme>) -> Self {
+            Box::<str>::from(value).into()
+        }
+    }
+
     /// A type containing any number of extended Unicode grapheme clusters.
     #[derive(PartialEq, Eq)]
     #[repr(transparent)]
@@ -742,6 +793,38 @@ pub mod unicode {
     impl<'src> From<&'src Graphemes> for &'src str {
         fn from(value: &'src Graphemes) -> Self {
             value.as_str()
+        }
+    }
+
+    impl<'src> From<&'src Graphemes> for Box<Graphemes> {
+        fn from(value: &'src Graphemes) -> Self {
+            value.as_str().into()
+        }
+    }
+
+    impl<'src> From<&'src str> for Box<Graphemes> {
+        fn from(value: &'src str) -> Self {
+            Box::<str>::from(value).into()
+        }
+    }
+
+    impl From<Box<str>> for Box<Graphemes> {
+        fn from(value: Box<str>) -> Self {
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { Box::from_raw(Box::into_raw(value) as *mut Graphemes) }
+        }
+    }
+
+    impl From<Box<Graphemes>> for Box<str> {
+        fn from(value: Box<Graphemes>) -> Self {
+            // SAFETY: This is ok because Grapheme is #[repr(transparent)]
+            unsafe { Box::from_raw(Box::into_raw(value) as *mut str) }
+        }
+    }
+
+    impl From<Box<Graphemes>> for Box<[u8]> {
+        fn from(value: Box<Graphemes>) -> Self {
+            Box::<str>::from(value).into()
         }
     }
 
