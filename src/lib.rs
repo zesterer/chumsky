@@ -2200,7 +2200,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     fn boxed<'b>(self) -> Boxed<'src, 'b, I, O, E>
     where
-        Self: Sized + 'src + 'b,
+        Self: Sized + 'b,
     {
         Boxed {
             inner: Rc::new(self),
@@ -2822,7 +2822,7 @@ where
 
     fn boxed<'c>(self) -> Boxed<'src, 'c, I, O, E>
     where
-        Self: Sized + 'src + 'c,
+        Self: Sized + 'c,
     {
         // Never double-box parsers
         self
