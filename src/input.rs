@@ -1355,7 +1355,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     ) -> O
     where
         'parse: 'sub_parse,
-        S: 'src + Inspector<'src, I>,
+        S: Inspector<'src, I>,
     {
         let mut new_inp = InputRef {
             cursor: self.cursor.clone(),

@@ -231,17 +231,18 @@ pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F>
 ///
 /// A function that generates a fallback output on recovery is also required.
 // TODO: Make this a strategy, add an unclosed_delimiter error
-pub fn nested_delimiters<'src, I, O, E, F, const N: usize>(
+pub fn nested_delimiters<'src, 'parse, I, O, E, F, const N: usize>(
     start: I::Token,
     end: I::Token,
     others: [(I::Token, I::Token); N],
     fallback: F,
-) -> impl Parser<'src, I, O, E> + Clone
+) -> impl Parser<'src, I, O, E> + Clone + 'parse
 where
     I: ValueInput<'src>,
     I::Token: PartialEq + Clone,
-    E: extra::ParserExtra<'src, I>,
-    F: Fn(I::Span) -> O + Clone,
+    E: extra::ParserExtra<'src, I> + 'parse,
+    'src: 'parse,
+    F: Fn(I::Span) -> O + Clone + 'parse,
 {
     // TODO: Does this actually work? TESTS!
     #[allow(clippy::tuple_array_conversions)]
