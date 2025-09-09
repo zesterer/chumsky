@@ -109,7 +109,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
-    pub fn define<P: Parser<'src, I, O, E> + Clone + 'src + 'b>(&mut self, parser: P) {
+    pub fn define<P: Parser<'src, I, O, E> + Clone + 'b>(&mut self, parser: P) {
         let location = *Location::caller();
         self.parser()
             .inner
