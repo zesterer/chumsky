@@ -15,6 +15,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.11.0] - 2025-09-11
+
+### Added
+
+- The `set(...)` combinator, which may be used to conveniently parse a set of patterns, in any order
+- Support for non-associative infix operators are now supported by the `.pratt(...)` combinator
+- `Parser::try_foldl`, allowing folding operations to short-circuit in a manner similar to `Parser::try_map`
+- `Parser::contextual`, which allows a parser to be disabled or enabled in a context-sensitive manner
+- Implemented `ValueInput` for `IterInput`, which was previously missing
+- More types that implement the `State` trait:
+    - `RollbackState`, which reverts parser state when a parser rewinds and may be used to, for example, count the number of times a pattern appears in the input
+    - `TruncateState`, which truncates a vector when a parser rewinds, and may be used to implement an arena allocator for AST nodes
+- Implemented `IterParser` for `a.then(b)` when both `a` and `b` are both `IterParser`s that produce the same output type
+
+### Changed
+
+- Made lifetime bounds on `recursive` and `ParserExtra` more permissive
+- Improved support for grapheme parsing
+- Text parsers now report labels
+- `Parser::filter` now generates a `DefaultExpected::SomethingElse` label instead of nothing (this can be overridden with the `.labelled(...)` function)
+- Improved areas of documentation
+- Make whitespace parsers reject codepoints that are vulnerable to [CVE-2021-42574](https://www.cve.org/CVERecord?id=CVE-2021-42574)
+- Maybe the `select!` parser more permissive, accepting any implementor of `Input` instead of requiring `ValueInput` too
+
+### Fixed
+
+- Many minor incorrect debug-only sanity checks have been fixed
+- Many minor span and error prioritisation behavioural problems have been fixed (most notably, `Parser::try_map`)
+- The `.rewind()` parser no longer rewinds any secondary error that were encountered
+- Accidental `text::ascii::keyword` lifetime regression
+
 # [0.10.1] - 2025-04-13
 
 ### Added
