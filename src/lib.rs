@@ -2071,6 +2071,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     {
         Unwrapped {
             parser: self,
+            #[cfg(debug_assertions)]
             location: *Location::caller(),
             phantom: EmptyPhantom::new(),
         }

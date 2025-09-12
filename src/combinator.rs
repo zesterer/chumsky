@@ -891,6 +891,7 @@ impl<A: Clone, O> Clone for Unwrapped<A, O> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
+            #[cfg(debug_assertions)]
             location: self.location,
             phantom: EmptyPhantom::new(),
         }
