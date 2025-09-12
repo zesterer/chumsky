@@ -26,6 +26,8 @@ jobs:
         run: cargo check --benches --examples --tests --all-features
       - name: Run cargo check (no features)
         run: cargo check --benches --examples --tests --no-default-features
+      - name: Run cargo check (release, all features)
+        run: cargo check --release --benches --examples --tests --all-features
       - name: Run cargo clippy
         run: cargo clippy --benches --examples --tests --all-features -- -D warnings
       - name: Run cargo fmt
