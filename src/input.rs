@@ -1744,6 +1744,17 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
+    pub(crate) fn emit_errors(
+        &mut self,
+        cursor: &(impl Clone + Into<Option<Cursor<'src, 'parse, I>>>),
+        errors: Vec<E::Error>,
+    ) {
+        for err in errors {
+            self.emit(cursor.clone(), err);
+        }
+    }
+
+    #[inline]
     pub(crate) fn add_alt<Exp, L>(
         &mut self,
         expected: Exp,
@@ -1840,6 +1851,7 @@ pub struct MapExtra<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> {
     cache: &'b mut I::Cache,
     state: &'b mut E::State,
     ctx: &'b E::Context,
+    emitted: &'b mut Vec<E::Error>,
 }
 
 impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E> {
@@ -1847,6 +1859,7 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
     pub(crate) fn new<'parse>(
         before: &'b Cursor<'src, 'parse, I>,
         inp: &'b mut InputRef<'src, 'parse, I, E>,
+        emitted: &'b mut Vec<E::Error>,
     ) -> Self {
         Self {
             before: &before.inner,
@@ -1854,6 +1867,7 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
             cache: inp.cache,
             ctx: inp.ctx,
             state: inp.state,
+            emitted,
         }
     }
 
@@ -1886,5 +1900,10 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
     #[inline(always)]
     pub fn ctx(&self) -> &E::Context {
         self.ctx
+    }
+
+    /// Emits an non-fatal error.
+    pub fn emit(&mut self, err: E::Error) {
+        self.emitted.push(err)
     }
 }

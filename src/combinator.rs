@@ -390,9 +390,15 @@ where
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
         let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| {
-            (self.mapper)(out, &mut MapExtra::new(&before, inp))
-        }))
+        let mut errors = Vec::new();
+
+        let out = M::map(out, |out| {
+            (self.mapper)(out, &mut MapExtra::new(&before, inp, &mut errors))
+        });
+
+        inp.emit_errors(&before, errors);
+
+        Ok(out)
     }
 
     go_extra!(O);
@@ -428,7 +434,11 @@ where
         let before = inp.cursor();
         match self.parser.next::<M>(inp, state, debug) {
             Ok(Some(o)) => Ok(Some(M::map(o, |o| {
-                (self.mapper)(o, &mut MapExtra::new(&before, inp))
+                let mut errors = Vec::new();
+                let mapped = (self.mapper)(o, &mut MapExtra::new(&before, inp, &mut errors));
+                inp.emit_errors(&before, errors);
+
+                mapped
             }))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
@@ -590,7 +600,13 @@ where
                 .next::<Emit>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(b_out)) => {
-                    match (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp)) {
+                    let mut errors = Vec::new();
+
+                    let folded = (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp, &mut errors));
+
+                    inp.emit_errors(&before, errors);
+
+                    match folded {
                         Ok(b_f_out) => {
                             out = b_f_out;
                         }
@@ -717,7 +733,13 @@ where
         inp.errors.alt = old_alt;
         match res {
             Ok(out) => {
-                match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
+                let mut errors = Vec::new();
+
+                let mapped = (self.mapper)(out, &mut MapExtra::new(&before, inp, &mut errors));
+
+                inp.emit_errors(&before, errors);
+
+                match mapped {
                     Ok(out) => {
                         // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
@@ -2612,11 +2634,18 @@ where
 
         let b_out = self.parser_b.go::<M>(inp)?;
 
-        Ok(M::combine(a_out, b_out, |a_out, b_out| {
+
+        let out = M::combine(a_out, b_out, |a_out, b_out| {
             a_out.into_iter().rfold(b_out, |b, (a, before)| {
-                (self.folder)(a, b, &mut MapExtra::new(&before, inp))
+                let mut errors = Vec::new();
+                let folded = (self.folder)(a, b, &mut MapExtra::new(&before, inp, &mut errors));
+                inp.emit_errors(&before, errors);
+
+                folded
             })
-        }))
+        });
+
+        Ok(out)
     }
 
     go_extra!(O);
@@ -2720,9 +2749,14 @@ where
                 .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(b_out)) => {
+                    let before = inp.cursor();
+                    let mut errors = Vec::new();
+
                     out = M::combine(out, b_out, |out, b_out| {
-                        (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp))
-                    })
+                        (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp, &mut errors))
+                    });
+
+                    inp.emit_errors(&before, errors);
                 }
 
                 Ok(None) => break Ok(out),
@@ -2918,10 +2952,11 @@ where
         let out = self.parser.go::<Emit>(inp)?;
 
         let mut emitter = Emitter::new();
-        let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
-        for err in emitter.errors() {
-            inp.emit(before.clone(), err);
-        }
+        let mut errors = Vec::new();
+        let out = (self.validator)(out, &mut MapExtra::new(&before, inp, &mut errors), &mut emitter);
+        inp.emit_errors(&before, emitter.errors());
+        inp.emit_errors(&before, errors);
+
         Ok(M::bind(|| out))
     }
 

@@ -477,10 +477,15 @@ where
         let next = inp.next_maybe_inner();
         let found = match next {
             Some(tok) => {
-                match (self.filter)(
+                let cursor = before.cursor();
+                let mut errors = Vec::new();
+                let filtered = (self.filter)(
                     tok.borrow().clone(),
-                    &mut MapExtra::new(before.cursor(), inp),
-                ) {
+                    &mut MapExtra::new(cursor, inp, &mut errors),
+                );
+                inp.emit_errors(cursor, errors);
+
+                match filtered {
                     Some(out) => return Ok(M::bind(|| out)),
                     None => Some(tok.into()),
                 }
@@ -539,9 +544,16 @@ where
         let before = inp.save();
         let next = inp.next_ref_inner();
         let found = match next {
-            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(before.cursor(), inp)) {
-                Some(out) => return Ok(M::bind(|| out)),
-                None => Some(tok.into()),
+            Some(tok) => {
+                let cursor = before.cursor();
+                let mut errors = Vec::new();
+                let filtered = (self.filter)(tok, &mut MapExtra::new(cursor, inp, &mut errors));
+                inp.emit_errors(cursor, errors);
+
+                match filtered {
+                    Some(out) => return Ok(M::bind(|| out)),
+                    None => Some(tok.into()),
+                }
             },
             found => found.map(|f| f.into()),
         };
