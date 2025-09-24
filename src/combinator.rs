@@ -772,6 +772,18 @@ where
     A: Parser<'src, I, OA, E>,
     O: Clone,
 {
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        self.parser.supports_could_match()
+    }
+
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &I::Token) -> bool {
+        self.parser.could_match(start)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         self.parser.go::<Check>(inp)?;
@@ -1110,6 +1122,18 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        self.parser_a.supports_could_match()
+    }
+
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &I::Token) -> bool {
+        self.parser_a.could_match(start)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OB> {
         self.parser_a.go::<Check>(inp)?;
@@ -2748,6 +2772,18 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        self.parser.supports_could_match()
+    }
+
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &I::Token) -> bool {
+        self.parser.could_match(start)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();

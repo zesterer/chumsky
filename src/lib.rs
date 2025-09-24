@@ -321,6 +321,18 @@ impl<T, E> ParseResult<T, E> {
 // )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
     #[doc(hidden)]
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        false
+    }
+    #[doc(hidden)]
+    #[cfg(feature = "unstable")]
+    fn could_match(&self, i: &I::Token) -> bool {
+        false
+    }
+
+    #[doc(hidden)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized;

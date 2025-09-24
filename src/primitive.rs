@@ -160,6 +160,18 @@ where
     I::Token: PartialEq,
     T: OrderedSeq<'src, I::Token> + Clone,
 {
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        true
+    }
+
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &I::Token) -> bool {
+        self.seq.could_match(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, T> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
@@ -258,6 +270,18 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn supports_could_match(&self) -> bool {
+        true
+    }
+
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &I::Token) -> bool {
+        self.seq.contains(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -914,6 +938,25 @@ macro_rules! impl_choice_for_tuple {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
+
+                #[cfg(feature = "unstable")]
+                if $Head.supports_could_match() $(&& $X.supports_could_match())* {
+                    if let Some(next) = inp.peek_maybe().as_deref() {
+                        match next {
+                            _ if $Head.could_match(&next) => match $Head.go::<M>(inp) {
+                                Ok(out) => return Ok(out),
+                                Err(()) => inp.rewind(before.clone()),
+                            },
+                            $(
+                                _ if $X.could_match(&next) => match $X.go::<M>(inp) {
+                                    Ok(out) => return Ok(out),
+                                    Err(()) => inp.rewind(before.clone()),
+                                },
+                            )*
+                            _ => {},
+                        }
+                    }
+                }
 
                 match $Head.go::<M>(inp) {
                     Ok(out) => return Ok(out),

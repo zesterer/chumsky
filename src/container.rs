@@ -895,7 +895,17 @@ impl<'p> Seq<'p, &'p Grapheme> for &'p Graphemes {
 /// A utility trait to abstract over *linear* container-like things.
 ///
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
-pub trait OrderedSeq<'p, T>: Seq<'p, T> {}
+pub trait OrderedSeq<'p, T>: Seq<'p, T> {
+    #[doc(hidden)]
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn could_match(&self, start: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.seq_iter().next().map_or(true, |x| start == x.borrow())
+    }
+}
 
 impl<T: Clone> OrderedSeq<'_, T> for T {}
 impl<'p, T> OrderedSeq<'p, T> for &'p T {}
