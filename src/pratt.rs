@@ -586,10 +586,7 @@ where
                             M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                             op,
                             |(lhs, rhs), op| {
-                                let mut errors = Vec::new();
-                                let folded = (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp, &mut errors));
-                                inp.emit_errors(pre_expr, errors);
-                                folded
+                                (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
                             },
                         )),
                         Err(()) => {
@@ -686,11 +683,7 @@ where
         match self.op_parser.go::<M>(inp) {
             Ok(op) => match f(inp, self.binding_power) {
                 Ok(rhs) => OperatorResult::Ok(M::combine(op, rhs, |op, rhs| {
-                    let cursor = pre_expr.cursor();
-                    let mut errors = Vec::new();
-                    let folded = (self.fold)(op, rhs, &mut MapExtra::new(cursor, inp, &mut errors));
-                    inp.emit_errors(cursor, errors);
-                    folded
+                    (self.fold)(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                 })),
                 Err(()) => {
                     inp.rewind(pre_expr.clone());
@@ -777,10 +770,7 @@ where
         if self.binding_power >= min_power {
             match self.op_parser.go::<M>(inp) {
                 Ok(op) => OperatorResult::Ok(M::combine(lhs, op, |lhs, op| {
-                    let mut errors = Vec::new();
-                    let folded = (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp, &mut errors));
-                    inp.emit_errors(pre_expr, errors);
-                    folded
+                    (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
                 })),
                 Err(()) => {
                     inp.rewind(pre_op.clone());
