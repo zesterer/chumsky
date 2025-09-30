@@ -1892,6 +1892,8 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
 
     /// Emits an non-fatal error.
     pub fn emit(&mut self, err: E::Error) {
-        self.emitted.secondary.push(Located::at(self.before.clone(), err));
+        self.emitted
+            .secondary
+            .push(Located::at(self.before.clone(), err));
     }
 }
