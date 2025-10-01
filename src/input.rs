@@ -1840,6 +1840,7 @@ pub struct MapExtra<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> {
     cache: &'b mut I::Cache,
     state: &'b mut E::State,
     ctx: &'b E::Context,
+    emitted: &'b mut Errors<I::Cursor, E::Error>,
 }
 
 impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E> {
@@ -1854,6 +1855,7 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
             cache: inp.cache,
             ctx: inp.ctx,
             state: inp.state,
+            emitted: &mut inp.errors,
         }
     }
 
@@ -1886,5 +1888,12 @@ impl<'src, 'b, I: Input<'src>, E: ParserExtra<'src, I>> MapExtra<'src, 'b, I, E>
     #[inline(always)]
     pub fn ctx(&self) -> &E::Context {
         self.ctx
+    }
+
+    /// Emits an non-fatal error.
+    pub fn emit(&mut self, err: E::Error) {
+        self.emitted
+            .secondary
+            .push(Located::at(self.before.clone(), err));
     }
 }
