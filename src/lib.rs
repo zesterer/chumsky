@@ -2,7 +2,13 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures)
+    feature(
+        never_type,
+        fn_traits,
+        tuple_trait,
+        unboxed_closures,
+        associated_type_defaults
+    )
 )]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -24,6 +30,19 @@ macro_rules! go_extra {
         #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Check, $O> {
             Parser::<I, $O, E>::go::<Check>(self, inp)
+        }
+    };
+}
+
+macro_rules! could_match {
+    ($field:ident : $T:ty) => {
+        #[cfg(feature = "nightly")]
+        type Jump = <$T>::Jump;
+
+        #[cfg(feature = "nightly")]
+        #[inline]
+        fn will_match(&self, start: &I::Token) -> bool {
+            self.$field.will_match(start)
         }
     };
 }
@@ -278,6 +297,16 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
+#[doc(hidden)]
+pub trait SupportsJump {
+    const SUPPORTS: bool = false;
+}
+#[doc(hidden)]
+pub struct Jump<const SUPPORTS: bool>;
+impl<const SUPPORTS: bool> SupportsJump for Jump<SUPPORTS> {
+    const SUPPORTS: bool = SUPPORTS;
+}
+
 /// A trait implemented by parsers.
 ///
 /// Parsers take inputs of type `I`, which will implement [`Input`]. Refer to the documentation on [`Input`] for examples
@@ -321,15 +350,16 @@ impl<T, E> ParseResult<T, E> {
 // )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
     #[doc(hidden)]
-    #[cfg(feature = "unstable")]
-    #[inline]
-    fn supports_could_match(&self) -> bool {
-        false
-    }
+    #[cfg(feature = "nightly")]
+    type Jump: SupportsJump
+        = Jump<false>
+    where
+        Self: Sized;
+
     #[doc(hidden)]
-    #[cfg(feature = "unstable")]
-    fn could_match(&self, i: &I::Token) -> bool {
-        false
+    #[cfg(feature = "nightly")]
+    fn will_match(&self, _i: &I::Token) -> bool {
+        unimplemented!()
     }
 
     #[doc(hidden)]

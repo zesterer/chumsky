@@ -897,9 +897,9 @@ impl<'p> Seq<'p, &'p Grapheme> for &'p Graphemes {
 /// This trait is likely to change in future versions of the crate, so avoid implementing it yourself.
 pub trait OrderedSeq<'p, T>: Seq<'p, T> {
     #[doc(hidden)]
-    #[cfg(feature = "unstable")]
+    #[cfg(feature = "nightly")]
     #[inline]
-    fn could_match(&self, start: &T) -> bool
+    fn matches_first(&self, start: &T) -> bool
     where
         T: PartialEq,
     {

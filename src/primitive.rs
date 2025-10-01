@@ -160,16 +160,13 @@ where
     I::Token: PartialEq,
     T: OrderedSeq<'src, I::Token> + Clone,
 {
-    #[cfg(feature = "unstable")]
-    #[inline]
-    fn supports_could_match(&self) -> bool {
-        true
-    }
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
 
-    #[cfg(feature = "unstable")]
+    #[cfg(feature = "nightly")]
     #[inline]
-    fn could_match(&self, start: &I::Token) -> bool {
-        self.seq.could_match(start)
+    fn will_match(&self, start: &I::Token) -> bool {
+        self.seq.matches_first(start)
     }
 
     #[inline]
@@ -270,15 +267,12 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
-    #[cfg(feature = "unstable")]
-    #[inline]
-    fn supports_could_match(&self) -> bool {
-        true
-    }
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
 
-    #[cfg(feature = "unstable")]
+    #[cfg(feature = "nightly")]
     #[inline]
-    fn could_match(&self, start: &I::Token) -> bool {
+    fn will_match(&self, start: &I::Token) -> bool {
         self.seq.contains(start)
     }
 
@@ -359,6 +353,15 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        !self.seq.contains(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -652,6 +655,15 @@ where
     I: BorrowInput<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        true
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src I::Token> {
         let before = inp.save();
@@ -933,27 +945,37 @@ macro_rules! impl_choice_for_tuple {
             $Head: Parser<'src, I, O, E>,
             $($X: Parser<'src, I, O, E>),*
         {
+            /*
+            #[cfg(feature = "nightly")]
+            type SupportsJump = Jump<{ true $(&& $X::SupportsJump::SUPPORTS)* }>;
+
+            #[cfg(feature = "nightly")]
+            #[inline]
+            fn will_match(&self, start: &I::Token) -> bool {
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
+                false $(|| $X.will_match(start))*
+            }
+            */
+
             #[inline]
             fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                #[cfg(feature = "unstable")]
-                if $Head.supports_could_match() $(&& $X.supports_could_match())* {
+                // Attempt to construct a jump table if all parsers support it.
+                // Note that this tends to pessimise behaviour for EmptyErr (which presumably optimises to an jump table already),
+                // so we detect this case and skip this optimisation using size_of.
+                #[cfg(feature = "nightly")]
+                if core::mem::size_of::<E::Error>() > 0 && $Head::Jump::SUPPORTS $(&& $X::Jump::SUPPORTS)* {
                     if let Some(next) = inp.peek_maybe().as_deref() {
                         match next {
-                            _ if $Head.could_match(&next) => match $Head.go::<M>(inp) {
-                                Ok(out) => return Ok(out),
-                                Err(()) => inp.rewind(before.clone()),
-                            },
+                            // The hope is that the optimiser folds this arm condition into the match in such a way that we end up with a jump table
+                            _ if $Head.will_match(&next) => return $Head.go::<M>(inp),
                             $(
-                                _ if $X.could_match(&next) => match $X.go::<M>(inp) {
-                                    Ok(out) => return Ok(out),
-                                    Err(()) => inp.rewind(before.clone()),
-                                },
+                                _ if $X.will_match(&next) => return $X.go::<M>(inp),
                             )*
-                            _ => {},
+                            _ => return Err(()),
                         }
                     }
                 }
