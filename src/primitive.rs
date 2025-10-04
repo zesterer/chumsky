@@ -160,6 +160,15 @@ where
     I::Token: PartialEq,
     T: OrderedSeq<'src, I::Token> + Clone,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        self.seq.matches_first(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, T> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
@@ -258,6 +267,15 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        self.seq.contains(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -335,6 +353,15 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        !self.seq.contains(start)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -628,6 +655,15 @@ where
     I: BorrowInput<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[cfg(feature = "nightly")]
+    type Jump = Jump<true>;
+
+    #[cfg(feature = "nightly")]
+    #[inline]
+    fn will_match(&self, start: &I::Token) -> bool {
+        true
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src I::Token> {
         let before = inp.save();
@@ -909,21 +945,55 @@ macro_rules! impl_choice_for_tuple {
             $Head: Parser<'src, I, O, E>,
             $($X: Parser<'src, I, O, E>),*
         {
+            /*
+            #[cfg(feature = "nightly")]
+            type SupportsJump = Jump<{ true $(&& $X::SupportsJump::SUPPORTS)* }>;
+
+            #[cfg(feature = "nightly")]
+            #[inline]
+            fn will_match(&self, start: &I::Token) -> bool {
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
+                false $(|| $X.will_match(start))*
+            }
+            */
+
             #[inline]
             fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
+                // Attempt to construct a jump table if all parsers support it.
+                // Note that this tends to pessimise behaviour for EmptyErr (which presumably optimises to an jump table already),
+                // so we detect this case and skip this optimisation using size_of.
+                #[cfg(feature = "nightly")]
+                if core::mem::size_of::<E::Error>() > 0
+                    && $Head::Jump::SUPPORTS $(&& $X::Jump::SUPPORTS)*
+                    && (1 $(+ $X::Jump::SUPPORTS as u64)*) > 1
+                {
+                    return if let Some(next) = inp.peek_maybe_inner().as_ref().map(Borrow::borrow) {
+                        if $Head.will_match(&next) {
+                            $Head.go::<M>(inp)
+                        } $(else if $X.will_match(&next) {
+                            $X.go::<M>(inp)
+                        })* else {
+                            Err(())
+                        }
+                    } else {
+                        Err(())
+                    };
+                }
+
                 match $Head.go::<M>(inp) {
                     Ok(out) => return Ok(out),
-                    Err(()) => inp.rewind(before.clone()),
+                    Err(()) => {},
                 }
 
                 $(
+                    inp.rewind(before.clone());
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
-                        Err(()) => inp.rewind(before.clone()),
+                        Err(()) => {},
                     }
                 )*
 
