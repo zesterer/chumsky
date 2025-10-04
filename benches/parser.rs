@@ -31,8 +31,7 @@ fn bench_choice(c: &mut Criterion) {
         just('X'),
         just('Y'),
         just('Z'),
-    ))
-    .repeated();
+    ));
 
     let mut group = c.benchmark_group("choice");
 

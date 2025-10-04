@@ -967,28 +967,33 @@ macro_rules! impl_choice_for_tuple {
                 // Note that this tends to pessimise behaviour for EmptyErr (which presumably optimises to an jump table already),
                 // so we detect this case and skip this optimisation using size_of.
                 #[cfg(feature = "nightly")]
-                if core::mem::size_of::<E::Error>() > 0 && $Head::Jump::SUPPORTS $(&& $X::Jump::SUPPORTS)* {
-                    if let Some(next) = inp.peek_maybe().as_deref() {
-                        match next {
-                            // The hope is that the optimiser folds this arm condition into the match in such a way that we end up with a jump table
-                            _ if $Head.will_match(&next) => return $Head.go::<M>(inp),
-                            $(
-                                _ if $X.will_match(&next) => return $X.go::<M>(inp),
-                            )*
-                            _ => return Err(()),
+                if core::mem::size_of::<E::Error>() > 0
+                    && $Head::Jump::SUPPORTS $(&& $X::Jump::SUPPORTS)*
+                    && (1 $(+ $X::Jump::SUPPORTS as u64)*) > 1
+                {
+                    return if let Some(next) = inp.peek_maybe_inner().as_ref().map(Borrow::borrow) {
+                        if $Head.will_match(&next) {
+                            $Head.go::<M>(inp)
+                        } $(else if $X.will_match(&next) {
+                            $X.go::<M>(inp)
+                        })* else {
+                            Err(())
                         }
-                    }
+                    } else {
+                        Err(())
+                    };
                 }
 
                 match $Head.go::<M>(inp) {
                     Ok(out) => return Ok(out),
-                    Err(()) => inp.rewind(before.clone()),
+                    Err(()) => {},
                 }
 
                 $(
+                    inp.rewind(before.clone());
                     match $X.go::<M>(inp) {
                         Ok(out) => return Ok(out),
-                        Err(()) => inp.rewind(before.clone()),
+                        Err(()) => {},
                     }
                 )*
 
