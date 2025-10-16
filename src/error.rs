@@ -602,7 +602,7 @@ where
 /// assert_eq!(error.found(), Some(&'5'));
 ///
 /// ```
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>> {
     span: S,
     reason: Box<RichReason<'a, T>>,
