@@ -206,3 +206,41 @@ impl<T: Clone> Span for Range<T> {
         self.end.clone()
     }
 }
+
+#[cfg(feature = "nightly")]
+impl<T> From<std::range::Range<T>> for SimpleSpan<T> {
+    fn from(range: std::range::Range<T>) -> Self {
+        SimpleSpan {
+            start: range.start,
+            end: range.end,
+            context: (),
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T> From<SimpleSpan<T, ()>> for std::range::Range<T> {
+    fn from(span: SimpleSpan<T>) -> Self {
+        std::range::Range {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T: Clone> Span for std::range::Range<T> {
+    type Context = ();
+    type Offset = T;
+
+    fn new(_context: Self::Context, range: Range<Self::Offset>) -> Self {
+        range.into()
+    }
+    fn context(&self) -> Self::Context {}
+    fn start(&self) -> Self::Offset {
+        self.start.clone()
+    }
+    fn end(&self) -> Self::Offset {
+        self.end.clone()
+    }
+}
