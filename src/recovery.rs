@@ -239,10 +239,10 @@ pub fn nested_delimiters<'src, 'parse, I, O, E, F, const N: usize>(
 ) -> impl Parser<'src, I, O, E> + Clone + 'parse
 where
     I: ValueInput<'src>,
-    I::Token: PartialEq + Clone,
+    I::Token: PartialEq + Clone + Send + Sync,
     E: extra::ParserExtra<'src, I> + 'parse,
     'src: 'parse,
-    F: Fn(I::Span) -> O + Clone + 'parse,
+    F: Fn(I::Span) -> O + Clone + Send + Sync + 'parse,
 {
     // TODO: Does this actually work? TESTS!
     #[allow(clippy::tuple_array_conversions)]

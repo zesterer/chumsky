@@ -251,7 +251,8 @@ where
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse("").into_result(), Ok(()));
 /// ```
-pub fn whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
+pub fn whitespace<'src, I, E>(
+) -> Repeated<impl Parser<'src, I, (), E> + Copy + Send + Sync, (), I, E>
 where
     I: StrInput<'src>,
     I::Token: Char + 'src,
@@ -287,7 +288,8 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
-pub fn inline_whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
+pub fn inline_whitespace<'src, I, E>(
+) -> Repeated<impl Parser<'src, I, (), E> + Copy + Send + Sync, (), I, E>
 where
     I: StrInput<'src>,
     I::Token: Char + 'src,
@@ -335,7 +337,7 @@ where
 /// assert_eq!(newline.parse("\u{2029}").into_result(), Ok(()));
 /// ```
 #[must_use]
-pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy
+pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy + Send + Sync
 where
     I: StrInput<'src>,
     I::Token: Char + 'src,
@@ -398,7 +400,7 @@ where
 #[must_use]
 pub fn digits<'src, I, E>(
     radix: u32,
-) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy, I::Token, I, E>
+) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy + Send + Sync, I::Token, I, E>
 where
     I: StrInput<'src>,
     I::Token: Char + 'src,
@@ -446,10 +448,12 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+pub fn int<'src, I, E>(
+    radix: u32,
+) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy + Send + Sync
 where
     I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I::Token: Char + Send + Sync + 'src,
     E: ParserExtra<'src, I>,
     E::Error:
         LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
@@ -486,7 +490,8 @@ pub mod ascii {
     /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    pub fn ident<'src, I, E>(
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy + Send + Sync
     where
         I: StrInput<'src>,
         I::Token: Char + 'src,
@@ -539,12 +544,12 @@ pub mod ascii {
     #[track_caller]
     pub fn keyword<'src, I, S, E>(
         keyword: S,
-    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + Send + Sync + 'src
     where
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + Send + Sync + 'src,
         E: ParserExtra<'src, I> + 'src,
         E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
     {
@@ -981,7 +986,8 @@ pub mod unicode {
     ///
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    pub fn ident<'src, I, E>(
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy + Send + Sync
     where
         I: StrInput<'src>,
         I::Token: Char + 'src,
@@ -1028,12 +1034,12 @@ pub mod unicode {
     #[track_caller]
     pub fn keyword<'src, I, S, E>(
         keyword: S,
-    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
+    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + Send + Sync + 'src
     where
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + Send + Sync + 'src,
         E: ParserExtra<'src, I> + 'src,
         E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
     {

@@ -37,8 +37,8 @@ impl<T> OnceCell<T> {
 
 // TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
-    Owned(Rc<T>),
-    Unowned(rc::Weak<T>),
+    Owned(Arc<T>),
+    Unowned(Weak<T>),
 }
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
@@ -100,7 +100,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// ```
     pub fn declare() -> Self {
         Recursive {
-            inner: RecursiveInner::Owned(Rc::new(Indirect {
+            inner: RecursiveInner::Owned(Arc::new(Indirect {
                 inner: OnceCell::new(),
             })),
         }
@@ -109,7 +109,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// Defines the parser after declaring it, allowing it to be used for parsing.
     // INFO: Clone bound not actually needed, but good to be safe for future compat
     #[track_caller]
-    pub fn define<P: Parser<'src, I, O, E> + Clone + 'b>(&mut self, parser: P) {
+    pub fn define<P: Parser<'src, I, O, E> + Clone + Send + Sync + 'b>(&mut self, parser: P) {
         let location = *Location::caller();
         self.parser()
             .inner
@@ -122,7 +122,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
 
 impl<P: ?Sized> Recursive<P> {
     #[inline]
-    fn parser(&self) -> Rc<P> {
+    fn parser(&self) -> Arc<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -243,11 +243,11 @@ pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I,
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E> + Clone + 'b,
+    A: Parser<'src, I, O, E> + Clone + Send + Sync + 'b,
     F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
 {
-    let rc = Rc::new_cyclic(|rc| {
-        let rc: rc::Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
+    let rc = Arc::new_cyclic(|rc| {
+        let rc: Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };
