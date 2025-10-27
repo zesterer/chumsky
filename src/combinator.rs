@@ -211,6 +211,12 @@ where
     I: SliceInput<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Slice>
     where
@@ -248,6 +254,12 @@ where
     A: Parser<'src, I, O, E>,
     F: Fn(&O) -> bool,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Filter(Box::new(self.parser.node_info(scope)))
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let found = inp.peek_maybe();
@@ -316,6 +328,12 @@ where
     A: Parser<'src, I, OA, E>,
     F: Fn(OA) -> O,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let out = self.parser.go::<M>(inp)?;
@@ -810,6 +828,12 @@ where
     A: Parser<'src, I, OA, E>,
     O: Clone,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         self.parser.go::<Check>(inp)?;
@@ -906,6 +930,12 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         self.parser.go::<Check>(inp)?;
@@ -1072,6 +1102,15 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(self.parser_b.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, (OA, OB)> {
         let a = self.parser_a.go::<M>(inp)?;
@@ -1148,6 +1187,15 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(self.parser_b.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OB> {
         self.parser_a.go::<Check>(inp)?;
@@ -1184,6 +1232,15 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(self.parser_b.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
         let a = self.parser_a.go::<M>(inp)?;
@@ -1511,6 +1568,18 @@ where
     B: Parser<'src, I, OB, E>,
     C: Parser<'src, I, OC, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(debug::NodeInfo::Then(
+                Box::new(self.start.node_info(scope)),
+                Box::new(self.parser.node_info(scope)),
+            )),
+            Box::new(self.end.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
         self.start.go::<Check>(inp)?;
@@ -1572,6 +1641,12 @@ where
     A: Parser<'src, I, O, E>,
     B: Parser<'src, I, O, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.choice.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         self.choice.go::<M>(inp)
@@ -1707,6 +1782,15 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Repeated(
+            self.at_least as u64..self.at_most,
+            Box::new(self.parser.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     #[allow(clippy::nonminimal_bool)] // TODO: Remove this, lint is currently buggy
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
@@ -1753,6 +1837,15 @@ where
     A: Parser<'src, I, O, E>,
 {
     type IterState<M: Mode> = usize;
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Repeated(
+            self.at_least as u64..self.at_most,
+            Box::new(self.parser.node_info(scope)),
+        )
+    }
 
     #[inline(always)]
     fn make_iter<M: Mode>(
@@ -2029,6 +2122,15 @@ where
     where
         I: 'src;
 
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::SeparatedBy(
+            Box::new(self.parser.node_info(scope)),
+            Box::new(self.separator.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn make_iter<M: Mode>(
         &self,
@@ -2117,6 +2219,15 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::SeparatedBy(
+            Box::new(self.parser.node_info(scope)),
+            Box::new(self.separator.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
         let mut state = self.make_iter::<Check>(inp)?;
@@ -2211,6 +2322,12 @@ where
     A: IterParser<'src, I, O, E>,
     C: Container<O>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, C> {
         let mut output = M::bind::<C, _>(|| C::default());
@@ -2309,6 +2426,12 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::OrNot(Box::new(self.parser.node_info(scope)))
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Option<O>> {
         let before = inp.save();
@@ -2900,6 +3023,12 @@ where
     A: Parser<'src, I, O, E>,
     F: Fn(E::Error) -> E::Error,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
@@ -3020,6 +3149,12 @@ where
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>, &mut Emitter<E::Error>) -> U,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, U>
     where

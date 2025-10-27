@@ -2,7 +2,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures)
+    feature(never_type, fn_traits, tuple_trait, unboxed_closures, specialization)
 )]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -33,6 +33,8 @@ mod blanket;
 pub mod cache;
 pub mod combinator;
 pub mod container;
+#[cfg(feature = "debug")]
+pub mod debug;
 #[cfg(feature = "either")]
 mod either;
 pub mod error;
@@ -320,6 +322,12 @@ impl<T, E> ParseResult<T, E> {
 //     )
 // )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        todo!("Parser::node_info for {}", core::any::type_name::<Self>())
+    }
+
     #[doc(hidden)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
@@ -2528,6 +2536,12 @@ where
         state: &mut Self::IterState<M>,
         debug: IterParserDebug,
     ) -> IPResult<M, O>;
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        todo!("Parser::node_info for {}", core::any::type_name::<Self>())
+    }
 
     /// Collect this iterable parser into a [`Container`].
     ///
