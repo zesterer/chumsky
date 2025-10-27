@@ -118,12 +118,13 @@ fn json<'a>() -> impl Parser<'a, &'a str, Json> {
             just("null").to(Json::Null),
             just("true").to(Json::Bool(true)),
             just("false").to(Json::Bool(false)),
-            number.map(Json::Num),
-            string.map(Json::Str),
-            array.map(Json::Array),
-            object.map(Json::Object),
+            number.map(Json::Num).labelled("number"),
+            string.map(Json::Str).labelled("string"),
+            array.map(Json::Array).labelled("array"),
+            object.map(Json::Object).labelled("object"),
         ))
         .padded()
+        .labelled("JSON value")
     })
 }
 

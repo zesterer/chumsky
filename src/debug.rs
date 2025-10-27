@@ -4,10 +4,24 @@
 pub enum SeqInfo {
     Char(char),
     String(String),
+    Opaque(String),
+    Unknown(String),
+}
+
+impl SeqInfo {
+    fn show(&self) -> String {
+        match self {
+            Self::Char(c) => format!("'{c}'"),
+            Self::String(s) => format!("\"{s}\""),
+            Self::Opaque(s) => format!("{s}"),
+            Self::Unknown(s) => format!("{s}"),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum NodeInfo {
+    Unknown(String),
     // The root of a recursive definition
     Recursive(usize, Box<Self>),
     RecursiveRef(usize),
@@ -22,12 +36,14 @@ pub enum NodeInfo {
     Padded(Box<Self>),
     Filter(Box<Self>),
     OrNot(Box<Self>),
+    Labelled(String, Box<Self>),
 }
 
 impl NodeInfo {
     // ctx { 0 = any, 1 = or, 2 = then }
     fn bnf_inner(&self, depth: usize, defs: &mut Vec<String>, ctx: usize) -> String {
         match self {
+            Self::Unknown(s) => format!("<unknown: {s}>"),
             Self::Recursive(r, inner) => {
                 let def = inner.bnf_inner(1, defs, 0);
                 defs.push(format!("def_{r} ::= {def};"));
@@ -52,10 +68,9 @@ impl NodeInfo {
                     format!("({s})")
                 }
             }
-            Self::Just(SeqInfo::Char(c)) => format!("'{c}'"),
-            Self::Just(SeqInfo::String(s)) => format!("\"{s}\""),
-            Self::OneOf(SeqInfo::String(s)) => format!("one_of(\"{s}\")"),
-            Self::NoneOf(SeqInfo::String(s)) => format!("none_of(\"{s}\")"),
+            Self::Just(seq) => seq.show(),
+            Self::OneOf(seq) => format!("one_of({})", seq.show()),
+            Self::NoneOf(seq) => format!("none_of({})", seq.show()),
             Self::Then(a, b) => {
                 let s = format!(
                     "{} {}",
@@ -69,7 +84,9 @@ impl NodeInfo {
                 }
             }
             Self::Any => format!("any"),
-            Self::Padded(inner) | Self::Filter(inner) => inner.bnf_inner(depth, defs, ctx),
+            Self::Padded(inner) | Self::Filter(inner) | Self::Labelled(_, inner) => {
+                inner.bnf_inner(depth, defs, ctx)
+            }
             Self::RecursiveRef(r) => format!("def_{r}"),
             _ => todo!("{:?}", self),
         }
@@ -85,6 +102,7 @@ impl NodeInfo {
     fn railroad_inner(&self, defs: &mut Vec<Box<dyn railroad::Node>>) -> Box<dyn railroad::Node> {
         use railroad::*;
         match self {
+            Self::Unknown(s) => Box::new(Comment::new(format!("{s}"))),
             Self::Recursive(r, inner) => {
                 let inner = inner.railroad_inner(defs);
                 defs.push(Box::new(LabeledBox::new(
@@ -105,24 +123,30 @@ impl NodeInfo {
             Self::Choice(inners) => Box::new(Choice::new(
                 inners.iter().map(|i| i.railroad_inner(defs)).collect(),
             )),
-            Self::Just(SeqInfo::Char(c)) => Box::new(NonTerminal::new(format!("'{c}'"))),
-            Self::Just(SeqInfo::String(s)) => Box::new(NonTerminal::new(format!("\"{s}\""))),
-            Self::OneOf(SeqInfo::String(s)) => Box::new(Terminal::new(format!("one_of(\"{s}\")"))),
-            Self::NoneOf(SeqInfo::String(s)) => {
-                Box::new(Terminal::new(format!("none_of(\"{s}\")")))
-            }
+            Self::Just(seq) => Box::new(NonTerminal::new(seq.show())),
+            Self::OneOf(seq) => Box::new(Terminal::new(format!("one_of({})", seq.show()))),
+            Self::NoneOf(seq) => Box::new(Terminal::new(format!("none_of({})", seq.show()))),
             Self::Then(a, b) => Box::new(Sequence::new(vec![
                 a.railroad_inner(defs),
                 b.railroad_inner(defs),
             ])),
             Self::RecursiveRef(r) => Box::new(Terminal::new(format!("def_{r}"))),
-            Self::Padded(inner) => Box::new(LabeledBox::new(
+            Self::Padded(inner) => Box::new(Sequence::new(vec![
+                Box::new(Terminal::new(format!("whitespace"))) as Box<dyn Node>,
                 inner.railroad_inner(defs),
-                Comment::new(format!("padded")),
-            )),
+                Box::new(Terminal::new(format!("whitespace"))),
+            ])),
+            // Self::Padded(inner) => Box::new(LabeledBox::new(
+            //     inner.railroad_inner(defs),
+            //     Comment::new(format!("padded")),
+            // )),
             Self::Filter(inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
                 Comment::new(format!("filtered")),
+            )),
+            Self::Labelled(label, inner) => Box::new(LabeledBox::new(
+                inner.railroad_inner(defs),
+                NonTerminal::new(format!("{label}")),
             )),
             Self::Any => Box::new(Terminal::new(format!("any"))),
             Self::OrNot(inner) => Box::new(Optional::new(inner.railroad_inner(defs))),
