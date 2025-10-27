@@ -786,10 +786,10 @@ where
                 *found = new_found;
             }
             _ => {
-                self.reason = Box::new(RichReason::ExpectedFound {
+                *self.reason = RichReason::ExpectedFound {
                     expected: new_expected.into_iter().map(|tok| tok.into()).collect(),
                     found: new_found,
-                });
+                };
             }
         }
         self.context.clear();
@@ -805,10 +805,10 @@ where
                 expected.push(label.into());
             }
             _ => {
-                self.reason = Box::new(RichReason::ExpectedFound {
+                *self.reason = RichReason::ExpectedFound {
                     expected: vec![label.into()],
                     found: self.reason.take_found(),
-                });
+                };
             }
         }
     }
