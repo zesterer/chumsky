@@ -160,6 +160,12 @@ where
     I::Token: PartialEq,
     T: OrderedSeq<'src, I::Token> + Clone,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Just(self.seq.seq_info(scope))
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, T> {
         Self::go_cfg::<M>(self, inp, JustCfg::default())
@@ -258,6 +264,12 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::OneOf(self.seq.seq_info(scope))
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -335,6 +347,12 @@ where
     I::Token: PartialEq,
     T: Seq<'src, I::Token>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::NoneOf(self.seq.seq_info(scope))
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -572,6 +590,12 @@ where
     I: ValueInput<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Any
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
         let before = inp.save();
@@ -909,6 +933,13 @@ macro_rules! impl_choice_for_tuple {
             $Head: Parser<'src, I, O, E>,
             $($X: Parser<'src, I, O, E>),*
         {
+            #[doc(hidden)]
+            #[cfg(feature = "debug")]
+            fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
+                debug::NodeInfo::Choice(vec![$Head.node_info(scope), $($X.node_info(scope)),*])
+            }
+
             #[inline]
             fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
                 let before = inp.save();

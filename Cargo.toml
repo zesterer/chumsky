@@ -42,6 +42,9 @@ sync = ["spin"]
 # Enable Pratt parsing combinator
 pratt = ["unstable"]
 
+# Utilities for debugging parsers
+debug = ["unstable", "nightly", "dep:railroad"]
+
 # Allow the use of unstable features (aka features where the API is not settled)
 unstable = []
 
@@ -83,6 +86,7 @@ serde = { version = "1.0", default-features = false, optional = true, features =
 unicode-ident =  "1.0.10"
 unicode-segmentation = "1"
 bytes = { version = "1", default-features = false, optional = true }
+railroad = { version = "0.3.3", optional = true }
 
 [dev-dependencies]
 ariadne = "0.5"
@@ -149,3 +153,7 @@ required-features = ["std"]
 [[example]]
 name = "mini_ml"
 required-features = ["pratt"]
+
+[[example]]
+name = "debug"
+required-features = ["debug"]
