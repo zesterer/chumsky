@@ -325,7 +325,8 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
-        todo!("Parser::node_info for {}", core::any::type_name::<Self>())
+        let ty = core::any::type_name::<Self>();
+        debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
 
     #[doc(hidden)]
@@ -2540,7 +2541,8 @@ where
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
-        todo!("Parser::node_info for {}", core::any::type_name::<Self>())
+        let ty = core::any::type_name::<Self>();
+        debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
 
     /// Collect this iterable parser into a [`Container`].

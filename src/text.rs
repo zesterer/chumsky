@@ -216,11 +216,9 @@ where
 }
 
 /// Labels denoting a variety of text-related patterns.
+#[derive(Copy, Clone, Debug)]
 #[non_exhaustive]
-pub enum TextExpected<'src, I: StrInput<'src>>
-where
-    I::Token: Char,
-{
+pub enum TextExpected<Slice> {
     /// Whitespace (for example: spaces, tabs, or newlines).
     Whitespace,
     /// Inline whitespace (for example: spaces or tabs).
@@ -231,13 +229,15 @@ where
     ///
     /// For example:
     ///
-    /// - `Digit(0..10)` implies any base-10 digit
-    /// - `Digit(1..16)` implies any non-zero hexadecimal digit
-    Digit(Range<u32>),
+    /// - `Digit(0, 10)` implies any base-10 digit
+    /// - `Digit(1, 16)` implies any non-zero hexadecimal digit
+    Digit(u32, u32),
     /// Part of an identifier, either ASCII or unicode.
     IdentifierPart,
     /// A specific identifier.
-    Identifier(I::Slice),
+    Identifier(Slice),
+    /// An integer was expected
+    Int,
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
@@ -262,7 +262,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
@@ -295,7 +295,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(|c: &I::Token| c.is_inline_whitespace())
@@ -341,7 +341,7 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     custom(|inp| {
         let before = inp.cursor();
@@ -403,11 +403,15 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix))
-        .labelled_with(move |_| TextExpected::Digit(0..radix))
+        .labelled_with(move |_| TextExpected::Digit(0, radix))
+        .map_err(move |mut err: E::Error| {
+            err.label_with(TextExpected::Digit(0, radix));
+            err
+        })
         .repeated()
         .at_least(1)
 }
@@ -449,20 +453,21 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     E::Error:
-        LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
+        LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
-        .labelled_with(move |_| TextExpected::Digit(1..radix))
+        .labelled_with(move |_| TextExpected::Digit(1, radix))
         .then(
             any()
                 .filter(move |c: &I::Token| c.is_digit(radix))
-                .labelled_with(move |_| TextExpected::Digit(0..radix))
+                .labelled_with(move |_| TextExpected::Digit(0, radix))
                 .repeated(),
         )
         .ignored()
         .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
+        .labelled(TextExpected::Int)
 }
 
 /// Parsers and utilities for working with ASCII inputs.
@@ -482,7 +487,7 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         any()
             .filter(|c: &I::Token| {
@@ -531,7 +536,7 @@ pub mod ascii {
         I::Token: Char + fmt::Debug + 'src,
         S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -971,7 +976,7 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         any()
             .filter(|c: &I::Token| c.is_ident_start())
@@ -1014,7 +1019,7 @@ pub mod unicode {
         I::Token: Char + fmt::Debug + 'src,
         S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]

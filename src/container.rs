@@ -310,10 +310,8 @@ pub trait Seq<'p, T> {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
-        todo!(
-            "OrderedSeq::seq_info for {}",
-            core::any::type_name::<Self>()
-        )
+        let ty = core::any::type_name::<Self>();
+        debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
 }
 
@@ -352,18 +350,22 @@ impl<'p, T: Clone> Seq<'p, T> for T {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     default fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
-        todo!(
-            "OrderedSeq::seq_info for {}",
-            core::any::type_name::<Self>()
-        )
+        let ty = core::any::type_name::<Self>();
+        debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
+    }
+}
+
+#[doc(hidden)]
+#[cfg(feature = "debug")]
+impl<'p, T: Clone + core::fmt::Debug> Seq<'p, T> for T {
+    default fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        debug::SeqInfo::Opaque(format!("{self:?}"))
     }
 }
 
 #[doc(hidden)]
 #[cfg(feature = "debug")]
 impl Seq<'_, char> for char {
-    #[doc(hidden)]
-    #[cfg(feature = "debug")]
     fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
         debug::SeqInfo::Char(*self)
     }

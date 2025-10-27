@@ -86,6 +86,29 @@ where
     L: Clone,
     E::Error: LabelError<'src, I, L>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        trait LabelString {
+            fn label_string(&self) -> String;
+        }
+        impl<T> LabelString for T {
+            default fn label_string(&self) -> String {
+                core::any::type_name::<Self>().to_string()
+            }
+        }
+        impl<T: core::fmt::Debug> LabelString for T {
+            fn label_string(&self) -> String {
+                format!("{self:?}")
+            }
+        }
+
+        debug::NodeInfo::Labelled(
+            self.label.label_string(),
+            Box::new(self.parser.node_info(scope)),
+        )
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let old_alt = inp.errors.alt.take();

@@ -280,6 +280,7 @@ where
 /// An expected pattern for a [`Rich`] error.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum RichPattern<'a, T> {
     /// A specific token.
     Token(MaybeRef<'a, T>),
@@ -306,21 +307,19 @@ impl<'a, T> From<DefaultExpected<'a, T>> for RichPattern<'a, T> {
     }
 }
 
-impl<'a, I: StrInput<'a>, T> From<text::TextExpected<'a, I>> for RichPattern<'a, T>
-where
-    I::Token: Char,
-{
-    fn from(expected: text::TextExpected<'a, I>) -> Self {
+impl<'a, Slice: core::fmt::Debug, T> From<text::TextExpected<Slice>> for RichPattern<'a, T> {
+    fn from(expected: text::TextExpected<Slice>) -> Self {
         match expected {
             text::TextExpected::Whitespace => Self::Label(Cow::Borrowed("whitespace")),
             text::TextExpected::InlineWhitespace => Self::Label(Cow::Borrowed("inline whitespace")),
             text::TextExpected::Newline => Self::Label(Cow::Borrowed("newline")),
-            text::TextExpected::Digit(r) if r.start > 0 => {
+            text::TextExpected::Digit(start, _end) if start > 0 => {
                 Self::Label(Cow::Borrowed("non-zero digit"))
             }
-            text::TextExpected::Digit(_) => Self::Label(Cow::Borrowed("digit")),
+            text::TextExpected::Digit(_, _) => Self::Label(Cow::Borrowed("digit")),
             text::TextExpected::IdentifierPart => Self::Label(Cow::Borrowed("identifier")),
-            text::TextExpected::Identifier(i) => Self::Identifier(I::stringify(i)),
+            text::TextExpected::Identifier(i) => Self::Identifier(format!("{i:?}")),
+            text::TextExpected::Int => Self::Label(Cow::Borrowed("int")),
         }
     }
 }
