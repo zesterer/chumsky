@@ -10,35 +10,10 @@
 
 use super::*;
 
-struct OnceCell<T>(core::cell::Cell<Option<T>>);
-impl<T> OnceCell<T> {
-    pub fn new() -> Self {
-        Self(core::cell::Cell::new(None))
-    }
-    pub fn set(&self, x: T) -> Result<(), ()> {
-        // SAFETY: Function is not reentrant so we have exclusive access to the inner data
-        unsafe {
-            let vacant = (*self.0.as_ptr()).is_none();
-            if vacant {
-                self.0.as_ptr().write(Some(x));
-                Ok(())
-            } else {
-                Err(())
-            }
-        }
-    }
-    #[inline]
-    pub fn get(&self) -> Option<&T> {
-        // SAFETY: We ensure that we never insert twice (so the inner `T` always lives as long as us, if it exists) and
-        // neither function is possibly reentrant so there's no way we can invalidate mut xor shared aliasing
-        unsafe { (*self.0.as_ptr()).as_ref() }
-    }
-}
-
 // TODO: Ensure that this doesn't produce leaks
 enum RecursiveInner<T: ?Sized> {
-    Owned(Rc<T>),
-    Unowned(rc::Weak<T>),
+    Owned(Arc<T>),
+    Unowned(Weak<T>),
 }
 
 /// Type for recursive parsers that are defined through a call to `recursive`, and as such
@@ -48,7 +23,7 @@ pub type Direct<'src, 'b, I, O, Extra> = DynParser<'src, 'b, I, O, Extra>;
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
 pub struct Indirect<'src, 'b, I: Input<'src>, O, Extra: ParserExtra<'src, I>> {
-    inner: OnceCell<Box<DynParser<'src, 'b, I, O, Extra>>>,
+    inner: spin::Once<Box<DynParser<'src, 'b, I, O, Extra>>>,
 }
 
 /// A parser that can be defined in terms of itself by separating its [declaration](Recursive::declare) from its
@@ -100,29 +75,21 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     /// ```
     pub fn declare() -> Self {
         Recursive {
-            inner: RecursiveInner::Owned(Rc::new(Indirect {
-                inner: OnceCell::new(),
+            inner: RecursiveInner::Owned(Arc::new(Indirect {
+                inner: spin::Once::new(),
             })),
         }
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
-    // INFO: Clone bound not actually needed, but good to be safe for future compat
-    #[track_caller]
-    pub fn define<P: Parser<'src, I, O, E> + Clone + 'b>(&mut self, parser: P) {
-        let location = *Location::caller();
-        self.parser()
-            .inner
-            .set(Box::new(parser))
-            .unwrap_or_else(|_| {
-                panic!("recursive parsers can only be defined once, trying to redefine it at {location}")
-            });
+    pub fn define<P: Parser<'src, I, O, E> + Send + Sync + 'b>(&mut self, parser: P) {
+        self.parser().inner.call_once(|| Box::new(parser));
     }
 }
 
 impl<P: ?Sized> Recursive<P> {
     #[inline]
-    fn parser(&self) -> Rc<P> {
+    fn parser(&self) -> Arc<P> {
         match &self.inner {
             RecursiveInner::Owned(x) => x.clone(),
             RecursiveInner::Unowned(x) => x
@@ -243,11 +210,11 @@ pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I,
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E> + Clone + 'b,
+    A: Parser<'src, I, O, E> + Send + Sync + 'b,
     F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
 {
-    let rc = Rc::new_cyclic(|rc| {
-        let rc: rc::Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
+    let rc = Arc::new_cyclic(|rc| {
+        let rc: Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
         };

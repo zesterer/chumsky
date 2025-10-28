@@ -116,7 +116,7 @@ where
     I: BorrowInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
     // Because this function is generic over the input type, we need the caller to tell us how to create a new input,
     // `I`, from a nested token tree. This function serves that purpose.
-    M: Fn(SimpleSpan, &'tokens [Spanned<Token<'src>>]) -> I + Clone + 'src,
+    M: Fn(SimpleSpan, &'tokens [Spanned<Token<'src>>]) -> I + Clone + Send + Sync + 'src,
 {
     recursive(|expr| {
         let ident = select_ref! { Token::Ident(x) => *x };

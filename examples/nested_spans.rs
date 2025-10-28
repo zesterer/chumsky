@@ -13,7 +13,7 @@ enum Token {
 fn parser<'src, I, M>(make_input: M) -> impl Parser<'src, I, i64>
 where
     I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [(Token, SimpleSpan)]) -> I + Clone + 'src,
+    M: Fn(SimpleSpan, &'src [(Token, SimpleSpan)]) -> I + Send + Sync + Clone + 'src,
 {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };
