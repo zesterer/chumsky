@@ -234,6 +234,8 @@ pub enum TextExpected<Slice> {
     Digit(u32, u32),
     /// Part of an identifier, either ASCII or unicode.
     IdentifierPart,
+    /// Any identifier.
+    AnyIdentifier,
     /// A specific identifier.
     Identifier(Slice),
     /// An integer was expected
@@ -271,6 +273,8 @@ where
             err
         })
         .ignored()
+        .labelled(TextExpected::Whitespace)
+        .as_builtin()
         .repeated()
 }
 
@@ -307,6 +311,8 @@ where
             err
         })
         .ignored()
+        .labelled(TextExpected::InlineWhitespace)
+        .as_builtin()
         .repeated()
 }
 
@@ -378,6 +384,8 @@ where
             }
         }
     })
+    .labelled(TextExpected::Newline)
+    .as_builtin()
 }
 
 /// A parser that accepts one or more ASCII digits.
@@ -417,6 +425,8 @@ where
             err.label_with(TextExpected::Digit(0, radix));
             err
         })
+        .labelled(TextExpected::Digit(0, radix))
+        .as_builtin()
         .repeated()
         .at_least(1)
 }
@@ -479,6 +489,7 @@ where
         .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
         .labelled(TextExpected::Int)
+        .as_builtin()
 }
 
 /// Parsers and utilities for working with ASCII inputs.
@@ -522,6 +533,8 @@ pub mod ascii {
                     .repeated(),
             )
             .to_slice()
+            .labelled(TextExpected::AnyIdentifier)
+            .as_builtin()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -551,9 +564,9 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -571,15 +584,22 @@ pub mod ascii {
             }
         }
         */
+        let keyword = *keyword.borrow();
         ident()
             .try_map(move |s: I::Slice, span| {
                 if keyword == s {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found([keyword.clone()], None, span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier(keyword)],
+                        None,
+                        span,
+                    ))
                 }
             })
             .to_slice()
+            .labelled(TextExpected::Identifier(keyword))
+            .as_builtin()
     }
 }
 
@@ -1011,6 +1031,8 @@ pub mod unicode {
                     .repeated(),
             )
             .to_slice()
+            .labelled(TextExpected::AnyIdentifier)
+            .as_builtin()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -1040,7 +1062,7 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
         E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
     {
@@ -1064,15 +1086,22 @@ pub mod unicode {
             }
         }
         */
+        let keyword = *keyword.borrow();
         ident()
             .try_map(move |s: I::Slice, span| {
-                if keyword.borrow() == &s {
+                if keyword == s {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found([keyword.clone()], None, span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier(keyword)],
+                        None,
+                        span,
+                    ))
                 }
             })
             .to_slice()
+            .labelled(TextExpected::Identifier(keyword))
+            .as_builtin()
     }
 
     /// Like [`char::is_whitespace`], but rejects the characters U+202A, U+202B, U+202C, U+202D, U+202E, U+2066, U+2067, U+2068, U+2069

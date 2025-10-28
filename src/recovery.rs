@@ -92,6 +92,12 @@ where
     A: Parser<'src, I, O, E>,
     S: Strategy<'src, I, O, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();
         match self.parser.go::<M>(inp) {
