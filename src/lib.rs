@@ -1,5 +1,5 @@
 #![cfg_attr(not(any(doc, feature = "std", test)), no_std)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
+#![cfg_attr(docsrs, feature(doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
     feature(never_type, fn_traits, tuple_trait, unboxed_closures)

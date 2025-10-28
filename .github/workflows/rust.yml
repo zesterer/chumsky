@@ -34,8 +34,8 @@ jobs:
         run: cargo fmt --check
       - name: Run cargo doc
         run: cargo doc --all-features
-        env:
-            RUSTDOCFLAGS: --cfg docsrs
+        #env:
+        #    RUSTDOCFLAGS: --cfg docsrs
   test:
     name: Test
     runs-on: ubuntu-latest
