@@ -64,6 +64,7 @@ pub struct Labelled<A, L> {
     pub(crate) parser: A,
     pub(crate) label: L,
     pub(crate) is_context: bool,
+    pub(crate) is_builtin: bool,
 }
 
 impl<A, L> Labelled<A, L> {
@@ -75,6 +76,11 @@ impl<A, L> Labelled<A, L> {
             is_context: true,
             ..self
         }
+    }
+
+    pub(crate) fn as_builtin(mut self) -> Self {
+        self.is_builtin = true;
+        self
     }
 }
 
@@ -98,15 +104,41 @@ where
             }
         }
         impl<T: core::fmt::Debug> LabelString for T {
-            fn label_string(&self) -> String {
+            default fn label_string(&self) -> String {
                 format!("{self:?}")
             }
         }
+        impl<T: core::fmt::Debug> LabelString for TextExpected<T> {
+            fn label_string(&self) -> String {
+                match self {
+                    Self::AnyIdentifier => format!("identifier"),
+                    Self::Identifier(s) => format!("{s:?}"),
+                    Self::Digit(start, end) => format!(
+                        "digit{}{}",
+                        if *start == 0 {
+                            format!("")
+                        } else {
+                            format!(", >= {start}")
+                        },
+                        if *end == 10 {
+                            format!("")
+                        } else {
+                            format!(", base {end}")
+                        },
+                    ),
+                    _ => format!("{self:?}"),
+                }
+            }
+        }
 
-        debug::NodeInfo::Labelled(
-            self.label.label_string(),
-            Box::new(self.parser.node_info(scope)),
-        )
+        if self.is_builtin {
+            debug::NodeInfo::Builtin(self.label.label_string())
+        } else {
+            debug::NodeInfo::Labelled(
+                self.label.label_string(),
+                Box::new(self.parser.node_info(scope)),
+            )
+        }
     }
 
     #[inline]

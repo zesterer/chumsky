@@ -489,6 +489,12 @@ where
     E: ParserExtra<'src, I>,
     F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Filter(Box::new(debug::NodeInfo::Any))
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();

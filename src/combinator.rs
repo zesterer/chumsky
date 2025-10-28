@@ -404,6 +404,12 @@ where
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> O,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.parser.node_info(scope)
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
@@ -691,6 +697,12 @@ where
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, I::Span) -> Result<O, E::Error>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Filter(Box::new(self.parser.node_info(scope)))
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.cursor();
@@ -2758,6 +2770,18 @@ where
     E: ParserExtra<'src, I>,
     F: Fn(OA, O) -> O,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(debug::NodeInfo::Repeated(
+                0..!0,
+                Box::new(self.parser_a.node_info(scope)),
+            )),
+            Box::new(self.parser_b.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
@@ -2885,6 +2909,18 @@ where
     E: ParserExtra<'src, I>,
     F: Fn(O, OB) -> O,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(debug::NodeInfo::Repeated(
+                0..!0,
+                Box::new(self.parser_b.node_info(scope)),
+            )),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
@@ -2940,6 +2976,18 @@ where
     E: ParserExtra<'src, I>,
     F: Fn(O, OB, &mut MapExtra<'src, '_, I, E>) -> O,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Then(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(debug::NodeInfo::Repeated(
+                0..!0,
+                Box::new(self.parser_b.node_info(scope)),
+            )),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where

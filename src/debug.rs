@@ -37,6 +37,7 @@ pub enum NodeInfo {
     Filter(Box<Self>),
     OrNot(Box<Self>),
     Labelled(String, Box<Self>),
+    Builtin(String),
 }
 
 impl NodeInfo {
@@ -84,6 +85,7 @@ impl NodeInfo {
                 }
             }
             Self::Any => format!("any"),
+            Self::Builtin(s) => format!("{s}"),
             Self::Padded(inner) | Self::Filter(inner) | Self::Labelled(_, inner) => {
                 inner.bnf_inner(depth, defs, ctx)
             }
@@ -131,15 +133,12 @@ impl NodeInfo {
                 b.railroad_inner(defs),
             ])),
             Self::RecursiveRef(r) => Box::new(Terminal::new(format!("def_{r}"))),
-            Self::Padded(inner) => Box::new(Sequence::new(vec![
-                Box::new(Terminal::new(format!("whitespace"))) as Box<dyn Node>,
-                inner.railroad_inner(defs),
-                Box::new(Terminal::new(format!("whitespace"))),
-            ])),
-            // Self::Padded(inner) => Box::new(LabeledBox::new(
+            // Self::Padded(inner) => Box::new(Sequence::new(vec![
+            //     Box::new(Terminal::new(format!("whitespace"))) as Box<dyn Node>,
             //     inner.railroad_inner(defs),
-            //     Comment::new(format!("padded")),
-            // )),
+            //     Box::new(Terminal::new(format!("whitespace"))),
+            // ])),
+            Self::Padded(inner) => inner.railroad_inner(defs),
             Self::Filter(inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
                 Comment::new(format!("filtered")),
@@ -148,6 +147,7 @@ impl NodeInfo {
                 inner.railroad_inner(defs),
                 NonTerminal::new(format!("{label}")),
             )),
+            Self::Builtin(s) => Box::new(Terminal::new(format!("{s}"))),
             Self::Any => Box::new(Terminal::new(format!("any"))),
             Self::OrNot(inner) => Box::new(Optional::new(inner.railroad_inner(defs))),
             _ => todo!("{:?}", self),

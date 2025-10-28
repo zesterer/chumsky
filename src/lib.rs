@@ -944,6 +944,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser: self,
             label,
             is_context: false,
+            is_builtin: false,
         }
     }
 
@@ -2911,6 +2912,12 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.inner.node_info(scope)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         M::invoke(&*self.inner, inp)
