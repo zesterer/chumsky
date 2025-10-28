@@ -1101,7 +1101,7 @@ mod tests {
     fn make_ascii_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
         I: crate::StrInput<'src>,
-        I::Slice: PartialEq + Clone,
+        I::Slice: PartialEq + Send + Sync + Clone,
         I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::ascii::keyword(s).ignored()
@@ -1110,7 +1110,7 @@ mod tests {
     fn make_unicode_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
         I: crate::StrInput<'src>,
-        I::Slice: PartialEq + Clone,
+        I::Slice: PartialEq + Clone + Send + Sync,
         I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::unicode::keyword(s).ignored()
