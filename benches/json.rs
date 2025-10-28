@@ -44,7 +44,7 @@ fn bench_json(c: &mut Criterion) {
         }
     });
 
-    c.bench_function("json_chumsky_zero_copy", {
+    c.bench_function("json_chumsky", {
         use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json::<EmptyErr>();
         move |b| {
@@ -56,7 +56,7 @@ fn bench_json(c: &mut Criterion) {
         }
     });
 
-    c.bench_function("json_chumsky_zero_copy_check", {
+    c.bench_function("json_chumsky_check", {
         use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json::<EmptyErr>();
         move |b| {
@@ -68,7 +68,7 @@ fn bench_json(c: &mut Criterion) {
         }
     });
 
-    c.bench_function("json_chumsky_zero_copy_rich", {
+    c.bench_function("json_chumsky_rich", {
         use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json::<Rich<u8>>();
         move |b| {
@@ -80,7 +80,7 @@ fn bench_json(c: &mut Criterion) {
         }
     });
 
-    c.bench_function("json_chumsky_zero_copy_check_rich", {
+    c.bench_function("json_chumsky_check_rich", {
         use ::chumsky::prelude::*;
         let json = chumsky_zero_copy::json::<Rich<u8>>();
         move |b| {
