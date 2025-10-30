@@ -1087,7 +1087,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// assert_eq!(tl.parse(&tokens).into_result(), Ok(vec![("foo", vec!["a", "b"])]));
     /// ```
-    fn nested_in<B: Parser<'src, J, I, F>, J, F>(self, other: B) -> NestedIn<Self, B, J, F, O, E>
+    fn nested_in<B: Parser<'src, J, I, F>, J, F>(self, other: B) -> NestedIn<Self, B, I, O, F>
     where
         Self: Sized,
         I: 'src,

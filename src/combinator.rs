@@ -1157,15 +1157,15 @@ where
 }
 
 /// See [`Parser::nested_in`].
-pub struct NestedIn<A, B, J, F, O, E> {
+pub struct NestedIn<A, B, J, O, E> {
     pub(crate) parser_a: A,
     pub(crate) parser_b: B,
     #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<(J, F, O, E)>,
+    pub(crate) phantom: EmptyPhantom<(J, O, E)>,
 }
 
-impl<A: Copy, B: Copy, J, F, O, E> Copy for NestedIn<A, B, J, F, O, E> {}
-impl<A: Clone, B: Clone, J, F, O, E> Clone for NestedIn<A, B, J, F, O, E> {
+impl<A: Copy, B: Copy, J, O, E> Copy for NestedIn<A, B, J, O, E> {}
+impl<A: Clone, B: Clone, J, O, E> Clone for NestedIn<A, B, J, O, E> {
     fn clone(&self) -> Self {
         Self {
             parser_a: self.parser_a.clone(),
@@ -1175,14 +1175,32 @@ impl<A: Clone, B: Clone, J, F, O, E> Clone for NestedIn<A, B, J, F, O, E> {
     }
 }
 
-impl<'src, I, J, E, F, A, B, O> Parser<'src, I, O, E> for NestedIn<A, B, J, F, O, E>
+impl<'src, I, J, E, A, B, O> Parser<'src, I, O, E> for NestedIn<A, B, J, O, E>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
+    // These bounds looks silly, but they basically just ensure that the extra type of the inner parser is compatible with the extra of the outer parser
+    E: ParserExtra<
+        'src,
+        J,
+        Error = <E as ParserExtra<'src, I>>::Error,
+        State = <E as ParserExtra<'src, I>>::State,
+        Context = <E as ParserExtra<'src, I>>::Context,
+    >,
+    <E as ParserExtra<'src, I>>::Error: Error<'src, J>,
+    <E as ParserExtra<'src, I>>::State: Inspector<'src, J>,
     B: Parser<'src, I, J, E>,
     J: Input<'src>,
-    F: ParserExtra<'src, J, State = E::State, Context = E::Context, Error = E::Error>,
-    A: Parser<'src, J, O, F>,
+    A: Parser<
+        'src,
+        J,
+        O,
+        extra::Full<
+            <E as ParserExtra<'src, I>>::Error,
+            <E as ParserExtra<'src, I>>::State,
+            <E as ParserExtra<'src, I>>::Context,
+        >,
+    >,
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
