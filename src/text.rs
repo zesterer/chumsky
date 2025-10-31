@@ -199,6 +199,12 @@ where
     I::Token: Char,
     A: Parser<'src, I, O, E>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::Padded(Box::new(self.parser.node_info(scope)))
+    }
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         inp.skip_while(|c| c.is_whitespace());
         let out = self.parser.go::<M>(inp)?;
@@ -210,11 +216,9 @@ where
 }
 
 /// Labels denoting a variety of text-related patterns.
+#[derive(Copy, Clone, Debug)]
 #[non_exhaustive]
-pub enum TextExpected<'src, I: StrInput<'src>>
-where
-    I::Token: Char,
-{
+pub enum TextExpected<Slice> {
     /// Whitespace (for example: spaces, tabs, or newlines).
     Whitespace,
     /// Inline whitespace (for example: spaces or tabs).
@@ -225,13 +229,17 @@ where
     ///
     /// For example:
     ///
-    /// - `Digit(0..10)` implies any base-10 digit
-    /// - `Digit(1..16)` implies any non-zero hexadecimal digit
-    Digit(Range<u32>),
+    /// - `Digit(0, 10)` implies any base-10 digit
+    /// - `Digit(1, 16)` implies any non-zero hexadecimal digit
+    Digit(u32, u32),
     /// Part of an identifier, either ASCII or unicode.
     IdentifierPart,
+    /// Any identifier.
+    AnyIdentifier,
     /// A specific identifier.
-    Identifier(I::Slice),
+    Identifier(Slice),
+    /// An integer was expected
+    Int,
 }
 
 /// A parser that accepts (and ignores) any number of whitespace characters.
@@ -256,7 +264,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
@@ -265,6 +273,8 @@ where
             err
         })
         .ignored()
+        .labelled(TextExpected::Whitespace)
+        .as_builtin()
         .repeated()
 }
 
@@ -292,7 +302,7 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(|c: &I::Token| c.is_inline_whitespace())
@@ -301,6 +311,8 @@ where
             err
         })
         .ignored()
+        .labelled(TextExpected::InlineWhitespace)
+        .as_builtin()
         .repeated()
 }
 
@@ -341,7 +353,7 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     custom(|inp| {
         let before = inp.cursor();
@@ -372,6 +384,8 @@ where
             }
         }
     })
+    .labelled(TextExpected::Newline)
+    .as_builtin()
 }
 
 /// A parser that accepts one or more ASCII digits.
@@ -403,14 +417,16 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix))
         .map_err(move |mut err: E::Error| {
-            err.label_with(TextExpected::Digit(0..radix));
+            err.label_with(TextExpected::Digit(0, radix));
             err
         })
+        .labelled(TextExpected::Digit(0, radix))
+        .as_builtin()
         .repeated()
         .at_least(1)
 }
@@ -452,19 +468,19 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     E::Error:
-        LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
+        LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
         .map_err(move |mut err: E::Error| {
-            err.label_with(TextExpected::Digit(1..radix));
+            err.label_with(TextExpected::Digit(1, radix));
             err
         })
         .then(
             any()
                 .filter(move |c: &I::Token| c.is_digit(radix))
                 .map_err(move |mut err: E::Error| {
-                    err.label_with(TextExpected::Digit(0..radix));
+                    err.label_with(TextExpected::Digit(0, radix));
                     err
                 })
                 .repeated(),
@@ -472,6 +488,8 @@ where
         .ignored()
         .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
+        .labelled(TextExpected::Int)
+        .as_builtin()
 }
 
 /// Parsers and utilities for working with ASCII inputs.
@@ -491,7 +509,7 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         any()
             .filter(|c: &I::Token| {
@@ -515,6 +533,8 @@ pub mod ascii {
                     .repeated(),
             )
             .to_slice()
+            .labelled(TextExpected::AnyIdentifier)
+            .as_builtin()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -544,9 +564,9 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -564,15 +584,22 @@ pub mod ascii {
             }
         }
         */
+        let keyword = *keyword.borrow();
         ident()
             .try_map(move |s: I::Slice, span| {
                 if keyword == s {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found([keyword.clone()], None, span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier(keyword)],
+                        None,
+                        span,
+                    ))
                 }
             })
             .to_slice()
+            .labelled(TextExpected::Identifier(keyword))
+            .as_builtin()
     }
 }
 
@@ -986,7 +1013,7 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
     {
         any()
             .filter(|c: &I::Token| c.is_ident_start())
@@ -1004,6 +1031,8 @@ pub mod unicode {
                     .repeated(),
             )
             .to_slice()
+            .labelled(TextExpected::AnyIdentifier)
+            .as_builtin()
     }
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -1033,9 +1062,9 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        S: Borrow<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<'src, I>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -1057,15 +1086,22 @@ pub mod unicode {
             }
         }
         */
+        let keyword = *keyword.borrow();
         ident()
             .try_map(move |s: I::Slice, span| {
-                if keyword.borrow() == &s {
+                if keyword == s {
                     Ok(())
                 } else {
-                    Err(LabelError::expected_found([keyword.clone()], None, span))
+                    Err(LabelError::expected_found(
+                        [TextExpected::Identifier(keyword)],
+                        None,
+                        span,
+                    ))
                 }
             })
             .to_slice()
+            .labelled(TextExpected::Identifier(keyword))
+            .as_builtin()
     }
 
     /// Like [`char::is_whitespace`], but rejects the characters U+202A, U+202B, U+202C, U+202D, U+202E, U+2066, U+2067, U+2068, U+2069

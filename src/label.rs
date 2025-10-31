@@ -64,6 +64,7 @@ pub struct Labelled<A, L> {
     pub(crate) parser: A,
     pub(crate) label: L,
     pub(crate) is_context: bool,
+    pub(crate) is_builtin: bool,
 }
 
 impl<A, L> Labelled<A, L> {
@@ -76,6 +77,11 @@ impl<A, L> Labelled<A, L> {
             ..self
         }
     }
+
+    pub(crate) fn as_builtin(mut self) -> Self {
+        self.is_builtin = true;
+        self
+    }
 }
 
 impl<'src, I, O, E, A, L> Parser<'src, I, O, E> for Labelled<A, L>
@@ -86,6 +92,55 @@ where
     L: Clone,
     E::Error: LabelError<'src, I, L>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        trait LabelString {
+            fn label_string(&self) -> String;
+        }
+        impl<T> LabelString for T {
+            default fn label_string(&self) -> String {
+                core::any::type_name::<Self>().to_string()
+            }
+        }
+        impl<T: core::fmt::Debug> LabelString for T {
+            default fn label_string(&self) -> String {
+                format!("{self:?}")
+            }
+        }
+        impl<T: core::fmt::Debug> LabelString for TextExpected<T> {
+            fn label_string(&self) -> String {
+                match self {
+                    Self::AnyIdentifier => format!("identifier"),
+                    Self::Identifier(s) => format!("{s:?}"),
+                    Self::Digit(start, end) => format!(
+                        "digit{}{}",
+                        if *start == 0 {
+                            format!("")
+                        } else {
+                            format!(", >= {start}")
+                        },
+                        if *end == 10 {
+                            format!("")
+                        } else {
+                            format!(", base {end}")
+                        },
+                    ),
+                    _ => format!("{self:?}"),
+                }
+            }
+        }
+
+        if self.is_builtin {
+            debug::NodeInfo::Builtin(self.label.label_string())
+        } else {
+            debug::NodeInfo::Labelled(
+                self.label.label_string(),
+                Box::new(self.parser.node_info(scope)),
+            )
+        }
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let old_alt = inp.errors.alt.take();
