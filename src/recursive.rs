@@ -255,15 +255,16 @@ where
 
 /// A trait for types which can be passed into the [`recursive_n`] function.
 pub trait RecursiveArgs<'src, 'b, I, O, E, P>: Sized {
-    /// The recursive dependencies of `Self`
-    type Tail;
     /// The type for the definitions, returned by the parameter to the [`build`](RecursiveArgs::build)
     type Definitions;
+    /// The return type of the parsers made by `Self`
+    type Return;
+
+    /// A helper type for the macro :D Don't worry.
+    type Aux;
 
     /// Define the recursive parsers, returning a tuple of the primary parser, and it's dependencies.
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O, E>>, Self::Tail)
+    fn build<F: FnOnce(Self) -> Self::Definitions>(f: F) -> Self::Return
     where
         I: Input<'src>,
         E: ParserExtra<'src, I>;
@@ -355,7 +356,7 @@ pub trait RecursiveArgs<'src, 'b, I, O, E, P>: Sized {
 ///     Expr(Expr),
 /// }
 ///
-/// let stmt = recursive_n::<_, _, extra::Err<Simple<char>>, _, _, _>(|(stmt, expr)| {
+/// let (stmt, _) = recursive_n::<_, _, extra::Err<Simple<char>>, _, _, _>(|(stmt, expr)| {
 ///     let expr = choice((
 ///         stmt.clone()
 ///             .repeated()
@@ -393,396 +394,111 @@ pub trait RecursiveArgs<'src, 'b, I, O, E, P>: Sized {
 ///     )]),))
 /// );
 /// ```
-pub fn recursive_n<'src, 'b, I, O, E, F, Args, P>(
-    f: F,
-) -> RecursiveN<Recursive<Indirect<'src, 'b, I, O, E>>, Args::Tail>
+pub fn recursive_n<'src, 'b, I, O, E, F, Args, P>(f: F) -> Args::Return
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     Args: RecursiveArgs<'src, 'b, I, O, E, P>,
     F: FnOnce(Args) -> Args::Definitions,
 {
-    let (parser, dependencies) = Args::define(f);
-
-    RecursiveN {
-        parser,
-        dependencies,
-    }
+    Args::build(f)
 }
 
-impl<'src, 'b, I, O, E, P1> RecursiveArgs<'src, 'b, I, O, E, P1>
-    for Recursive<Indirect<'src, 'b, I, O, E>>
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O, E> + Clone + 'b,
-{
-    type Tail = ();
+macro_rules! impl_recursive_args_for_tuple {
+    () => {};
+    ($P1:ident $D1:ident $($X:ident)*) => {
+        impl_recursive_args_for_tuple!($($X)*);
+        impl_recursive_args_for_tuple!(~ $P1 $D1 $($X)*);
+    };
+    (~ $Pi:ident $Di:ident $($Pn:ident $Dn:ident)+) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'src, 'b, I, E, $Pi, $Di, $($Pn, $Dn),+> RecursiveArgs<'src, 'b, I, $Di, E, ($Pi, $($Pn),+)>
+            for (
+                Recursive<Indirect<'src, 'b, I, $Di, E>>,
+                $(
+                    Recursive<Indirect<'src, 'b, I, $Dn, E>>
+                ),+
+            )
+        where
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $Pi: Parser<'src, I, $Di, E> + Clone + 'b,
+            $($Pn: Parser<'src, I, $Dn, E> + Clone + 'b),+
+        {
+            type Definitions = ($Pi, $($Pn),+);
 
-    type Definitions = P1;
+            type Aux = (Recursive<Indirect<'src, 'b, I, $Di, E>>, $(Recursive<Indirect<'src, 'b, I, $Dn, E>>),+);
 
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
+            type Return = (
+                RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, Self::Aux>
+                $(
+                    ,RecursiveN<Recursive<Indirect<'src, 'b, I, $Dn, E>>, Self::Aux>
+                )+
+            );
 
-        let p1_def = f(p1.weak());
-        p1.define(p1_def);
+            fn build<F: FnOnce(Self) -> Self::Definitions>(f: F) -> Self::Return {
+                  let mut $Pi = Recursive::declare();
+                $(let mut $Pn = Recursive::declare();)+
 
-        (p1, ())
-    }
+                let ($Di, $($Dn),+) = f(($Pi.weak(), $($Pn.weak()),+));
+
+                  $Pi.define($Di);
+                $($Pn.define($Dn);)+
+
+                let deps = ($Pi.clone(), $($Pn.clone()),+);
+
+                (
+                    RecursiveN {
+                        parser: $Pi.clone(),
+                        dependencies: deps.clone(),
+                    },
+                    $(
+                        RecursiveN {
+                            parser: $Pn.clone(),
+                            dependencies: deps.clone(),
+                        }
+                    ),+
+                )
+            }
+        }
+    };
+    (~ $Pi:ident $Di:ident) => {
+        #[allow(unused_variables, non_snake_case)]
+        impl<'src, 'b, I, E, $Pi, $Di> RecursiveArgs<'src, 'b, I, $Di, E, $Pi>
+            for Recursive<Indirect<'src, 'b, I, $Di, E>>
+        where
+            I: Input<'src>,
+            E: ParserExtra<'src, I>,
+            $Pi: Parser<'src, I, $Di, E> + Clone + 'b,
+        {
+            type Definitions = $Pi;
+
+            type Aux = ();
+
+            type Return = RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, ()>;
+
+            fn build<F: FnOnce(Self) -> Self::Definitions>(f: F) -> Self::Return {
+                let mut $Pi = Recursive::declare();
+
+                let $Di = f($Pi.weak());
+                $Pi.define($Di);
+
+                RecursiveN {
+                    parser: $Pi,
+                    dependencies: (),
+                }
+            }
+        }
+    };
 }
 
-impl<'src, 'b, I, O1, O2, E, P1, P2> RecursiveArgs<'src, 'b, I, O1, E, (P1, P2)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-{
-    type Tail = Recursive<Indirect<'src, 'b, I, O2, E>>;
-
-    type Definitions = (P1, P2);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-
-        let (p1_def, p2_def) = f((p1.weak(), p2.weak()));
-        p1.define(p1_def);
-        p2.define(p2_def);
-
-        (p1, p2)
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, E, P1, P2, P3> RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-    );
-
-    type Definitions = (P1, P2, P3);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def) = f((p1.weak(), p2.weak(), p3.weak()));
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-
-        (p1, (p2, p3))
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, O4, E, P1, P2, P3, P4>
-    RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3, P4)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-    P4: Parser<'src, I, O4, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-    );
-
-    type Definitions = (P1, P2, P3, P4);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-        let mut p4 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def, p4_def) = f((p1.weak(), p2.weak(), p3.weak(), p4.weak()));
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-        p4.define(p4_def);
-
-        (p1, (p2, p3, p4))
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, O4, O5, E, P1, P2, P3, P4, P5>
-    RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3, P4, P5)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-    P4: Parser<'src, I, O4, E> + Clone + 'b,
-    P5: Parser<'src, I, O5, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-    );
-
-    type Definitions = (P1, P2, P3, P4, P5);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-        let mut p4 = Recursive::declare();
-        let mut p5 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def, p4_def, p5_def) =
-            f((p1.weak(), p2.weak(), p3.weak(), p4.weak(), p5.weak()));
-
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-        p4.define(p4_def);
-        p5.define(p5_def);
-
-        (p1, (p2, p3, p4, p5))
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, O4, O5, O6, E, P1, P2, P3, P4, P5, P6>
-    RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3, P4, P5, P6)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-    P4: Parser<'src, I, O4, E> + Clone + 'b,
-    P5: Parser<'src, I, O5, E> + Clone + 'b,
-    P6: Parser<'src, I, O6, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-    );
-
-    type Definitions = (P1, P2, P3, P4, P5, P6);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-        let mut p4 = Recursive::declare();
-        let mut p5 = Recursive::declare();
-        let mut p6 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def, p4_def, p5_def, p6_def) = f((
-            p1.weak(),
-            p2.weak(),
-            p3.weak(),
-            p4.weak(),
-            p5.weak(),
-            p6.weak(),
-        ));
-
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-        p4.define(p4_def);
-        p5.define(p5_def);
-        p6.define(p6_def);
-
-        (p1, (p2, p3, p4, p5, p6))
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, O4, O5, O6, O7, E, P1, P2, P3, P4, P5, P6, P7>
-    RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3, P4, P5, P6, P7)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-        Recursive<Indirect<'src, 'b, I, O7, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-    P4: Parser<'src, I, O4, E> + Clone + 'b,
-    P5: Parser<'src, I, O5, E> + Clone + 'b,
-    P6: Parser<'src, I, O6, E> + Clone + 'b,
-    P7: Parser<'src, I, O7, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-        Recursive<Indirect<'src, 'b, I, O7, E>>,
-    );
-
-    type Definitions = (P1, P2, P3, P4, P5, P6, P7);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-        let mut p4 = Recursive::declare();
-        let mut p5 = Recursive::declare();
-        let mut p6 = Recursive::declare();
-        let mut p7 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def, p4_def, p5_def, p6_def, p7_def) = f((
-            p1.weak(),
-            p2.weak(),
-            p3.weak(),
-            p4.weak(),
-            p5.weak(),
-            p6.weak(),
-            p7.weak(),
-        ));
-
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-        p4.define(p4_def);
-        p5.define(p5_def);
-        p6.define(p6_def);
-        p7.define(p7_def);
-
-        (p1, (p2, p3, p4, p5, p6, p7))
-    }
-}
-
-impl<'src, 'b, I, O1, O2, O3, O4, O5, O6, O7, O8, E, P1, P2, P3, P4, P5, P6, P7, P8>
-    RecursiveArgs<'src, 'b, I, O1, E, (P1, P2, P3, P4, P5, P6, P7, P8)>
-    for (
-        Recursive<Indirect<'src, 'b, I, O1, E>>,
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-        Recursive<Indirect<'src, 'b, I, O7, E>>,
-        Recursive<Indirect<'src, 'b, I, O8, E>>,
-    )
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    P1: Parser<'src, I, O1, E> + Clone + 'b,
-    P2: Parser<'src, I, O2, E> + Clone + 'b,
-    P3: Parser<'src, I, O3, E> + Clone + 'b,
-    P4: Parser<'src, I, O4, E> + Clone + 'b,
-    P5: Parser<'src, I, O5, E> + Clone + 'b,
-    P6: Parser<'src, I, O6, E> + Clone + 'b,
-    P7: Parser<'src, I, O7, E> + Clone + 'b,
-    P8: Parser<'src, I, O8, E> + Clone + 'b,
-{
-    type Tail = (
-        Recursive<Indirect<'src, 'b, I, O2, E>>,
-        Recursive<Indirect<'src, 'b, I, O3, E>>,
-        Recursive<Indirect<'src, 'b, I, O4, E>>,
-        Recursive<Indirect<'src, 'b, I, O5, E>>,
-        Recursive<Indirect<'src, 'b, I, O6, E>>,
-        Recursive<Indirect<'src, 'b, I, O7, E>>,
-        Recursive<Indirect<'src, 'b, I, O8, E>>,
-    );
-
-    type Definitions = (P1, P2, P3, P4, P5, P6, P7, P8);
-
-    fn define<F: FnOnce(Self) -> Self::Definitions>(
-        f: F,
-    ) -> (Recursive<Indirect<'src, 'b, I, O1, E>>, Self::Tail) {
-        let mut p1 = Recursive::declare();
-        let mut p2 = Recursive::declare();
-        let mut p3 = Recursive::declare();
-        let mut p4 = Recursive::declare();
-        let mut p5 = Recursive::declare();
-        let mut p6 = Recursive::declare();
-        let mut p7 = Recursive::declare();
-        let mut p8 = Recursive::declare();
-
-        let (p1_def, p2_def, p3_def, p4_def, p5_def, p6_def, p7_def, p8_def) = f((
-            p1.weak(),
-            p2.weak(),
-            p3.weak(),
-            p4.weak(),
-            p5.weak(),
-            p6.weak(),
-            p7.weak(),
-            p8.weak(),
-        ));
-
-        p1.define(p1_def);
-        p2.define(p2_def);
-        p3.define(p3_def);
-        p4.define(p4_def);
-        p5.define(p5_def);
-        p6.define(p6_def);
-        p7.define(p7_def);
-        p8.define(p8_def);
-
-        (p1, (p2, p3, p4, p5, p6, p7, p8))
-    }
-}
+impl_recursive_args_for_tuple!(
+    P1 O1
+    P2 O2
+    P3 O3
+    P4 O4
+    P5 O5
+    P6 O6
+    P7 O7
+    P8 O8
+);
