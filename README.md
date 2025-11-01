@@ -201,3 +201,23 @@ My apologies to Noam for choosing such an absurd name.
 ## License
 
 Chumsky is licensed under the MIT license (see `LICENSE` in the main repository).
+
+## Provenance
+
+This software is proudly and fondly written, maintained, used - and most crucially - **understood** by real human beings.
+While we can't personally attest to the provenance of every line of code ever contributed, the vast majority of the
+codebase has certainly been developed without the aid of large language models and other stochastic 'intelligence'.
+
+While the GPLv3 may not guarantee warranty 'of any kind', you can at least use this software in the comforting knowledge
+that its veracity and coherence is vouched for by sentient intelligence with skin in the game and a reputation to uphold.
+
+## Contribution guidelines
+
+We expect contributors to adhere to the ethos of the project.
+
+Source code is not an artifact, an intermediate representation, nor a bothersome annoyance whose creation is to be
+offloaded to metal and transistors. Source code is a **source of truth** - the only source of truth that constitutes this
+software project - and it deserves to be understood and curated by the *accountable* and *reasoned* mind of a human being.
+
+Please refrain from contributing changes that you have not personally understood and instigated the authorship of. We do
+not expect perfection, but we do expect you to personally understand your own motivations and decisions.
