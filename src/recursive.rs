@@ -260,9 +260,6 @@ pub trait RecursiveArgs<'src, 'b, I, O, E, P>: Sized {
     /// The return type of the parsers made by `Self`
     type Return;
 
-    /// A helper type for the macro :D Don't worry.
-    type Aux;
-
     /// Define the recursive parsers, returning a tuple of the primary parser, and it's dependencies.
     fn build<F: FnOnce(Self) -> Self::Definitions>(f: F) -> Self::Return
     where
@@ -427,12 +424,10 @@ macro_rules! impl_recursive_args_for_tuple {
         {
             type Definitions = ($Pi, $($Pn),+);
 
-            type Aux = (Recursive<Indirect<'src, 'b, I, $Di, E>>, $(Recursive<Indirect<'src, 'b, I, $Dn, E>>),+);
-
             type Return = (
-                RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, Self::Aux>,
+                RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, Self>,
                 $(
-                    RecursiveN<Recursive<Indirect<'src, 'b, I, $Dn, E>>, Self::Aux>
+                    RecursiveN<Recursive<Indirect<'src, 'b, I, $Dn, E>>, Self>
                 ),+
             );
 
@@ -472,8 +467,6 @@ macro_rules! impl_recursive_args_for_tuple {
             $Pi: Parser<'src, I, $Di, E> + Clone + 'b,
         {
             type Definitions = $Pi;
-
-            type Aux = ();
 
             type Return = RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, ()>;
 
