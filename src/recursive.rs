@@ -430,10 +430,10 @@ macro_rules! impl_recursive_args_for_tuple {
             type Aux = (Recursive<Indirect<'src, 'b, I, $Di, E>>, $(Recursive<Indirect<'src, 'b, I, $Dn, E>>),+);
 
             type Return = (
-                RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, Self::Aux>
+                RecursiveN<Recursive<Indirect<'src, 'b, I, $Di, E>>, Self::Aux>,
                 $(
-                    ,RecursiveN<Recursive<Indirect<'src, 'b, I, $Dn, E>>, Self::Aux>
-                )+
+                    RecursiveN<Recursive<Indirect<'src, 'b, I, $Dn, E>>, Self::Aux>
+                ),+
             );
 
             fn build<F: FnOnce(Self) -> Self::Definitions>(f: F) -> Self::Return {
