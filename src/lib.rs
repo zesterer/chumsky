@@ -89,8 +89,8 @@ pub mod prelude {
 use crate::input::InputOwn;
 use alloc::{
     boxed::Box,
-    rc::{self, Rc},
     string::String,
+    sync::{Arc, Weak},
     vec,
     vec::Vec,
 };
@@ -157,9 +157,10 @@ impl<T> Unpin for EmptyPhantom<T> {}
 impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
 impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
 
-pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + 'b;
+pub(crate) type DynParser<'src, 'b, I, O, E> = dyn Parser<'src, I, O, E> + Send + Sync + 'b;
 #[cfg(feature = "pratt")]
-pub(crate) type DynOperator<'src, 'b, I, O, E> = dyn pratt::Operator<'src, I, O, E> + 'b;
+pub(crate) type DynOperator<'src, 'b, I, O, E> =
+    dyn pratt::Operator<'src, I, O, E> + Send + Sync + 'b;
 
 /// Labels corresponding to a variety of patterns.
 #[derive(Clone, Debug, PartialEq)]
@@ -2201,10 +2202,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     fn boxed<'b>(self) -> Boxed<'src, 'b, I, O, E>
     where
-        Self: Sized + 'b,
+        Self: Sized + Send + Sync + 'b,
     {
         Boxed {
-            inner: Rc::new(self),
+            inner: Arc::new(self),
         }
     }
 
@@ -2808,12 +2809,11 @@ where
 
 /// See [`Parser::boxed`].
 ///
-/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
-/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
+/// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Arc`] to facilitate
+/// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Arc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
-// TODO: Don't use an Rc (why?)
 pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
-    inner: Rc<DynParser<'src, 'b, I, O, E>>,
+    inner: Arc<DynParser<'src, 'b, I, O, E>>,
 }
 
 impl<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> Clone for Boxed<'src, '_, I, O, E> {
