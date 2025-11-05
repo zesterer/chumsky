@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.11.2] - 2025-11-05
+
+### Added
+
+- Implement `Default`, `PartialOrd`, and `Ord` for `SimpleSpan`
+- Implement `PartialOrd` and `Ord` for `Rich`
+
 # [0.11.1] - 2025-09-12
 
 ### Fixed
