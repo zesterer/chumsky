@@ -34,8 +34,9 @@ jobs:
         run: cargo fmt --check
       - name: Run cargo doc
         run: cargo doc --all-features
-        #env:
-        #    RUSTDOCFLAGS: --cfg docsrs
+      - name: Run cargo lockfile check
+        run: cargo generate-lockfile --frozen
+
   test:
     name: Test
     runs-on: ubuntu-latest
