@@ -178,10 +178,14 @@ mod chumsky_zero_copy {
                 just(b"null").to(JsonZero::Null),
                 just(b"true").to(JsonZero::Bool(true)),
                 just(b"false").to(JsonZero::Bool(false)),
-                number.map(JsonZero::Num),
-                string.map(JsonZero::Str),
-                array.map(JsonZero::Array),
-                object.map(JsonZero::Object),
+                one_of(b"0123456789-")
+                    .rewind()
+                    .ignore_then(number.map(JsonZero::Num)),
+                just(b'"').rewind().ignore_then(string.map(JsonZero::Str)),
+                just(b'[').rewind().ignore_then(array.map(JsonZero::Array)),
+                just(b'{')
+                    .rewind()
+                    .ignore_then(object.map(JsonZero::Object)),
             ))
             .padded()
         })
