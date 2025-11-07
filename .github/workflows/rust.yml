@@ -29,13 +29,11 @@ jobs:
       - name: Run cargo check (release, all features)
         run: cargo check --release --benches --examples --tests --all-features
       - name: Run cargo clippy
-        run: cargo clippy --benches --examples --tests --all-features -- -D warnings
+        run: cargo clippy --frozen --benches --examples --tests --all-features -- -D warnings
       - name: Run cargo fmt
         run: cargo fmt --check
       - name: Run cargo doc
         run: cargo doc --all-features
-      - name: Run cargo lockfile check
-        run: cargo generate-lockfile --frozen
 
   test:
     name: Test
