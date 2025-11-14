@@ -73,7 +73,7 @@ where
                 return Err(());
             }
         };
-        inp.emit(None, alt.err);
+        inp.emit(alt.err);
         Ok(out)
     }
 }
@@ -156,7 +156,7 @@ where
                     .secondary_errors_since(before.err_count)
                     .is_empty()
             }) {
-                inp.emit(None, alt.err);
+                inp.emit(alt.err);
                 break Ok(out);
             } else {
                 inp.errors.alt.take();
@@ -198,7 +198,7 @@ where
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<Check>(inp) {
-                inp.emit(None, alt.err);
+                inp.emit(alt.err);
                 break Ok(M::bind(|| (self.fallback)()));
             }
             inp.rewind(before);

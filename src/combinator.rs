@@ -2938,7 +2938,7 @@ where
         let mut emitter = Emitter::new();
         let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
         for err in emitter.errors() {
-            inp.emit(before.clone(), err);
+            inp.emit_at(before.clone(), err);
         }
         Ok(M::bind(|| out))
     }
