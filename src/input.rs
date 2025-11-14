@@ -1730,8 +1730,20 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         self.cursor += skip;
     }
 
+    /// Emits a non-fatal error
     #[inline]
-    pub(crate) fn emit(
+    pub fn emit(&mut self, error: E::Error) {
+        self.emit_inner(None, error);
+    }
+
+    /// Emits a non-fatal error at the given cursor position
+    #[inline]
+    pub fn emit_at(&mut self, cursor: Cursor<'src, 'parse, I>, error: E::Error) {
+        self.emit_inner(Some(cursor), error);
+    }
+
+    #[inline]
+    fn emit_inner(
         &mut self,
         cursor: impl Into<Option<Cursor<'src, 'parse, I>>>,
         error: E::Error,
