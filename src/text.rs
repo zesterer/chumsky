@@ -260,10 +260,7 @@ where
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
-        .map_err(|mut err: E::Error| {
-            err.label_with(TextExpected::Whitespace);
-            err
-        })
+        .labelled_with(|_| TextExpected::Whitespace)
         .ignored()
         .repeated()
 }
@@ -296,10 +293,7 @@ where
 {
     any()
         .filter(|c: &I::Token| c.is_inline_whitespace())
-        .map_err(|mut err: E::Error| {
-            err.label_with(TextExpected::InlineWhitespace);
-            err
-        })
+        .labelled_with(|_| TextExpected::InlineWhitespace)
         .ignored()
         .repeated()
 }
@@ -407,10 +401,7 @@ where
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix))
-        .map_err(move |mut err: E::Error| {
-            err.label_with(TextExpected::Digit(0..radix));
-            err
-        })
+        .labelled_with(move |_| TextExpected::Digit(0..radix))
         .repeated()
         .at_least(1)
 }
@@ -456,17 +447,11 @@ where
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
-        .map_err(move |mut err: E::Error| {
-            err.label_with(TextExpected::Digit(1..radix));
-            err
-        })
+        .labelled_with(move |_| TextExpected::Digit(1..radix))
         .then(
             any()
                 .filter(move |c: &I::Token| c.is_digit(radix))
-                .map_err(move |mut err: E::Error| {
-                    err.label_with(TextExpected::Digit(0..radix));
-                    err
-                })
+                .labelled_with(move |_| TextExpected::Digit(0..radix))
                 .repeated(),
         )
         .ignored()
@@ -498,20 +483,14 @@ pub mod ascii {
                 c.to_ascii()
                     .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
             })
-            .map_err(|mut err: E::Error| {
-                err.label_with(TextExpected::IdentifierPart);
-                err
-            })
+            .labelled_with(|_| TextExpected::IdentifierPart)
             .then(
                 any()
                     .filter(|c: &I::Token| {
                         c.to_ascii()
                             .map_or(false, |i| i.is_ascii_alphanumeric() || i == b'_')
                     })
-                    .map_err(|mut err: E::Error| {
-                        err.label_with(TextExpected::IdentifierPart);
-                        err
-                    })
+                    .labelled_with(|_| TextExpected::IdentifierPart)
                     .repeated(),
             )
             .to_slice()
@@ -990,17 +969,11 @@ pub mod unicode {
     {
         any()
             .filter(|c: &I::Token| c.is_ident_start())
-            .map_err(|mut err: E::Error| {
-                err.label_with(TextExpected::IdentifierPart);
-                err
-            })
+            .labelled_with(|_| TextExpected::IdentifierPart)
             .then(
                 any()
                     .filter(|c: &I::Token| c.is_ident_continue())
-                    .map_err(|mut err: E::Error| {
-                        err.label_with(TextExpected::IdentifierPart);
-                        err
-                    })
+                    .labelled_with(|_| TextExpected::IdentifierPart)
                     .repeated(),
             )
             .to_slice()
