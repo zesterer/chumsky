@@ -208,23 +208,25 @@ impl<T: Clone> Span for Range<T> {
 }
 
 /// A supertrait of [`Span`] that specifies how a value, usually an AST node, might have a span attached to it.
-pub trait WrappingSpan: Span {
+///
+/// The type for which this trait is implemented is the span type, and the `T` is the value type.
+pub trait WrappingSpan<T>: Span {
     /// The type of a node after being wrapped in a span.
-    type Spanned<T>;
+    type Spanned;
 
     /// Wrap a node in a span.
-    fn make_wrapped<T>(self, inner: T) -> Self::Spanned<T>;
+    fn make_wrapped(self, inner: T) -> Self::Spanned;
 }
 
 /// A utility trait that allows AST spanning to be done using method syntax.
-pub trait SpanWrap<S: WrappingSpan>: Sized {
+pub trait SpanWrap<S: WrappingSpan<Self>>: Sized {
     /// Invokes [`WrappingSpan::make_wrapped`] to wrap an AST node in a span.
-    fn with_span(self, span: S) -> S::Spanned<Self> {
+    fn with_span(self, span: S) -> S::Spanned {
         span.make_wrapped(self)
     }
 }
 
-impl<T, S: WrappingSpan> SpanWrap<S> for T {}
+impl<T, S: WrappingSpan<T>> SpanWrap<S> for T {}
 
 /// A type that wraps a value of type `T`, usually an AST node, and a span of type `S`.
 ///
@@ -253,16 +255,20 @@ pub struct Spanned<T, S = SimpleSpan> {
     pub span: S,
 }
 
-impl<U: Clone, C: Clone> WrappingSpan for SimpleSpan<U, C> {
-    type Spanned<T> = Spanned<T, Self>;
+/// `Spanned` for `SimpleSpan`.
+pub type SimpleSpanned<T, U = usize, C = ()> = Spanned<T, SimpleSpan<U, C>>;
 
-    fn make_wrapped<T>(self, inner: T) -> Self::Spanned<T> {
-        Spanned { inner, span: self }
+impl<T, U: Clone, C: Clone> WrappingSpan<T> for SimpleSpan<U, C> {
+    type Spanned = SimpleSpanned<T, U, C>;
+
+    fn make_wrapped(self, inner: T) -> Self::Spanned {
+        SimpleSpanned { inner, span: self }
     }
 }
 
 impl<T, S> Deref for Spanned<T, S> {
     type Target = T;
+
     fn deref(&self) -> &Self::Target {
         &self.inner
     }

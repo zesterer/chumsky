@@ -546,6 +546,44 @@ where
     go_extra!(I::Span);
 }
 
+/// See [`Parser::spanned`].
+pub struct Spanned<A, OA> {
+    pub(crate) parser: A,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<OA>,
+}
+
+impl<A: Copy, OA> Copy for Spanned<A, OA> {}
+impl<A: Clone, OA> Clone for Spanned<A, OA> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'src, I, OA, E, A> Parser<'src, I, <I::Span as WrappingSpan<OA>>::Spanned, E>
+    for Spanned<A, OA>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, OA, E>,
+    I::Span: WrappingSpan<OA>,
+{
+    #[inline(always)]
+    fn go<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<M, <I::Span as WrappingSpan<OA>>::Spanned> {
+        let before = inp.cursor();
+        let out = self.parser.go::<M>(inp)?;
+        Ok(M::map(out, |out| inp.span_since(&before).make_wrapped(out)))
+    }
+
+    go_extra!(<I::Span as WrappingSpan<OA>>::Spanned);
+}
+
 /// See [`Parser::try_foldl`].
 pub struct TryFoldl<F, A, B, OB, E> {
     pub(crate) parser_a: A,
@@ -607,44 +645,6 @@ where
     }
 
     go_extra!(OA);
-}
-
-/// See [`Parser::spanned`].
-pub struct Spanned<A, OA> {
-    pub(crate) parser: A,
-    #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
-}
-
-impl<A: Copy, OA> Copy for Spanned<A, OA> {}
-impl<A: Clone, OA> Clone for Spanned<A, OA> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-            phantom: EmptyPhantom::new(),
-        }
-    }
-}
-
-impl<'src, I, OA, E, A> Parser<'src, I, <I::Span as WrappingSpan>::Spanned<OA>, E>
-    for Spanned<A, OA>
-where
-    I: Input<'src>,
-    E: ParserExtra<'src, I>,
-    A: Parser<'src, I, OA, E>,
-    I::Span: WrappingSpan,
-{
-    #[inline(always)]
-    fn go<M: Mode>(
-        &self,
-        inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<M, <I::Span as WrappingSpan>::Spanned<OA>> {
-        let before = inp.cursor();
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| inp.span_since(&before).make_wrapped(out)))
-    }
-
-    go_extra!(<I::Span as WrappingSpan>::Spanned<OA>);
 }
 
 /// See [`Parser::try_map`].
