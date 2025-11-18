@@ -212,6 +212,18 @@ pub trait Input<'src>: 'src {
         }
     }
 
+    /// Take an input (such as a slice) with token type `(T, S)` and turns it into one that produces tokens of type `T` and spans of type `S`.
+    ///
+    /// This is useful when you can't make your parser generic over an input type and need to name the input type, such as with [`Parser::nested_in`].
+    fn split_token_span<T, S>(self, eoi: S) -> SplitTokenSpanInput<'src, T, S, Self>
+    where
+        Self: Input<'src, Token = (T, S), MaybeToken = &'src (T, S)> + Sized,
+        T: 'src,
+        S: Span + 'src,
+    {
+        self.map(eoi, |(t, s)| (t, s))
+    }
+
     /// Map the spans output for this input to a different output span.
     ///
     /// This is useful if you wish to include extra context that applies to all spans emitted during a parse, such as
@@ -228,6 +240,21 @@ pub trait Input<'src>: 'src {
         }
     }
 }
+
+/// See [Input::split_token_span].
+///
+/// A type that splits a token of type `(T, S)` into tokens of type `T` and spans of type `S`.
+pub type SplitTokenSpanInput<'src, T, S, I> = MappedInput<
+    T,
+    S,
+    I,
+    fn(
+        <I as Input<'src>>::MaybeToken,
+    ) -> (
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<T>,
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<S>,
+    ),
+>;
 
 /// Implemented by inputs that have a known size.
 ///

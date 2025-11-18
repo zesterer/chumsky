@@ -1,4 +1,4 @@
-use chumsky::{input::BorrowInput, prelude::*};
+use chumsky::{input::SplitTokenSpanInput, prelude::*};
 
 // This token is a tree: it contains within it a sub-tree of tokens
 #[derive(PartialEq, Debug)]
@@ -10,16 +10,14 @@ enum Token {
 }
 
 #[allow(clippy::let_and_return)]
-fn parser<'src, I, M>(make_input: M) -> impl Parser<'src, I, i64>
-where
-    I: BorrowInput<'src, Token = Token, Span = SimpleSpan>,
-    M: Fn(SimpleSpan, &'src [(Token, SimpleSpan)]) -> I + Clone + 'src,
+fn parser<'src>(
+) -> impl Parser<'src, SplitTokenSpanInput<'src, Token, SimpleSpan, &'src [(Token, SimpleSpan)]>, i64>
 {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };
         let parens = expr
             // Here we specify that `expr` should appear *inside* the parenthesised token tree
-            .nested_in(select_ref! { Token::Parens(xs) = e => make_input(e.span(), xs) });
+            .nested_in(select_ref! { Token::Parens(xs) = e => xs.split_token_span(e.span()) });
 
         let atom = num.or(parens);
 
@@ -35,13 +33,6 @@ where
 
         sum
     })
-}
-
-fn make_input(
-    eoi: SimpleSpan,
-    toks: &[(Token, SimpleSpan)],
-) -> impl BorrowInput<'_, Token = Token, Span = SimpleSpan> {
-    toks.map(eoi, |(t, s)| (t, s))
 }
 
 fn main() {
@@ -62,8 +53,8 @@ fn main() {
     let eoi = SimpleSpan::new((), 11..11); // Example EoI
 
     assert_eq!(
-        parser(make_input)
-            .parse(make_input(eoi, &tokens))
+        parser()
+            .parse(tokens[..].split_token_span(eoi))
             .into_result(),
         Ok(20)
     );
