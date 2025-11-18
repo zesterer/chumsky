@@ -192,7 +192,7 @@ pub trait Input<'src>: 'src {
     ///
     /// Although `MappedInput` does implement [`SliceInput`], please be aware that, as you might anticipate, the slices
     /// will be those of the original input and not `&[T]`, to avoid the need to copy around sections of the input.
-    fn map<T, S, F>(self, eoi: S, f: F) -> MappedInput<T, S, Self, F>
+    fn map<T, S, F>(self, eoi: S, f: F) -> MappedInput<'src, T, S, Self, F>
     where
         Self: Sized,
         F: Fn(
@@ -215,7 +215,7 @@ pub trait Input<'src>: 'src {
     /// Take an input (such as a slice) with token type `(T, S)` and turns it into one that produces tokens of type `T` and spans of type `S`.
     ///
     /// This is useful when you can't make your parser generic over an input type and need to name the input type, such as with [`Parser::nested_in`].
-    fn split_token_span<T, S>(self, eoi: S) -> SplitTokenSpanInput<'src, T, S, Self>
+    fn split_token_span<T, S>(self, eoi: S) -> MappedInput<'src, T, S, Self>
     where
         Self: Input<'src, Token = (T, S), MaybeToken = &'src (T, S)> + Sized,
         T: 'src,
@@ -240,21 +240,6 @@ pub trait Input<'src>: 'src {
         }
     }
 }
-
-/// See [Input::split_token_span].
-///
-/// A type that splits a token of type `(T, S)` into tokens of type `T` and spans of type `S`.
-pub type SplitTokenSpanInput<'src, T, S, I> = MappedInput<
-    T,
-    S,
-    I,
-    fn(
-        <I as Input<'src>>::MaybeToken,
-    ) -> (
-        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<T>,
-        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<S>,
-    ),
->;
 
 /// Implemented by inputs that have a known size.
 ///
@@ -609,15 +594,26 @@ impl<'src, T: 'src, const N: usize> BorrowInput<'src> for &'src [T; N] {
 
 /// See [`Input::map`].
 #[derive(Copy, Clone)]
-pub struct MappedInput<T, S, I, F> {
+pub struct MappedInput<
+    'src,
+    T,
+    S,
+    I,
+    F = fn(
+        <I as Input<'src>>::MaybeToken,
+    ) -> (
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<T>,
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<S>,
+    ),
+> {
     input: I,
     eoi: S,
     mapper: F,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<T>,
+    phantom: EmptyPhantom<&'src T>,
 }
 
-impl<'src, T, S, I, F> Input<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> Input<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src>,
     T: 'src,
@@ -676,7 +672,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> ExactSizeInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> ExactSizeInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: ExactSizeInput<'src>,
     T: 'src,
@@ -700,7 +696,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> ValueInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> ValueInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: ValueInput<'src>,
     T: Clone + 'src,
@@ -725,7 +721,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> BorrowInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> BorrowInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src> + BorrowInput<'src>,
     I::MaybeToken: From<&'src I::Token>,
@@ -752,7 +748,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> SliceInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> SliceInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src> + SliceInput<'src, Token = (T, S)>,
     T: 'src,

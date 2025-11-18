@@ -5,7 +5,7 @@
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::{
-    input::{Input as _, SplitTokenSpanInput},
+    input::{Input as _, MappedInput},
     pratt::*,
     prelude::*,
 };
@@ -113,12 +113,9 @@ pub enum Expr<'src> {
     },
 }
 
-type Input<'tokens, 'src> =
-    SplitTokenSpanInput<'tokens, Token<'src>, SimpleSpan, &'tokens [Spanned<Token<'src>>]>;
-
 fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
-    Input<'tokens, 'src>,
+    MappedInput<'tokens, Token<'src>, SimpleSpan, &'tokens [Spanned<Token<'src>>]>,
     Spanned<Expr<'src>>,
     extra::Err<Rich<'tokens, Token<'src>>>,
 > {
