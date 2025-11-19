@@ -2621,10 +2621,43 @@ where
         }
     }
 
-    /// Right-fold the output of the parser into a single value.
+    /// Fold the output of the parser into the given accumulator.
     ///
-    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
-    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
+    /// The output type of this iterable parser is `B`, the accumulator type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// let int = text::int::<_, extra::Err<Simple<char>>>(10)
+    ///     .from_str::<u32>()
+    ///     .unwrapped();
+    ///
+    /// let sum = int
+    ///     .padded()
+    ///     .repeated()
+    ///     .fold(0, |sum, x| sum + x);
+    ///
+    /// assert_eq!(sum.parse("3 7 2").into_result(), Ok(12));
+    /// assert_eq!(sum.parse("").into_result(), Ok(0));
+    /// assert_eq!(sum.parse("42 1").into_result(), Ok(43));
+    /// ```
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn fold<B, F>(self, init: B, f: F) -> Fold<F, Self, B, O, E>
+    where
+        B: Clone,
+        F: Fn(B, O) -> B,
+        Self: Sized,
+    {
+        Fold {
+            parser: self,
+            init,
+            folder: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
+    /// Right-fold the output of the parser into a single value.
     ///
     /// The output type of this iterable parser is `B`, the right-hand component of the original parser's output.
     ///
@@ -2661,9 +2694,6 @@ where
     }
 
     /// Right-fold the output of the parser into a single value, making use of the parser's state when doing so.
-    ///
-    /// The output of the original parser must be of type `(impl IntoIterator<Item = A>, B)`. Because right-folds work
-    /// backwards, the iterator must implement [`DoubleEndedIterator`] so that it can be reversed.
     ///
     /// The output type of this parser is `B`, the right-hand component of the original parser's output.
     ///

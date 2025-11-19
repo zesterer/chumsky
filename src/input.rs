@@ -192,7 +192,7 @@ pub trait Input<'src>: 'src {
     ///
     /// Although `MappedInput` does implement [`SliceInput`], please be aware that, as you might anticipate, the slices
     /// will be those of the original input and not `&[T]`, to avoid the need to copy around sections of the input.
-    fn map<T, S, F>(self, eoi: S, f: F) -> MappedInput<T, S, Self, F>
+    fn map<T, S, F>(self, eoi: S, f: F) -> MappedInput<'src, T, S, Self, F>
     where
         Self: Sized,
         F: Fn(
@@ -210,6 +210,51 @@ pub trait Input<'src>: 'src {
             mapper: f,
             phantom: EmptyPhantom::new(),
         }
+    }
+
+    /// Take an input (such as a slice) with token type `(T, S)` and turns it into one that produces tokens of type `T` and spans of type `S`.
+    ///
+    /// This is useful when you can't make your parser generic over an input type and need to name the input type, such as with [`Parser::nested_in`].
+    ///
+    /// This is largely an ergonomic convenience over calling [`input.map(eoi, |(t, s)| (t, s))`](`Input::map`).
+    ///
+    /// # Examples
+    /// ```
+    /// use chumsky::{input::{Input as _, MappedInput}, prelude::*};
+    ///
+    /// enum TokenTree<'src> { Num(i64), Sum(&'src [(Self, SimpleSpan)]) }
+    ///
+    /// type Input<'src> = MappedInput<'src, TokenTree<'src>, SimpleSpan, &'src [(TokenTree<'src>, SimpleSpan)]>;
+    ///
+    /// // This parser will parse a recursive input composed of `TokenTree`s.
+    /// fn eval<'src>() -> impl Parser<'src, Input<'src>, i64> {
+    ///     recursive(|tree| {
+    ///         let sum = tree.repeated().fold(0, |sum, x| sum + x)
+    ///             .nested_in(select_ref! { TokenTree::Sum(xs) = e => xs.split_token_span(e.span()) });
+    ///     
+    ///         select_ref! { TokenTree::Num(x) => *x }.or(sum)
+    ///     })
+    /// }
+    ///
+    /// let example = [
+    ///     (TokenTree::Sum(&[
+    ///         (TokenTree::Num(1), SimpleSpan::from(0..1)), // 1
+    ///         (TokenTree::Sum(&[
+    ///             (TokenTree::Num(2), SimpleSpan::from(2..3)), // 2
+    ///             (TokenTree::Num(3), SimpleSpan::from(4..5)), // 3
+    ///         ]), SimpleSpan::from(2..5))
+    ///     ]), SimpleSpan::from(0..5)),
+    /// ];
+    ///
+    /// assert_eq!(eval().parse(example[..].split_token_span((0..4).into())).into_result(), Ok(6));
+    /// ```
+    fn split_token_span<T, S>(self, eoi: S) -> MappedInput<'src, T, S, Self>
+    where
+        Self: Input<'src, Token = (T, S), MaybeToken = &'src (T, S)> + Sized,
+        T: 'src,
+        S: Span + 'src,
+    {
+        self.map(eoi, |(t, s)| (t, s))
     }
 
     /// Map the spans output for this input to a different output span.
@@ -582,15 +627,26 @@ impl<'src, T: 'src, const N: usize> BorrowInput<'src> for &'src [T; N] {
 
 /// See [`Input::map`].
 #[derive(Copy, Clone)]
-pub struct MappedInput<T, S, I, F> {
+pub struct MappedInput<
+    'src,
+    T,
+    S,
+    I,
+    F = fn(
+        <I as Input<'src>>::MaybeToken,
+    ) -> (
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<T>,
+        <<I as Input<'src>>::MaybeToken as IntoMaybe<'src, <I as Input<'src>>::Token>>::Proj<S>,
+    ),
+> {
     input: I,
     eoi: S,
     mapper: F,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<T>,
+    phantom: EmptyPhantom<&'src T>,
 }
 
-impl<'src, T, S, I, F> Input<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> Input<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src>,
     T: 'src,
@@ -649,7 +705,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> ExactSizeInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> ExactSizeInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: ExactSizeInput<'src>,
     T: 'src,
@@ -673,7 +729,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> ValueInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> ValueInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: ValueInput<'src>,
     T: Clone + 'src,
@@ -698,7 +754,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> BorrowInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> BorrowInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src> + BorrowInput<'src>,
     I::MaybeToken: From<&'src I::Token>,
@@ -725,7 +781,7 @@ where
     }
 }
 
-impl<'src, T, S, I, F> SliceInput<'src> for MappedInput<T, S, I, F>
+impl<'src, T, S, I, F> SliceInput<'src> for MappedInput<'src, T, S, I, F>
 where
     I: Input<'src> + SliceInput<'src, Token = (T, S)>,
     T: 'src,

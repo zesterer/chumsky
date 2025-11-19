@@ -4,7 +4,11 @@
 //! cargo run --features=pratt,label --example mini_ml -- examples/sample.mini_ml
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
-use chumsky::{input::BorrowInput, pratt::*, prelude::*};
+use chumsky::{
+    input::{Input as _, MappedInput},
+    pratt::*,
+    prelude::*,
+};
 use std::{env, fmt, fs};
 
 // Tokens and lexer
@@ -109,15 +113,12 @@ pub enum Expr<'src> {
     },
 }
 
-fn parser<'tokens, 'src: 'tokens, I, M>(
-    make_input: M,
-) -> impl Parser<'tokens, I, Spanned<Expr<'src>>, extra::Err<Rich<'tokens, Token<'src>>>>
-where
-    I: BorrowInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
-    // Because this function is generic over the input type, we need the caller to tell us how to create a new input,
-    // `I`, from a nested token tree. This function serves that purpose.
-    M: Fn(SimpleSpan, &'tokens [Spanned<Token<'src>>]) -> I + Clone + 'src,
-{
+fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
+    'tokens,
+    MappedInput<'tokens, Token<'src>, SimpleSpan, &'tokens [Spanned<Token<'src>>]>,
+    Spanned<Expr<'src>>,
+    extra::Err<Rich<'tokens, Token<'src>>>,
+> {
     recursive(|expr| {
         let ident = select_ref! { Token::Ident(x) => *x };
         let atom = choice((
@@ -157,7 +158,7 @@ where
                 ),
             ),
             // ( x )
-            expr.nested_in(select_ref! { Token::Parens(ts) = e => make_input(e.span(), ts) }),
+            expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_token_span(e.span()) }),
         ))
         .pratt(vec![
             // Multiply
@@ -445,13 +446,6 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
     )
 }
 
-fn make_input<'src>(
-    eoi: SimpleSpan,
-    toks: &'src [Spanned<Token<'src>>],
-) -> impl BorrowInput<'src, Token = Token<'src>, Span = SimpleSpan> {
-    toks.map(eoi, |(t, s)| (t, s))
-}
-
 fn main() {
     let filename = env::args().nth(1).expect("Expected file argument");
     let src = &fs::read_to_string(&filename).expect("Failed to read file");
@@ -461,8 +455,8 @@ fn main() {
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
-    let expr = parser(make_input)
-        .parse(make_input((0..src.len()).into(), &tokens))
+    let expr = parser()
+        .parse(tokens[..].split_token_span((0..src.len()).into()))
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
