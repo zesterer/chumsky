@@ -100,6 +100,7 @@ use core::{
     borrow::Borrow,
     cell::{Cell, RefCell},
     cmp::{Eq, Ord, Ordering},
+    convert::Infallible,
     fmt,
     hash::Hash,
     marker::PhantomData,
@@ -1333,6 +1334,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser: self,
             start,
             end,
+            invalid_end: crate::primitive::Never,
             phantom: EmptyPhantom::new(),
         }
     }
