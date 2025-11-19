@@ -2513,6 +2513,61 @@ where
     go_extra!(OA);
 }
 
+/// See [`IterParser::fold`].
+pub struct Fold<F, A, B, O, E> {
+    pub(crate) parser: A,
+    pub(crate) init: B,
+    pub(crate) folder: F,
+    #[allow(dead_code)]
+    pub(crate) phantom: EmptyPhantom<(O, E)>,
+}
+
+impl<F: Copy, A: Copy, B: Copy, O, E> Copy for Fold<F, A, B, O, E> {}
+impl<F: Clone, A: Clone, B: Clone, O, E> Clone for Fold<F, A, B, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            parser: self.parser.clone(),
+            init: self.init.clone(),
+            folder: self.folder.clone(),
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'src, I, F, A, B, O, E> Parser<'src, I, B, E> for Fold<F, A, B, O, E>
+where
+    I: Input<'src>,
+    A: IterParser<'src, I, O, E>,
+    E: ParserExtra<'src, I>,
+    B: Clone,
+    F: Fn(B, O) -> B,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, B>
+    where
+        Self: Sized,
+    {
+        let mut acc = M::bind(|| self.init.clone());
+        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        loop {
+            match self
+                .parser
+                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+            {
+                Ok(Some(out)) => {
+                    acc = M::combine(acc, out, |acc, item| (self.folder)(acc, item));
+                }
+                Ok(None) => break,
+                Err(()) => return Err(()),
+            }
+        }
+
+        Ok(acc)
+    }
+
+    go_extra!(B);
+}
+
 /// See [`IterParser::foldr`].
 pub struct Foldr<F, A, B, OA, E> {
     pub(crate) parser_a: A,

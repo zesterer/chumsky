@@ -215,6 +215,39 @@ pub trait Input<'src>: 'src {
     /// Take an input (such as a slice) with token type `(T, S)` and turns it into one that produces tokens of type `T` and spans of type `S`.
     ///
     /// This is useful when you can't make your parser generic over an input type and need to name the input type, such as with [`Parser::nested_in`].
+    ///
+    /// This is largely an ergonomic convenience over calling [`input.map(eoi, |(t, s)| (t, s))`](`Input::map`).
+    ///
+    /// # Examples
+    /// ```
+    /// use chumsky::{input::{Input as _, MappedInput}, prelude::*};
+    ///
+    /// enum TokenTree<'src> { Num(i64), Sum(&'src [(Self, SimpleSpan)]) }
+    ///
+    /// type Input<'src> = MappedInput<'src, TokenTree<'src>, SimpleSpan, &'src [(TokenTree<'src>, SimpleSpan)]>;
+    ///
+    /// // This parser will parse a recursive input composed of `TokenTree`s.
+    /// fn eval<'src>() -> impl Parser<'src, Input<'src>, i64> {
+    ///     recursive(|tree| {
+    ///         let sum = tree.repeated().fold(0, |sum, x| sum + x)
+    ///             .nested_in(select_ref! { TokenTree::Sum(xs) = e => xs.split_token_span(e.span()) });
+    ///     
+    ///         select_ref! { TokenTree::Num(x) => *x }.or(sum)
+    ///     })
+    /// }
+    ///
+    /// let example = [
+    ///     (TokenTree::Sum(&[
+    ///         (TokenTree::Num(1), SimpleSpan::from(0..1)), // 1
+    ///         (TokenTree::Sum(&[
+    ///             (TokenTree::Num(2), SimpleSpan::from(2..3)), // 2
+    ///             (TokenTree::Num(3), SimpleSpan::from(4..5)), // 3
+    ///         ]), SimpleSpan::from(2..5))
+    ///     ]), SimpleSpan::from(0..5)),
+    /// ];
+    ///
+    /// assert_eq!(eval().parse(example[..].split_token_span((0..4).into())).into_result(), Ok(6));
+    /// ```
     fn split_token_span<T, S>(self, eoi: S) -> MappedInput<'src, T, S, Self>
     where
         Self: Input<'src, Token = (T, S), MaybeToken = &'src (T, S)> + Sized,
