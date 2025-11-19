@@ -257,6 +257,18 @@ pub trait Input<'src>: 'src {
         self.map(eoi, |(t, s)| (t, s))
     }
 
+    /// Take an input (such as a slice) with token type `T` where `T` is a spanned type, and split it into its inner value and token.
+    ///
+    /// See the documentation for [`Input::split_token_span`], which is nearly identical in concept.
+    fn split_spanned<T, S>(self, eoi: S) -> MappedInput<'src, T, S, Self>
+    where
+        Self: Input<'src, Token = S::Spanned, MaybeToken = &'src S::Spanned> + Sized,
+        T: 'src,
+        S: WrappingSpan<T> + 'src,
+    {
+        self.map(eoi, |spanned| (S::inner_of(spanned), S::span_of(spanned)))
+    }
+
     /// Map the spans output for this input to a different output span.
     ///
     /// This is useful if you wish to include extra context that applies to all spans emitted during a parse, such as

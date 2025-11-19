@@ -50,8 +50,6 @@ impl fmt::Display for Token<'_> {
     }
 }
 
-pub type Spanned<T> = (T, SimpleSpan);
-
 fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
     recursive(|token| {
@@ -82,7 +80,7 @@ fn lexer<'src>(
                 .as_context()
                 .map(Token::Parens),
         ))
-        .map_with(|t, e| (t, e.span()))
+        .spanned()
         .padded()
     })
     .repeated()
@@ -128,7 +126,7 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
             ident.map(Expr::Var),
             // let x = y in z
             just(Token::Let)
-                .ignore_then(ident.map_with(|x, e| (x, e.span())))
+                .ignore_then(ident.spanned())
                 .then_ignore(just(Token::Eq))
                 .then(expr.clone())
                 .then_ignore(just(Token::In))
@@ -141,45 +139,39 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
         ));
 
         choice((
-            atom.map_with(|expr, e| (expr, e.span())),
+            atom.spanned(),
             // fn x y = z
-            just(Token::Fn).ignore_then(
-                ident.map_with(|x, e| (x, e.span())).repeated().foldr_with(
-                    just(Token::Eq).ignore_then(expr.clone()),
-                    |arg, body, e| {
-                        (
-                            Expr::Func {
-                                arg: Box::new(arg),
-                                body: Box::new(body),
-                            },
-                            e.span(),
-                        )
-                    },
-                ),
-            ),
+            just(Token::Fn).ignore_then(ident.spanned().repeated().foldr_with(
+                just(Token::Eq).ignore_then(expr.clone()),
+                |arg, body, e| {
+                    Expr::Func {
+                        arg: Box::new(arg),
+                        body: Box::new(body),
+                    }
+                    .with_span(e.span())
+                },
+            )),
             // ( x )
-            expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_token_span(e.span()) }),
+            expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_spanned(e.span()) }),
         ))
         .pratt(vec![
             // Multiply
             infix(left(10), just(Token::Asterisk), |x, _, y, e| {
-                (Expr::Mul(Box::new(x), Box::new(y)), e.span())
+                Expr::Mul(Box::new(x), Box::new(y)).with_span(e.span())
             })
             .boxed(),
             // Add
             infix(left(9), just(Token::Plus), |x, _, y, e| {
-                (Expr::Add(Box::new(x), Box::new(y)), e.span())
+                Expr::Add(Box::new(x), Box::new(y)).with_span(e.span())
             })
             .boxed(),
             // Calls
             infix(left(1), empty(), |x, _, y, e| {
-                (
-                    Expr::Apply {
-                        func: Box::new(x),
-                        arg: Box::new(y),
-                    },
-                    e.span(),
-                )
+                Expr::Apply {
+                    func: Box::new(x),
+                    arg: Box::new(y),
+                }
+                .with_span(e.span())
             })
             .boxed(),
         ])
@@ -270,9 +262,9 @@ impl Solver<'_> {
         expr: &Spanned<Expr<'src>>,
         env: &mut Vec<(&'src str, TyVar)>,
     ) -> TyVar {
-        match &expr.0 {
-            Expr::Num(_) => self.create_ty(TyInfo::Num, expr.1),
-            Expr::Bool(_) => self.create_ty(TyInfo::Bool, expr.1),
+        match &**expr {
+            Expr::Num(_) => self.create_ty(TyInfo::Num, expr.span),
+            Expr::Bool(_) => self.create_ty(TyInfo::Bool, expr.span),
             Expr::Var(name) => {
                 env.iter()
                     .rev()
@@ -280,7 +272,7 @@ impl Solver<'_> {
                     .unwrap_or_else(|| {
                         failure(
                             format!("No such local '{name}'"),
-                            ("not found in scope".to_string(), expr.1),
+                            ("not found in scope".to_string(), expr.span),
                             None,
                             self.src,
                         )
@@ -289,32 +281,32 @@ impl Solver<'_> {
             }
             Expr::Let { lhs, rhs, then } => {
                 let rhs_ty = self.check(rhs, env);
-                env.push((lhs.0, rhs_ty));
+                env.push((**lhs, rhs_ty));
                 let out_ty = self.check(then, env);
                 env.pop();
                 out_ty
             }
             Expr::Func { arg, body } => {
-                let arg_ty = self.create_ty(TyInfo::Unknown, arg.1);
-                env.push((arg.0, arg_ty));
+                let arg_ty = self.create_ty(TyInfo::Unknown, arg.span);
+                env.push((&**arg, arg_ty));
                 let body_ty = self.check(body, env);
                 env.pop();
-                self.create_ty(TyInfo::Func(arg_ty, body_ty), expr.1)
+                self.create_ty(TyInfo::Func(arg_ty, body_ty), expr.span)
             }
             Expr::Apply { func, arg } => {
                 let func_ty = self.check(func, env);
                 let arg_ty = self.check(arg, env);
-                let out_ty = self.create_ty(TyInfo::Unknown, expr.1);
-                let func_req_ty = self.create_ty(TyInfo::Func(arg_ty, out_ty), func.1);
-                self.unify(func_req_ty, func_ty, expr.1);
+                let out_ty = self.create_ty(TyInfo::Unknown, expr.span);
+                let func_req_ty = self.create_ty(TyInfo::Func(arg_ty, out_ty), func.span);
+                self.unify(func_req_ty, func_ty, expr.span);
                 out_ty
             }
             Expr::Add(l, r) | Expr::Mul(l, r) => {
-                let out_ty = self.create_ty(TyInfo::Num, expr.1);
+                let out_ty = self.create_ty(TyInfo::Num, expr.span);
                 let l_ty = self.check(l, env);
-                self.unify(out_ty, l_ty, expr.1);
+                self.unify(out_ty, l_ty, expr.span);
                 let r_ty = self.check(r, env);
-                self.unify(out_ty, r_ty, expr.1);
+                self.unify(out_ty, r_ty, expr.span);
                 out_ty
             }
         }
@@ -363,14 +355,14 @@ pub struct Vm<'src> {
 
 impl<'src> Vm<'src> {
     pub fn eval(&mut self, expr: &'src Spanned<Expr<'src>>) -> Value<'src> {
-        match &expr.0 {
+        match &**expr {
             Expr::Num(x) => Value::Num(*x),
             Expr::Bool(x) => Value::Bool(*x),
             Expr::Var(var) => self
                 .stack
                 .iter()
                 .rev()
-                .find(|(v, _)| v.0 == *var)
+                .find(|(v, _)| **v == *var)
                 .unwrap()
                 .1
                 .clone(),
@@ -456,7 +448,7 @@ fn main() {
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
     let expr = parser()
-        .parse(tokens[..].split_token_span((0..src.len()).into()))
+        .parse(tokens[..].split_spanned((0..src.len()).into()))
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 

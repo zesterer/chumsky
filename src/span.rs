@@ -206,3 +206,88 @@ impl<T: Clone> Span for Range<T> {
         self.end.clone()
     }
 }
+
+/// A supertrait of [`Span`] that specifies how a value, usually an AST node, might have a span attached to it.
+///
+/// The type for which this trait is implemented is the span type, and the `T` is the value type.
+pub trait WrappingSpan<T>: Span {
+    /// The type of a node after being wrapped in a span.
+    type Spanned;
+
+    /// Wrap a node in a span.
+    fn make_wrapped(self, inner: T) -> Self::Spanned;
+
+    /// Retrieve the inner value after it has been spanned.
+    fn inner_of(spanned: &Self::Spanned) -> &T;
+    /// Retrieve the span of a spanned value.
+    fn span_of(spanned: &Self::Spanned) -> &Self;
+}
+
+/// A utility trait that allows AST spanning to be done using method syntax.
+pub trait SpanWrap<S: WrappingSpan<Self>>: Sized {
+    /// Invokes [`WrappingSpan::make_wrapped`] to wrap an AST node in a span.
+    fn with_span(self, span: S) -> S::Spanned {
+        span.make_wrapped(self)
+    }
+}
+
+impl<T, S: WrappingSpan<T>> SpanWrap<S> for T {}
+
+/// A type that wraps a value of type `T`, usually an AST node, and a span of type `S`.
+///
+/// It is common to compose your AST out of such spanned types.
+///
+/// # Example
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// enum Expr {
+///     // Integer literal
+///     Int(u64),
+///     // -x
+///     Neg(Spanned<Box<Self>>),
+///     // lhs + rhs
+///     Add { lhs: Spanned<Box<Self>>, rhs: Spanned<Box<Self>> },
+///     // |arg| body
+///     Func { arg: Spanned<String>, body: Spanned<Box<Self>> },
+/// }
+/// ```
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Spanned<T, S = SimpleSpan> {
+    /// The inner value.
+    pub inner: T,
+    /// The span covered by the inner value in the source input.
+    pub span: S,
+}
+
+/// `Spanned` for `SimpleSpan`.
+pub type SimpleSpanned<T, U = usize, C = ()> = Spanned<T, SimpleSpan<U, C>>;
+
+impl<T, U: Clone, C: Clone> WrappingSpan<T> for SimpleSpan<U, C> {
+    type Spanned = SimpleSpanned<T, U, C>;
+
+    fn make_wrapped(self, inner: T) -> Self::Spanned {
+        SimpleSpanned { inner, span: self }
+    }
+
+    fn inner_of(spanned: &Self::Spanned) -> &T {
+        &spanned.inner
+    }
+    fn span_of(spanned: &Self::Spanned) -> &Self {
+        &spanned.span
+    }
+}
+
+impl<T, S> Deref for Spanned<T, S> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T, S> DerefMut for Spanned<T, S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
