@@ -152,7 +152,7 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 },
             )),
             // ( x )
-            expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_token_span(e.span()) }),
+            expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_spanned(e.span()) }),
         ))
         .pratt(vec![
             // Multiply
@@ -448,7 +448,7 @@ fn main() {
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
     let expr = parser()
-        .parse(tokens[..].split_token_span((0..src.len()).into()))
+        .parse(tokens[..].split_spanned((0..src.len()).into()))
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 

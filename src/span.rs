@@ -216,6 +216,11 @@ pub trait WrappingSpan<T>: Span {
 
     /// Wrap a node in a span.
     fn make_wrapped(self, inner: T) -> Self::Spanned;
+
+    /// Retrieve the inner value after it has been spanned.
+    fn inner_of(spanned: &Self::Spanned) -> &T;
+    /// Retrieve the span of a spanned value.
+    fn span_of(spanned: &Self::Spanned) -> &Self;
 }
 
 /// A utility trait that allows AST spanning to be done using method syntax.
@@ -263,6 +268,13 @@ impl<T, U: Clone, C: Clone> WrappingSpan<T> for SimpleSpan<U, C> {
 
     fn make_wrapped(self, inner: T) -> Self::Spanned {
         SimpleSpanned { inner, span: self }
+    }
+
+    fn inner_of(spanned: &Self::Spanned) -> &T {
+        &spanned.inner
+    }
+    fn span_of(spanned: &Self::Spanned) -> &Self {
+        &spanned.span
     }
 }
 
