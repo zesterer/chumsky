@@ -86,6 +86,32 @@ where
     go_extra!(());
 }
 
+/// See [`never`].
+#[derive(Copy, Clone)]
+pub struct Never;
+
+/// A parser that always fails.
+///
+/// The output type of this parser is [`core::convert::Infallible`]. In the future, this may be changed to [`!`].
+pub const fn never() -> Never {
+    Never
+}
+
+impl<'src, I, E> Parser<'src, I, Infallible, E> for Never
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+{
+    #[inline]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Infallible> {
+        let span = inp.span_since(&inp.cursor());
+        inp.add_alt([DefaultExpected::SomethingElse], None, span);
+        Err(())
+    }
+
+    go_extra!(Infallible);
+}
+
 /// Configuration for [`just`], used in [`ConfigParser::configure`]
 pub struct JustCfg<T> {
     seq: Option<T>,
