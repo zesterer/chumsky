@@ -76,7 +76,8 @@ fn lexer<'src>(
                 .repeated()
                 .collect()
                 .delimited_by(just('('), just(')'))
-                .labelled("token tree")
+                .with_mismatched_end(one_of("]})"))
+                .labelled("expression")
                 .as_context()
                 .map(Token::Parens),
         ))
@@ -135,7 +136,9 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     lhs,
                     rhs: Box::new(rhs),
                     then: Box::new(then),
-                }),
+                })
+                .labelled("expression")
+                .as_context(),
         ));
 
         choice((
@@ -175,8 +178,6 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
             })
             .boxed(),
         ])
-        .labelled("expression")
-        .as_context()
     })
 }
 
@@ -249,8 +250,8 @@ impl Solver<'_> {
                 format!("Type mismatch between {a_info} and {b_info}"),
                 ("mismatch occurred here".to_string(), span),
                 vec![
-                    (format!("{a_info}"), self.vars[a.0].1),
-                    (format!("{b_info}"), self.vars[b.0].1),
+                    (format!("{a_info}"), self.vars[a.0].1, Color::Yellow),
+                    (format!("{b_info}"), self.vars[b.0].1, Color::Yellow),
                 ],
                 self.src,
             ),
@@ -400,7 +401,7 @@ impl<'src> Vm<'src> {
 fn failure(
     msg: String,
     label: (String, SimpleSpan),
-    extra_labels: impl IntoIterator<Item = (String, SimpleSpan)>,
+    extra_labels: impl IntoIterator<Item = (String, SimpleSpan, Color)>,
     src: &str,
 ) -> ! {
     let fname = "example";
@@ -412,10 +413,10 @@ fn failure(
                 .with_message(label.0)
                 .with_color(Color::Red),
         )
-        .with_labels(extra_labels.into_iter().map(|label2| {
-            Label::new((fname, label2.1.into_range()))
-                .with_message(label2.0)
-                .with_color(Color::Yellow)
+        .with_labels(extra_labels.into_iter().map(|(pat, span, col)| {
+            Label::new((fname, span.into_range()))
+                .with_message(pat)
+                .with_color(col)
         }))
         .finish()
         .print(sources([(fname, src)]))
@@ -432,8 +433,24 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
                 .unwrap_or_else(|| "end of input".to_string()),
             *err.span(),
         ),
-        err.contexts()
-            .map(|(l, s)| (format!("while parsing this {l}"), *s)),
+        err.reason()
+            .unclosed_delimiter()
+            .map(|ud| {
+                (
+                    "this delimiter was never closed".to_string(),
+                    *ud,
+                    Color::Blue,
+                )
+            })
+            .into_iter()
+            .chain(err.contexts().map(|ctx| {
+                (
+                    format!("while parsing this {}", ctx.pattern()),
+                    *ctx.span(),
+                    Color::Yellow,
+                )
+            }))
+            .take(1),
         src,
     )
 }
