@@ -194,7 +194,7 @@ pub struct Padded<A> {
 
 impl<'src, I, O, E, A> Parser<'src, I, O, E> for Padded<A>
 where
-    I: ValueInput<'src>,
+    I: Input<'src>,
     E: ParserExtra<'src, I>,
     I::Token: Char,
     A: Parser<'src, I, O, E>,

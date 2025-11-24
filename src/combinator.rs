@@ -2385,7 +2385,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
 
 impl<'src, I, E, A, OA> Parser<'src, I, (), E> for Not<A, OA>
 where
-    I: ValueInput<'src>,
+    I: Input<'src>,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
