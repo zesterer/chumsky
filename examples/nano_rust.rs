@@ -300,7 +300,10 @@ where
         // Blocks are expressions but delimited with braces
         let block = expr
             .clone()
+            // Empty blocks are permitted
+            .or(empty().map_with(|(), e| (Expr::Value(Value::Null), e.span())))
             .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
+            .with_mismatched_end(one_of([Token::Ctrl(']'), Token::Ctrl(')')]))
             // Attempt to recover anything that looks like a block but contains errors
             .recover_with(via_parser(nested_delimiters(
                 Token::Ctrl('{'),
@@ -310,7 +313,9 @@ where
                     (Token::Ctrl('['), Token::Ctrl(']')),
                 ],
                 |span| (Expr::Error, span),
-            )));
+            )))
+            .labelled("block")
+            .as_context();
 
         let if_ = recursive(|if_| {
             just(Token::If)
@@ -343,30 +348,9 @@ where
                 (Expr::Then(Box::new(a), Box::new(b)), e.span())
             });
 
-        let block_recovery = nested_delimiters(
-            Token::Ctrl('{'),
-            Token::Ctrl('}'),
-            [
-                (Token::Ctrl('('), Token::Ctrl(')')),
-                (Token::Ctrl('['), Token::Ctrl(']')),
-            ],
-            |span| (Expr::Error, span),
-        );
-
         block_chain
-            .labelled("block")
             // Expressions, chained by semicolons, are statements
             .or(inline_expr.clone())
-            .recover_with(skip_then_retry_until(
-                block_recovery.ignored().or(any().ignored()),
-                one_of([
-                    Token::Ctrl(';'),
-                    Token::Ctrl('}'),
-                    Token::Ctrl(')'),
-                    Token::Ctrl(']'),
-                ])
-                .ignored(),
-            ))
             .foldl_with(
                 just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated(),
                 |a, b, e| {
@@ -395,7 +379,7 @@ fn funcs_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    let ident = select! { Token::Ident(ident) => ident };
+    let ident = select! { Token::Ident(ident) => ident }.labelled("identifier");
 
     // Argument lists are just identifiers separated by commas, surrounded by parentheses
     let args = ident
@@ -403,19 +387,31 @@ where
         .allow_trailing()
         .collect()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-        .labelled("function args");
+        .with_mismatched_end(one_of([Token::Ctrl(']'), Token::Ctrl('}')]))
+        .labelled("argument list")
+        .as_context()
+        .recover_with(via_parser(nested_delimiters(
+            Token::Ctrl('('),
+            Token::Ctrl(')'),
+            [
+                (Token::Ctrl('{'), Token::Ctrl('}')),
+                (Token::Ctrl('['), Token::Ctrl(']')),
+            ],
+            |_| Vec::new(),
+        )));
 
     let func = just(Token::Fn)
-        .ignore_then(
-            ident
-                .map_with(|name, e| (name, e.span()))
-                .labelled("function name"),
-        )
+        .ignore_then(ident.map_with(|name, e| (name, e.span())))
         .then(args)
         .map_with(|start, e| (start, e.span()))
         .then(
             expr_parser()
+                // Empty function bodies are permitted
+                .or(empty().map_with(|(), e| (Expr::Value(Value::Null), e.span())))
                 .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
+                .with_mismatched_end(one_of([Token::Ctrl(']'), Token::Ctrl(')')]))
+                .labelled("function body")
+                .as_context()
                 // Attempt to recover anything that looks like a function body but contains errors
                 .recover_with(via_parser(nested_delimiters(
                     Token::Ctrl('{'),
@@ -610,9 +606,14 @@ fn main() {
                         .with_message(e.reason().to_string())
                         .with_color(Color::Red),
                 )
-                .with_labels(e.contexts().map(|(label, span)| {
-                    Label::new((filename.clone(), span.into_range()))
-                        .with_message(format!("while parsing this {label}"))
+                .with_labels(e.reason().unclosed_delimiter().map(|ud| {
+                    Label::new((filename.clone(), ud.into_range()))
+                        .with_message("this delimiter was never closed")
+                        .with_color(Color::Blue)
+                }))
+                .with_labels(e.contexts().take(1).map(|ctx| {
+                    Label::new((filename.clone(), ctx.span().into_range()))
+                        .with_message(format!("while parsing this {}", ctx.pattern()))
                         .with_color(Color::Yellow)
                 }))
                 .finish()
