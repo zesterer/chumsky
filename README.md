@@ -24,7 +24,7 @@ that you may need. It also has `no_std` support, making it suitable for embedded
 - ☑️ **Check-only mode** for fast verification of inputs, automatically supported
 - 🚀 **Internal optimiser** leverages the power of [GATs](https://smallcultfollowing.com/babysteps/blog/2022/06/27/many-modes-a-gats-pattern/) to optimise your parser for you
 - 📖 **Text-oriented parsers** for text inputs (i.e: `&[u8]` and `&str`)
-- 👁️‍🗨️ **Context-free grammars** are fully supported, with support for context-sensitivity
+- 👁️ **Context-free grammars** are fully supported, with support for context-sensitivity
 - 🔄 **Left recursion and memoization** have opt-in support
 - 🪺 **Nested inputs** such as token trees are fully supported both as inputs and outputs
 - 🏷️ **Pattern labelling** for dynamic, user-friendly error messages

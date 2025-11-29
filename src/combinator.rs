@@ -223,6 +223,7 @@ where
     }
 
     go_extra!(I::Slice);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::filter`].
@@ -323,6 +324,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 impl<'src, I, O, E, A, OA, F> IterParser<'src, I, O, E> for Map<A, OA, F>
@@ -396,6 +398,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 impl<'src, I, O, E, A, OA, F> IterParser<'src, I, O, E> for MapWith<A, OA, F>
@@ -474,6 +477,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 #[cfg(feature = "nightly")]
@@ -544,6 +548,7 @@ where
     }
 
     go_extra!(I::Span);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::spanned`].
@@ -645,6 +650,7 @@ where
     }
 
     go_extra!(OA);
+    could_match!(parser_a : A);
 }
 
 /// See [`Parser::try_map`].
@@ -817,6 +823,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::into_iter`].
@@ -850,6 +857,7 @@ where
     }
 
     go_extra!(());
+    could_match!(parser : A);
 }
 
 impl<'src, A, O, I, E> IterParser<'src, I, O::Item, E> for IntoIter<A, O>
@@ -913,6 +921,7 @@ where
     }
 
     go_extra!(());
+    could_match!(parser : A);
 }
 
 /// See [`Parser::unwrapped`].
@@ -1156,6 +1165,7 @@ where
     }
 
     go_extra!(OB);
+    could_match!(parser_a : A);
 }
 
 /// See [`Parser::then_ignore`].
@@ -1192,6 +1202,7 @@ where
     }
 
     go_extra!(OA);
+    could_match!(parser_a : A);
 }
 
 /// See [`Parser::nested_in`].
@@ -1269,6 +1280,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser_b : B);
 }
 
 /// See [`Parser::ignore_with_ctx`].
@@ -1306,6 +1318,7 @@ where
     }
 
     go_extra!(OB);
+    could_match!(parser : A);
 }
 
 impl<'src, I, E, A, B, OA, OB> IterParser<'src, I, OB, E>
@@ -1381,6 +1394,7 @@ where
     }
 
     go_extra!((OA, OB));
+    could_match!(parser : A);
 }
 
 impl<'src, I, E, A, B, OA, OB> IterParser<'src, I, OB, E>
@@ -1449,6 +1463,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::with_state`].
@@ -1480,6 +1495,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::delimited_by`].
@@ -1520,6 +1536,7 @@ where
     }
 
     go_extra!(OA);
+    could_match!(start : B);
 }
 
 /// See [`Parser::padded_by`].
@@ -1557,6 +1574,7 @@ where
     }
 
     go_extra!(OA);
+    could_match!(padding : B);
 }
 
 /// See [`Parser::or`].
@@ -2884,6 +2902,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::map_err`].
@@ -2911,6 +2930,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 // /// See [`Parser::map_err_with_span`].
@@ -2992,6 +3012,7 @@ where
     }
 
     go_extra!(O);
+    could_match!(parser : A);
 }
 
 /// See [`Parser::validate`]
@@ -3037,6 +3058,7 @@ where
     }
 
     go_extra!(U);
+    could_match!(parser : A);
 }
 
 // /// See [`Parser::or_else`].
