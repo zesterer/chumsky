@@ -129,7 +129,7 @@ fn json<'a>() -> impl Parser<'a, &'a str, Json> {
 }
 
 fn main() {
-    let node_info = json().node_info(&mut Default::default());
+    let node_info = json().debug();
     // println!("{}", node_info.to_graph().to_dot_string().unwrap());
     // println!("{}", node_info.to_ebnf());
     println!("{}", node_info.to_railroad_svg());

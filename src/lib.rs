@@ -322,6 +322,19 @@ impl<T, E> ParseResult<T, E> {
 //     )
 // )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
+    /// Generate debugging information for this parser.
+    ///
+    /// This is an unstable feature, and will likely remain so indefinitely. As such, it **does not fall inside the semver
+    /// guarantees** of the broader crate. It is intended to aid the development of parsers and should not be used as part
+    /// of production software.
+    #[cfg(feature = "debug")]
+    fn debug(&self) -> debug::DebugInfo<'_> {
+        debug::DebugInfo {
+            node_info: self.node_info(&mut Default::default()),
+            phantom: PhantomData,
+        }
+    }
+
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {

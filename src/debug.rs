@@ -1,5 +1,10 @@
-#![doc(hidden)]
+//! Unstable utilities for debugging in-development parsers.
+//!
+//! See [`Parser::debug`].
 
+use super::*;
+
+#[doc(hidden)]
 #[derive(Debug)]
 pub enum SeqInfo {
     Char(char),
@@ -19,6 +24,7 @@ impl SeqInfo {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug)]
 pub enum NodeInfo {
     Unknown(String),
@@ -153,30 +159,13 @@ impl NodeInfo {
             _ => todo!("{:?}", self),
         }
     }
-
-    pub fn to_railroad_svg(&self) -> impl core::fmt::Display {
-        use railroad::*;
-
-        let mut seq = Sequence::default();
-        let mut defs = Vec::new();
-        let def = self.railroad_inner(&mut defs);
-        defs.push(def);
-        seq.push(Box::new(VerticalGrid::new(defs)) as Box<dyn Node>);
-
-        let mut dia = Diagram::new(seq);
-
-        dia.add_element(
-            svg::Element::new("style")
-                .set("type", "text/css")
-                .text(DEFAULT_CSS),
-        );
-        dia
-    }
 }
 
+#[doc(hidden)]
 #[derive(Default)]
 pub struct NodeScope {
     rec_count: usize,
+    // (ptr, index, name)
     rec: Vec<(usize, usize)>,
 }
 
@@ -192,5 +181,44 @@ impl NodeScope {
                 self.rec.push((ptr, self.rec_count));
                 NodeInfo::Recursive(self.rec_count, Box::new(f(self)))
             })
+    }
+}
+
+/// A catch-all box of tricks for debugging a parser.
+pub struct DebugInfo<'a> {
+    node_info: NodeInfo,
+    phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> DebugInfo<'a> {
+    /// Generate a human-readable [railroad diagram](https://en.wikipedia.org/wiki/Syntax_diagram) that describes the grammar.
+    ///
+    /// The resulting diagram is in [SVG](https://en.wikipedia.org/wiki/SVG) format and may be printed to the console, written to a file, etc.
+    ///
+    /// The exact format of the diagram is not specified and its quality may depend heavily on annotations, such as [`Parser::labelled`].
+    /// Aspects of the grammar may also not be captured. For example, context-sensitive parsers are largely ignored today.
+    ///
+    /// # Examples
+    ///
+    /// Here is a generated railroad diagram for the example JSON parser. See `examples/json.rs` in the repository.
+    ///
+    /// ![A railroad diagram of the grammar for JSON](https://github.com/zesterer/chumsky/raw/main/misc/json-railroad.svg)
+    pub fn as_railroad_svg(&self) -> impl core::fmt::Display {
+        use railroad::*;
+
+        let mut seq = Sequence::default();
+        let mut defs = Vec::new();
+        let def = self.node_info.railroad_inner(&mut defs);
+        defs.push(def);
+        seq.push(Box::new(VerticalGrid::new(defs)) as Box<dyn Node>);
+
+        let mut dia = Diagram::new(seq);
+
+        dia.add_element(
+            svg::Element::new("style")
+                .set("type", "text/css")
+                .text(DEFAULT_CSS),
+        );
+        dia
     }
 }
