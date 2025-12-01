@@ -337,7 +337,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
         let ty = core::any::type_name::<Self>();
         debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
@@ -971,12 +971,13 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     where
         Self: Sized,
         E::Error: LabelError<'src, I, L>,
-        F: Fn(&mut MapExtra<'src, '_, I, E>) -> L,
+        F: Fn() -> L,
     {
         LabelledWith {
             parser: self,
             label,
             is_context: false,
+            is_builtin: false,
             phantom: PhantomData,
         }
     }
@@ -2554,7 +2555,7 @@ where
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
         let ty = core::any::type_name::<Self>();
         debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
@@ -3857,7 +3858,7 @@ mod tests {
             just("hello")
                 .ignored()
                 .recover_with(via_parser(empty()))
-                .labelled_with(|_| "greeting")
+                .labelled_with(|| "greeting")
                 .as_context()
         }
 

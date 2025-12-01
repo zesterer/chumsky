@@ -216,7 +216,7 @@ where
 }
 
 /// Labels denoting a variety of text-related patterns.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum TextExpected<Slice> {
     /// Whitespace (for example: spaces, tabs, or newlines).
@@ -242,6 +242,8 @@ pub enum TextExpected<Slice> {
     Int,
 }
 
+impl<Slice: Copy> Copy for TextExpected<Slice> {}
+
 /// A parser that accepts (and ignores) any number of whitespace characters.
 ///
 /// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
@@ -264,14 +266,13 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+    E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
         .filter(|c: &I::Token| c.is_whitespace())
-        .labelled_with(|_| TextExpected::Whitespace)
-        .ignored()
-        .labelled(TextExpected::Whitespace)
+        .labelled_with(|| TextExpected::Whitespace)
         .as_builtin()
+        .ignored()
         .repeated()
 }
 
@@ -299,14 +300,13 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+    E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
         .filter(|c: &I::Token| c.is_inline_whitespace())
-        .labelled_with(|_| TextExpected::InlineWhitespace)
-        .ignored()
-        .labelled(TextExpected::InlineWhitespace)
+        .labelled_with(|| TextExpected::InlineWhitespace)
         .as_builtin()
+        .ignored()
         .repeated()
 }
 
@@ -347,7 +347,7 @@ where
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
     &'src str: OrderedSeq<'src, I::Token>,
-    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+    E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     custom(|inp| {
         let before = inp.cursor();
@@ -378,7 +378,7 @@ where
             }
         }
     })
-    .labelled(TextExpected::Newline)
+    .labelled_with(|| TextExpected::Newline)
     .as_builtin()
 }
 
@@ -411,17 +411,16 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+    E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix))
-        .labelled_with(move |_| TextExpected::Digit(0, radix))
+        .labelled_with(move || TextExpected::Digit(0, radix))
+        .as_builtin()
         .map_err(move |mut err: E::Error| {
             err.label_with(TextExpected::Digit(0, radix));
             err
         })
-        .labelled(TextExpected::Digit(0, radix))
-        .as_builtin()
         .repeated()
         .at_least(1)
 }
@@ -462,22 +461,19 @@ where
     I: StrInput<'src>,
     I::Token: Char + 'src,
     E: ParserExtra<'src, I>,
-    E::Error:
-        LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
+    E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
 {
     any()
         .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
-        .labelled_with(move |_| TextExpected::Digit(1, radix))
         .then(
             any()
                 .filter(move |c: &I::Token| c.is_digit(radix))
-                .labelled_with(move |_| TextExpected::Digit(0, radix))
                 .repeated(),
         )
         .ignored()
         .or(just(I::Token::digit_zero()).ignored())
         .to_slice()
-        .labelled(TextExpected::Int)
+        .labelled_with(|| TextExpected::Int)
         .as_builtin()
 }
 
@@ -498,25 +494,23 @@ pub mod ascii {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+        E::Error: LabelError<'src, I, TextExpected<()>>,
     {
         any()
             .filter(|c: &I::Token| {
                 c.to_ascii()
                     .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
             })
-            .labelled_with(|_| TextExpected::IdentifierPart)
             .then(
                 any()
                     .filter(|c: &I::Token| {
                         c.to_ascii()
                             .map_or(false, |i| i.is_ascii_alphanumeric() || i == b'_')
                     })
-                    .labelled_with(|_| TextExpected::IdentifierPart)
                     .repeated(),
             )
             .to_slice()
-            .labelled(TextExpected::AnyIdentifier)
+            .labelled_with(|| TextExpected::AnyIdentifier)
             .as_builtin()
     }
 
@@ -545,11 +539,10 @@ pub mod ascii {
     ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
     where
         I: StrInput<'src>,
-        I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: Borrow<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+        E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, TextExpected<S>>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -567,17 +560,19 @@ pub mod ascii {
             }
         }
         */
-        let keyword = *keyword.borrow();
         ident()
-            .try_map(move |s: I::Slice, span| {
-                if keyword == s {
-                    Ok(())
-                } else {
-                    Err(LabelError::expected_found(
-                        [TextExpected::Identifier(keyword)],
-                        None,
-                        span,
-                    ))
+            .try_map({
+                let keyword = keyword.clone();
+                move |s: I::Slice, span| {
+                    if keyword == s {
+                        Ok(())
+                    } else {
+                        Err(LabelError::expected_found(
+                            [TextExpected::Identifier(keyword.clone())],
+                            None,
+                            span,
+                        ))
+                    }
                 }
             })
             .to_slice()
@@ -996,15 +991,13 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Token: Char + 'src,
         E: ParserExtra<'src, I>,
-        E::Error: LabelError<'src, I, TextExpected<I::Slice>>,
+        E::Error: LabelError<'src, I, TextExpected<()>>,
     {
         any()
             .filter(|c: &I::Token| c.is_ident_start())
-            .labelled_with(|_| TextExpected::IdentifierPart)
             .then(
                 any()
                     .filter(|c: &I::Token| c.is_ident_continue())
-                    .labelled_with(|_| TextExpected::IdentifierPart)
                     .repeated(),
             )
             .to_slice()
@@ -1039,9 +1032,9 @@ pub mod unicode {
         I: StrInput<'src>,
         I::Slice: PartialEq,
         I::Token: Char + fmt::Debug + 'src,
-        S: Borrow<I::Slice> + Clone + 'src,
+        S: PartialEq<I::Slice> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
-        E::Error: LabelError<'src, I, TextExpected<I::Slice>> + LabelError<'src, I, S>,
+        E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, TextExpected<S>>,
     {
         /*
         #[cfg(debug_assertions)]
@@ -1063,21 +1056,23 @@ pub mod unicode {
             }
         }
         */
-        let keyword = *keyword.borrow();
         ident()
-            .try_map(move |s: I::Slice, span| {
-                if keyword == s {
-                    Ok(())
-                } else {
-                    Err(LabelError::expected_found(
-                        [TextExpected::Identifier(keyword)],
-                        None,
-                        span,
-                    ))
+            .try_map({
+                let keyword = keyword.clone();
+                move |s: I::Slice, span| {
+                    if keyword == s {
+                        Ok(())
+                    } else {
+                        Err(LabelError::expected_found(
+                            [TextExpected::Identifier(keyword.clone())],
+                            None,
+                            span,
+                        ))
+                    }
                 }
             })
             .to_slice()
-            .labelled(TextExpected::Identifier(keyword))
+            .labelled(TextExpected::Identifier(keyword.clone()))
             .as_builtin()
     }
 
@@ -1108,7 +1103,7 @@ mod tests {
     fn make_ascii_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
         I: crate::StrInput<'src>,
-        I::Slice: PartialEq + Clone,
+        I::Slice: PartialEq,
         I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::ascii::keyword(s).ignored()
@@ -1117,7 +1112,7 @@ mod tests {
     fn make_unicode_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
     where
         I: crate::StrInput<'src>,
-        I::Slice: PartialEq + Clone,
+        I::Slice: PartialEq,
         I::Token: crate::Char + fmt::Debug + 'src,
     {
         text::unicode::keyword(s).ignored()

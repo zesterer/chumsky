@@ -96,15 +96,7 @@ impl NodeInfo {
                 inner.bnf_inner(depth, defs, ctx)
             }
             Self::RecursiveRef(r) => format!("def_{r}"),
-            _ => todo!("{:?}", self),
         }
-    }
-
-    pub fn to_ebnf(&self) -> String {
-        let mut defs = Vec::new();
-        let def = self.bnf_inner(1, &mut defs, 0);
-        defs.push(def);
-        defs.join("\n\n")
     }
 
     fn railroad_inner(&self, defs: &mut Vec<Box<dyn railroad::Node>>) -> Box<dyn railroad::Node> {
@@ -156,7 +148,6 @@ impl NodeInfo {
             Self::Builtin(s) => Box::new(Terminal::new(format!("{s}"))),
             Self::Any => Box::new(Terminal::new(format!("any"))),
             Self::OrNot(inner) => Box::new(Optional::new(inner.railroad_inner(defs))),
-            _ => todo!("{:?}", self),
         }
     }
 }
@@ -186,11 +177,21 @@ impl NodeScope {
 
 /// A catch-all box of tricks for debugging a parser.
 pub struct DebugInfo<'a> {
-    node_info: NodeInfo,
-    phantom: PhantomData<&'a ()>,
+    pub(crate) node_info: NodeInfo,
+    pub(crate) phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> DebugInfo<'a> {
+    /// Generate a string containing an [eBNF](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form#EBNF) grammar for this parser.
+    ///
+    /// The exact format of the grammar definition is not specified, and is only intended to be read by a human being.
+    pub fn to_ebnf(&self) -> String {
+        let mut defs = Vec::new();
+        let def = self.node_info.bnf_inner(1, &mut defs, 0);
+        defs.push(def);
+        defs.join("\n\n")
+    }
+
     /// Generate a human-readable [railroad diagram](https://en.wikipedia.org/wiki/Syntax_diagram) that describes the grammar.
     ///
     /// The resulting diagram is in [SVG](https://en.wikipedia.org/wiki/SVG) format and may be printed to the console, written to a file, etc.
@@ -203,14 +204,14 @@ impl<'a> DebugInfo<'a> {
     /// Here is a generated railroad diagram for the example JSON parser. See `examples/json.rs` in the repository.
     ///
     /// ![A railroad diagram of the grammar for JSON](https://github.com/zesterer/chumsky/raw/main/misc/json-railroad.svg)
-    pub fn as_railroad_svg(&self) -> impl core::fmt::Display {
+    pub fn to_railroad_svg(&self) -> impl core::fmt::Display + Clone {
         use railroad::*;
 
         let mut seq = Sequence::default();
         let mut defs = Vec::new();
         let def = self.node_info.railroad_inner(&mut defs);
         defs.push(def);
-        seq.push(Box::new(VerticalGrid::new(defs)) as Box<dyn Node>);
+        seq.push(Rc::new(VerticalGrid::new(defs)) as Rc<dyn Node>);
 
         let mut dia = Diagram::new(seq);
 

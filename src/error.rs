@@ -319,7 +319,7 @@ impl<'a, Slice: core::fmt::Debug, T> From<text::TextExpected<Slice>> for RichPat
             text::TextExpected::Digit(_, _) => Self::Label(Cow::Borrowed("digit")),
             text::TextExpected::IdentifierPart => Self::Label(Cow::Borrowed("identifier part")),
             text::TextExpected::AnyIdentifier => Self::Label(Cow::Borrowed("identifier")),
-            text::TextExpected::Identifier(i) => Self::Identifier(format!("{i:?}")),
+            text::TextExpected::Identifier(i) => Self::Identifier(alloc::format!("{i:?}")),
             text::TextExpected::Int => Self::Label(Cow::Borrowed("int")),
         }
     }

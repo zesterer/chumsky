@@ -309,7 +309,7 @@ pub trait Seq<'p, T> {
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         let ty = core::any::type_name::<Self>();
         debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
@@ -349,7 +349,7 @@ impl<'p, T: Clone> Seq<'p, T> for T {
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    default fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    default fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         let ty = core::any::type_name::<Self>();
         debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
     }
@@ -358,7 +358,7 @@ impl<'p, T: Clone> Seq<'p, T> for T {
 #[doc(hidden)]
 #[cfg(feature = "debug")]
 impl<'p, T: Clone + core::fmt::Debug> Seq<'p, T> for T {
-    default fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    default fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         debug::SeqInfo::Opaque(format!("{self:?}"))
     }
 }
@@ -366,7 +366,7 @@ impl<'p, T: Clone + core::fmt::Debug> Seq<'p, T> for T {
 #[doc(hidden)]
 #[cfg(feature = "debug")]
 impl Seq<'_, char> for char {
-    fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         debug::SeqInfo::Char(*self)
     }
 }
@@ -863,7 +863,7 @@ impl<'p> Seq<'p, char> for &'p str {
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         debug::SeqInfo::String(self.to_string())
     }
 }
@@ -899,7 +899,7 @@ impl<'p> Seq<'p, &'p Grapheme> for &'p str {
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn seq_info(&self, scope: &mut debug::NodeScope) -> debug::SeqInfo {
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
         debug::SeqInfo::String(self.to_string())
     }
 }

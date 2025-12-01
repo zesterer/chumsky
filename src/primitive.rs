@@ -491,7 +491,7 @@ where
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
         debug::NodeInfo::Filter(Box::new(debug::NodeInfo::Any))
     }
 
@@ -598,7 +598,7 @@ where
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
-    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
         debug::NodeInfo::Any
     }
 

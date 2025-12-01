@@ -3,40 +3,7 @@
 //! cargo run --example debug
 
 use chumsky::prelude::*;
-use std::{
-    collections::HashMap,
-    env, fs,
-    io::{self, Read},
-};
-
-#[derive(Clone)]
-enum Instr {
-    Invalid,
-    Left,
-    Right,
-    Incr,
-    Decr,
-    Read,
-    Write,
-    Loop(Vec<Self>),
-}
-
-fn bf<'a>() -> impl Parser<'a, &'a str, Vec<Instr>, extra::Err<Simple<'a, char>>> {
-    use Instr::*;
-    recursive(|bf| {
-        choice((
-            just('<').to(Left),
-            just('>').to(Right),
-            just('+').to(Incr),
-            just('-').to(Decr),
-            just(',').to(Read),
-            just('.').to(Write),
-            bf.delimited_by(just('['), just(']')).map(Loop),
-        ))
-        .repeated()
-        .collect()
-    })
-}
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub enum Json {
@@ -129,8 +96,9 @@ fn json<'a>() -> impl Parser<'a, &'a str, Json> {
 }
 
 fn main() {
-    let node_info = json().debug();
-    // println!("{}", node_info.to_graph().to_dot_string().unwrap());
-    // println!("{}", node_info.to_ebnf());
-    println!("{}", node_info.to_railroad_svg());
+    // Generate an eBNF grammar for the parser
+    println!("{}", json().debug().to_ebnf());
+
+    // Generate a railroad diagram for the parser
+    println!("{}", json().debug().to_railroad_svg());
 }

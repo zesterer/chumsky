@@ -1102,14 +1102,7 @@ where
     }
 }
 
-impl<'src, S, I> Sealed for WithContext<S, I>
-where
-    I: Input<'src>,
-    S: Span + Clone + 'src,
-    S::Context: Clone + 'src,
-    S::Offset: From<<I::Span as Span>::Offset>,
-{
-}
+impl<S: Span, I> Sealed for WithContext<S, I> {}
 impl<'src, S, I> StrInput<'src> for WithContext<S, I>
 where
     I: StrInput<'src>,
