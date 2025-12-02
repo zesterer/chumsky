@@ -184,6 +184,8 @@ where
     #[doc(hidden)]
     #[cfg(feature = "debug")]
     fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        // Debug features don't fall under MSRV
+        #[allow(clippy::incompatible_msrv)]
         let ptr = match &self.inner {
             RecursiveInner::Owned(x) => Rc::as_ptr(x).addr(),
             RecursiveInner::Unowned(x) => rc::Weak::as_ptr(x).addr(),

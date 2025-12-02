@@ -18,8 +18,8 @@ impl SeqInfo {
         match self {
             Self::Char(c) => format!("'{c}'"),
             Self::String(s) => format!("\"{s}\""),
-            Self::Opaque(s) => format!("{s}"),
-            Self::Unknown(s) => format!("{s}"),
+            Self::Opaque(s) => s.to_string(),
+            Self::Unknown(s) => s.to_string(),
         }
     }
 }
@@ -90,8 +90,8 @@ impl NodeInfo {
                     format!("({s})")
                 }
             }
-            Self::Any => format!("any"),
-            Self::Builtin(s) => format!("{s}"),
+            Self::Any => "any".to_string(),
+            Self::Builtin(s) => s.to_string(),
             Self::Padded(inner) | Self::Filter(inner) | Self::Labelled(_, inner) => {
                 inner.bnf_inner(depth, defs, ctx)
             }
@@ -102,7 +102,7 @@ impl NodeInfo {
     fn railroad_inner(&self, defs: &mut Vec<Box<dyn railroad::Node>>) -> Box<dyn railroad::Node> {
         use railroad::*;
         match self {
-            Self::Unknown(s) => Box::new(Comment::new(format!("{s}"))),
+            Self::Unknown(s) => Box::new(Comment::new(s.to_string())),
             Self::Recursive(r, inner) => {
                 let inner = inner.railroad_inner(defs);
                 defs.push(Box::new(LabeledBox::new(
@@ -139,14 +139,14 @@ impl NodeInfo {
             Self::Padded(inner) => inner.railroad_inner(defs),
             Self::Filter(inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
-                Comment::new(format!("filtered")),
+                Comment::new("filtered".to_string()),
             )),
             Self::Labelled(label, inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
-                NonTerminal::new(format!("{label}")),
+                NonTerminal::new(label.to_string()),
             )),
-            Self::Builtin(s) => Box::new(Terminal::new(format!("{s}"))),
-            Self::Any => Box::new(Terminal::new(format!("any"))),
+            Self::Builtin(s) => Box::new(Terminal::new(s.to_string())),
+            Self::Any => Box::new(Terminal::new("any".to_string())),
             Self::OrNot(inner) => Box::new(Optional::new(inner.railroad_inner(defs))),
         }
     }

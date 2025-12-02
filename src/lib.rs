@@ -4,9 +4,13 @@
     feature = "nightly",
     feature(never_type, fn_traits, tuple_trait, unboxed_closures, specialization)
 )]
+#![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
+// A lot of clippy's default lints are silly and annoying
 #![allow(
+    clippy::style,
+    clippy::useless_format,
     clippy::should_implement_trait,
     clippy::type_complexity,
     clippy::result_unit_err
@@ -2030,7 +2034,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///     multi_step_val.parse("100 2").into_result(),
     ///     Err(vec![
     ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
-    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<&str>::IdentifierPart], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<&str>::AnyIdentifier], Some(MaybeRef::Val('2')), (4..5).into()),
     ///     ])
     /// );
     ///

@@ -232,8 +232,6 @@ pub enum TextExpected<Slice> {
     /// - `Digit(0, 10)` implies any base-10 digit
     /// - `Digit(1, 16)` implies any non-zero hexadecimal digit
     Digit(u32, u32),
-    /// Part of an identifier, either ASCII or unicode.
-    IdentifierPart,
     /// Any identifier.
     AnyIdentifier,
     /// A specific identifier.
