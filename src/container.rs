@@ -306,6 +306,13 @@ pub trait Seq<'p, T> {
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b;
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        let ty = core::any::type_name::<Self>();
+        debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
+    }
 }
 
 impl<'p, T: Clone> Seq<'p, T> for T {
@@ -338,6 +345,29 @@ impl<'p, T: Clone> Seq<'p, T> for T {
         'p: 'b,
     {
         MaybeRef::Val(item.clone())
+    }
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    default fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        let ty = core::any::type_name::<Self>();
+        debug::SeqInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
+    }
+}
+
+#[doc(hidden)]
+#[cfg(feature = "debug")]
+impl<'p, T: Clone + core::fmt::Debug> Seq<'p, T> for T {
+    default fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        debug::SeqInfo::Opaque(format!("{self:?}"))
+    }
+}
+
+#[doc(hidden)]
+#[cfg(feature = "debug")]
+impl Seq<'_, char> for char {
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        debug::SeqInfo::Char(*self)
     }
 }
 
@@ -830,6 +860,12 @@ impl<'p> Seq<'p, char> for &'p str {
     {
         MaybeRef::Val(item)
     }
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        debug::SeqInfo::String(self.to_string())
+    }
 }
 
 impl<'p> Seq<'p, &'p Grapheme> for &'p str {
@@ -859,6 +895,12 @@ impl<'p> Seq<'p, &'p Grapheme> for &'p str {
         'p: 'b,
     {
         MaybeRef::Val(item)
+    }
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+        debug::SeqInfo::String(self.to_string())
     }
 }
 
@@ -898,6 +940,7 @@ impl<'p> Seq<'p, &'p Grapheme> for &'p Graphemes {
 pub trait OrderedSeq<'p, T>: Seq<'p, T> {}
 
 impl<T: Clone> OrderedSeq<'_, T> for T {}
+
 impl<'p, T> OrderedSeq<'p, T> for &'p T {}
 impl<'p, T> OrderedSeq<'p, T> for &'p [T] {}
 impl<T: Clone, const N: usize> OrderedSeq<'_, T> for [T; N] {}

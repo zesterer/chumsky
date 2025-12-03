@@ -2,11 +2,15 @@
 #![cfg_attr(docsrs, feature(doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures)
+    feature(never_type, fn_traits, tuple_trait, unboxed_closures, specialization)
 )]
+#![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
+// A lot of clippy's default lints are silly and annoying
 #![allow(
+    clippy::style,
+    clippy::useless_format,
     clippy::should_implement_trait,
     clippy::type_complexity,
     clippy::result_unit_err
@@ -33,6 +37,8 @@ mod blanket;
 pub mod cache;
 pub mod combinator;
 pub mod container;
+#[cfg(feature = "debug")]
+pub mod debug;
 #[cfg(feature = "either")]
 mod either;
 pub mod error;
@@ -320,6 +326,26 @@ impl<T, E> ParseResult<T, E> {
 //     )
 // )]
 pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
+    /// Generate debugging information for this parser.
+    ///
+    /// This is an unstable feature, and will likely remain so indefinitely. As such, it **does not fall inside the semver
+    /// guarantees** of the broader crate. It is intended to aid the development of parsers and should not be used as part
+    /// of production software.
+    #[cfg(feature = "debug")]
+    fn debug(&self) -> debug::DebugInfo<'_> {
+        debug::DebugInfo {
+            node_info: self.node_info(&mut Default::default()),
+            phantom: PhantomData,
+        }
+    }
+
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        let ty = core::any::type_name::<Self>();
+        debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
+    }
+
     #[doc(hidden)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
@@ -935,6 +961,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
             parser: self,
             label,
             is_context: false,
+            is_builtin: false,
         }
     }
 
@@ -948,12 +975,13 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     where
         Self: Sized,
         E::Error: LabelError<'src, I, L>,
-        F: Fn(&mut MapExtra<'src, '_, I, E>) -> L,
+        F: Fn() -> L,
     {
         LabelledWith {
             parser: self,
             label,
             is_context: false,
+            is_builtin: false,
             phantom: PhantomData,
         }
     }
@@ -2006,7 +2034,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///     multi_step_val.parse("100 2").into_result(),
     ///     Err(vec![
     ///         Rich::<char>::custom((0..3).into(), "100 must be 256 or higher"),
-    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<&str>::IdentifierPart], Some(MaybeRef::Val('2')), (4..5).into()),
+    ///         <Rich<char> as LabelError<&str, _>>::expected_found([TextExpected::<&str>::AnyIdentifier], Some(MaybeRef::Val('2')), (4..5).into()),
     ///     ])
     /// );
     ///
@@ -2529,6 +2557,13 @@ where
         debug: IterParserDebug,
     ) -> IPResult<M, O>;
 
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, _scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        let ty = core::any::type_name::<Self>();
+        debug::NodeInfo::Unknown(ty.split_once('<').map_or(ty, |(ty, _)| ty).to_string())
+    }
+
     /// Collect this iterable parser into a [`Container`].
     ///
     /// This is commonly useful for collecting parsers that output many values into containers of various kinds:
@@ -2895,6 +2930,12 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        self.inner.node_info(scope)
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         M::invoke(&*self.inner, inp)
@@ -3821,7 +3862,7 @@ mod tests {
             just("hello")
                 .ignored()
                 .recover_with(via_parser(empty()))
-                .labelled_with(|_| "greeting")
+                .labelled_with(|| "greeting")
                 .as_context()
         }
 
