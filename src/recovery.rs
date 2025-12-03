@@ -246,6 +246,7 @@ pub fn nested_delimiters<'src, 'parse, I, O, E, F, const N: usize>(
 where
     I: ValueInput<'src>,
     I::Token: PartialEq + Clone,
+    I::Span: Clone,
     E: extra::ParserExtra<'src, I> + 'parse,
     'src: 'parse,
     F: Fn(I::Span) -> O + Clone + 'parse,
