@@ -63,17 +63,20 @@
 //! let op = |c| just(c).padded();
 //!
 //! let expr = atom.pratt((
-//!     // We want factorial to happen before any negation, so we need its precedence to be higher than `Expr::Neg`.
+//!     // We want factorial to happen before any negation, so we
+//!     // need its precedence to be higher than `Expr::Neg`.
 //!     postfix(4, op('!'), |lhs, _, _| Expr::Factorial(Box::new(lhs))),
-//!     // Just like in math, we want that if we write -x^2, our parser parses that as -(x^2), so we need it to have
-//!     // exponents bind tighter than our prefix operators.
+//!     // Just like in math, we want that if we write -x^2, our parser
+//!     // parses that as -(x^2), so we need it to have exponents bind
+//!     // tighter than our prefix operators.
 //!     infix(right(3), op('^'), |l, _, r, _| Expr::Pow(Box::new(l), Box::new(r))),
-//!     // Notice the conflict with our `Expr::Sub`. This will still parse correctly. We want negation to happen before
-//!     // `+` and `-`, so we set its precedence higher.
+//!     // Notice the conflict with our `Expr::Sub`. This will still
+//!     // parse correctly. We want negation to happen before `+` and
+//!     // `-`, so we set its precedence higher.
 //!     prefix(2, op('-'), |_, rhs, _| Expr::Neg(Box::new(rhs))),
 //!     prefix(2, op('*'), |_, rhs, _| Expr::Deref(Box::new(rhs))),
-//!     // Our `-` and `+` bind the weakest, meaning that even if they occur first in an expression, they will be the
-//!     // last executed.
+//!     // Our `-` and `+` bind the weakest, meaning that even if they
+//!     // occur first in an expression, they will be the last executed.
 //!     infix(left(1), op('+'), |l, _, r, _| Expr::Add(Box::new(l), Box::new(r))),
 //!     infix(left(1), op('-'), |l, _, r, _| Expr::Sub(Box::new(l), Box::new(r))),
 //! ))
