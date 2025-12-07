@@ -35,6 +35,7 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .then(exp.or_not())
             .to_slice()
             .map(|s: &str| s.parse().unwrap())
+            .labelled("number")
             .boxed();
 
         let escape = just('\\')
@@ -68,6 +69,8 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .to_slice()
             .map(ToString::to_string)
             .delimited_by(just('"'), just('"'))
+            .labelled("string")
+            .as_context()
             .boxed();
 
         let array = value
@@ -86,9 +89,16 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
                     .recover_with(via_parser(end()))
                     .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
+            .labelled("array")
+            .as_context()
             .boxed();
 
-        let member = string.clone().then_ignore(just(':').padded()).then(value);
+        let member = string
+            .clone()
+            .then_ignore(just(':').padded())
+            .then(value)
+            .labelled("object member")
+            .as_context();
         let object = member
             .clone()
             .separated_by(just(',').padded().recover_with(skip_then_retry_until(
@@ -104,12 +114,14 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
                     .recover_with(via_parser(end()))
                     .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
+            .labelled("object")
+            .as_context()
             .boxed();
 
         choice((
-            just("null").to(Json::Null),
-            just("true").to(Json::Bool(true)),
-            just("false").to(Json::Bool(false)),
+            just("null").to(Json::Null).labelled("null"),
+            just("true").to(Json::Bool(true)).labelled("boolean"),
+            just("false").to(Json::Bool(false)).labelled("boolean"),
             number.map(Json::Num),
             string.map(Json::Str),
             array.map(Json::Array),
@@ -150,6 +162,11 @@ fn main() {
                     .with_message(e.reason().to_string())
                     .with_color(Color::Red),
             )
+            .with_labels(e.contexts().next().map(|ctx| {
+                Label::new(((), ctx.span().into_range()))
+                    .with_message(format!("while parsing this {}", ctx.pattern()))
+                    .with_color(Color::Yellow)
+            }))
             .finish()
             .print(Source::from(&src))
             .unwrap()

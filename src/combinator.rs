@@ -1552,33 +1552,55 @@ where
 }
 
 /// See [`Parser::delimited_by`].
-pub struct DelimitedBy<A, B, C, OB, OC> {
+pub struct DelimitedBy<A, B, C, OB, OC, D = crate::primitive::Never, OD = Infallible> {
     pub(crate) parser: A,
     pub(crate) start: B,
     pub(crate) end: C,
+    pub(crate) invalid_end: D,
     #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<(OB, OC)>,
+    pub(crate) phantom: EmptyPhantom<(OB, OC, OD)>,
 }
 
-impl<A: Copy, B: Copy, C: Copy, OB, OC> Copy for DelimitedBy<A, B, C, OB, OC> {}
-impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC> {
+impl<A: Copy, B: Copy, C: Copy, OB, OC, D: Copy, OD> Copy for DelimitedBy<A, B, C, OB, OC, D, OD> {}
+impl<A: Clone, B: Clone, C: Clone, OB, OC, D: Clone, OD> Clone
+    for DelimitedBy<A, B, C, OB, OC, D, OD>
+{
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
             start: self.start.clone(),
             end: self.end.clone(),
+            invalid_end: self.invalid_end.clone(),
             phantom: EmptyPhantom::new(),
         }
     }
 }
 
-impl<'src, I, E, A, B, C, OA, OB, OC> Parser<'src, I, OA, E> for DelimitedBy<A, B, C, OB, OC>
+impl<A, B, C, OB, OC, D, OD> DelimitedBy<A, B, C, OB, OC, D, OD> {
+    /// Indicate that when the given mismatched pattern is found, errors should be marked as 'unclosed delimiters'.
+    ///
+    /// This can result in improved error messages in certain cases.
+    pub fn with_mismatched_end<D2, OD2>(self, end: D2) -> DelimitedBy<A, B, C, OB, OC, D2, OD2> {
+        DelimitedBy {
+            parser: self.parser,
+            start: self.start,
+            end: self.end,
+            invalid_end: end,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+}
+
+impl<'src, I, E, A, B, C, OA, OB, OC, D, OD> Parser<'src, I, OA, E>
+    for DelimitedBy<A, B, C, OB, OC, D, OD>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
     C: Parser<'src, I, OC, E>,
+    D: Parser<'src, I, OD, E>,
+    I::Span: Clone,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -1594,10 +1616,34 @@ where
 
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
+        let before_start = inp.cursor();
         self.start.go::<Check>(inp)?;
+        let start_span = inp.span_since(&before_start);
         let a = self.parser.go::<M>(inp)?;
-        self.end.go::<Check>(inp)?;
-        Ok(a)
+        // let before_errors = inp.errors.secondary.len();
+        let before_end = inp.save();
+        let old_alt = inp.take_alt();
+        let scope_span = inp.span_since(&before_start);
+        let end_res = self.end.go::<Check>(inp);
+        let res = if end_res.is_err() {
+            let mut new_alt = inp.take_alt().expect("error, but no alt");
+            inp.rewind(before_end);
+            if self.invalid_end.go::<Check>(inp).is_ok() {
+                new_alt
+                    .err
+                    .in_delimited(start_span.clone(), scope_span.clone());
+            }
+            inp.errors.alt = old_alt;
+            inp.add_alt_err(&new_alt.pos, new_alt.err);
+            Err(())
+        } else {
+            inp.errors.alt = old_alt;
+            Ok(a)
+        };
+        // for err in inp.errors.secondary_errors_since(before_errors) {
+        //     err.err.in_delimited(start_span.clone(), scope_span.clone());
+        // }
+        res
     }
 
     go_extra!(OA);

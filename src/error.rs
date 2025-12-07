@@ -76,6 +76,15 @@ pub use label::LabelError;
 pub trait Error<'a, I: Input<'a>>:
     Sized + LabelError<'a, I, DefaultExpected<'a, I::Token>>
 {
+    /// Indicates that this error occurred when parsing the final delimiter of a delimited parser failed (see [`Parser::delimited_by`]).
+    ///
+    /// The span `start` is the span of the starting delimiter.
+    ///
+    /// `scope` is the span from (and including) the starting delimiter, up to the location of the error.
+    fn in_delimited(&mut self, start: I::Span, scope: I::Span) {
+        #![allow(unused_variables)]
+    }
+
     /// Merge two errors that point to the same input together, combining their information.
     #[inline(always)]
     fn merge(self, other: Self) -> Self {
@@ -423,19 +432,22 @@ where
 /// The reason for a [`Rich`] error.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum RichReason<'a, T> {
+#[non_exhaustive]
+pub enum RichReason<'a, T, S> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
         expected: Vec<RichPattern<'a, T>>,
         /// The tokens found
         found: Option<MaybeRef<'a, T>>,
+        /// If `Some`, a delimiter that started a pattern did not have a matching close delimiter.
+        unclosed_delimiter: Option<S>,
     },
     /// An error with a custom message
     Custom(String),
 }
 
-impl<'a, T> RichReason<'a, T> {
+impl<'a, T, S> RichReason<'a, T, S> {
     /// Return the token that was found by this error reason. `None` implies that the end of input was expected.
     pub fn found(&self) -> Option<&T> {
         match self {
@@ -444,15 +456,32 @@ impl<'a, T> RichReason<'a, T> {
         }
     }
 
+    /// If the reason for the error involves a delimiter that was never closed, return the span of that delimiter.
+    pub fn unclosed_delimiter(&self) -> Option<&S> {
+        if let Self::ExpectedFound {
+            unclosed_delimiter, ..
+        } = self
+        {
+            unclosed_delimiter.as_ref()
+        } else {
+            None
+        }
+    }
+
     /// Convert this reason into an owned version of itself by cloning any borrowed internal tokens, if necessary.
-    pub fn into_owned<'b>(self) -> RichReason<'b, T>
+    pub fn into_owned<'b>(self) -> RichReason<'b, T, S>
     where
         T: Clone,
     {
         match self {
-            Self::ExpectedFound { found, expected } => RichReason::ExpectedFound {
+            Self::ExpectedFound {
+                found,
+                expected,
+                unclosed_delimiter,
+            } => RichReason::ExpectedFound {
                 expected: expected.into_iter().map(RichPattern::into_owned).collect(),
                 found: found.map(MaybeRef::into_owned),
+                unclosed_delimiter,
             },
             Self::Custom(msg) => RichReason::Custom(msg),
         }
@@ -469,39 +498,52 @@ impl<'a, T> RichReason<'a, T> {
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
     /// the token type for each pass is different (`char` vs `MyToken`, say).
-    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichReason<'a, U>
+    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichReason<'a, U, S>
     where
         T: Clone,
     {
         match self {
-            RichReason::ExpectedFound { expected, found } => RichReason::ExpectedFound {
+            RichReason::ExpectedFound {
+                expected,
+                found,
+                unclosed_delimiter,
+            } => RichReason::ExpectedFound {
                 expected: expected
                     .into_iter()
                     .map(|pat| pat.map_token(&mut f))
                     .collect(),
                 found: found.map(|found| f(found.into_inner()).into()),
+                unclosed_delimiter,
             },
             RichReason::Custom(msg) => RichReason::Custom(msg),
         }
     }
 
-    fn inner_fmt<S>(
+    fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
         mut fmt_token: impl FnMut(&T, &mut fmt::Formatter<'_>) -> fmt::Result,
         mut fmt_span: impl FnMut(&S, &mut fmt::Formatter<'_>) -> fmt::Result,
         span: Option<&S>,
-        context: &[(RichPattern<'a, T>, S)],
+        context: &[RichContext<'a, T, S>],
     ) -> fmt::Result {
         match self {
-            RichReason::ExpectedFound { expected, found } => {
-                write!(f, "found ")?;
+            RichReason::ExpectedFound {
+                expected,
+                found,
+                unclosed_delimiter,
+            } => {
+                if unclosed_delimiter.is_some() {
+                    write!(f, "found mismatched delimiter ")?;
+                } else {
+                    write!(f, "found ")?;
+                }
                 write_token(f, &mut fmt_token, found.as_deref())?;
                 if let Some(span) = span {
                     write!(f, " at ")?;
                     fmt_span(span, f)?;
                 }
-                write!(f, " expected ")?;
+                write!(f, ", expected ")?;
                 match &expected[..] {
                     [] => write!(f, "something else")?,
                     [expected] => expected.write(f, &mut fmt_token)?,
@@ -523,17 +565,17 @@ impl<'a, T> RichReason<'a, T> {
                 }
             }
         }
-        for (l, s) in context {
+        for ctx in context {
             write!(f, " in ")?;
-            l.write(f, &mut fmt_token)?;
+            ctx.pattern().write(f, &mut fmt_token)?;
             write!(f, " at ")?;
-            fmt_span(s, f)?;
+            fmt_span(ctx.span(), f)?;
         }
         Ok(())
     }
 }
 
-impl<T> RichReason<'_, T>
+impl<T, S> RichReason<'_, T, S>
 where
     T: PartialEq,
 {
@@ -547,9 +589,11 @@ where
                 RichReason::ExpectedFound {
                     expected: mut this_expected,
                     found,
+                    unclosed_delimiter: this_unclosed,
                 },
                 RichReason::ExpectedFound {
                     expected: mut other_expected,
+                    unclosed_delimiter: other_unclosed,
                     ..
                 },
             ) => {
@@ -565,18 +609,43 @@ where
                 RichReason::ExpectedFound {
                     expected: this_expected,
                     found,
+                    unclosed_delimiter: this_unclosed.or(other_unclosed),
                 }
             }
         }
     }
 }
 
-impl<T> fmt::Display for RichReason<'_, T>
+impl<T, S> fmt::Display for RichReason<'_, T, S>
 where
     T: fmt::Display,
+    S: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner_fmt(f, T::fmt, |_: &(), _| Ok(()), None, &[])
+        self.inner_fmt(f, T::fmt, |_, _| Ok(()), None, &[])
+    }
+}
+
+/// Represents a grammatical context in which a [`Rich`] error can appear.
+///
+/// For example, in a Rust-like language, errors might appear within nested sets of expressions, blocks, modules, etc.
+///
+/// Contexts can provide useful hints to your user about how to locate an error or why the erroneous syntax is not valid at a certain location.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RichContext<'a, T, S = SimpleSpan<usize>> {
+    pattern: RichPattern<'a, T>,
+    span: S,
+}
+
+impl<'a, T, S> RichContext<'a, T, S> {
+    /// Get the [`RichPattern`] that identifies this context.
+    pub fn pattern(&self) -> &RichPattern<'a, T> {
+        &self.pattern
+    }
+
+    /// Get the span associated with this context.
+    pub fn span(&self) -> &S {
+        &self.span
     }
 }
 
@@ -604,8 +673,8 @@ where
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Rich<'a, T, S = SimpleSpan<usize>> {
     span: S,
-    reason: Box<RichReason<'a, T>>,
-    context: Vec<(RichPattern<'a, T>, S)>,
+    reason: Box<RichReason<'a, T, S>>,
+    context: Vec<RichContext<'a, T, S>>,
 }
 
 impl<T, S> Rich<'_, T, S> {
@@ -645,12 +714,12 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 
     /// Get the reason for this error.
-    pub fn reason(&self) -> &RichReason<'a, T> {
+    pub fn reason(&self) -> &RichReason<'a, T, S> {
         &self.reason
     }
 
     /// Take the reason from this error.
-    pub fn into_reason(self) -> RichReason<'a, T> {
+    pub fn into_reason(self) -> RichReason<'a, T, S> {
         *self.reason
     }
 
@@ -659,12 +728,14 @@ impl<'a, T, S> Rich<'a, T, S> {
         self.reason.found()
     }
 
-    /// Return an iterator over the labelled contexts of this error, from least general to most.
+    /// Return an iterator over the labelled contexts of this error, starting from that which appears closest to the error location.
     ///
     /// 'Context' here means parser patterns that the parser was in the process of parsing when the error occurred. To
     /// add labelled contexts, see [`Parser::labelled`].
-    pub fn contexts(&self) -> impl Iterator<Item = (&RichPattern<'a, T>, &S)> {
-        self.context.iter().map(|(l, s)| (l, s))
+    pub fn contexts(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &RichContext<'a, T, S>> + ExactSizeIterator {
+        self.context.iter()
     }
 
     /// Convert this error into an owned version of itself by cloning any borrowed internal tokens, if necessary.
@@ -677,7 +748,10 @@ impl<'a, T, S> Rich<'a, T, S> {
             context: self
                 .context
                 .into_iter()
-                .map(|(p, s)| (p.into_owned(), s))
+                .map(|ctx| RichContext {
+                    pattern: ctx.pattern.into_owned(),
+                    ..ctx
+                })
                 .collect(),
             ..self
         }
@@ -705,7 +779,10 @@ impl<'a, T, S> Rich<'a, T, S> {
             context: self
                 .context
                 .into_iter()
-                .map(|(p, s)| (p.map_token(&mut f), s))
+                .map(|ctx| RichContext {
+                    pattern: ctx.pattern.map_token(&mut f),
+                    span: ctx.span,
+                })
                 .collect(),
         }
     }
@@ -715,13 +792,30 @@ impl<'a, I: Input<'a>> Error<'a, I> for Rich<'a, I::Token, I::Span>
 where
     I::Token: PartialEq,
 {
+    fn in_delimited(&mut self, start: I::Span, _scope: I::Span) {
+        if let RichReason::ExpectedFound {
+            unclosed_delimiter, ..
+        } = &mut *self.reason
+        {
+            if unclosed_delimiter.is_none() {
+                *unclosed_delimiter = Some(start);
+            }
+        }
+        // <Self as LabelError<I, _>>::in_context(self, RichPattern::SomethingElse, scope);
+    }
+
     #[inline]
     fn merge(self, other: Self) -> Self {
         let new_reason = self.reason.flat_merge(*other.reason);
         Self {
             span: self.span,
             reason: Box::new(new_reason),
-            context: self.context, // TOOD: Merge contexts
+            // TOOD: Merge context properly
+            context: if self.context.len() > other.context.len() {
+                self.context
+            } else {
+                other.context
+            },
         }
     }
 }
@@ -742,6 +836,7 @@ where
             reason: Box::new(RichReason::ExpectedFound {
                 expected: expected.into_iter().map(|tok| tok.into()).collect(),
                 found,
+                unclosed_delimiter: None,
             }),
             context: Vec::new(),
         }
@@ -755,7 +850,9 @@ where
         _span: I::Span,
     ) -> Self {
         match &mut *self.reason {
-            RichReason::ExpectedFound { expected, found } => {
+            RichReason::ExpectedFound {
+                expected, found, ..
+            } => {
                 for new_expected in new_expected {
                     let new_expected = new_expected.into();
                     if !expected[..].contains(&new_expected) {
@@ -766,7 +863,6 @@ where
             }
             RichReason::Custom(_) => {}
         }
-        // TOOD: Merge contexts
         self
     }
 
@@ -779,15 +875,21 @@ where
     ) -> Self {
         self.span = span;
         match &mut *self.reason {
-            RichReason::ExpectedFound { expected, found } => {
+            RichReason::ExpectedFound {
+                expected,
+                found,
+                unclosed_delimiter,
+            } => {
                 expected.clear();
                 expected.extend(new_expected.into_iter().map(|tok| tok.into()));
                 *found = new_found;
+                *unclosed_delimiter = None;
             }
             _ => {
                 *self.reason = RichReason::ExpectedFound {
                     expected: new_expected.into_iter().map(|tok| tok.into()).collect(),
                     found: new_found,
+                    unclosed_delimiter: None,
                 };
             }
         }
@@ -799,7 +901,9 @@ where
     fn label_with(&mut self, label: L) {
         // Opportunistically attempt to reuse allocations if we can
         match &mut *self.reason {
-            RichReason::ExpectedFound { expected, found: _ } => {
+            RichReason::ExpectedFound {
+                expected, found: _, ..
+            } => {
                 expected.clear();
                 expected.push(label.into());
             }
@@ -807,6 +911,7 @@ where
                 *self.reason = RichReason::ExpectedFound {
                     expected: vec![label.into()],
                     found: self.reason.take_found(),
+                    unclosed_delimiter: None,
                 };
             }
         }
@@ -815,8 +920,11 @@ where
     #[inline]
     fn in_context(&mut self, label: L, span: I::Span) {
         let label = label.into();
-        if self.context.iter().all(|(l, _)| l != &label) {
-            self.context.push((label, span));
+        if self.context.iter().all(|ctx| ctx.pattern != label) {
+            self.context.push(RichContext {
+                pattern: label,
+                span,
+            });
         }
     }
 }
