@@ -520,6 +520,44 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
+    /// Filter and map the output of this parser, accepting only inputs that get mapped to `Some`.
+    ///
+    /// The output type of this parser is `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use chumsky::{prelude::*, error::Simple};
+    /// #[derive(Debug, PartialEq)]
+    /// enum Token {
+    ///     Digit(char), // invariant: .is_ascii_digit()
+    ///     Alpha(char), // invariant: .is_alphabetic()
+    /// }
+    ///
+    /// let token = any::<_, extra::Err<Simple<char>>>()
+    ///     .filter_map(|c: char| if c.is_ascii_digit() {
+    ///         Some(Token::Digit(c))
+    ///     } else if c.is_alphabetic() {
+    ///         Some(Token::Alpha(c))
+    ///     } else {
+    ///         None
+    ///     });
+    ///
+    /// assert_eq!(token.parse("x").into_result(), Ok(Token::Alpha('x')));
+    /// assert_eq!(token.parse("5").into_result(), Ok(Token::Digit('5')));
+    /// assert!(token.parse("!").has_errors());
+    /// ```
+    fn filter_map<U, F: Fn(O) -> Option<U>>(self, f: F) -> FilterMap<Self, O, F>
+    where
+        Self: Sized,
+    {
+        FilterMap {
+            parser: self,
+            filter_mapper: f,
+            phantom: EmptyPhantom::new(),
+        }
+    }
+
     /// Map the output of this parser to another value.
     ///
     /// The output type of this parser is `U`, the same as the function's output.
