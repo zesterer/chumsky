@@ -6,6 +6,12 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        (*self).node_info(scope)
+    }
+
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
     where
         Self: Sized,

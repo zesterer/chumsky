@@ -44,6 +44,7 @@ pub enum NodeInfo {
     OrNot(Box<Self>),
     Labelled(String, Box<Self>),
     Builtin(String),
+    NestedIn(Box<Self>, Box<Self>),
 }
 
 impl NodeInfo {
@@ -92,6 +93,11 @@ impl NodeInfo {
             }
             Self::Any => "any".to_string(),
             Self::Builtin(s) => s.to_string(),
+            Self::NestedIn(a, b) => format!(
+                "({}).nested_in({})",
+                a.bnf_inner(depth, defs, 0),
+                b.bnf_inner(depth, defs, 0)
+            ),
             Self::Padded(inner) | Self::Filter(inner) | Self::Labelled(_, inner) => {
                 inner.bnf_inner(depth, defs, ctx)
             }
@@ -146,6 +152,20 @@ impl NodeInfo {
                 NonTerminal::new(label.to_string()),
             )),
             Self::Builtin(s) => Box::new(Terminal::new(s.to_string())),
+            Self::NestedIn(inner, outer) => Box::new(LabeledBox::new(
+                Box::new(LabeledBox::new(
+                    outer.railroad_inner(defs),
+                    NonTerminal::new("outer".to_string()),
+                )),
+                Box::new(LabeledBox::new(
+                    Sequence::new(vec![
+                        Box::new(SimpleStart) as Box<dyn Node>,
+                        inner.railroad_inner(defs),
+                        Box::new(SimpleEnd),
+                    ]),
+                    NonTerminal::new("inner".to_string()),
+                )),
+            )),
             Self::Any => Box::new(Terminal::new("any".to_string())),
             Self::OrNot(inner) => Box::new(Optional::new(inner.railroad_inner(defs))),
         }

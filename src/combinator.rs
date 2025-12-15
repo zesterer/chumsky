@@ -1309,6 +1309,15 @@ where
         >,
     >,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        debug::NodeInfo::NestedIn(
+            Box::new(self.parser_a.node_info(scope)),
+            Box::new(self.parser_b.node_info(scope)),
+        )
+    }
+
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         let before = inp.save();

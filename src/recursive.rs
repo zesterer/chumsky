@@ -159,6 +159,25 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
+    #[doc(hidden)]
+    #[cfg(feature = "debug")]
+    fn node_info(&self, scope: &mut debug::NodeScope) -> debug::NodeInfo {
+        // Debug features don't fall under MSRV
+        #[allow(clippy::incompatible_msrv)]
+        let ptr = match &self.inner {
+            RecursiveInner::Owned(x) => Rc::as_ptr(x).addr(),
+            RecursiveInner::Unowned(x) => rc::Weak::as_ptr(x).addr(),
+        };
+        scope.lookup_rec(ptr, |scope| {
+            self.parser()
+                .inner
+                .get()
+                .expect("Recursive parser used before being defined")
+                .as_ref()
+                .node_info(scope)
+        })
+    }
+
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
         recurse(move || {
