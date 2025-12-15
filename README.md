@@ -31,6 +31,7 @@ that you may need. It also has `no_std` support, making it suitable for embedded
 - 🗃️ **Caching** allows parsers to be created once and reused many times
 - ↔️ **Pratt parsing** support for simple yet flexible expression parsing
 - 🪛 **no_std** support, allowing chumsky to run in embedded environments
+- 🔬**Debugging** utilities, including automatic generation of parser [railroad diagrams](https://en.wikipedia.org/wiki/Syntax_diagram)
 
 ## Example
 
