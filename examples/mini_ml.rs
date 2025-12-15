@@ -154,17 +154,15 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
             // ( x )
             expr.nested_in(select_ref! { Token::Parens(ts) = e => ts.split_spanned(e.span()) }),
         ))
-        .pratt(vec![
+        .pratt((
             // Multiply
             infix(left(10), just(Token::Asterisk), |x, _, y, e| {
                 Expr::Mul(Box::new(x), Box::new(y)).with_span(e.span())
-            })
-            .boxed(),
+            }),
             // Add
             infix(left(9), just(Token::Plus), |x, _, y, e| {
                 Expr::Add(Box::new(x), Box::new(y)).with_span(e.span())
-            })
-            .boxed(),
+            }),
             // Calls
             infix(left(1), empty(), |x, _, y, e| {
                 Expr::Apply {
@@ -172,9 +170,8 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     arg: Box::new(y),
                 }
                 .with_span(e.span())
-            })
-            .boxed(),
-        ])
+            }),
+        ))
         .labelled("expression")
         .as_context()
     })
