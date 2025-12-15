@@ -15,6 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+# [0.12.0] - 2025-12-15
+
+### Added
+
+- `MapExtra::emit`, which allows emitting secondary errors during mapping operations
+- `InputRef::emit`, which allows emitting secondary errors within `custom` parsers
+- `labelled_with`, which avoids the need to implement `Clone` for labels
+- `Input::split_token_span`, a convenience function for splitting `(Token, Span)` inputs so that chumsky can understand them
+- `Input::split_spanned`, which does the same as above, but for implementors of `WrappingSpan`
+- `spanned`, a combinator which automatically annotates a parser output with a span
+- Experimental:
+    - `IterParser::parse_iter`, a way to turn an `IterParser` (like `x.repeated()`) into an iterator
+    - `Parser::debug`, which provides access to various parser debugging utilities.
+
+### Changed
+
+- Made `nested_in` more flexible by allowing it to map between different input types instead of requiring the same input as the outer parser
+
+### Fixed
+
+- A prioritisation bug with `nested_in`
+
 # [0.11.2] - 2025-11-05
 
 ### Added
