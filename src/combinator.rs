@@ -1311,6 +1311,8 @@ where
 {
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        let before = inp.save();
+
         let inp2 = self.parser_b.go::<Emit>(inp)?;
 
         let alt = inp.errors.alt.take();
@@ -1327,11 +1329,21 @@ where
             &mut memos,
         );
 
-        // TODO: Translate secondary error offsets too
+        // Translate error offsets to the start of the outer pattern
+        // This is not idea, but it mostly prevents error prioritisation issues
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err(&inp.cursor().inner, new_alt.err);
+            inp.add_alt_err(&before.cursor().inner, new_alt.err);
+        }
+        for err in inp
+            .errors
+            .secondary
+            .get_mut(before.err_count..)
+            .into_iter()
+            .flatten()
+        {
+            err.pos = before.cursor().inner.clone();
         }
 
         res
