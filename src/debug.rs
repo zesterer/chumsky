@@ -41,7 +41,6 @@ pub enum NodeInfo {
     Then(Box<Self>, Box<Self>),
     Padded(Box<Self>),
     Filter(Box<Self>),
-    FilterMap(Box<Self>),
     OrNot(Box<Self>),
     Labelled(String, Box<Self>),
     Builtin(String),
@@ -141,10 +140,6 @@ impl NodeInfo {
             Self::Filter(inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
                 Comment::new("filtered".to_string()),
-            )),
-            Self::FilterMap(inner) => Box::new(LabeledBox::new(
-                inner.railroad_inner(defs),
-                Comment::new("filter_mapped".to_string()),
             )),
             Self::Labelled(label, inner) => Box::new(LabeledBox::new(
                 inner.railroad_inner(defs),
