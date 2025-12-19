@@ -262,9 +262,9 @@ where
 
     #[inline(always)]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-		(&self.parser)
-			.filter_map(|out| if (self.filter)(&out) { Some(out) } else { None })
-			.go::<M>(inp)
+        (&self.parser)
+            .filter_map(|out| if (self.filter)(&out) { Some(out) } else { None })
+            .go::<M>(inp)
     }
 
     go_extra!(O);
@@ -323,7 +323,7 @@ where
                             inp.add_alt_err(&new_alt.pos, new_alt.err);
                         }
                         Ok(M::bind(|| mapped))
-                    },
+                    }
                     None => {
                         // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
                         let expected = [DefaultExpected::SomethingElse];
@@ -331,7 +331,7 @@ where
                         let err = E::Error::expected_found(expected, found, span);
                         inp.add_alt_err(&before.inner, err);
                         Err(())
-                    },
+                    }
                 }
             }
 
