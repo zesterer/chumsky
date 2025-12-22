@@ -4293,4 +4293,31 @@ mod tests {
 
         let _ = parser().parse("tru");
     }
+
+    // Prevent a regression
+    #[test]
+    fn parsers_macro() {
+        use crate::recursive::parsers;
+
+        fn parsers<'i>() -> (
+            impl Parser<'i, &'i str, &'i str>,
+            impl Parser<'i, &'i str, &'i str>,
+        ) {
+            parsers! {
+                a = just("a")
+                    .then(b.or_not().delimited_by(just('('), just(')')))
+                    .to_slice();
+
+                b = just("b")
+                    .then(a.or_not().delimited_by(just('('), just(')')))
+                    .to_slice();
+            };
+
+            (a, b)
+        }
+
+        let (a, b) = parsers();
+
+        a.parse("a(b(a(b())))").unwrap();
+    }
 }

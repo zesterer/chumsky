@@ -55,11 +55,14 @@ pub struct Indirect<'src, 'b, I: Input<'src>, O, Extra: ParserExtra<'src, I>> {
 /// [definition](Recursive::define).
 ///
 /// Prefer to use [`recursive()`], which exists as a convenient wrapper around both operations, if possible.
-pub struct Recursive<P: ?Sized> {
+pub struct Recursive<'b, P: ?Sized> {
     inner: RecursiveInner<P>,
+    to_drop: Option<Rc<dyn Unpin + 'b>>,
 }
 
-impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'src, 'b, I, O, E>> {
+impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>>
+    Recursive<'b, Indirect<'src, 'b, I, O, E>>
+{
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -103,7 +106,24 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
             inner: RecursiveInner::Owned(Rc::new(Indirect {
                 inner: OnceCell::new(),
             })),
+            to_drop: None,
         }
+    }
+
+    #[doc(hidden)]
+    pub fn _weak_clone(&self) -> Self {
+        Self {
+            inner: match &self.inner {
+                RecursiveInner::Owned(x) => RecursiveInner::Unowned(Rc::downgrade(x)),
+                RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
+            },
+            to_drop: None,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn _set_to_drop(&mut self, x: Rc<dyn Unpin + 'b>) {
+        self.to_drop = Some(x);
     }
 
     /// Defines the parser after declaring it, allowing it to be used for parsing.
@@ -120,7 +140,7 @@ impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'s
     }
 }
 
-impl<P: ?Sized> Recursive<P> {
+impl<'b, P: ?Sized> Recursive<'b, P> {
     #[inline]
     fn parser(&self) -> Rc<P> {
         match &self.inner {
@@ -132,13 +152,14 @@ impl<P: ?Sized> Recursive<P> {
     }
 }
 
-impl<P: ?Sized> Clone for Recursive<P> {
+impl<'b, P: ?Sized> Clone for Recursive<'b, P> {
     fn clone(&self) -> Self {
         Self {
             inner: match &self.inner {
                 RecursiveInner::Owned(x) => RecursiveInner::Owned(x.clone()),
                 RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
             },
+            to_drop: self.to_drop.clone(),
         }
     }
 }
@@ -154,7 +175,7 @@ pub(crate) fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
     f()
 }
 
-impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Indirect<'src, '_, I, O, E>>
+impl<'b, 'src, I, O, E> Parser<'src, I, O, E> for Recursive<'b, Indirect<'src, 'b, I, O, E>>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
@@ -195,7 +216,7 @@ where
     go_extra!(O);
 }
 
-impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Direct<'src, '_, I, O, E>>
+impl<'b, 'src, I, O, E> Parser<'src, I, O, E> for Recursive<'b, Direct<'src, 'b, I, O, E>>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
@@ -270,17 +291,18 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
-pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I, O, E>>
+pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<'b, Direct<'src, 'b, I, O, E>>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E> + Clone + 'b,
-    F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
+    F: FnOnce(Recursive<'b, Direct<'src, 'b, I, O, E>>) -> A,
 {
     let rc = Rc::new_cyclic(|rc| {
         let rc: rc::Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
         let parser = Recursive {
             inner: RecursiveInner::Unowned(rc.clone()),
+            to_drop: None,
         };
 
         f(parser)
@@ -288,5 +310,28 @@ where
 
     Recursive {
         inner: RecursiveInner::Owned(rc),
+        to_drop: None,
     }
 }
+
+/// TODO
+#[macro_export]
+macro_rules! parsers {
+    ($($name:ident = $body:expr;)*) => {
+        struct Parsers<$($name,)*> { $($name: $name,)* }
+        let mut parsers = Parsers { $($name: Recursive::declare(),)* };
+        {
+            $(let $name = parsers.$name._weak_clone();)*
+            $(parsers.$name.define($body);)*
+        }
+        {
+            let to_drop = ::alloc::rc::Rc::new({
+                $(let $name = parsers.$name.clone();)*
+                move || { $(::core::mem::drop($name);)* }
+            });
+            $(parsers.$name._set_to_drop(to_drop.clone() as _);)*
+        }
+        let Parsers { $($name,)* } = parsers;
+    };
+}
+pub use parsers;
