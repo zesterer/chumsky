@@ -35,10 +35,6 @@ memoization = []
 # Allows extending chumsky by writing your own parser implementations.
 extension = []
 
-# Make builtin parsers such as `Boxed` use atomic instead of non-atomic internals.
-# TODO: Remove or rework this
-sync = ["spin"]
-
 # Enable Pratt parsing combinator
 pratt = ["unstable"]
 
@@ -68,8 +64,9 @@ docsrs = []
 
 # An alias of all features that work with the stable compiler.
 # Do not use this feature, its removal is not considered a breaking change and its behaviour may change.
-# If you're working on chumsky and you're adding a feature that does not require nightly support, please add it to this list.
-_test_stable = ["std", "stacker", "memoization", "extension", "sync"]
+# If you're working on chumsky, and you're adding a feature that does not require nightly support,
+# please add it to this list.
+_test_stable = ["std", "stacker", "memoization", "extension"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -79,7 +76,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 hashbrown = "0.15"
 stacker = { version = "0.1", optional = true }
 regex-automata = { version = "0.3", default-features = false, optional = true, features = ["alloc", "meta", "perf", "unicode", "nfa", "dfa", "hybrid"] }
-spin = { version = "0.9", features = ["once"], default-features = false, optional = true }
 lexical = { version = "6.1.1", default-features = false, features = ["parse-integers", "parse-floats", "format"], optional = true }
 either = { version = "1.8.1", optional = true }
 serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
