@@ -130,6 +130,15 @@ impl<P: ?Sized> Recursive<P> {
                 .expect("Recursive parser used before being defined"),
         }
     }
+
+    fn weak(&self) -> Self {
+        Self {
+            inner: match &self.inner {
+                RecursiveInner::Owned(x) => RecursiveInner::Unowned(Rc::downgrade(x)),
+                RecursiveInner::Unowned(x) => RecursiveInner::Unowned(x.clone()),
+            },
+        }
+    }
 }
 
 impl<P: ?Sized> Clone for Recursive<P> {
@@ -270,23 +279,195 @@ where
 /// ])));
 /// ```
 // INFO: Clone bound not actually needed, but good to be safe for future compat
-pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I, O, E>>
+pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Indirect<'src, 'b, I, O, E>>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E> + Clone + 'b,
-    F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,
+    F: FnOnce(Recursive<Indirect<'src, 'b, I, O, E>>) -> A,
 {
-    let rc = Rc::new_cyclic(|rc| {
-        let rc: rc::Weak<DynParser<'src, 'b, I, O, E>> = rc.clone() as _;
-        let parser = Recursive {
-            inner: RecursiveInner::Unowned(rc.clone()),
-        };
+    recursive_fold(|recursive| (f(recursive), ())).0
+}
+/// Construct two mutually recursive parsers (i.e: two parser that may reference each other).
+///
+/// The given function must create the parser. The parser must not be used to parse input before this function returns.
+///
+/// The output type of this parser is `O1`, the same as the inner parser.
+///
+/// # Examples
+///
+/// ```
+/// # use chumsky::prelude::*;
+/// use chumsky::recursive::recursive_2;
+/// #[derive(Debug, PartialEq)]
+/// enum Tree<'a> {
+///     Leaf(&'a str),
+///     Branch(Vec<Tree<'a>>),
+/// }
+///
+/// // Parser that recursively parses nested lists with ordinary or square brackets
+/// let tree = recursive_2::<_, _, _, extra::Err<Simple<char>>, _, _, _, _>(|bracket, square| {
+///   (choice((bracket.clone()
+///     .separated_by(just(','))
+///      .collect::<Vec<_>>()
+///     .delimited_by(just('('), just(')'))
+///     .map(Tree::Branch)
+///     .or(text::ascii::ident().map(Tree::Leaf))
+///     .padded(), square.clone())),
+///   choice((square
+///     .separated_by(just(','))
+///     .collect::<Vec<_>>()
+///     .delimited_by(just('['), just(']'))
+///     .map(Tree::Branch)
+///     .or(text::ascii::ident().map(Tree::Leaf))
+///     .padded(), bracket.clone())))
+/// });
+///
+/// assert_eq!(tree.parse("hello").into_result(), Ok(Tree::Leaf("hello")));
+/// assert_eq!(tree.parse("(a, b, c)").into_result(), Ok(Tree::Branch(vec![
+///     Tree::Leaf("a"),
+///     Tree::Leaf("b"),
+///     Tree::Leaf("c"),
+/// ])));
+/// // The parser can deal with arbitrarily complex nested lists
+/// assert_eq!(tree.parse("[(a, b), c, [d, (e, f)]]").into_result(), Ok(Tree::Branch(vec![
+///     Tree::Branch(vec![
+///         Tree::Leaf("a"),
+///         Tree::Leaf("b"),
+///     ]),
+///     Tree::Leaf("c"),
+///     Tree::Branch(vec![
+///         Tree::Leaf("d"),
+///         Tree::Branch(vec![
+///             Tree::Leaf("e"),
+///             Tree::Leaf("f"),
+///         ]),
+///     ]),
+/// ])));
+/// // Both sides of the parser can be used
+/// assert_eq!(tree.flip().parse("(a, b, c)").into_result(), Ok(Tree::Branch(vec![
+///     Tree::Leaf("a"),
+///     Tree::Leaf("b"),
+///     Tree::Leaf("c"),
+/// ])));
+/// ```
+///
+///
+pub fn recursive_2<'src, 'b, I, O1, O2, E, A1, A2, R, F>(
+    f: F,
+) -> EitherParser<Recursive<Indirect<'src, 'b, I, O1, E>>, Recursive<Indirect<'src, 'b, I, O2, E>>>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A1: Parser<'src, I, O1, E> + Clone + 'b,
+    A2: Parser<'src, I, O2, E> + Clone + 'b,
+    R: Into<EitherParser<A1, A2>>,
+    F: FnOnce(
+        Recursive<Indirect<'src, 'b, I, O1, E>>,
+        Recursive<Indirect<'src, 'b, I, O2, E>>,
+    ) -> R,
+{
+    recursive_fold(|left| recursive_fold(|right| f(left, right).into().flip()).flip())
+}
 
-        f(parser)
-    });
+/// Construct an EitherParser<A1, A2> with A1 recursive and a guarantee that A1 and A2 are dropped together.
+/// This function is useful for constructing recursive parser combinators.
+///
+/// The given function must create the parser. The parser must not be used to parse input before this function returns.
+///
+/// The output type of this parser is `O1`, the same as the left parser.
+///
+/// # Examples
+///
+/// Please see [recursive] and [recursive_2] for how recursive_fold can be used to define new recursive combinators.
+pub fn recursive_fold<'a, 'b, I, O1, A1, A2, R, F, E>(
+    f: F,
+) -> EitherParser<Recursive<Indirect<'a, 'b, I, O1, E>>, A2>
+where
+    I: Input<'a>,
+    E: ParserExtra<'a, I>,
+    A1: Parser<'a, I, O1, E> + Clone + 'b,
+    R: Into<EitherParser<A1, A2>>,
+    F: FnOnce(Recursive<Indirect<'a, 'b, I, O1, E>>) -> R,
+{
+    let mut left_parser = Recursive::declare();
+    let either = f(left_parser.weak()).into();
+    left_parser.define(either.0);
+    EitherParser(left_parser, either.1)
+}
 
-    Recursive {
-        inner: RecursiveInner::Owned(rc),
+/// A parser that parses using A1 while guaranteeing that A1 and A2 are dropped together.
+#[derive(Clone)]
+pub struct EitherParser<A1, A2>(A1, A2);
+
+impl<A1, A2> From<(A1, A2)> for EitherParser<A1, A2> {
+    fn from(value: (A1, A2)) -> Self {
+        EitherParser(value.0, value.1)
+    }
+}
+
+impl<'src, I, O, E, A1, A2> Parser<'src, I, O, E> for EitherParser<A1, A2>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A1: Parser<'src, I, O, E>,
+{
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        self.0.go::<M>(inp)
+    }
+
+    go_extra!(O);
+}
+
+impl<A1, A2> EitherParser<A1, A2> {
+    /// Flip the position of A1 and A2
+    pub fn flip(self) -> EitherParser<A2, A1> {
+        EitherParser(self.1, self.0)
+    }
+
+    #[allow(missing_docs)]
+    pub fn left(&self) -> &A1 {
+        &self.0
+    }
+
+    #[allow(missing_docs)]
+    pub fn right(&self) -> &A2 {
+        &self.1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+    use crate::recursive::{recursive_2, RecursiveInner};
+
+    #[test]
+    fn no_strong_references_after_drop() {
+        fn check_ref_count<T>(recursive_inner: &RecursiveInner<T>, expected: usize) {
+            match recursive_inner {
+                RecursiveInner::Owned(_) => {
+                    panic!("a user must not have access to strong references")
+                }
+                RecursiveInner::Unowned(weak) => {
+                    assert_eq!(weak.strong_count(), expected);
+                }
+            };
+        }
+
+        let mut smuggle_r1 = None;
+        let mut smuggle_r2 = None;
+
+        {
+            let _ = recursive_2::<&str, (), (), extra::Err<Simple<char>>, _, _, _, _>(|r1, r2| {
+                check_ref_count(&r1.inner, 1);
+                check_ref_count(&r2.inner, 1);
+                smuggle_r1.replace(r1.clone());
+                smuggle_r2.replace(r2.clone());
+                (r1, r2)
+            });
+        }
+
+        check_ref_count(&smuggle_r1.unwrap().inner, 0);
+        check_ref_count(&smuggle_r2.unwrap().inner, 0);
     }
 }
