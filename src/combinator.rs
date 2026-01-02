@@ -2164,7 +2164,7 @@ where
 
     /// Allow a trailing separator to appear after the last item.
     ///
-    /// Note that if no items are parsed, no leading separator is permitted.
+    /// Note that if no items are parsed, no trailing separator is permitted.
     ///
     /// # Examples
     ///
