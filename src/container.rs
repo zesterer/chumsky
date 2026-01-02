@@ -2,6 +2,7 @@
 
 use super::*;
 use alloc::collections::LinkedList;
+use core::hash::BuildHasher;
 use hashbrown::HashSet;
 
 /// A utility trait for types that can be constructed from a series of items.
@@ -92,9 +93,9 @@ impl Container<char> for String {
     }
 }
 
-impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
+impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)> for HashMap<K, V, S> {
     fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
+        Self::with_capacity_and_hasher(n, Default::default())
     }
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
@@ -102,18 +103,20 @@ impl<K: Eq + Hash, V> Container<(K, V)> for HashMap<K, V> {
 }
 
 #[cfg(feature = "std")]
-impl<K: Eq + Hash, V> Container<(K, V)> for std::collections::HashMap<K, V> {
+impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)>
+    for std::collections::HashMap<K, V, S>
+{
     fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
+        Self::with_capacity_and_hasher(n, Default::default())
     }
     fn push(&mut self, (key, value): (K, V)) {
         (*self).insert(key, value);
     }
 }
 
-impl<T: Eq + Hash> Container<T> for HashSet<T> {
+impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for HashSet<T, S> {
     fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
+        Self::with_capacity_and_hasher(n, Default::default())
     }
     fn push(&mut self, item: T) {
         (*self).insert(item);
@@ -121,9 +124,9 @@ impl<T: Eq + Hash> Container<T> for HashSet<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: Eq + Hash> Container<T> for std::collections::HashSet<T> {
+impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for std::collections::HashSet<T, S> {
     fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
+        Self::with_capacity_and_hasher(n, Default::default())
     }
     fn push(&mut self, item: T) {
         (*self).insert(item);
@@ -570,7 +573,7 @@ impl<'p, T: Clone> Seq<'p, T> for LinkedList<T> {
     }
 }
 
-impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for HashSet<T> {
+impl<'p, T: Clone + Eq + Hash, S: BuildHasher> Seq<'p, T> for HashSet<T, S> {
     type Item<'a>
         = &'a T
     where
@@ -598,13 +601,14 @@ impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for HashSet<T> {
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b,
+        S: 'b,
     {
         MaybeRef::Val(item.clone())
     }
 }
 
 #[cfg(feature = "std")]
-impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for std::collections::HashSet<T> {
+impl<'p, T: Clone + Eq + Hash, S: BuildHasher> Seq<'p, T> for std::collections::HashSet<T, S> {
     type Item<'a>
         = &'a T
     where
@@ -632,6 +636,7 @@ impl<'p, T: Clone + Eq + Hash> Seq<'p, T> for std::collections::HashSet<T> {
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b,
+        S: 'b,
     {
         MaybeRef::Val(item.clone())
     }
