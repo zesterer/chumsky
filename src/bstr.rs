@@ -1,5 +1,5 @@
 use super::*;
-use alloc::bstr::ByteStr;
+use core::bstr::ByteStr;
 
 impl<'src> Input<'src> for &'src ByteStr {
     type Cursor = usize;
