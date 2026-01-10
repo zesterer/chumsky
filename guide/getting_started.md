@@ -80,7 +80,7 @@ fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
 
 2. Because large parsers can have rather unwieldy types, we save ourselves the need to declare the exact return type
    with Rust's `impl Trait` syntax. This says to the compiler "we don't actually care what type is returned here, but
-   it needs to implement the `Parser<'src, &'src, str, ()>` trait, you figure it out". Note that, unlike `dyn Trait`
+   it needs to implement the `Parser<'src, &'src str, ()>` trait, you figure it out". Note that, unlike `dyn Trait`
    syntax, `impl Trait` has no runtime cost: the compiler simply *hides* the type from you rather than performing
    *type erasure*, which would require performing [dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)
    while your code is running.
