@@ -69,7 +69,7 @@
 //!     // Just like in math, we want that if we write -x^2, our parser
 //!     // parses that as -(x^2), so we need it to have exponents bind
 //!     // tighter than our prefix operators.
-//!     infix(Associativity::Right(3), op('^'), |l, _, r, _| Expr::Pow(Box::new(l), Box::new(r))),
+//!     infix(right(3), op('^'), |l, _, r, _| Expr::Pow(Box::new(l), Box::new(r))),
 //!     // Notice the conflict with our `Expr::Sub`. This will still
 //!     // parse correctly. We want negation to happen before `+` and
 //!     // `-`, so we set its precedence higher.
@@ -77,8 +77,8 @@
 //!     prefix(2, op('*'), |_, rhs, _| Expr::Deref(Box::new(rhs))),
 //!     // Our `-` and `+` bind the weakest, meaning that even if they
 //!     // occur first in an expression, they will be the last executed.
-//!     infix(Associativity::Left(1), op('+'), |l, _, r, _| Expr::Add(Box::new(l), Box::new(r))),
-//!     infix(Associativity::Left(1), op('-'), |l, _, r, _| Expr::Sub(Box::new(l), Box::new(r))),
+//!     infix(left(1), op('+'), |l, _, r, _| Expr::Add(Box::new(l), Box::new(r))),
+//!     infix(left(1), op('-'), |l, _, r, _| Expr::Sub(Box::new(l), Box::new(r))),
 //! ))
 //!     .map(|x| x.to_string());
 //!
@@ -87,6 +87,8 @@
 //!     Ok("(((*1) + (-(2!))) - (-(3 ^ 2)))".to_string()),
 //! );
 //! ```
+//!
+//! `left`, `right` and `none` are shorthand versions of `Associativity` variants.
 
 use super::*;
 
