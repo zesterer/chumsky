@@ -87,6 +87,8 @@
 //!     Ok("(((*1) + (-(2!))) - (-(3 ^ 2)))".to_string()),
 //! );
 //! ```
+//!
+//! `left`, `right` and `none` are shorthand versions of `Associativity` variants.
 
 use super::*;
 
