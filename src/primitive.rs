@@ -952,15 +952,14 @@ macro_rules! impl_choice_for_tuple {
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                match $Head.go::<M>(inp) {
-                    Ok(out) => return Ok(out),
-                    Err(()) => inp.rewind(before.clone()),
+                if let Ok(out) = $Head.go::<M>(inp) {
+                    return Ok(out);
                 }
 
                 $(
-                    match $X.go::<M>(inp) {
-                        Ok(out) => return Ok(out),
-                        Err(()) => inp.rewind(before.clone()),
+                    inp.rewind(before.clone());
+                    if let Ok(out) = $X.go::<M>(inp) {
+                        return Ok(out);
                     }
                 )*
 

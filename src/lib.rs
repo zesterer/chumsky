@@ -4243,6 +4243,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn secondary_error_choice() {
+        let secondary_error = any::<_, extra::Default>()
+            .validate(|out, _, emitter| {
+                emitter.emit(EmptyErr::default());
+                out
+            })
+            .then(just('c'));
+        let parser = choice((just('a').then(just('b')), secondary_error));
+
+        assert_eq!(
+            parser.parse("aa").into_output_errors(),
+            (None, vec![EmptyErr::default(), EmptyErr::default()])
+        );
+    }
+
     /*
     #[test]
     fn label_sets() {
