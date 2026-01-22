@@ -5,6 +5,7 @@
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::{
+    extra::SimpleState,
     input::{Input as _, MappedInput},
     pratt::*,
     prelude::*,
@@ -94,31 +95,133 @@ pub enum Expr<'src> {
     Var(&'src str),
     Num(f64),
     Bool(bool),
-    Add(Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Mul(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Add(Box<Spanned<Self, Span>>, Box<Spanned<Self, Span>>),
+    Mul(Box<Spanned<Self, Span>>, Box<Spanned<Self, Span>>),
     Let {
-        lhs: Spanned<&'src str>,
-        rhs: Box<Spanned<Self>>,
-        then: Box<Spanned<Self>>,
+        lhs: Spanned<&'src str, Span>,
+        rhs: Box<Spanned<Self, Span>>,
+        then: Box<Spanned<Self, Span>>,
     },
     Apply {
-        func: Box<Spanned<Self>>,
-        arg: Box<Spanned<Self>>,
+        func: Box<Spanned<Self, Span>>,
+        arg: Box<Spanned<Self, Span>>,
     },
     Func {
-        arg: Box<Spanned<&'src str>>,
-        body: Box<Spanned<Self>>,
+        arg: Box<Spanned<&'src str, Span>>,
+        body: Box<Spanned<Self, Span>>,
     },
+}
+
+/// A span that can store small spans inline or intern large spans.
+///
+/// Inline spans use 8 bytes total (file_id: 2 + version: 2 + offset: 2 + length: 2).
+/// Interned spans store only file_id, version, and an ID to look up the actual data in a cache.
+///
+/// The `file_id` and `version` fields demonstrate one way to implement LSP (Language Server
+/// Protocol) features. The `file_id` identifies which source file the span belongs to, while
+/// `version` tracks document versions - allowing a language server to invalidate cached
+/// data when a file is edited and detect stale spans from previous document versions.
+///
+/// These fields are stored directly on both variants (including `Interned`) rather than
+/// only in the cache. This allows common operations like "which file is this span from?"
+/// and "is this span from the current document version?" to be answered without a cache
+/// lookup. Only resolving the actual byte offsets requires cache access.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Span {
+    /// Small span stored inline (offset < 2^16, length < 2^16)
+    Inline {
+        file_id: u16,
+        version: u16,
+        offset: u16,
+        length: u16,
+    },
+    /// Large span stored in cache, referenced by ID
+    Interned { file_id: u16, version: u16, id: u32 },
+}
+
+/// Cache for storing interned spans.
+///
+/// When a span is too large to fit inline, it gets stored here and
+/// referenced by an ID.
+#[derive(Debug, Default)]
+pub struct SpanCache {
+    /// The file ID for spans created by this cache
+    file_id: u16,
+    /// The version for spans created by this cache
+    version: u16,
+    /// Interned spans stored as (offset, length) pairs
+    interned: Vec<(u32, u32)>,
+}
+
+impl SpanCache {
+    /// Create a new span cache for a file.
+    pub fn new(file_id: u16, version: u16) -> Self {
+        Self {
+            file_id,
+            version,
+            interned: Vec::new(),
+        }
+    }
+
+    /// Create a span, automatically choosing inline or interned storage.
+    pub fn create_span(&mut self, start: usize, end: usize) -> Span {
+        let length = end.saturating_sub(start);
+
+        // If both offset and length fit in u16, store inline
+        if start <= u16::MAX as usize && length <= u16::MAX as usize {
+            Span::Inline {
+                file_id: self.file_id,
+                version: self.version,
+                offset: start as u16,
+                length: length as u16,
+            }
+        } else {
+            // Intern the span
+            let id = self.interned.len() as u32;
+            self.interned.push((start as u32, length as u32));
+            Span::Interned {
+                file_id: self.file_id,
+                version: self.version,
+                id,
+            }
+        }
+    }
+
+    /// Look up an interned span by ID.
+    pub fn lookup(&self, id: u32) -> (u32, u32) {
+        self.interned[id as usize]
+    }
+
+    /// Get statistics about the cache.
+    pub fn stats(&self) -> (usize, usize) {
+        (self.interned.len(), self.interned.len() * 8)
+    }
+
+    pub fn to_simple(&self, span: Span) -> SimpleSpan {
+        let (start, length) = match span {
+            Span::Inline { offset, length, .. } => (offset as u32, length as u32),
+            Span::Interned { id, .. } => self.lookup(id),
+        };
+        SimpleSpan::new((), start as usize..start as usize + length as usize)
+    }
 }
 
 fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
     MappedInput<'tokens, Token<'src>, SimpleSpan, &'tokens [Spanned<Token<'src>>]>,
-    Spanned<Expr<'src>>,
-    extra::Err<Rich<'tokens, Token<'src>>>,
+    Spanned<Expr<'src>, Span>,
+    // extra::Err<Rich<'tokens, Token<'src>>>,
+    extra::Full<Rich<'tokens, Token<'src>>, SimpleState<SpanCache>, ()>,
 > {
     recursive(|expr| {
         let ident = select_ref! { Token::Ident(x) => *x };
+        let spanned_ident = ident.map_with(|inner, e| {
+            let span = e.span() as SimpleSpan;
+            Spanned {
+                inner,
+                span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
+            }
+        });
         let atom = choice((
             select_ref! { Token::Num(x) => Expr::Num(*x) },
             just(Token::True).to(Expr::Bool(true)),
@@ -126,7 +229,7 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
             ident.map(Expr::Var),
             // let x = y in z
             just(Token::Let)
-                .ignore_then(ident.spanned())
+                .ignore_then(spanned_ident)
                 .then_ignore(just(Token::Eq))
                 .then(expr.clone())
                 .then_ignore(just(Token::In))
@@ -139,16 +242,25 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
         ));
 
         choice((
-            atom.spanned(),
+            atom.map_with(|inner, e| {
+                let span = e.span() as SimpleSpan;
+                Spanned {
+                    inner,
+                    span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
+                }
+            }),
             // fn x y = z
-            just(Token::Fn).ignore_then(ident.spanned().repeated().foldr_with(
+            just(Token::Fn).ignore_then(spanned_ident.repeated().foldr_with(
                 just(Token::Eq).ignore_then(expr.clone()),
                 |arg, body, e| {
-                    Expr::Func {
-                        arg: Box::new(arg),
-                        body: Box::new(body),
+                    let span = e.span() as SimpleSpan;
+                    Spanned {
+                        inner: Expr::Func {
+                            arg: Box::new(arg),
+                            body: Box::new(body),
+                        },
+                        span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
                     }
-                    .with_span(e.span())
                 },
             )),
             // ( x )
@@ -157,19 +269,30 @@ fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
         .pratt((
             // Multiply
             infix(left(10), just(Token::Asterisk), |x, _, y, e| {
-                Expr::Mul(Box::new(x), Box::new(y)).with_span(e.span())
+                let span = e.span() as SimpleSpan;
+                Spanned {
+                    inner: Expr::Mul(Box::new(x), Box::new(y)),
+                    span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
+                }
             }),
             // Add
             infix(left(9), just(Token::Plus), |x, _, y, e| {
-                Expr::Add(Box::new(x), Box::new(y)).with_span(e.span())
+                let span = e.span() as SimpleSpan;
+                Spanned {
+                    inner: Expr::Add(Box::new(x), Box::new(y)),
+                    span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
+                }
             }),
             // Calls
             infix(left(1), empty(), |x, _, y, e| {
-                Expr::Apply {
-                    func: Box::new(x),
-                    arg: Box::new(y),
+                let span = e.span() as SimpleSpan;
+                Spanned {
+                    inner: Expr::Apply {
+                        func: Box::new(x),
+                        arg: Box::new(y),
+                    },
+                    span: (e.state() as &mut SpanCache).create_span(span.start, span.end),
                 }
-                .with_span(e.span())
             }),
         ))
         .labelled("expression")
@@ -222,16 +345,17 @@ impl fmt::Display for Ty {
 
 struct Solver<'src> {
     src: &'src str,
-    vars: Vec<(TyInfo, SimpleSpan)>,
+    vars: Vec<(TyInfo, Span)>,
+    span_cache: SpanCache,
 }
 
 impl Solver<'_> {
-    fn create_ty(&mut self, info: TyInfo, span: SimpleSpan) -> TyVar {
+    fn create_ty(&mut self, info: TyInfo, span: Span) -> TyVar {
         self.vars.push((info, span));
         TyVar(self.vars.len() - 1)
     }
 
-    fn unify(&mut self, a: TyVar, b: TyVar, span: SimpleSpan) {
+    fn unify(&mut self, a: TyVar, b: TyVar, span: Span) {
         match (self.vars[a.0].0, self.vars[b.0].0) {
             (TyInfo::Unknown, _) => self.vars[a.0].0 = TyInfo::Ref(b),
             (_, TyInfo::Unknown) => self.vars[b.0].0 = TyInfo::Ref(a),
@@ -244,10 +368,19 @@ impl Solver<'_> {
             }
             (a_info, b_info) => failure(
                 format!("Type mismatch between {a_info} and {b_info}"),
-                ("mismatch occurred here".to_string(), span),
+                (
+                    "mismatch occurred here".to_string(),
+                    self.span_cache.to_simple(span),
+                ),
                 vec![
-                    (format!("{a_info}"), self.vars[a.0].1),
-                    (format!("{b_info}"), self.vars[b.0].1),
+                    (
+                        format!("{a_info}"),
+                        self.span_cache.to_simple(self.vars[a.0].1),
+                    ),
+                    (
+                        format!("{b_info}"),
+                        self.span_cache.to_simple(self.vars[b.0].1),
+                    ),
                 ],
                 self.src,
             ),
@@ -256,7 +389,7 @@ impl Solver<'_> {
 
     fn check<'src>(
         &mut self,
-        expr: &Spanned<Expr<'src>>,
+        expr: &Spanned<Expr<'src>, Span>,
         env: &mut Vec<(&'src str, TyVar)>,
     ) -> TyVar {
         match &**expr {
@@ -269,7 +402,10 @@ impl Solver<'_> {
                     .unwrap_or_else(|| {
                         failure(
                             format!("No such local '{name}'"),
-                            ("not found in scope".to_string(), expr.span),
+                            (
+                                "not found in scope".to_string(),
+                                self.span_cache.to_simple(expr.span),
+                            ),
                             None,
                             self.src,
                         )
@@ -313,7 +449,10 @@ impl Solver<'_> {
         match self.vars[var.0].0 {
             TyInfo::Unknown => failure(
                 "Cannot infer type".to_string(),
-                ("has unknown type".to_string(), self.vars[var.0].1),
+                (
+                    "has unknown type".to_string(),
+                    self.span_cache.to_simple(self.vars[var.0].1),
+                ),
                 None,
                 self.src,
             ),
@@ -330,9 +469,9 @@ pub enum Value<'src> {
     Num(f64),
     Bool(bool),
     Func {
-        arg: Spanned<&'src str>,
+        arg: Spanned<&'src str, Span>,
         env: Scope<'src>,
-        body: &'src Spanned<Expr<'src>>,
+        body: &'src Spanned<Expr<'src>, Span>,
     },
 }
 
@@ -343,7 +482,7 @@ impl Value<'_> {
     }
 }
 
-type Scope<'src> = Vec<(Spanned<&'src str>, Value<'src>)>;
+type Scope<'src> = Vec<(Spanned<&'src str, Span>, Value<'src>)>;
 
 #[derive(Default)]
 pub struct Vm<'src> {
@@ -351,7 +490,7 @@ pub struct Vm<'src> {
 }
 
 impl<'src> Vm<'src> {
-    pub fn eval(&mut self, expr: &'src Spanned<Expr<'src>>) -> Value<'src> {
+    pub fn eval(&mut self, expr: &'src Spanned<Expr<'src>, Span>) -> Value<'src> {
         match &**expr {
             Expr::Num(x) => Value::Num(*x),
             Expr::Bool(x) => Value::Bool(*x),
@@ -439,19 +578,25 @@ fn main() {
     let filename = env::args().nth(1).expect("Expected file argument");
     let src = &fs::read_to_string(&filename).expect("Failed to read file");
 
+    let mut span_cache = SimpleState(SpanCache::default());
+
     let tokens = lexer()
         .parse(src)
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
     let expr = parser()
-        .parse(tokens[..].split_spanned((0..src.len()).into()))
+        .parse_with_state(
+            tokens[..].split_spanned((0..src.len()).into()),
+            &mut span_cache,
+        )
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], src));
 
     let mut solver = Solver {
         src,
         vars: Vec::new(),
+        span_cache: span_cache.0,
     };
     let program_ty = solver.check(&expr, &mut Vec::new());
     println!("Result type: {:?}", solver.solve(program_ty));
