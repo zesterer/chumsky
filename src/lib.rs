@@ -1997,6 +1997,29 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
         }
     }
 
+    /// Map the primary error of this parser to another value, making use of the parser state and
+    /// context.
+    ///
+    /// This function is useful for augmenting errors to allow them to include context in non context-free
+    /// languages, or provide contextual notes on possible causes.
+    ///
+    /// The output type of this parser is `O`, the same as the original parser.
+    ///
+    /// Note: Chumsky permits parsers to leave the input in an unspecified state after an error
+    /// occurs and backtracking begins. As such, the output of [`MapExtra::span`] and
+    /// [`MapExtra::slice`] is unspecified within this function.
+    ///
+    fn map_err_with<F>(self, f: F) -> MapErrWith<Self, F>
+    where
+        Self: Sized,
+        F: Fn(E::Error, &mut MapExtra<'src, '_, I, E>) -> E::Error,
+    {
+        MapErrWith {
+            parser: self,
+            mapper: f,
+        }
+    }
+
     /// Validate an output, producing non-terminal errors if it does not fulfill certain criteria.
     /// The errors will not immediately halt parsing on this path, but instead it will continue,
     /// potentially emitting one or more other errors, only failing after the pattern has otherwise
@@ -4016,6 +4039,36 @@ mod tests {
                 (0..1).into()
             )])
         );
+    }
+
+    #[test]
+    fn map_err_with() {
+        use crate::LabelError;
+
+        let parser = just::<char, &str, extra::Err<_>>('#')
+            .repeated()
+            .count()
+            .ignore_with_ctx(just('"').map_err_with(move |e: Rich<char>, extras| {
+                println!("Found = {:?}", e.found());
+                println!("Expected = {:?}", e.expected().collect::<Vec<_>>());
+                println!("Span = {:?}", e.span());
+                println!("Context = {:?}", extras.ctx());
+                LabelError::<&str, String>::expected_found(
+                    [format!("after {} hashes", extras.ctx())],
+                    e.found().copied().map(Into::into),
+                    *e.span(),
+                )
+            }));
+
+        let mut err: Rich<_> =
+            LabelError::<&str, char>::expected_found(['#'], Some('H'.into()), (3..4).into());
+        err = LabelError::<&str, String>::merge_expected_found(
+            err,
+            ["after 3 hashes".into()],
+            Some('H'.into()),
+            (3..4).into(),
+        );
+        assert_eq!(parser.parse("###H").into_result(), Err(vec![err]));
     }
 
     #[test]

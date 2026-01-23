@@ -3149,7 +3149,7 @@ where
         Self: Sized,
     {
         (&self.parser)
-            .map_err_with_state(|e, _, _| (self.mapper)(e))
+            .map_err_with(|e, _| (self.mapper)(e))
             .go::<M>(inp)
     }
 
@@ -3191,7 +3191,6 @@ where
 //     go_extra!(O);
 // }
 
-// TODO: Remove combinator, replace with map_err_with
 /// See [`Parser::map_err_with_state`].
 #[derive(Copy, Clone)]
 pub struct MapErrWithState<A, F> {
@@ -3226,6 +3225,50 @@ where
             let mut new_alt = new_alt.unwrap();
             let span = inp.span_since(&start);
             new_alt.err = (self.mapper)(new_alt.err, span, inp.state());
+
+            inp.errors.alt = old_alt;
+            inp.add_alt_err(&new_alt.pos, new_alt.err);
+        }
+
+        res
+    }
+
+    go_extra!(O);
+}
+
+/// See [`Parser::map_err_with`].
+#[derive(Copy, Clone)]
+pub struct MapErrWith<A, F> {
+    pub(crate) parser: A,
+    pub(crate) mapper: F,
+}
+
+impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for MapErrWith<A, F>
+where
+    I: Input<'src>,
+    E: ParserExtra<'src, I>,
+    A: Parser<'src, I, O, E>,
+    F: Fn(E::Error, &mut MapExtra<'src, '_, I, E>) -> E::Error,
+{
+    #[inline(always)]
+    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    where
+        Self: Sized,
+    {
+        let start = inp.cursor();
+        let old_alt = inp.take_alt();
+        let res = self.parser.go::<M>(inp);
+        let new_alt = inp.take_alt();
+
+        if res.is_ok() {
+            inp.errors.alt = old_alt;
+            if let Some(new_alt) = new_alt {
+                inp.add_alt_err(&new_alt.pos, new_alt.err);
+            }
+        } else {
+            // Can't fail!
+            let mut new_alt = new_alt.unwrap();
+            new_alt.err = (self.mapper)(new_alt.err, &mut MapExtra::new(&start, inp));
 
             inp.errors.alt = old_alt;
             inp.add_alt_err(&new_alt.pos, new_alt.err);
