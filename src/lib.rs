@@ -2005,6 +2005,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// The output type of this parser is `O`, the same as the original parser.
     ///
+    /// Note: Chumsky permits parsers to leave the input in an unspecified state after an error
+    /// occurs and backtracking begins. As such, the output of [`MapExtra::span`] and
+    /// [`MapExtra::slice`] is unspecified within this function.
+    ///
     fn map_err_with<F>(self, f: F) -> MapErrWith<Self, F>
     where
         Self: Sized,
