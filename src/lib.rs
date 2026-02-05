@@ -184,7 +184,7 @@ pub enum DefaultExpected<'a, T> {
 impl<T> DefaultExpected<'_, T> {
     /// Convert this [`DefaultExpected`] into an owned version of itself, cloning any inner references if required.
     #[inline]
-    pub fn into_owned(self) -> DefaultExpected<'static, T>
+    pub fn into_owned<'b>(self) -> DefaultExpected<'b, T>
     where
         T: Clone,
     {
