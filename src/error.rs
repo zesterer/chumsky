@@ -239,6 +239,17 @@ impl<'a, T, S> Simple<'a, T, S> {
             found: self.found.map(|found| f(found.into_inner()).into()),
         }
     }
+
+    /// Transform this error's span using the given function.
+    ///
+    /// This is useful when you need to convert spans from one representation to another,
+    /// such as when enriching or interning spans.
+    pub fn map_span<S2, F: FnOnce(S) -> S2>(self, f: F) -> Simple<'a, T, S2> {
+        Simple {
+            span: f(self.span),
+            found: self.found,
+        }
+    }
 }
 
 impl<'a, I: Input<'a>> Error<'a, I> for Simple<'a, I::Token, I::Span> {}
@@ -707,6 +718,18 @@ impl<'a, T, S> Rich<'a, T, S> {
                 .into_iter()
                 .map(|(p, s)| (p.map_token(&mut f), s))
                 .collect(),
+        }
+    }
+
+    /// Transform this error's spans using the given function.
+    ///
+    /// This is useful when you need to convert spans, such as enriching or
+    /// interning spans.
+    pub fn map_span<S2, F: FnMut(S) -> S2>(self, mut f: F) -> Rich<'a, T, S2> {
+        Rich {
+            span: f(self.span),
+            reason: self.reason,
+            context: self.context.into_iter().map(|(p, s)| (p, f(s))).collect(),
         }
     }
 }
