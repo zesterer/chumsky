@@ -211,6 +211,27 @@ where
     }
 }
 
+/// Configuration for [`one_of`], used in [`ConfigParser::configure`]
+pub struct OneOfCfg<T> {
+    seq: Option<T>,
+}
+
+impl<T> OneOfCfg<T> {
+    /// Set the sequence to be used while parsing
+    #[inline]
+    pub fn seq(mut self, new_seq: T) -> Self {
+        self.seq = Some(new_seq);
+        self
+    }
+}
+
+impl<T> Default for OneOfCfg<T> {
+    #[inline]
+    fn default() -> Self {
+        OneOfCfg { seq: None }
+    }
+}
+
 /// See [`one_of`].
 pub struct OneOf<T, I, E> {
     seq: T,
@@ -272,16 +293,37 @@ where
 
     #[inline]
     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
+        Self::go_cfg::<M>(self, inp, OneOfCfg::default())
+    }
+
+    go_extra!(I::Token);
+}
+
+impl<'src, I, E, T> ConfigParser<'src, I, I::Token, E> for OneOf<T, I, E>
+where
+    I: ValueInput<'src>,
+    E: ParserExtra<'src, I>,
+    I::Token: PartialEq,
+    T: Seq<'src, I::Token>,
+{
+    type Config = OneOfCfg<T>;
+
+    #[inline]
+    fn go_cfg<M: Mode>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<M, I::Token> {
+        let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
         let before = inp.save();
         match inp.next_inner() {
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
-            Some(tok) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
+            Some(tok) if seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
                 inp.add_alt(
-                    self.seq
-                        .seq_iter()
+                    seq.seq_iter()
                         .map(|e| DefaultExpected::Token(T::to_maybe_ref(e))),
                     found.map(|f| f.into()),
                     err_span,
@@ -290,8 +332,6 @@ where
             }
         }
     }
-
-    go_extra!(I::Token);
 }
 
 /// See [`none_of`].
