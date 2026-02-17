@@ -7,7 +7,7 @@
 //! like [`Cheap`], [`Simple`] or [`Rich`].
 
 use super::*;
-use alloc::{borrow::Cow, string::ToString};
+use alloc::borrow::Cow;
 
 pub use label::LabelError;
 
@@ -434,7 +434,7 @@ where
 /// The reason for a [`Rich`] error.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum RichReason<'a, T> {
+pub enum RichReason<'a, T, C = String> {
     /// An unexpected input was found
     ExpectedFound {
         /// The tokens expected
@@ -442,11 +442,11 @@ pub enum RichReason<'a, T> {
         /// The tokens found
         found: Option<MaybeRef<'a, T>>,
     },
-    /// An error with a custom message
-    Custom(String),
+    /// A custom error
+    Custom(C),
 }
 
-impl<'a, T> RichReason<'a, T> {
+impl<'a, T, C> RichReason<'a, T, C> {
     /// Return the token that was found by this error reason. `None` implies that the end of input was expected.
     pub fn found(&self) -> Option<&T> {
         match self {
@@ -456,7 +456,7 @@ impl<'a, T> RichReason<'a, T> {
     }
 
     /// Convert this reason into an owned version of itself by cloning any borrowed internal tokens, if necessary.
-    pub fn into_owned<'b>(self) -> RichReason<'b, T>
+    pub fn into_owned<'b>(self) -> RichReason<'b, T, C>
     where
         T: Clone,
     {
@@ -480,7 +480,7 @@ impl<'a, T> RichReason<'a, T> {
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
     /// the token type for each pass is different (`char` vs `MyToken`, say).
-    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichReason<'a, U>
+    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> RichReason<'a, U, C>
     where
         T: Clone,
     {
@@ -495,7 +495,12 @@ impl<'a, T> RichReason<'a, T> {
             RichReason::Custom(msg) => RichReason::Custom(msg),
         }
     }
+}
 
+impl<'a, T, C> RichReason<'a, T, C>
+where
+    C: fmt::Display,
+{
     fn inner_fmt<S>(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -544,7 +549,7 @@ impl<'a, T> RichReason<'a, T> {
     }
 }
 
-impl<T> RichReason<'_, T>
+impl<T, C> RichReason<'_, T, C>
 where
     T: PartialEq,
 {
@@ -582,9 +587,10 @@ where
     }
 }
 
-impl<T> fmt::Display for RichReason<'_, T>
+impl<T, C> fmt::Display for RichReason<'_, T, C>
 where
     T: fmt::Display,
+    C: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner_fmt(f, T::fmt, |_: &(), _| Ok(()), None, &[])
@@ -613,13 +619,16 @@ where
 ///
 /// ```
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Rich<'a, T, S = SimpleSpan<usize>> {
+pub struct Rich<'a, T, S = SimpleSpan<usize>, C = String> {
     span: S,
-    reason: Box<RichReason<'a, T>>,
+    reason: Box<RichReason<'a, T, C>>,
     context: Vec<(RichPattern<'a, T>, S)>,
 }
 
-impl<T, S> Rich<'_, T, S> {
+impl<T, S, C> Rich<'_, T, S, C>
+where
+    C: fmt::Display,
+{
     fn inner_fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -637,13 +646,13 @@ impl<T, S> Rich<'_, T, S> {
     }
 }
 
-impl<'a, T, S> Rich<'a, T, S> {
+impl<'a, T, S, C> Rich<'a, T, S, C> {
     /// Create an error with a custom message and span
     #[inline]
-    pub fn custom<M: ToString>(span: S, msg: M) -> Self {
+    pub fn custom<M: Into<C>>(span: S, msg: M) -> Self {
         Rich {
             span,
-            reason: Box::new(RichReason::Custom(msg.to_string())),
+            reason: Box::new(RichReason::Custom(msg.into())),
             context: Vec::new(),
         }
     }
@@ -656,12 +665,12 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 
     /// Get the reason for this error.
-    pub fn reason(&self) -> &RichReason<'a, T> {
+    pub fn reason(&self) -> &RichReason<'a, T, C> {
         &self.reason
     }
 
     /// Take the reason from this error.
-    pub fn into_reason(self) -> RichReason<'a, T> {
+    pub fn into_reason(self) -> RichReason<'a, T, C> {
         *self.reason
     }
 
@@ -679,7 +688,7 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 
     /// Convert this error into an owned version of itself by cloning any borrowed internal tokens, if necessary.
-    pub fn into_owned<'b>(self) -> Rich<'b, T, S>
+    pub fn into_owned<'b>(self) -> Rich<'b, T, S, C>
     where
         T: Clone,
     {
@@ -706,7 +715,7 @@ impl<'a, T, S> Rich<'a, T, S> {
     ///
     /// This is useful when you wish to combine errors from multiple compilation passes (lexing and parsing, say) where
     /// the token type for each pass is different (`char` vs `MyToken`, say).
-    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> Rich<'a, U, S>
+    pub fn map_token<U, F: FnMut(T) -> U>(self, mut f: F) -> Rich<'a, U, S, C>
     where
         T: Clone,
     {
@@ -725,7 +734,7 @@ impl<'a, T, S> Rich<'a, T, S> {
     ///
     /// This is useful when you need to convert spans, such as enriching or
     /// interning spans.
-    pub fn map_span<S2, F: FnMut(S) -> S2>(self, mut f: F) -> Rich<'a, T, S2> {
+    pub fn map_span<S2, F: FnMut(S) -> S2>(self, mut f: F) -> Rich<'a, T, S2, C> {
         Rich {
             span: f(self.span),
             reason: self.reason,
@@ -734,7 +743,7 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 }
 
-impl<'a, I: Input<'a>> Error<'a, I> for Rich<'a, I::Token, I::Span>
+impl<'a, I: Input<'a>, C> Error<'a, I> for Rich<'a, I::Token, I::Span, C>
 where
     I::Token: PartialEq,
 {
@@ -749,7 +758,7 @@ where
     }
 }
 
-impl<'a, I: Input<'a>, L> LabelError<'a, I, L> for Rich<'a, I::Token, I::Span>
+impl<'a, I: Input<'a>, L, C> LabelError<'a, I, L> for Rich<'a, I::Token, I::Span, C>
 where
     I::Token: PartialEq,
     L: Into<RichPattern<'a, I::Token>>,
@@ -844,20 +853,22 @@ where
     }
 }
 
-impl<T, S> fmt::Debug for Rich<'_, T, S>
+impl<T, S, C> fmt::Debug for Rich<'_, T, S, C>
 where
     T: fmt::Debug,
     S: fmt::Debug,
+    C: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.inner_fmt(f, T::fmt, S::fmt, true)
     }
 }
 
-impl<T, S> fmt::Display for Rich<'_, T, S>
+impl<T, S, C> fmt::Display for Rich<'_, T, S, C>
 where
     T: fmt::Display,
     S: fmt::Display,
+    C: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner_fmt(f, T::fmt, S::fmt, false)
