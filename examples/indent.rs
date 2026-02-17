@@ -53,15 +53,14 @@ fn samedent<'a>() -> impl Parser<'a, &'a str, (), Extras<'a>> + Copy {
             }
             IndentCtx::Root => Ok(()),
             IndentCtx::Block(pdent) if n > pdent => {
-                Err(Rich::custom(ext.span(), "Unexpected indent"))
+                Err(Rich::custom(ext.span(), format!("Unexpected indent from {pdent} to {n}")))
             }
             IndentCtx::Block(pdent) if n < pdent => {
-                Err(Rich::custom(ext.span(), "Unexpected dedent"))
+                Err(Rich::custom(ext.span(), format!("Unexpected dedent from {pdent} to {n}")))
             }
             IndentCtx::Block(_) /* n == pdent */ => Ok(()),
             IndentCtx::Disabled(_) => todo!(),
         })
-        .labelled("existing indent")
 }
 
 /// Parse a new indent (i.e. greater indent than our parent, if any.) and return what the new ctx should be.
@@ -74,7 +73,8 @@ fn indent<'a>() -> impl Parser<'a, &'a str, IndentCtx, Extras<'a>> + Copy {
         .then(just('\n'))
         .repeated()
         .at_least(0);
-    empty_lines.ignore_then(ws().count())
+    empty_lines
+        .ignore_then(ws().count())
         .try_map_with(|n, ext| match *ext.ctx() {
             IndentCtx::Root if n != 0 => {
                 Err(Rich::custom(ext.span(), "No indent allowed at root level"))
@@ -82,15 +82,16 @@ fn indent<'a>() -> impl Parser<'a, &'a str, IndentCtx, Extras<'a>> + Copy {
             IndentCtx::Root => Ok(IndentCtx::Block(0)),
             IndentCtx::Block(pdent) if n > pdent => Ok(IndentCtx::Block(n)),
             IndentCtx::Block(pdent) if n < pdent => {
-                Err(Rich::custom(ext.span(), "Unexpected dedent"))
+                Err(Rich::custom(ext.span(), format!("Unexpected dedent from {pdent} to {n}")))
             }
-            IndentCtx::Block(_pdent) /* n == pdent */ => Err(Rich::custom(ext.span(), "Expected indent")),
+            IndentCtx::Block(pdent) /* n == pdent */ => {
+                Err(Rich::custom(ext.span(), format!("Expected indent beyond {pdent}")))
+            },
             IndentCtx::Disabled(_) => Err(Rich::custom(
                 ext.span(),
                 "Refusing to match a block in a non-indent zone",
             )),
         })
-        .labelled("indent for new block")
 }
 
 #[derive(Clone, Debug)]
