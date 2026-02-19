@@ -865,7 +865,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// let byte = text::int::<_, extra::Err<Rich<char>>>(10)
     ///     .try_map(|s: &str, span| s
     ///         .parse::<u8>()
-    ///         .map_err(|e| Rich::custom(span, e)));
+    ///         .map_err(|e| Rich::custom(span, e.to_string())));
     ///
     /// assert!(byte.parse("255").has_output());
     /// assert!(byte.parse("256").has_errors()); // Out of range
