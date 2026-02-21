@@ -2,7 +2,14 @@
 #![cfg_attr(docsrs, feature(doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(
     feature = "nightly",
-    feature(never_type, fn_traits, tuple_trait, unboxed_closures, specialization)
+    feature(
+        never_type,
+        fn_traits,
+        tuple_trait,
+        unboxed_closures,
+        specialization,
+        bstr
+    )
 )]
 #![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![doc = include_str!("../README.md")]
@@ -33,6 +40,8 @@ macro_rules! go_extra {
 }
 
 mod blanket;
+#[cfg(feature = "nightly")]
+mod bstr;
 #[cfg(feature = "unstable")]
 pub mod cache;
 pub mod combinator;
