@@ -58,6 +58,12 @@ where
     go_extra!(O);
 }
 
+impl<'a, T> From<ExpectedNumber> for error::RichPattern<'a, T> {
+    fn from(_: ExpectedNumber) -> Self {
+        error::RichPattern::Label(std::borrow::Cow::Borrowed("number"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
