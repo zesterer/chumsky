@@ -120,7 +120,7 @@ impl<T> From<T> for RollbackState<T> {
 /// This might be useful for representing, say, an arena-style allocator.
 #[derive(Clone, Default, Debug)]
 pub struct TruncateState<T>(pub Vec<T>);
-impl<'src, T: Clone, I: Input<'src>> Inspector<'src, I> for TruncateState<T> {
+impl<'src, T, I: Input<'src>> Inspector<'src, I> for TruncateState<T> {
     type Checkpoint = usize;
     #[inline(always)]
     fn on_token(&mut self, _: &<I as Input<'src>>::Token) {}
