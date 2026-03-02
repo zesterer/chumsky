@@ -1705,8 +1705,6 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     /// Get full slice of raw input.
-    ///
-    /// Note we have to make sure our index of full slice land in the correct boundary of utf8 character if using utf8 input.
     #[cfg_attr(not(feature = "regex"), allow(dead_code))]
     #[inline]
     pub fn full_slice(&mut self) -> I::Slice
