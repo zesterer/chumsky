@@ -109,7 +109,7 @@ impl<T> Default for JustCfg<T> {
 
 /// See [`just`].
 pub struct Just<T, I, E = EmptyErr> {
-    seq: T,
+    pub(crate) seq: T,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(E, I)>,
 }
@@ -911,7 +911,7 @@ where
 /// See [`choice`].
 #[derive(Copy, Clone)]
 pub struct Choice<T> {
-    parsers: T,
+    pub(crate) parsers: T,
 }
 
 /// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
