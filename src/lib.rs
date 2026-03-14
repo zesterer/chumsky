@@ -3173,10 +3173,10 @@ where
 /// ```
 #[macro_export]
 macro_rules! select {
-    ($($p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($(#[$attr:meta])? $p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select(
             move |x, extra| match (x, extra) {
-                $(($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+                $($(#[$attr])? ($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
@@ -3192,10 +3192,10 @@ macro_rules! select {
 /// Requires that the parser input implements [`BorrowInput`].
 #[macro_export]
 macro_rules! select_ref {
-    ($($p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
+    ($($(#[$attr:meta])? $p:pat $(= $extra:ident)? $(if $guard:expr)? $(=> $out:expr)?),+ $(,)?) => ({
         $crate::primitive::select_ref(
             move |x, extra| match (x, extra) {
-                $(($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
+                 $($(#[$attr])? ($p $(,$extra)?, ..) $(if $guard)? => ::core::option::Option::Some({ () $(;$out)? })),+,
                 _ => ::core::option::Option::None,
             }
         )
