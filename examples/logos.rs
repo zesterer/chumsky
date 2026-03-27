@@ -64,15 +64,13 @@ enum SExpr {
 // This function signature looks complicated, but don't fear! We're just saying that this function is generic over
 // inputs that:
 //     - Can have tokens pulled out of them by-value, by cloning (`ValueInput`)
-//     - Gives us access to slices of the original input (`SliceInput`)
 //     - Produces tokens of type `Token`, the type we defined above (`Token = Token<'a>`)
 //     - Produces spans of type `SimpleSpan`, a built-in span type provided by chumsky (`Span = SimpleSpan`)
 // The function then returns a parser that:
 //     - Has an input type of type `I`, the one we declared as a type parameter
 //     - Produces an `SExpr` as its output
 //     - Uses `Rich`, a built-in error type provided by chumsky, for error generation
-fn parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, SExpr, extra::Err<Rich<'tokens, Token<'src>>>>
+fn parser<'tok, 'src: 'tok, I>() -> impl Parser<'tok, I, SExpr, extra::Err<Rich<'tok, Token<'src>>>>
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
 {
